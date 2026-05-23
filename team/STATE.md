@@ -10,17 +10,17 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-23 (M2 Wave 0 SHIPPED + ClickUp flushed + NITs tickets filed; Wave 1 ready to dispatch)
+## Current state — 2026-05-23 (M2 Wave 1 IN FLIGHT — Felix M2-04 + Maya M2-05 dispatched in parallel)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
 - **`origin/main` tip:** `8494e58` (PR #22 merge — M2-01 extension scaffold + build pipeline). Verify: `git rev-parse origin/main`.
 - **M2 Wave 0 status: SHIPPED.** PR #19 (Nora M2-09 dispatch-template) `ccc05c4`, PR #20 (Iris M2-03 dashboard tile spec) `e989eed`, PR #21 (Sage M2-07 acceptance test plan) `5c650b4`, PR #22 (Felix M2-01 extension scaffold + build pipeline) `8494e58`. Sponsor scope-overlap (Option A) confirmed earlier this session.
 - **Test counts:** Maya verified locally on PR #22 worktree: 140 unit + 31 integration = **171 tests green** post-M2-01 merge.
-- **Open PRs:** none.
-- **In-flight agents:** none.
-- **Worktrees:** Felix at `6940033` detached (post PR #22 fix), Maya at `df0a225` detached (post PR #20 review), Sage at `1b3ebf3` detached (PR #21 author), Nora at PR #19 head detached. All cleanly detached.
-- **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:40:00Z` (this cron tick — ClickUp MCP came back mid-tick, flushed + created NITs tickets in same round).
+- **Open PRs:** none yet (Wave 1 dispatches just fired).
+- **In-flight agents:** Felix on M2-04 (`86c9y7uhz`, branch `felix/m2-04-watcher-loop`, background); Maya on M2-05 (`86c9y7uka`, branch `maya/m2-05-webview-tile-renderer`, background).
+- **Worktrees:** Felix worktree active on M2-04 lane (was detached at `6940033`); Maya worktree active on M2-05 lane (was detached at `df0a225`). Sage + Nora + Iris + Bram idle (no current dispatches).
+- **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:42:00Z` (this cron tick — sponsor picked Path A, Wave 1 dispatched).
 
 **ClickUp board state (post-flush):**
 - All Wave 0 tickets `complete` on board: `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01). Direct API calls; intermediate "in review" entries were skipped because the developer-side flip never happened (sub-agent MCP gap, see `.claude/docs/orchestration-overview.md` "ClickUp as hard gate").
@@ -38,15 +38,13 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 | `7af93bd` | chore(orch): ENTRY 015 — 86c9y7jn9 -> complete (PR #19 merged) |
 | `ccc05c4` | chore(docs): enumerate APPROVE_WITH_NITS verdict in dispatch-template (M2-09) (#19) |
 
-**Ready to dispatch (Wave 1, parallel) — sponsor decision: this session or next?**
+**Wave 1 in flight (sponsor picked Path A 2026-05-23 18:42 UTC):**
 
-ClickUp tickets M2-04/05/06/08 NOT yet created (orchestrator deferred creation pending sponsor "go" given session-bloat lessons earlier). Backlog body for each is already canonical in `team/nora-pl/milestone-2-backlog.md`.
-
-- **M2-04 (Felix — file-watcher loop)** — `src/extension/watcher/watcherLoop.ts` + extract `cwdToSlug` to `src/shared/slug.ts` (resolves M1-09-followup duplication item).
-- **M2-05 (Maya — webview tile renderer)** — vanilla TS per Bram's M2-02 prior-art research.
+- **M2-04 (Felix — file-watcher loop)** — ClickUp `86c9y7uhz` at `in progress`. Branch `felix/m2-04-watcher-loop`. Resolves two open questions from M2-03 review in same PR: (1) `DashboardState` vs `AgentTree` canonical name, (2) `StateDelta` shape (`{added, updated, removed}`). Reviewer: Maya.
+- **M2-05 (Maya — webview tile renderer)** — ClickUp `86c9y7uka` at `in progress`. Branch `maya/m2-05-webview-tile-renderer`. Vanilla TS per Bram's M2-02 prior-art. Static-fixture mode (AC8) unblocks Maya from Felix's parallel work; tiny rebase expected after M2-04 if Felix renames `DashboardState`. Reviewer: Felix. Self-Test Report (hard rule #3) REQUIRED — manual VS Code reload + screenshots.
 
 Wave 2 (after Wave 1 lands):
-- **M2-06 (Felix — host↔webview integration)** — M2 shippable gate (extension installs from `.vsix`, Activity Bar tiles render live data).
+- **M2-06 (Felix — host↔webview integration)** — M2 shippable gate (extension installs from `.vsix`, Activity Bar tiles render live data). Ticket not yet created.
 
 Wave 3 (after Wave 2 lands):
 - **M2-08 (Sage — `@vscode/test-electron` Layer-3 tests)**.
