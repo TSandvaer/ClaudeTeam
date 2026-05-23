@@ -39,6 +39,12 @@ The `mcp__clickup__clickup_create_task` tool was listed in Nora's persona file (
 
 Logged this gap explicitly so future planning sessions don't repeat the surprise.
 
-## PR transitions pending
+## Status-flip queue (sub-agent dispatch fallback)
 
+Per `.claude/docs/orchestration-overview.md` "ClickUp as hard gate" — sub-agents append intended status transitions here; orchestrator flushes on each tick.
+
+```
+ENTRY 003: 86c9y5c8m -> in review
 ENTRY 004: 86c9y5c7v -> in review
+```
+
