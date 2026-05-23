@@ -65,5 +65,6 @@ ENTRY 017: 86c9y7jjd -> complete
 ENTRY 018: 86c9y7jdz -> complete
 ENTRY 019: 86c9y7uhz -> in review
 ENTRY 020: 86c9y7uhz -> complete
+ENTRY 021: 86c9y7uka -> complete
 ```
 
