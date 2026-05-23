@@ -37,6 +37,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
+import { cwdToSlug } from "../../../src/shared/slug.js";
+
+// Re-export so existing imports `from "./helpers/tempdir.js"` keep working.
+export { cwdToSlug };
+
 // ---------------------------------------------------------------------------
 // Fixture resolution
 // ---------------------------------------------------------------------------
@@ -62,22 +67,6 @@ export function loadFixture(name: string): string {
       `fixture ${name} required from M1-02 not found at ${path}: ${(err as Error).message}`,
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Slug derivation — mirrors cwdToSlug() from src/cli/agentTree.ts exactly.
-// data-sources.md §2: "c:\Trunk\PRIVATE\ClaudeTeam" → "c--Trunk-PRIVATE-ClaudeTeam"
-// ---------------------------------------------------------------------------
-
-export function cwdToSlug(cwd: string): string {
-  const driveMatch = cwd.match(/^([a-zA-Z]):(.*)$/);
-  if (driveMatch) {
-    const drive = driveMatch[1]!;
-    const rest = driveMatch[2]!;
-    const restNorm = rest.replace(/^[/\\]/, "--").replace(/[/\\]/g, "-");
-    return drive + restNorm;
-  }
-  return cwd.replace(/\//g, "-").replace(/^-/, "");
 }
 
 // ---------------------------------------------------------------------------

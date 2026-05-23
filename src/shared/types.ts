@@ -342,3 +342,68 @@ export interface AgentTree {
   /** One entry per SessionRecord, in the order supplied. */
   sessions: SessionTree[];
 }
+
+/**
+ * Canonical dashboard state shape exchanged across the extension host →
+ * webview boundary. `DashboardState` is an alias of `AgentTree` — same shape,
+ * different name for the webview-facing surface.
+ *
+ * Rationale (M2-04 resolution of M2-03 open question §11.1):
+ *   - The reducer (`buildAgentTree`) produces `AgentTree`.
+ *   - Iris's M2-03 spec uses `DashboardState` for the webview message payload.
+ *   - Aliasing keeps the reducer's existing return type stable while giving
+ *     downstream consumers (Maya's M2-05 webview, the message protocol) a
+ *     name that reads correctly in dashboard context.
+ *
+ * Both names refer to the same object. New code in the webview / message
+ * protocol SHOULD use `DashboardState`; new code in the reducer / CLI MAY
+ * continue to use `AgentTree`. There is no schema difference.
+ */
+export type DashboardState = AgentTree;
+
+// =============================================================================
+// State delta — host → webview partial update.
+// Type defined in M2-04; delta COMPUTATION is M2-06+ work (M2 ships state:full
+// only; M4 delta optimization computes the diff). Maya's M2-05 renders
+// against the type but does not need a real delta producer at M2 scope.
+// =============================================================================
+
+/**
+ * Compact key for a tile in a session.
+ *
+ * Used by `StateDelta.removed` to identify tiles that vanished between
+ * ticks. The string form is `sessionId + ":" + agentId` — both required
+ * because two sessions can spawn agents with overlapping ids (rare in V1
+ * but possible).
+ */
+export type TileKey = `${string}:${string}`;
+
+/**
+ * Minimum-viable shape for partial updates. The host computes a delta
+ * between two consecutive `DashboardState` snapshots and posts only the
+ * changes; the webview applies them to its rendered DOM without re-rendering
+ * unchanged tiles.
+ *
+ * Field semantics:
+ *   - `added`    : tiles present in the new state but not the previous one.
+ *   - `updated`  : tiles present in both, with at least one field changed
+ *                  (state, activity, model, role, display). The full tile
+ *                  is sent — the receiver does not need to diff sub-fields.
+ *   - `removed`  : `TileKey`s present in the previous state but absent now.
+ *
+ * Background-agent deltas are NOT carried in V1 — background tile renderings
+ * recompute from the count + collapsed list on every tick. If the live
+ * background list churns at high frequency we revisit in M4.
+ *
+ * NOTE (M2 scope): the host only sends `state:full` at M2. This type exists
+ * so Maya's M2-05 webview can typecheck the message receiver against it.
+ * Delta computation is deferred to M2-06 follow-up / M4 optimization.
+ */
+export interface StateDelta {
+  /** Tiles newly appearing. `agentId` is the tile's owner key within `sessionId`. */
+  added: Array<{ sessionId: string; tile: AgentTile }>;
+  /** Tiles where ≥1 field changed. Full tile sent — no sub-field diff. */
+  updated: Array<{ sessionId: string; tile: AgentTile }>;
+  /** Tiles that disappeared. Identified by `sessionId:agentId`. */
+  removed: TileKey[];
+}

@@ -24,6 +24,7 @@ import { readActivity } from "../extension/watcher/subagentTailer.js";
 import { listSessions } from "../extension/watcher/sessionRegistry.js";
 import { parseMetaFromString } from "../extension/watcher/metaJsonLoader.js";
 import { loadRoster } from "../extension/roster/loader.js";
+import { cwdToSlug } from "../shared/slug.js";
 import {
   buildAgentTree,
   type ActivityMap,
@@ -55,42 +56,6 @@ function parseArgs(argv: string[]): { claudeHome: string; rosterPath: string } {
 // =============================================================================
 // Filesystem readers
 // =============================================================================
-
-/**
- * Derive the project slug from a cwd path.
- *
- * Verified against on-disk directories (data-sources.md §2):
- *   "c:\Trunk\PRIVATE\ClaudeTeam" → "c--Trunk-PRIVATE-ClaudeTeam"
- *
- * Rule (observed from real captures):
- *   - Remove the drive colon (e.g. "c:" → "c")
- *   - Replace each backslash or forward slash with "-" (single dash)
- *   - The first separator between drive letter and first component is "--" (double dash)
- *
- * Observed examples:
- *   c:\Trunk\PRIVATE\ClaudeTeam      → c--Trunk-PRIVATE-ClaudeTeam
- *   C:\Trunk\PRIVATE\Axelot-tutor    → C--Trunk-PRIVATE-Axelot-tutor
- *   c:\Trunk\PRIVATE\MARIAN-TUTOR    → c--Trunk-PRIVATE-MARIAN-TUTOR
- *
- * Pattern: drive letter + "--" + rest of path with "\" replaced by "-".
- * The drive colon is dropped; the first backslash becomes "--"; subsequent
- * separators become "-".
- */
-function cwdToSlug(cwd: string): string {
-  // Match optional drive letter + colon, then path
-  const driveMatch = cwd.match(/^([a-zA-Z]):(.*)$/);
-  if (driveMatch) {
-    const drive = driveMatch[1]!;
-    const rest = driveMatch[2]!;
-    // First separator (the one right after drive+colon) becomes "--"
-    // Subsequent separators become "-"
-    // rest starts with \ or / — replace that first one with "--", rest with "-"
-    const restNorm = rest.replace(/^[/\\]/, "--").replace(/[/\\]/g, "-");
-    return drive + restNorm;
-  }
-  // POSIX path (no drive letter) — just replace all / with -
-  return cwd.replace(/\//g, "-").replace(/^-/, "");
-}
 
 /**
  * Read the `ai-title` record from a parent JSONL.
