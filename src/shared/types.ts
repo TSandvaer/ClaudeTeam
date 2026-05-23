@@ -222,3 +222,128 @@ export interface SessionRecord {
    */
   isAlive: boolean;
 }
+
+// =============================================================================
+// Reducer output types — M1-09 AgentTree.
+// Field names match Iris's M1-03 spec §6 Glossary exactly so M3 inherits
+// without renaming (iris-ux/m1-cli-output-spec.md §6).
+// =============================================================================
+
+/**
+ * Agent state (liveness inference per data-sources.md "Liveness inference").
+ *
+ *   running  — session alive + JSONL mtime < 10s old
+ *   idle     — session alive + JSONL mtime >= 10s old (but not finished/error)
+ *   finished — parent transcript has tool_result matching meta.toolUseId
+ *   error    — meta parse failed, JSONL missing for a non-finished spawn, or
+ *              roster matcher emitted a warning for this agent
+ */
+export type AgentState = "running" | "idle" | "finished" | "error";
+
+/**
+ * One rostered agent tile — the unit of display in the CLI / dashboard.
+ * Field names match Iris's §6 Glossary.
+ */
+export interface AgentTile {
+  /** Stable member id from the roster (e.g. "felix"). */
+  memberId: string;
+  /** Stable team id from the roster (e.g. "claudeteam-alpha"). */
+  teamId: string;
+  /** Display name from roster member.display (e.g. "Felix"). */
+  display: string;
+  /** Role label from roster member.role (e.g. "Extension Host Dev"). */
+  role: string;
+  /**
+   * Rendered activity string (30-char max in CLI presenter).
+   * Full string here — truncation is the presenter's job (spec §5 divergence #2).
+   *   running  → "tool:<toolName> <firstArg>"
+   *   idle     → "idle <Ns>"
+   *   finished → "finished"
+   *   error    → "error: <reason>"
+   */
+  activity: string;
+  /**
+   * Resolved model string (e.g. "claude-opus-4-7").
+   * "model:?" sentinel when unresolved (no assistant message in JSONL yet).
+   */
+  model: string;
+  /** Liveness state. */
+  state: AgentState;
+  /** Agent id (e.g. "a735226d3ddaa543b"). Used for parent→child linking. */
+  agentId: string;
+  /**
+   * toolUseId from meta.json — used for parent→child tree linkage.
+   * null on v2.1.119 schema (no toolUseId).
+   */
+  toolUseId: string | null;
+  /**
+   * toolUseId of this tile's parent agent. null for top-level (directly
+   * spawned by the orchestrator). Used for indentation in the CLI.
+   */
+  parentToolUseId: string | null;
+}
+
+/**
+ * A background (unrostered) agent collapsed into the noise chip.
+ * Per spec §1.6 — always shown (count always visible, details always printed
+ * in CLI, collapsible in dashboard M3).
+ */
+export interface BackgroundAgent {
+  /** meta.agentType — the engine type string (e.g. "general-purpose", "Explore"). */
+  agentType: string;
+  /**
+   * meta.description — truncated to 35 chars with ".." in the CLI presenter.
+   * Full string stored here.
+   */
+  description: string;
+  /** Liveness state (same inference as rostered tiles, but shown as literal word). */
+  state: AgentState;
+  /** Resolved model or "model:?" sentinel. */
+  model: string;
+}
+
+/**
+ * One session's slice of the agent tree — one entry per live SessionRecord.
+ */
+export interface SessionTree {
+  /** First 8 chars of sessionId UUID (used in CLI header). */
+  shortId: string;
+  /** Full session UUID. */
+  sessionId: string;
+  /** OS PID. */
+  pid: number;
+  /** Entry surface. */
+  entrypoint: string;
+  /** Claude Code version string. */
+  version: string;
+  /** Whether the OS process is alive. */
+  isAlive: boolean;
+  /** Project working directory. */
+  cwd: string;
+  /**
+   * Session title from the `ai-title` JSONL record.
+   * "(no title yet)" when no ai-title record found.
+   */
+  title: string;
+  /**
+   * Rostered tiles grouped by team.
+   * Key = teamId; value = ordered list of AgentTiles for that team.
+   */
+  rosterTiles: Map<string, AgentTile[]>;
+  /**
+   * Ordered list of teams in roster declaration order (for stable output).
+   * Only teams with >= 1 matched tile in this session are included.
+   */
+  teamOrder: string[];
+  /** Background (unrostered) agents for this session. */
+  background: BackgroundAgent[];
+}
+
+/**
+ * The full agent tree produced by `buildAgentTree`. Pure data — no filesystem
+ * access inside the reducer; callers supply the inputs.
+ */
+export interface AgentTree {
+  /** One entry per SessionRecord, in the order supplied. */
+  sessions: SessionTree[];
+}
