@@ -134,4 +134,18 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 **Status:** pending review.
 
-**Pointers:** Tickets `86c9y7u4p` (Felix M2-01 NITs), `86c9y7u44` (Iris M2-03 NITs), `86c9y7yzf` (Maya M2-05 NITs). Briefs use terse "see ClickUp ticket for canonical body" pattern per bloat mitigation. Cross-review pairings (per rule 6.6 #3 — mechanical reviewer routing): Felix's PR → Maya, Iris's PR → Maya, Maya's PR → Felix.
+**Pointers:** Tickets `86c9y7u4p` (Felix M2-01 NITs → PR #26), `86c9y7u44` (Iris M2-03 NITs → PR #27), `86c9y7yzf` (Maya M2-05 NITs → PR #25). Cross-review pairings (rule 6.6 #3): Felix's PR → Maya, Iris's PR → Maya, Maya's PR → Felix.
+
+## 2026-05-23 2032 UTC — Auto-merge PR #27 (M2-03 NITs follow-up) on Maya APPROVE_WITH_NITS
+
+**Decided:** Admin-merge PR #27 (Iris's M2-03 NITs follow-up — 6 spec-polish items, ClickUp `86c9y7u44`) via `gh pr merge 27 --admin --squash --delete-branch` after Maya posted `APPROVE_WITH_NITS`. All 6 NITs verified clean against canonical post-M2-04/05 main. One informational NIT to file as tiny follow-up (§3.2 empty-state Refresh-button affordance — drop the line or add an empty-state-specific button).
+
+**Foundation:** Promoted auto-decide class — orch-autonomy rule 6 + memory `[[merge-authorization-in-normal-autonomy]]`. PR #27 is routine spec-cleanup (`chore(spec)` class); CI green; Maya APPROVE_WITH_NITS; not on never-list.
+
+**Alternative:** Queue for sponsor review. Rejected — same precedent as all prior auto-merges this session.
+
+**Reversibility:** `git revert <merge-sha>` ≤1 PR / ~10 min.
+
+**Status:** pending review.
+
+**Pointers:** PR #27; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/27#issuecomment-4526462647`. 1 informational NIT to file as tiny follow-up ticket. Expected ENTRY 022 collision with PR #25 + PR #26 (all three sub-agents picked ENTRY 022 — same failure-mode documented at `.claude/docs/orchestration-overview.md` § Common failure modes; recovery via rebase + drop-or-checkout-ours pattern).
