@@ -106,4 +106,18 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 **Status:** pending review.
 
-**Pointers:** PR #23; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/23#issuecomment-4526334827`; CI run `26341073136` on Felix's branch. 2 NITs to file as follow-up ticket (`chore(watcher): M2-04 NITs follow-up`): (1) `src/extension/main.ts:69-74` subscription leak in resolveWebviewView (closure-shared watcher means only one is active, but `context.subscriptions` array grows across reload cycles); (2) `messageBus.ts:81` `as unknown as DashboardState` cast hides on-wire shape — recommends `SerializedStateFullMessage` typed union in `src/shared/messages.ts` before M2-06 (M2-05 already shipped with `Object.entries` workaround per dispatch brief). Expected ENTRY-019 collision with PR #24 on `clickup-pending.md` per the failure-mode documented in `.claude/docs/orchestration-overview.md`.
+**Pointers:** PR #23; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/23#issuecomment-4526334827`; CI run `26341073136` on Felix's branch. 2 NITs filed as follow-up ticket `86c9y7y9z`. Expected ENTRY-019 collision with PR #24 on `clickup-pending.md` materialized (also added unexpected `src/shared/messages.ts` code-merge conflict — Felix's serializer types + Maya's receiver types — handled by author-rebase per the now-documented escalation pattern).
+
+## 2026-05-23 1942 UTC — Auto-merge PR #24 (M2-05 webview tile renderer) on Felix APPROVE_WITH_NITS
+
+**Decided:** Admin-merge PR #24 (`feat(webview): dashboard tile renderer + message receiver` — M2-05, ClickUp `86c9y7uka`) via `gh pr merge 24 --admin --squash --delete-branch` after Felix posted `APPROVE_WITH_NITS` and Maya rebased to resolve dual conflicts (ENTRY 019 + `src/shared/messages.ts`). Maya's rebased head `f243132` passes 175/175 unit tests + CI 2x SUCCESS.
+
+**Foundation:** Same promoted auto-decide class as all 6 prior merge entries — user-global CLAUDE.md "Orchestrator autonomy" rule 6 promoted class "**Routine-PR-merge calls when CI green + orch-docs / cleanup class with peer reviewer attached.**" PR #24 is routine impl (M2-05 in-backlog webview renderer); CI green on rebased head (`26341763489` + `26341762541` both SUCCESS); peer-reviewer Felix posted APPROVE_WITH_NITS; not on never-auto-decide list. Cited memories: `[[merge-authorization-in-normal-autonomy]]` + `[[auto-execute-classes-without-sponsor-ack]]`.
+
+**Alternative:** Queue for sponsor review. Rejected — same precedent as PR #20/#22/#23; routine peer-review + CI gates already cleared, Wave 1 momentum matters (Wave 2 / M2-06 is the M2 shippable gate).
+
+**Reversibility:** `git revert <merge-sha>` → admin-merge revert PR. ≤1 PR; ~10 min.
+
+**Status:** pending review.
+
+**Pointers:** PR #24; Felix's review at `https://github.com/TSandvaer/ClaudeTeam/pull/24#issuecomment-4526341884`; rebased CI runs `26341763489` + `26341762541` on head `f243132`. 3 NITs to file as follow-up ticket (`chore(webview): M2-05 NITs follow-up`): (1) `messageReceiver.ts` has no dedicated tests (AC1 dispatch + unknown defense indirect-only); (2) **cross-PR contract gap for M2-06** — webview-side `deserializeState` is required to rebuild `Map` from `Object.entries` on the wire (matches Felix's M2-04 NIT #2; both notes point at the same M2-06 wiring fix in `86c9y7y9z`); (3) typo in `team/maya-dev/m2-05-selftest/SELF-TEST.md` line 3 (`clibrate.com` → `clickup.com`).

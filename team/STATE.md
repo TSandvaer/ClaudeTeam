@@ -10,22 +10,26 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-23 (M2 Wave 1 IN FLIGHT — Felix M2-04 + Maya M2-05 dispatched in parallel)
+## Current state — 2026-05-23 (M2 Wave 1 SHIPPED — Wave 2 / M2-06 next; sponsor decision queued)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `8494e58` (PR #22 merge — M2-01 extension scaffold + build pipeline). Verify: `git rev-parse origin/main`.
-- **M2 Wave 0 status: SHIPPED.** PR #19 (Nora M2-09 dispatch-template) `ccc05c4`, PR #20 (Iris M2-03 dashboard tile spec) `e989eed`, PR #21 (Sage M2-07 acceptance test plan) `5c650b4`, PR #22 (Felix M2-01 extension scaffold + build pipeline) `8494e58`. Sponsor scope-overlap (Option A) confirmed earlier this session.
-- **Test counts:** Maya verified locally on PR #22 worktree: 140 unit + 31 integration = **171 tests green** post-M2-01 merge.
-- **Open PRs:** **PR #24** (Maya M2-05, `86c9y7uka` at `in review`) — Felix APPROVE_WITH_NITS (3 NITs), but DIRTY due to ENTRY 019 collision + `src/shared/messages.ts` merge with Felix's M2-04. Maya dispatched to rebase + resolve (background). **PR #23 SHIPPED** at `807c3c6` (Maya APPROVE_WITH_NITS → auto-merged); M2-04 NITs follow-up ticket `86c9y7y9z` filed (Felix owns, address before M2-06).
-- **In-flight agents:** Maya rebasing PR #24 on current main (background, agent `a6ca4de6ae82f952d`). Felix idle post-M2-04 review.
+- **`origin/main` tip:** `09f95d3` (PR #24 merge — M2-05 webview dashboard tile renderer + message receiver). Verify: `git rev-parse origin/main`.
+- **M2 Wave 0 status: SHIPPED.** PR #19/#20/#21/#22 (M2-09/03/07/01).
+- **M2 Wave 1 status: SHIPPED.** PR #23 (Felix M2-04 file-watcher polling loop) `807c3c6` — Maya APPROVE_WITH_NITS, auto-merged. PR #24 (Maya M2-05 webview dashboard tile renderer) `09f95d3` — Felix APPROVE_WITH_NITS, rebased + auto-merged (resolved expected ENTRY 019 collision + unexpected `src/shared/messages.ts` code conflict). Wave 1 unblocked Wave 2 (M2-06 = M2 shippable gate).
+- **Test counts:** 175 unit + 41 integration = **216 tests green** post-Wave-1 (Maya verified locally during rebase).
+- **Open PRs:** none.
+- **In-flight agents:** none. Felix detached post-PR-#24-review; Maya detached at `f243132` post-rebase.
 - **Worktrees:** Felix worktree active on M2-04 lane (was detached at `6940033`); Maya worktree active on M2-05 lane (was detached at `df0a225`). Sage + Nora + Iris + Bram idle (no current dispatches).
 - **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:42:00Z` (this cron tick — sponsor picked Path A, Wave 1 dispatched).
 
-**ClickUp board state (post-flush):**
-- All Wave 0 tickets `complete` on board: `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01). Direct API calls; intermediate "in review" entries were skipped because the developer-side flip never happened (sub-agent MCP gap, see `.claude/docs/orchestration-overview.md` "ClickUp as hard gate").
-- **M2-03 NITs follow-up:** `86c9y7u44` — to do — Iris owns; 6 NITs.
-- **M2-01 NITs follow-up:** `86c9y7u4p` — to do — Felix owns; 3 NITs.
+**ClickUp board state:**
+- **Complete (all Wave 0 + Wave 1):** `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01), `86c9y7uhz` (M2-04), `86c9y7uka` (M2-05).
+- **To do (NITs follow-ups, 4 tickets queued):**
+  - `86c9y7u44` — M2-03 NITs (Iris, 6 items — spec polish + type alignment with M2-04's shipped types).
+  - `86c9y7u4p` — M2-01 NITs (Felix, 3 items — scaffold cleanup).
+  - `86c9y7y9z` — M2-04 NITs (Felix, 2 items — **NIT #2 should land before M2-06 dispatch**: `SerializedStateFullMessage` typed union eliminating the cast in `messageBus.ts:81`).
+  - `86c9y7yzf` — M2-05 NITs (Maya, 3 items — messageReceiver tests, M2-06 cross-link, typo fix).
 
 **This-session structural delta (newest at top):**
 
@@ -38,13 +42,19 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 | `7af93bd` | chore(orch): ENTRY 015 — 86c9y7jn9 -> complete (PR #19 merged) |
 | `ccc05c4` | chore(docs): enumerate APPROVE_WITH_NITS verdict in dispatch-template (M2-09) (#19) |
 
-**Wave 1 in flight (sponsor picked Path A 2026-05-23 18:42 UTC):**
+**Wave 2 ready to dispatch — sponsor decision queued:**
 
-- **M2-04 (Felix — file-watcher loop)** — ClickUp `86c9y7uhz` at `in progress`. Branch `felix/m2-04-watcher-loop`. Resolves two open questions from M2-03 review in same PR: (1) `DashboardState` vs `AgentTree` canonical name, (2) `StateDelta` shape (`{added, updated, removed}`). Reviewer: Maya.
-- **M2-05 (Maya — webview tile renderer)** — ClickUp `86c9y7uka` at `in progress`. Branch `maya/m2-05-webview-tile-renderer`. Vanilla TS per Bram's M2-02 prior-art. Static-fixture mode (AC8) unblocks Maya from Felix's parallel work; tiny rebase expected after M2-04 if Felix renames `DashboardState`. Reviewer: Felix. Self-Test Report (hard rule #3) REQUIRED — manual VS Code reload + screenshots.
+**M2-06 is the M2 shippable gate.** Extension installs from `.vsix`, Activity Bar tiles render live data, drill-in works. Once M2-06 merges, M2 is shippable.
 
-Wave 2 (after Wave 1 lands):
-- **M2-06 (Felix — host↔webview integration)** — M2 shippable gate (extension installs from `.vsix`, Activity Bar tiles render live data). Ticket not yet created.
+**Two ordering options (sponsor: pick one):**
+
+- **Path X — NITs-first.** Dispatch Felix on the M2-04 NITs follow-up (`86c9y7y9z`) *first*, then M2-06 (Felix again). Rationale: NIT #2 (`SerializedStateFullMessage` typed union) eliminates the `as unknown as DashboardState` cast that M2-06 will rely on for the live-data wire. Cleaner contract going into M2-06. ~2 sequential PRs from Felix.
+- **Path Y — M2-06-first.** Create M2-06 ticket now, dispatch Felix on M2-06 directly. Roll the M2-04 NIT #2 fix INTO the M2-06 PR (since M2-06 is the consumer that benefits). Roll the M2-04 NIT #1 (subscription leak) in too. Closes `86c9y7y9z` as duplicate-of-M2-06. ~1 PR from Felix, slightly larger.
+
+Orchestrator recommendation: **Path Y** — M2-06 is going to touch `messageBus.ts` and `main.ts` anyway (the two files with NITs), so combining is more economical than two PRs. Also lets the M2-05 NITs (`86c9y7yzf`) sit cleanly as Maya's separate small-PR follow-up.
+
+Wave 3 (after Wave 2 lands):
+- **M2-08 (Sage — `@vscode/test-electron` Layer-3 tests)**. Ticket not yet created.
 
 Wave 3 (after Wave 2 lands):
 - **M2-08 (Sage — `@vscode/test-electron` Layer-3 tests)**.
