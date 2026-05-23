@@ -5,8 +5,8 @@ Spec for the ClaudeTeam VS Code extension webview dashboard. Visual and interact
 - **Ticket:** [ClickUp 86c9y7jf4](https://app.clickup.com/t/86c9y7jf4) — `spec(ux): M2 dashboard tile spec — webview layout + interaction`
 - **Owner:** Iris
 - **Peer reviewer:** Maya (visual)
-- **Source docs:** `team/iris-ux/m1-cli-output-spec.md`, `.claude/docs/vscode-extension-conventions.md`, `.claude/docs/roster-matching.md`, `team/bram-research/m2-vscode-prior-art-2026-05-23.md`, `src/shared/types.ts`
-- **Message types:** pending M2-01 merge — types sourced from `.claude/docs/vscode-extension-conventions.md` "Message protocol"; may be refined when `src/shared/messages.ts` lands.
+- **Source docs:** `team/iris-ux/m1-cli-output-spec.md`, `.claude/docs/vscode-extension-conventions.md`, `.claude/docs/roster-matching.md`, `team/bram-research/m2-vscode-prior-art-2026-05-23.md`, `src/shared/types.ts`, `src/shared/messages.ts`
+- **Message types:** canonical — `src/shared/messages.ts` (merged M2-04, PR #23) and `src/shared/types.ts` (merged M2-04). Payload types (`DashboardState`, `StateDelta`, `Team`) are the source of truth; this spec references them directly.
 
 ---
 
@@ -72,12 +72,13 @@ Dashboard: roster errors and file-watcher errors render a visible error chip WIT
 
 The dashboard renders inside a `WebviewViewProvider` in the VS Code Activity Bar sidebar. Vanilla TypeScript (no React/Svelte) per M2-02 recommendation. All HTML must be CSP-safe — no inline event handlers, no inline `<style>` or `<script>` tags. Attach events with `element.addEventListener(...)`.
 
+**Payload type:** the webview renders against `DashboardState` (defined in `src/shared/types.ts` as an alias of `AgentTree` — same shape; see §11.1 resolution). All wireframes and DOM shapes in this section assume `DashboardState.sessions: SessionTree[]` as input.
+
 ### 3.1 Outer structure wireframe
 
 ```
 ┌─────────────────────────────────┐
 │  CLAUDETEAM DASHBOARD           │  ← panel header (VS Code renders this)
-│  [Refresh]                      │  ← claudeteam.refresh command button
 ├─────────────────────────────────┤
 │                                 │
 │  ┌─────────────────────────┐    │
@@ -85,23 +86,23 @@ The dashboard renders inside a `WebviewViewProvider` in the VS Code Activity Bar
 │  │ cwd: c:\Trunk\...        │    │
 │  │ title: ClaudeTeam M1    │    │
 │  │                         │    │
-│  │  ┌───────────────────┐  │    │
-│  │  │ TEAM ClaudeTeam   │  │    │  ← team-card (one per team in session)
-│  │  │ Alpha             │  │    │
-│  │  │                   │  │    │
-│  │  │  ┌─────────────┐  │  │    │
-│  │  │  │ [>] Felix   │  │  │    │  ← agent tile (one per AgentTile)
-│  │  │  │ Ext Host Dev│  │  │    │
-│  │  │  │ tool:Edit   │  │  │    │
-│  │  │  │ sonnet-4-5  │  │  │    │
-│  │  │  └─────────────┘  │  │    │
-│  │  │  ┌─────────────┐  │  │    │
-│  │  │  │ [.] Maya    │  │  │    │
-│  │  │  │ Webview Dev │  │  │    │
-│  │  │  │ idle 14s    │  │  │    │
-│  │  │  │ sonnet-4-5  │  │  │    │
-│  │  │  └─────────────┘  │  │    │
-│  │  └───────────────────┘  │    │
+│  │  ┌──────────────────────────┐│
+│  │  │ TEAM ClaudeTeam   [↻]   ││  ← team-card with refresh button (top-right)
+│  │  │ Alpha   (4 rostered)    ││
+│  │  │                          ││
+│  │  │  ┌─────────────┐         ││
+│  │  │  │ [>] Felix   │         ││  ← agent tile (one per AgentTile)
+│  │  │  │ Ext Host Dev│         ││
+│  │  │  │ tool:Edit   │         ││
+│  │  │  │ sonnet-4-5  │         ││
+│  │  │  └─────────────┘         ││
+│  │  │  ┌─────────────┐         ││
+│  │  │  │ [.] Maya    │         ││
+│  │  │  │ Webview Dev │         ││
+│  │  │  │ idle 14s    │         ││
+│  │  │  │ sonnet-4-5  │         ││
+│  │  │  └─────────────┘         ││
+│  │  └──────────────────────────┘│
 │  │                         │    │
 │  │  ┌───────────────────┐  │    │  ← background chip (always visible)
 │  │  │ + 3 background    │  │    │
@@ -130,7 +131,7 @@ Theme variables applied at each zone:
 
 ### 3.2 Empty state wireframe
 
-Renders when `AgentTree.sessions` is empty OR every session is dead.
+Renders when `DashboardState.sessions` is empty OR every session is dead.
 
 ```
 ┌─────────────────────────────────┐
@@ -155,17 +156,30 @@ One line of text. No icon (icons-only is prohibited per design discipline). No d
 
 One session block per `SessionTree`. Blocks render in the order the reducer returns sessions.
 
+**Alive session (canonical — `isAlive === true`):**
+
 ```
 ┌────────────────────────────────────────────────┐
 │ SESSION 7b53d0ee  [claude-vscode]  pid=68644   │  ← session-header
 │ cwd:   c:\Trunk\PRIVATE\ClaudeTeam             │
 │ title: ClaudeTeam M1 build session             │
-│ state=alive                                    │  ← only shown when dead
 ├────────────────────────────────────────────────┤
 │  [team card(s) here]                           │
 │  [background chip here]                        │
 └────────────────────────────────────────────────┘
 ```
+
+**Dead session (`isAlive === false`):** same header but with `[dead]` badge appended after the entrypoint chip; no team cards or chip render. See §3.1 outer wireframe for the dead-session example.
+
+```
+┌────────────────────────────────────────────────┐
+│ SESSION a91f3c20  [claude-vscode]  pid=1234  [dead]   │
+│ cwd:   c:\Trunk\PRIVATE\ClaudeTeam             │
+│ title: (no title yet)                          │
+└────────────────────────────────────────────────┘
+```
+
+Reconciles wireframe drift between §3.1 and §4 — neither alive nor dead wireframes carry a literal `state=alive` line. Liveness is conveyed by (a) presence/absence of the `[dead]` badge and (b) the `session-block--dead` opacity treatment.
 
 **Session header DOM:**
 ```
@@ -173,11 +187,11 @@ One session block per `SessionTree`. Blocks render in the order the reducer retu
   <header class="session-header">
     <span class="session-id">SESSION {shortId}</span>
     <span class="session-entrypoint">[{entrypoint}]</span>
+    <!-- only when !isAlive (positioned next to entrypoint chip per §4 wireframe): -->
+    <span class="session-dead-badge">[dead]</span>
     <span class="session-pid">pid={pid}</span>
     <span class="session-cwd" title="{cwd}">{cwd}</span>
     <span class="session-title">{title}</span>
-    <!-- only when !isAlive: -->
-    <span class="session-dead-badge">dead</span>
   </header>
   [team cards]
   [background chip]
@@ -276,6 +290,19 @@ No transition/animation (out of scope, M4).
 
 Per M1-03 §1.5, depth-1 subagents spawned by the orchestrator are the common case in V1. When parent→child nesting is present (linked via `toolUseId`), the child tile renders with `padding-left: 16px` additional indent inside the team card and a `┕` connector character (`&#x2515;`) prepended to its display name. Depth-2+ children flatten to depth-1 with `(nested)` appended to the `activity` field. This mirrors the CLI's nesting spec without requiring a tree layout algorithm.
 
+**Connector glyph DOM (decorative — must be hidden from assistive tech):**
+
+```html
+<div class="tile-row tile-row--primary">
+  <span class="state-dot" aria-label="{State}" title="{State}" data-state="{state}"></span>
+  <!-- only when child tile (toolUseId chain present): -->
+  <span class="tile-connector" aria-hidden="true">┕</span>
+  <span class="agent-display">{display}</span>
+</div>
+```
+
+`aria-hidden="true"` on `.tile-connector` is load-bearing: the connector is purely visual scaffolding for parent→child nesting. Screen readers must NOT announce the `┕` character — the parent→child relationship is conveyed structurally by DOM nesting + the tile's `aria-label` (which already includes display + role + state). Announcing "bottom-left-corner" would create unhelpful noise.
+
 ---
 
 ## 6. Team card
@@ -284,7 +311,7 @@ One team card per team in `SessionTree.teamOrder`, rendered inside the session b
 
 ```
 ┌────────────────────────────────────────────────┐
-│ TEAM ClaudeTeam Alpha  (4 rostered)            │  ← team-header
+│ TEAM ClaudeTeam Alpha  (4 rostered)     [↻]    │  ← team-header (Refresh top-right)
 │─────────────────────────────────────────────── │
 │ [agent tile]                                   │
 │ [agent tile]                                   │
@@ -298,14 +325,23 @@ One team card per team in `SessionTree.teamOrder`, rendered inside the session b
   <header class="team-header">
     <span class="team-name">TEAM {teamName}</span>
     <span class="team-count">({count} rostered)</span>
+    <button class="team-refresh" type="button"
+            aria-label="Refresh team data"
+            title="Refresh">↻</button>
   </header>
   [agent tiles in roster order]
 </section>
 ```
 
+**Refresh button placement (canonical):** top-right of the team card header, aligned to the trailing edge with `margin-left: auto` on the button (flex-row header layout). One button per team card. Clicking emits `{ type: "ui:refresh" }` (see §9 Interaction Contract). The button is a real `<button>` element (not a styled span) — keyboard-focusable, announced as "Refresh team data" by assistive tech, hover state via `--vscode-toolbar-hoverBackground`. The glyph `↻` is decorative-only; the `aria-label` carries the meaning.
+
+Rationale for team-card placement (not panel header): the panel header is owned by VS Code's `WebviewViewProvider` chrome — we can register a command via the `view/title` contribution point (per `vscode-extension-conventions.md` §"Extension manifest essentials"), but the icon there is small, easy to miss, and disconnected from the team data it refreshes. A button anchored to each team card is closer to the data it acts on and visible inline. In V1 there is only one team (claudeteam-alpha), so one button; if multiple teams render in future, each card carries its own. The button still emits the same `ui:refresh` message regardless of which team card it sits on — V1 refresh is dashboard-wide, not per-team.
+
 **Theme variables:**
 - `--vscode-descriptionForeground` — team header text
 - `--vscode-panel-border` — horizontal rule under team header (border-bottom)
+- `--vscode-toolbar-hoverBackground` — refresh button hover state (fall back to `--vscode-list-hoverBackground`)
+- `--vscode-icon-foreground` — refresh glyph color (fall back to `--vscode-foreground`)
 
 Teams with zero matched members in a session are suppressed entirely (no empty team card). Same rule as M1-03 §1.3.
 
@@ -437,12 +473,12 @@ All clickable elements attach event listeners in `main.ts` or a component module
 |---|---|---|---|
 | `.agent-tile` (rostered) | `click` or `keydown` Enter/Space | `{ type: "ui:open-transcript", payload: { sessionId: string, agentId: string } }` | `vscode.window.showTextDocument()` on the agent's JSONL path |
 | `.chip-header` | `click` | none (webview-local state) | n/a — toggles chip expanded/collapsed |
-| `.error-chip-action` ("Open Roster File") | `click` | `{ type: "ui:open-roster" }` | `vscode.window.showTextDocument()` on the roster YAML path |
-| Refresh button | `click` | `{ type: "ui:refresh" }` | Immediately triggers one watcher tick |
+| `.error-chip-action` ("Open Roster File") | `click` | `{ type: "ui:open-roster" }` | `vscode.window.showTextDocument()` on the loaded roster path (see §11.5) |
+| `.team-refresh` (top-right of team card header — see §6) | `click` or `keydown` Enter/Space | `{ type: "ui:refresh" }` | Immediately triggers one watcher tick |
 | Background agent rows | none in V1 | none | n/a |
 | Session header | none in V1 | none | n/a (team cards are always expanded in V1) |
 
-**Message shape (pending M2-01):** types as documented in `.claude/docs/vscode-extension-conventions.md` "Message protocol":
+**Message shape (canonical — `src/shared/messages.ts`, merged M2-04):**
 
 ```typescript
 // Webview → Host (emitted by click handlers)
@@ -456,6 +492,33 @@ All clickable elements attach event listeners in `main.ts` or a component module
 | { type: "roster:loaded"; payload: { teams: Team[] } }
 | { type: "roster:error"; payload: { error: string } }
 ```
+
+**`DashboardState` shape** (alias of `AgentTree` in `src/shared/types.ts`):
+
+```typescript
+interface DashboardState {  // = AgentTree
+  sessions: SessionTree[];
+}
+```
+
+**`StateDelta` shape** (canonical — `src/shared/types.ts`):
+
+```typescript
+type TileKey = `${string}:${string}`;  // sessionId:agentId
+
+interface StateDelta {
+  added:   Array<{ sessionId: string; tile: AgentTile }>;
+  updated: Array<{ sessionId: string; tile: AgentTile }>;
+  removed: TileKey[];
+}
+```
+
+Application semantics for the webview:
+- **`added`** — append the tile under its `sessionId` + roster-resolved teamId.
+- **`updated`** — replace the existing tile with the full new tile (no sub-field diff; the host sends the full record).
+- **`removed`** — locate the tile by parsing `TileKey` (`split(":")` → `[sessionId, agentId]`) and detach it from the DOM.
+- **M2-05 scope:** host emits `state:full` only; webview MAY no-op on incoming `state:delta` and re-render against last known state (per `src/webview/main.ts` `onStateDelta` handler). Delta application is M4 optimization work.
+- **Background-agent deltas:** NOT carried in `StateDelta` (V1 limitation). Background tiles recompute from each `state:full`.
 
 **`acquireVsCodeApi()` usage:** called ONCE in `main.ts` at webview initialization. The returned `vscode` object is stored in a module-level variable and passed into click handlers. Calling it twice throws (per VS Code webview docs). When `acquireVsCodeApi` is undefined (browser dev mode), fall back to `console.log` mock — identical pattern to Pixel Agents' browser-mock fallback per M2-02.
 
@@ -539,15 +602,34 @@ Agent model text: `font-size: smaller` (one step below body). Session cwd and ti
 
 ## 11. Open questions surfaced for Felix / Maya
 
-1. **`DashboardState` type shape** — `src/shared/types.ts` defines `AgentTree` (with `sessions: SessionTree[]`); the webview message protocol uses `DashboardState`. If these are the same type, Felix should alias or re-export. If they differ, Felix should document the delta when wiring `messageBus.ts` in M2-06. The spec uses `AgentTree` / `SessionTree` as the assumed payload shape.
+### 11.1 RESOLVED — `DashboardState` type shape (M2-04)
 
-2. **`StateDelta` type** — not yet defined in `src/shared/types.ts`. Required for `state:delta` messages (M2-05 AC7). Felix should define the delta shape in M2-01 / M2-04; Maya should not invent one. If undefined when M2-05 starts, Maya implements full-replace only and files a follow-up.
+Felix resolved by aliasing: `export type DashboardState = AgentTree;` in `src/shared/types.ts` (lines 346-362). Same object, two names — the reducer / CLI keeps using `AgentTree`; the webview / message protocol uses `DashboardState`. No schema difference, no migration cost. **Canonical: spec uses `DashboardState` for webview-facing references and `SessionTree` / `AgentTile` / `BackgroundAgent` for the nested shapes (unchanged).**
 
-3. **Background agent `agentId`** — `BackgroundAgent` in `types.ts` has no `agentId` field. This is intentional for V1 (no drill-in for background agents, per §9). If a future ticket adds background drill-in, Felix must add `agentId?: string` to `BackgroundAgent`. Flagged here so Felix is aware the spec intentionally omits it.
+### 11.2 RESOLVED — `StateDelta` type shape (M2-04)
 
-4. **Roster member `color` field** — `Member.color` in `types.ts` is optional (`color?: string`). The spec does not currently use the per-member color for tile backgrounds (the state dot provides state color; the tile background is always `--vscode-editor-background`). If Thomas wants per-member accent colors on tile cards in M3, the field is already in the type. No action needed in M2.
+Felix defined `StateDelta` in `src/shared/types.ts` (lines 401-409) with `TileKey = `${string}:${string}`` (sessionId:agentId). Full shape rendered in §9 above. M2-05 webview is wired to the type for typecheck purposes; runtime delta application is deferred to M4 optimization (host emits `state:full` only at M2 scope). No further action for Iris — spec references the canonical type.
 
-5. **`teams.yaml` file path for `ui:open-roster`** — the host handler for `ui:open-roster` needs to know which roster file was loaded (global vs project). Felix should expose the loaded roster path from the loader in M2-04/M2-06 so the host can pass it to `showTextDocument`. The spec assumes the host has this; implementation detail for Felix.
+### 11.3 Background agent `agentId` (open — informational)
+
+`BackgroundAgent` in `types.ts` has no `agentId` field. This is intentional for V1 (no drill-in for background agents, per §9). If a future ticket adds background drill-in, Felix must add `agentId?: string` to `BackgroundAgent`. Flagged here so Felix is aware the spec intentionally omits it.
+
+### 11.4 Roster member `color` field (open — informational)
+
+`Member.color` in `types.ts` is optional (`color?: string`). The spec does not currently use the per-member color for tile backgrounds (the state dot provides state color; the tile background is always `--vscode-editor-background`). If Thomas wants per-member accent colors on tile cards in M3, the field is already in the type. No action needed in M2.
+
+### 11.5 RESOLVED — `teams.yaml` file path for `ui:open-roster` (option A)
+
+**Decision: option A — host sends the resolved roster file path on every `state:full` message.**
+
+Implementation contract for M2-06 (handler wiring):
+- Felix's roster loader resolves the active roster path on load (global `~/.claudeteam/teams.yaml` OR project `<root>/.claude/teams.yaml`, project overrides global per `roster-matching.md` §"Config locations").
+- The host stores the resolved path alongside the loaded roster in extension-host state.
+- On every `state:full` send, the host includes the path on a top-level `rosterPath` field of the message envelope (NOT on `DashboardState` — keeps the domain type clean).
+- The webview caches the most recent `rosterPath` and uses it as the payload for the `ui:open-roster` action's eventual `showTextDocument` call. (The webview does NOT send the path back — the host already has it server-side; the path on `state:full` is for the webview's awareness only, e.g. surfacing the path in a tooltip on the "Open Roster File" button.)
+- **Alternative considered (option B):** webview sends `ui:open-roster` with no payload; host looks up the path from its own state. Equally correct mechanically, but option A is preferred because it (a) gives the webview optional UX affordances like tooltip-showing the path before opening, and (b) keeps the `ui:open-roster` message shape uniform with `ui:refresh` (no payload-or-no-payload polymorphism). Felix may implement option B if the option-A envelope change is non-trivial — both satisfy the user-visible behavior. **Default recommendation: option A.**
+
+This is a spec-level commitment, not an implementation requirement for M2-05. Maya's M2-05 webview can call `showTextDocument` indirectly via `ui:open-roster` without knowing the path; the path-on-`state:full` plumbing is M2-06 work.
 
 ---
 
