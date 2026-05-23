@@ -132,6 +132,45 @@ export type MatchResult =
   | { teamId: string; memberId: string }
   | null;
 
+// =============================================================================
+// Subagent activity — output of the JSONL tailer (M1-06).
+// See .claude/docs/data-sources.md §3 (Subagent transcript) for source shape.
+// =============================================================================
+
+/**
+ * Snapshot of "what is this subagent currently doing" derived from tailing
+ * its JSONL. Pure projection — no liveness / finished inference here; that's
+ * the reducer's job (M1-09) which cross-references the parent transcript.
+ *
+ * Field semantics (per M1-06 AC1):
+ *   - model:         resolved model from the FIRST assistant message in the
+ *                    file (e.g. "claude-opus-4-7"). Null when no assistant
+ *                    message has been written yet (fresh spawn, metadata-only
+ *                    JSONL, missing/empty file).
+ *   - lastTool:      tool name from the LAST `tool_use` content entry in the
+ *                    LAST `type: "assistant"` record (e.g. "Bash", "Read",
+ *                    "Edit"). Null when the last assistant message has only
+ *                    text content, or no assistant message exists yet.
+ *                    NOTE: per Bram's M1-11 finding, a subagent JSONL NEVER
+ *                    contains a closing assistant message — the file's last
+ *                    record is always a `type: "user"` tool_result. The
+ *                    "last assistant" we look at is the most recent one
+ *                    walking backwards from the tail, which represents
+ *                    whatever the agent was last doing.
+ *   - lastTimestamp: epoch ms parsed from the LAST `type: "assistant"`
+ *                    record's `timestamp` (ISO-8601 string). 0 sentinel when
+ *                    no assistant record found OR timestamp is missing/
+ *                    unparseable.
+ *   - mtimeMs:       fs.stat mtime of the JSONL file. 0 sentinel when the
+ *                    file is missing.
+ */
+export interface SubagentActivity {
+  model: string | null;
+  lastTool: string | null;
+  lastTimestamp: number;
+  mtimeMs: number;
+}
+
 /**
  * Result of loading the roster. The loader never throws — every error case
  * surfaces in `errors` and `warnings`; the caller decides whether to render
