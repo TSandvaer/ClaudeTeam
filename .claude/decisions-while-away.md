@@ -120,4 +120,18 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 **Status:** pending review.
 
-**Pointers:** PR #24; Felix's review at `https://github.com/TSandvaer/ClaudeTeam/pull/24#issuecomment-4526341884`; rebased CI runs `26341763489` + `26341762541` on head `f243132`. 3 NITs to file as follow-up ticket (`chore(webview): M2-05 NITs follow-up`): (1) `messageReceiver.ts` has no dedicated tests (AC1 dispatch + unknown defense indirect-only); (2) **cross-PR contract gap for M2-06** — webview-side `deserializeState` is required to rebuild `Map` from `Object.entries` on the wire (matches Felix's M2-04 NIT #2; both notes point at the same M2-06 wiring fix in `86c9y7y9z`); (3) typo in `team/maya-dev/m2-05-selftest/SELF-TEST.md` line 3 (`clibrate.com` → `clickup.com`).
+**Pointers:** PR #24; Felix's review at `https://github.com/TSandvaer/ClaudeTeam/pull/24#issuecomment-4526341884`; rebased CI runs `26341763489` + `26341762541` on head `f243132`. 3 NITs filed as follow-up ticket `86c9y7yzf`.
+
+## 2026-05-23 2024 UTC — Auto-dispatch 3 independent NITs follow-ups (M2-01, M2-03, M2-05) while sponsor's Wave 2 ordering decision is pending
+
+**Decided:** Dispatch in parallel — Felix on `86c9y7u4p` (M2-01 NITs, 3 items), Iris on `86c9y7u44` (M2-03 NITs, 6 items), Maya on `86c9y7yzf` (M2-05 NITs, 3 items). Flip each ticket `to do → in progress` via MCP in same round (rule #5). HOLD: Felix's M2-04 NITs (`86c9y7y9z`) and Wave 2 M2-06 ticket — both depend on sponsor's Path X vs Path Y decision (queued in STATE.md since 19:43 UTC).
+
+**Foundation:** General 4-gate framework (user-global CLAUDE.md "Orchestrator autonomy" rule 6) — (1) reversible: dispatches are TaskStop-cancellable + per-PR-revertable; (2) foundation citable: each ticket already exists on the board with full canonical body (`team/nora-pl/milestone-2-backlog.md` semantics inherited; tickets created earlier this session); each NITs ticket has explicit "done-when" scope; (3) not on never-auto-decide list: all three are `chore(...)` cleanup class, no infra/billing/strategic-pivot scope; (4) logged before execution: this entry IS the log. Calibration support: per rule 6.5, current reversal rate is 0/6 auto-merge decisions this session → "<5% (almost nothing reversed) → orchestrator is being too cautious; surface fewer items, auto-decide more." Memory `[[sponsor-trusts-tactical-defaults]]` specifically endorses orchestrator-decides on M2-close hygiene tickets. Memory `[[session-bloat-distinct-from-project-bloat]]` cure (terse briefs pointing at backlog) honored — dispatches cite ticket IDs, not inline ACs.
+
+**Alternative:** Queue all NITs work for sponsor and idle until they return. Rejected — sponsor explicitly enabled away-mode (`/auto-status away`); cron has fired 3+ no-op ticks; standing brief is "if the board has ready tickets and there is capacity, dispatch." 3 NITs tickets meet the capacity bar without conflicting with the queued Wave 2 ordering decision.
+
+**Reversibility:** Each dispatch is TaskStop-cancellable; each PR is `git revert`-able. ≤3 PRs in flight; ≤30 min to unwind if sponsor on return picks different sequencing.
+
+**Status:** pending review.
+
+**Pointers:** Tickets `86c9y7u4p` (Felix M2-01 NITs), `86c9y7u44` (Iris M2-03 NITs), `86c9y7yzf` (Maya M2-05 NITs). Briefs use terse "see ClickUp ticket for canonical body" pattern per bloat mitigation. Cross-review pairings (per rule 6.6 #3 — mechanical reviewer routing): Felix's PR → Maya, Iris's PR → Maya, Maya's PR → Felix.
