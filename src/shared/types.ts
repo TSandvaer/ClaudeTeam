@@ -1,43 +1,82 @@
-// Shared domain types across extension host and webview.
-//
-// AgentMeta covers all THREE meta.json variants observed on disk
-// (see .claude/docs/data-sources.md + team/bram-research/m1-fixtures-2026-05-23.md):
-//
-//   variant       | agentType        | name        | toolUseId | Claude Code version
-//   --------------|------------------|-------------|-----------|--------------------
-//   v2.1.119      | persona slug     | absent      | absent    | 2.1.119 era
-//   new-generic   | engine type      | usually null| present   | 2.1.145+
-//   new-persona   | persona slug     | absent/null | present   | 2.1.145+ (undocumented in docs/data-sources.md
-//                                                                until M1-11 Bram doc PR lands)
-//
-// Sized as a discriminated-ish shape: `schemaVersion` records which path
-// the parser detected; the matcher does NOT depend on it (matchAgent is
-// purely field-driven). Downstream consumers (reducer / CLI) may use
-// `schemaVersion` for diagnostics.
+/**
+ * Shared domain types for the extension host and webview.
+ *
+ * This file is the single source of truth for cross-process types. Both
+ * `src/extension/**` (extension host) and `src/webview/**` (webview) import
+ * from here. Keep it free of runtime dependencies on either side.
+ *
+ * AgentMeta covers all THREE meta.json variants observed on disk
+ * (see .claude/docs/data-sources.md §4 + team/bram-research/m1-fixtures-2026-05-23.md):
+ *
+ *   variant       | agentType        | name        | toolUseId | Claude Code version
+ *   --------------|------------------|-------------|-----------|--------------------
+ *   v2.1.119      | persona slug     | absent      | absent    | 2.1.119 era
+ *   new-generic   | engine type      | usually null| present   | 2.1.145+
+ *   new-persona   | persona slug     | absent/null | present   | 2.1.145+
+ *
+ * `schemaVersion` records which path the parser detected; the matcher
+ * does NOT depend on it (matchAgent is purely field-driven). Downstream
+ * consumers (reducer / CLI) may use `schemaVersion` for diagnostics.
+ */
 
 /**
- * Detected meta.json schema family. v2.1.119 if `toolUseId` is absent;
- * v2.1.145 otherwise. The "new-persona" sub-variant is a v2.1.145 file
- * whose `agentType` is a persona slug instead of an engine type — the
- * matcher routes it identically to v2.1.119 (via `agentType_equals`).
+ * Detected meta.json schema variant. The v2.1.145 schema is split into two
+ * sub-tags because the on-disk shape diverges meaningfully (engine-type
+ * `agentType` vs persona-slug `agentType`) even though `toolUseId` is
+ * present in both. See `.claude/docs/data-sources.md` §4 "Schema detection
+ * rule" lines 141-149.
  */
-export type AgentMetaSchemaVersion = "v2.1.119" | "v2.1.145";
+export type AgentMetaSchemaVersion =
+  | "v2.1.119"
+  | "v2.1.145-general"
+  | "v2.1.145-persona";
 
 /**
  * Normalized agent metadata, drift-agnostic. The matcher accepts this
  * shape — never raw on-disk JSON. Parsers normalize before passing.
+ *
+ * `name` is typed as `string | null | undefined` so test/fixture authors
+ * can use `undefined` to mean "key absent" without ceremony. The parser
+ * (parseMeta) normalizes both `undefined` and on-disk `null` to `null`.
  */
 export interface AgentMeta {
-  /** Detected schema family — diagnostic only, NOT used by the matcher. */
+  /** Detected schema variant — diagnostic only, NOT used by the matcher. */
   schemaVersion: AgentMetaSchemaVersion;
   /** Engine type ("general-purpose", "Explore") OR persona slug ("felix") depending on variant. */
   agentType: string;
-  /** Persona name when populated. Absent → undefined; explicit `null` on disk → null. Mostly absent (~74%+ in practice). */
+  /** Persona name when populated. Absent → undefined; explicit `null` on disk → null. Mostly absent. */
   name: string | null | undefined;
   /** Free-text description supplied at spawn time. */
   description: string;
   /** Parent transcript's `tool_use.id` linking parent → child. Absent only on v2.1.119. */
   toolUseId: string | null;
+}
+
+/**
+ * Typed error thrown by `parseMeta` when the input cannot be normalized.
+ *
+ * The raw input is preserved on the `raw` field so the caller (file
+ * watcher) can log it for postmortem. This is a parse-time failure —
+ * callers should catch and skip the offending meta.json, not crash.
+ */
+export class MetaParseError extends Error {
+  override readonly name = "MetaParseError";
+  readonly raw: unknown;
+  readonly reason:
+    | "not-object"
+    | "missing-agentType"
+    | "missing-description"
+    | "invalid-field-type";
+
+  constructor(
+    message: string,
+    reason: MetaParseError["reason"],
+    raw: unknown,
+  ) {
+    super(message);
+    this.reason = reason;
+    this.raw = raw;
+  }
 }
 
 // =============================================================================
