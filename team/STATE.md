@@ -17,8 +17,8 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 - **`origin/main` tip:** `8494e58` (PR #22 merge — M2-01 extension scaffold + build pipeline). Verify: `git rev-parse origin/main`.
 - **M2 Wave 0 status: SHIPPED.** PR #19 (Nora M2-09 dispatch-template) `ccc05c4`, PR #20 (Iris M2-03 dashboard tile spec) `e989eed`, PR #21 (Sage M2-07 acceptance test plan) `5c650b4`, PR #22 (Felix M2-01 extension scaffold + build pipeline) `8494e58`. Sponsor scope-overlap (Option A) confirmed earlier this session.
 - **Test counts:** Maya verified locally on PR #22 worktree: 140 unit + 31 integration = **171 tests green** post-M2-01 merge.
-- **Open PRs:** **PR #23** (Felix M2-04, `86c9y7uhz` at `in review`) — CLEAN/CI green/awaiting Maya peer review. **PR #24** (Maya M2-05, `86c9y7uka` at `in review`) — CLEAN/CI green (runs `26341494087` + `26341479008`)/awaiting Felix peer review/Self-Test Report posted with 7 screenshots (`https://github.com/TSandvaer/ClaudeTeam/pull/24#issuecomment-4526324129`).
-- **In-flight agents:** Maya reviewing PR #23 (background); Felix reviewing PR #24 (background). Cross-review pair Felix ↔ Maya.
+- **Open PRs:** **PR #24** (Maya M2-05, `86c9y7uka` at `in review`) — Felix APPROVE_WITH_NITS (3 NITs), but DIRTY due to ENTRY 019 collision + `src/shared/messages.ts` merge with Felix's M2-04. Maya dispatched to rebase + resolve (background). **PR #23 SHIPPED** at `807c3c6` (Maya APPROVE_WITH_NITS → auto-merged); M2-04 NITs follow-up ticket `86c9y7y9z` filed (Felix owns, address before M2-06).
+- **In-flight agents:** Maya rebasing PR #24 on current main (background, agent `a6ca4de6ae82f952d`). Felix idle post-M2-04 review.
 - **Worktrees:** Felix worktree active on M2-04 lane (was detached at `6940033`); Maya worktree active on M2-05 lane (was detached at `df0a225`). Sage + Nora + Iris + Bram idle (no current dispatches).
 - **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:42:00Z` (this cron tick — sponsor picked Path A, Wave 1 dispatched).
 
