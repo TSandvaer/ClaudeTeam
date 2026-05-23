@@ -85,6 +85,8 @@ type WebviewMessage =
 
 Refine the shapes as needed; the rule is: **add a new message type rather than overloading an existing one**. Easier to read, easier to migrate.
 
+**JSON-serialization constraint (non-obvious — validated M2-04, PR #23).** VS Code `webview.postMessage` (host → webview) and `acquireVsCodeApi().postMessage` (webview → host) serialize payloads via **JSON.stringify**, not the browser's structured-clone algorithm. This means `Map`, `Set`, `Date`, `RegExp`, `Function`, `undefined`-valued properties, circular refs, and class instances do NOT survive the round-trip — `Map` arrives as `{}`, `Date` arrives as ISO string, etc. **Rule:** message payload types must be JSON-safe (plain objects, arrays, primitives, ISO date strings if you need dates). If a host-side data structure uses `Map` (e.g. roster tiles keyed by agent id), flatten to a plain object via `Object.fromEntries(map)` on send and rebuild via `new Map(Object.entries(obj))` on receive. M2-04 pattern: `src/extension/messageBus.ts` exports `serializeState(state)` that flattens the host-side `DashboardState` to a `SerializedDashboardState` shape; webview consumers use `Object.entries` on the flattened fields. Apply the same pattern to any new message type whose payload would naturally use a `Map`/`Set`/`Date`.
+
 ## Build & package
 
 - **Bundler:** `esbuild` for both host and webview. Speed matters during dev (reload-test loop).

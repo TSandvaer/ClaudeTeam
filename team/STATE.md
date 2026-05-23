@@ -17,8 +17,8 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 - **`origin/main` tip:** `8494e58` (PR #22 merge — M2-01 extension scaffold + build pipeline). Verify: `git rev-parse origin/main`.
 - **M2 Wave 0 status: SHIPPED.** PR #19 (Nora M2-09 dispatch-template) `ccc05c4`, PR #20 (Iris M2-03 dashboard tile spec) `e989eed`, PR #21 (Sage M2-07 acceptance test plan) `5c650b4`, PR #22 (Felix M2-01 extension scaffold + build pipeline) `8494e58`. Sponsor scope-overlap (Option A) confirmed earlier this session.
 - **Test counts:** Maya verified locally on PR #22 worktree: 140 unit + 31 integration = **171 tests green** post-M2-01 merge.
-- **Open PRs:** none yet (Wave 1 dispatches just fired).
-- **In-flight agents:** Felix on M2-04 (`86c9y7uhz`, branch `felix/m2-04-watcher-loop`, background); Maya on M2-05 (`86c9y7uka`, branch `maya/m2-05-webview-tile-renderer`, background).
+- **Open PRs:** **PR #23** (Felix M2-04, branch `felix/m2-04-watcher-loop`) — `MERGEABLE`/`CLEAN`, CI 2× SUCCESS, awaiting Maya peer review. Ticket `86c9y7uhz` flipped `in progress → in review` on PR open. Felix surfaced one non-obvious finding captured in `.claude/docs/vscode-extension-conventions.md` § Message protocol: VS Code `postMessage` uses JSON serialization not structured-clone → `Map`/`Set`/`Date` don't survive. M2-04 ships a `serializeState()` workaround in `src/extension/messageBus.ts`.
+- **In-flight agents:** Maya on M2-05 (`86c9y7uka`, branch `maya/m2-05-webview-tile-renderer`, background, still running). Felix done.
 - **Worktrees:** Felix worktree active on M2-04 lane (was detached at `6940033`); Maya worktree active on M2-05 lane (was detached at `df0a225`). Sage + Nora + Iris + Bram idle (no current dispatches).
 - **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:42:00Z` (this cron tick — sponsor picked Path A, Wave 1 dispatched).
 
