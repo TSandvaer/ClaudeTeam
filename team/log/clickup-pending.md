@@ -38,3 +38,7 @@ Suggested ClickUp `markdown_description` for each ticket: copy the entire `## M1
 The `mcp__clickup__clickup_create_task` tool was listed in Nora's persona file (`/.claude/agents/nora.md` line 4) but is NOT exposed to the Nora session at runtime in the current Claude Code harness version. The persona-file tool list is best-effort declarative — the runtime harness controls actual availability. **Until this is fixed, ClickUp ticket creation flows back through the orchestrator.** Nora drafts the tickets as backlog markdown; orchestrator creates them in ClickUp.
 
 Logged this gap explicitly so future planning sessions don't repeat the surprise.
+
+## PR transitions pending
+
+ENTRY 004: 86c9y5c7v -> in review
