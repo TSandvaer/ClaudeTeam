@@ -15,13 +15,23 @@ The Claude Code main session is the **orchestrator**. Six named-role sub-agents 
 5. **ClickUp status as hard gate** — every dispatch / PR-open / merge pairs with a ClickUp status flip in the same tool round.
 6. **Orchestrator never codes** — dispatches from symptoms, never greps/traces/edits source.
 7. **Always parallel dispatch** — every tick aims for 3–5 agents in flight; tickets aren't progress, dispatches are.
-8. **Tightened final-report contract** — sub-agent reports ≤200 words; PR URL + verdict + blockers + doc-updates line. State claims (CI, tests, webview smoke) must cite verifiable evidence (run-id URL / SHA / file:line / screenshot).
+8. **Tightened final-report contract** — sub-agent reports ≤200 words; PR URL + verdict + blockers + doc-updates line. State claims (CI, tests, webview smoke) must cite verifiable evidence (run-id URL / SHA / file:line / screenshot). **Rationale:** verbose sub-agent reports flooding the orchestrator's main conversation window is the dominant context-bloat surface; detailed content goes in PR body / Self-Test Report comment / `team/<role>/` notes — NOT the orchestrator-bound message.
+9. **CI-status command discipline** — when checking "is CI green?" for a merge-gate decision, use `gh pr view <num> --json statusCheckRollup -q '.statusCheckRollup[] | {name, status, conclusion}'` OR `gh run view <run-id> --json status,conclusion` (both authoritative). Do NOT rely on `gh pr checks <num>` for merge decisions — it caches "pending" for 2+ hours after the underlying run completes, burning polling cycles. Sanity check: any "pending" >30min → drill in with the authoritative command before concluding "still waiting".
 
 ## Autonomy
 
 Defers to user-global CLAUDE.md "Orchestrator autonomy" rule. Every autonomous orchestrator decision is logged to [.claude/decisions-while-away.md](.claude/decisions-while-away.md) with `Foundation:`, `Alternative:`, `Reversibility:`, `Status:` fields. Calibration target: 5–10% reversal rate.
 
 The reviewer-track gate is hard: every code PR requires a peer `APPROVE` comment from the designated reviewer before the orchestrator admin-merges. No self-merge. Cross-review pairing: **Felix ↔ Maya** (devs review each other), **Sage** QAs both, **Iris** design PRs reviewed by Maya for visuals or Felix for spec edges.
+
+## Coordination state (anti-bloat scaffolding)
+
+ClaudeTeam separates coordination state across four files by access pattern, so the main conversation window doesn't have to carry it:
+
+- **[team/STATE.md](team/STATE.md)** — between-tick source of truth. Read on resume; updated as state changes. Each role owns one section.
+- **[team/DECISIONS.md](team/DECISIONS.md)** — append-only team-level decisions log (broader than `.claude/decisions-while-away.md` — covers sponsor calls, structural choices, retro-driven changes).
+- **[team/log/process-incidents.md](team/log/process-incidents.md)** — append-only chronicle of failure modes (symptom / cause / recovery / prevention). Lazy-loaded — `.claude/docs/orchestration-overview.md` keeps only the terse stable rules.
+- **[.claude/retros/](.claude/retros/)** — per-milestone retros. Promote durable lessons to `.claude/docs/` / memory / `process-incidents.md`. Use [`RETRO-TEMPLATE.md`](.claude/retros/RETRO-TEMPLATE.md) as the starting point.
 
 ## ClickUp board
 
