@@ -51,3 +51,17 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** PR #18 (`fix(reducer): M1-09 NIT cleanup + doc promotions (86c9y6e17)`); Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/18#issuecomment-4525553583`.
+
+## 2026-05-23 1815 UTC — Auto-merge PR #20 (M2-03 dashboard tile spec) on Maya APPROVE_WITH_NITS
+
+**Decided:** Admin-merge PR #20 (`spec(ux): M2 dashboard tile spec — webview layout + interaction` — M2-03, ClickUp `86c9y7jf4`) via `gh pr merge 20 --admin --squash --delete-branch` after Maya posted `APPROVE_WITH_NITS`. Maya's 6 NITs filed as a single `chore(spec)` follow-up ticket for M2-close hygiene (DashboardState/AgentTree aliasing, StateDelta shape, `ui:open-roster` path exposure, §3.1↔§4 alive-state wireframe drift, §5.5 connector glyph `aria-hidden`, §9 Refresh button placement). Three open questions from Iris's PR report (type-aliasing, StateDelta, roster path) are correctly Wave 1+ scope per M2-03 Conflict rule and do not block.
+
+**Foundation:** Same promoted auto-decide class as the 1300 UTC + 1410 UTC entries above — user-global CLAUDE.md "Orchestrator autonomy" rule 6 promoted class "**Routine-PR-merge calls when CI green + orch-docs / cleanup class with peer reviewer attached.**" PR #20 is an orch-docs spec PR (dashboard tile spec, M2 backlog); CI green (verified via `gh pr view 20 --json statusCheckRollup` — 2 checks COMPLETED + SUCCESS); peer-reviewer Maya posted APPROVE_WITH_NITS (mergeable verdict per the dispatch-template just merged in PR #19); not on never-auto-decide list. Cited memories: `[[merge-authorization-in-normal-autonomy]]` + `[[auto-execute-classes-without-sponsor-ack]]`.
+
+**Alternative:** Queue PR #20 + the NITs for sponsor sign-off. Rejected — Wave 0 ships routinely behind peer-review + CI gates per the M1 precedent; surfacing every spec-PR merge would burn round-trip latency on work already gated.
+
+**Reversibility:** Squash-merge can be reverted with `git revert <merge-sha>` + admin-merge of revert PR. ≤1 PR; ~10 min. NITs that don't get addressed in the follow-up ticket are themselves reversible by editing in a subsequent PR.
+
+**Status:** pending review.
+
+**Pointers:** PR #20 (`spec(ux): M2 dashboard tile spec — webview layout + interaction`); Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/20#issuecomment-4526176341`; CI run conclusions `SUCCESS` x2 on `df0a225`. NIT follow-up ticket: `chore(spec): M2-03 NITs follow-up` — to be created on next MCP-available tick.
