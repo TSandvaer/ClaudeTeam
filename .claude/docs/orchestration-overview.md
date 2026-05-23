@@ -77,7 +77,18 @@ Background agents must `git commit && git push` after each milestone — uncommi
 6. **Orchestrator admin-merges:** `gh pr merge --admin --squash --delete-branch`.
 7. **Orchestrator moves ticket `in review → complete`** (paired with merge).
 
-`gh pr review --approve` may be blocked by shared git identity. Fall back to `gh pr comment --body-file <path>` with "APPROVE" in the body.
+`gh pr review --approve` may be blocked by shared git identity. Fall back to `gh pr comment --body-file <path>` with the verdict header `## REVIEW VERDICT: APPROVE | APPROVE_WITH_NITS | REQUEST_CHANGES` followed by per-finding bullets. Three valid verdicts — `APPROVE_WITH_NITS` is mergeable + ships a follow-up ticket for the nits (used 1× this session on M1-09; nits filed under `86c9y6e17` and shipped in PR #18 without blocking M1's merge).
+
+**Reviewer-side checkout pattern (prefer over `gh pr checkout`).** When a peer-reviewer pulls down a PR to verify locally, use:
+
+```bash
+git -C <reviewer-wt> fetch origin pull/<n>/head:pr-<n>-review
+git -C <reviewer-wt> checkout pr-<n>-review
+```
+
+This creates a throwaway local-only branch that does NOT bind the reviewer's worktree to the author's branch. `gh pr checkout <n>` does bind, which blocks the orchestrator's subsequent `gh pr merge --delete-branch` until the reviewer detaches (see `team/log/process-incidents.md` "Peer-reviewer worktree blocks `gh pr merge --delete-branch`"). The fetch-into-local-branch pattern is the upstream prevention — eliminates the failure mode entirely instead of recovering from it. Pattern source: sibling project MarianLearning's dispatch-template. Validated 3× this session (Maya reviewing PR #14 + PR #18, Felix reviewing PR #15) — zero `--delete-branch` blocks after adopting.
+
+Whichever pattern the reviewer uses, **end with `git switch --detach HEAD`** — defense-in-depth.
 
 ## ClickUp as hard gate
 
