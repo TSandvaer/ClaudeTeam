@@ -10,27 +10,23 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-23 (M1 9/11 complete; M1-09 + M1-10 remain; bloat-prevention bundle landing)
+## Current state — 2026-05-23 (M1 SHIPPED — 11/11 complete; M2 dispatching to Nora)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `57c78a7` (orch-doc commit — peer-reviewer-worktree-blocks-delete-branch failure mode capture). Verify: `git rev-parse origin/main`.
-- **M1 status:** 9 / 11 tickets complete. Two remain, both sequential on Felix's lane:
-  - **M1-09** — `feat(cli): reducer + agent-tree CLI driver` (ClickUp `86c9y5chc`, status `to do`). Owner Felix, reviewer Maya. Dependencies all merged.
-  - **M1-10** — `test(m1): integration tests against fixture filesystem` (ClickUp `86c9y5cmg`, status `to do`). Owner Sage, reviewer Felix. Depends on M1-09.
-- **Test counts on main right now:** matcher 28 + loader 16 + metaJsonLoader 23 + subagentTailer 13 + sessionRegistry 19 = **99 unit tests, all green** at `57c78a7`. CI workflow at `.github/workflows/ci.yml`.
-- **Open PRs at session-start:** none. Last merged: PR #13 (M1-07 sessions/PID registry).
-- **Worktrees:** all six detached at session-start (none holding a branch). Felix worktree at `b19c5bf`; Sage at `8fc667c`. See § Worktree state below.
-- **In-flight agents:** none. Safe to dispatch.
-- **Auto-status:** ON (local), 5-min pulse, cron job `a88bd803` (`3-58/5 * * * *`).
-- **This session's structural changes (orch-doc bundle):**
-  - Extracted failure-mode entries from `.claude/docs/orchestration-overview.md` → `team/log/process-incidents.md` (NEW).
-  - Repurposed `team/STATE.md` (this file) as between-tick source of truth (was previously Nora's coord-doc run-log; her entries folded into her per-role history section below).
-  - Created `team/DECISIONS.md` (NEW) as append-only decisions log.
-  - Created `.claude/retros/` (NEW) for milestone retros.
-  - Refined CLAUDE.md hard rule #8 to cite context-bloat rationale + added CI-status command discipline.
+- **`origin/main` tip:** `29e98f2` (M1-10 merge — `test(m1): integration tests against fixture filesystem`). Verify: `git rev-parse origin/main`.
+- **M1 status: SHIPPED.** 11 / 11 tickets complete. Retro authored at [.claude/retros/retro-2026-05-23-m1-close.md](.claude/retros/retro-2026-05-23-m1-close.md).
+  - M1-09 (Felix reducer + CLI) merged at `2ef2025` — PR #14, Maya APPROVE_WITH_NITS, NITs filed as follow-up `86c9y6e17`.
+  - M1-10 (Sage integration tests) merged at `29e98f2` — PR #15, Felix APPROVE, no bugs in Felix's modules surfaced.
+- **Test counts on main right now:** 99 unit tests + 31 integration tests = **130 tests green** at `29e98f2`. Three CI workflow steps (typecheck + lint + unit + integration) all SUCCESS.
+- **Open PRs:** none.
+- **Open ClickUp tickets:** M1-09-followup `86c9y6e17` (P2, Felix's lane — Maya's 5 NITs + 2 doc-promotion candidates; not blocking M2).
+- **Worktrees:** all detached post-merge. See § Worktree state below.
+- **In-flight agents:** none.
+- **Auto-status:** AWAY (active orchestration tick every 15 min), cron job `f55a798f` (`7,22,37,52 * * * *`). Switched mid-session from local pulse.
+- **M2 scope:** VS Code extension scaffold + webview message protocol + file-watcher loop on top of M1's data plane. Nora authors the backlog (`team/nora-pl/milestone-2-backlog.md`); orchestrator creates ClickUp tickets after sponsor approves M2 scope.
 
-**Single most useful next action:** dispatch Felix on M1-09. Worktree `c:\Trunk\PRIVATE\ClaudeTeam-felix-wt`, branch `felix/m1-09-cli-driver` from `origin/main`. Self-Test Report required (first UX-visible PR).
+**Single most useful next action:** dispatch Nora for M2 backlog authoring (in progress as of this STATE update). After backlog lands and sponsor approves the M2 scope, dispatch the first M2 wave in parallel: Bram for VS Code Extension API prior-art research; Iris for the M2 dashboard tile spec inheriting M1-03's vocabulary; Felix for the extension scaffold ticket once Nora's backlog is reviewed.
 
 ---
 
