@@ -1,0 +1,42 @@
+# Files excluded from the .vsix package.
+# The packager includes everything not listed here.
+# Only dist/ and the manifest are needed at runtime.
+
+# Source — not needed at runtime; bundles are in dist/
+src/
+tests/
+
+# Dev tooling
+.github/
+.claude/
+.eslintrc*
+.eslintignore
+.prettierrc*
+tsconfig*.json
+vitest*.config.ts
+esbuild.config.mjs
+
+# Team / planning docs — not extension content
+team/
+docs/
+
+# Build artifacts that are NOT the extension bundles
+dist/cli/
+
+# Environment / editor
+.env
+.vscode/
+*.vsix
+
+# Node modules — vsce packs the extension; deps are bundled by esbuild
+node_modules/
+
+# Working notes / scratch files
+.scratch/
+
+# Misc
+*.map
+.gitignore
+.gitkeep
+*.md
+!README.md

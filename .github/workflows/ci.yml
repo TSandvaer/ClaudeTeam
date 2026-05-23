@@ -34,3 +34,11 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+
+      - name: Build bundles (required for VSIX)
+        run: npm run build
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+
+      - name: Package VSIX (manifest gate)
+        run: npx vsce package --no-yarn
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'

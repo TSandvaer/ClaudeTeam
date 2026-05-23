@@ -1,23 +1,118 @@
-// Bundle config — M1-09 adds the CLI entry point.
-// M2 will add extension host + webview targets.
-//
-// CLI target: src/cli/agentTree.ts → dist/cli/agentTree.js
-// Platform: Node (no browser shims needed).
+/**
+ * esbuild build configuration.
+ *
+ * Three bundles:
+ *
+ *   1. Extension host  (CJS, external vscode)
+ *      src/extension/main.ts → dist/extension/main.js
+ *      - CommonJS required: VS Code still loads extension entry points as CJS.
+ *      - `vscode` is always external — the host runtime provides it.
+ *      - js-yaml and zod are bundled (runtime deps, not devDeps).
+ *
+ *   2. Webview         (IIFE, no externals)
+ *      src/webview/main.ts → dist/webview/main.js
+ *      - IIFE required: VS Code webviews don't support ES module imports in
+ *        injected <script> tags. No import map available in the webview
+ *        context. See vscode-extension-conventions.md "Open questions §ESM".
+ *      - acquireVsCodeApi() is a webview global, not an npm module — no external.
+ *
+ *   3. CLI             (ESM, Node)
+ *      src/cli/agentTree.ts → dist/cli/agentTree.js
+ *      - Retained from M1-09. Not affected by the extension targets.
+ *
+ * `npm run watch` (AC10) starts all three in parallel via Promise.all with
+ * esbuild's `context.watch()`.
+ *
+ * Source: .claude/docs/vscode-extension-conventions.md "Build & package"
+ *         team/bram-research/m2-vscode-prior-art-2026-05-23.md §"VS Code API surface"
+ */
 
-const { build } = await import("esbuild");
+const { build, context } = await import("esbuild");
 
-await build({
+const isWatch = process.argv.includes("--watch");
+
+// ---------------------------------------------------------------------------
+// Shared base options
+// ---------------------------------------------------------------------------
+
+const commonOptions = {
+  bundle: true,
+  sourcemap: true,
+  logLevel: "info",
+};
+
+// ---------------------------------------------------------------------------
+// Target definitions
+// ---------------------------------------------------------------------------
+
+/** Extension host bundle — CJS, external vscode. */
+const extensionHostTarget = {
+  ...commonOptions,
+  entryPoints: ["src/extension/main.ts"],
+  outfile: "dist/extension/main.js",
+  platform: "node",
+  target: "es2022",
+  format: "cjs",
+  // vscode is provided by the extension host runtime; never bundle it.
+  external: ["vscode"],
+};
+
+/** Webview bundle — IIFE, all deps bundled (no externals). */
+const webviewTarget = {
+  ...commonOptions,
+  entryPoints: ["src/webview/main.ts"],
+  outfile: "dist/webview/main.js",
+  platform: "browser",
+  target: "es2020",
+  format: "iife",
+  // No externals: acquireVsCodeApi is a webview global, not an npm module.
+  external: [],
+};
+
+/** CLI bundle — ESM, Node (retained from M1-09). */
+const cliTarget = {
+  ...commonOptions,
   entryPoints: ["src/cli/agentTree.ts"],
   outfile: "dist/cli/agentTree.js",
-  bundle: true,
   platform: "node",
   target: "es2022",
   format: "esm",
-  sourcemap: true,
-  logLevel: "info",
-  // Mark Node built-ins as external so esbuild doesn't try to bundle them.
-  // js-yaml and zod ARE bundled (they're in dependencies, not devDependencies).
   external: [],
-});
+};
 
-console.log("[esbuild.config] CLI bundle written to dist/cli/agentTree.js");
+// ---------------------------------------------------------------------------
+// Build or watch
+// ---------------------------------------------------------------------------
+
+if (isWatch) {
+  // Watch mode — all three targets run in parallel via esbuild contexts.
+  // `npm run watch` passes --watch.
+  const [extCtx, webCtx, cliCtx] = await Promise.all([
+    context(extensionHostTarget),
+    context(webviewTarget),
+    context(cliTarget),
+  ]);
+
+  await Promise.all([
+    extCtx.watch(),
+    webCtx.watch(),
+    cliCtx.watch(),
+  ]);
+
+  console.log(
+    "[esbuild.config] Watch mode active — rebuilding on file changes...",
+  );
+  // Keep the process alive; Ctrl-C to stop.
+} else {
+  // One-shot build.
+  await Promise.all([
+    build(extensionHostTarget),
+    build(webviewTarget),
+    build(cliTarget),
+  ]);
+
+  console.log("[esbuild.config] Build complete:");
+  console.log("  dist/extension/main.js  (extension host, CJS)");
+  console.log("  dist/webview/main.js    (webview, IIFE)");
+  console.log("  dist/cli/agentTree.js   (CLI, ESM)");
+}

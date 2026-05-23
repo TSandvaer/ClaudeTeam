@@ -1,25 +1,101 @@
 {
   "name": "claudeteam",
+  "displayName": "ClaudeTeam",
   "version": "0.0.1",
-  "private": true,
-  "type": "module",
-  "description": "VS Code extension that surfaces orchestrated Claude Code agent teams.",
+  "description": "Real-time dashboard for orchestrated Claude Code agent teams.",
+  "publisher": "claudeteam",
   "license": "UNLICENSED",
+  "type": "module",
+  "private": true,
+  "main": "dist/extension/main.js",
   "engines": {
+    "vscode": "^1.85.0",
     "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TSandvaer/ClaudeTeam.git"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:claudeteam.dashboard"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudeteam-container",
+          "title": "ClaudeTeam",
+          "icon": "$(hubot)"
+        }
+      ]
+    },
+    "views": {
+      "claudeteam-container": [
+        {
+          "type": "webview",
+          "id": "claudeteam.dashboard",
+          "name": "Dashboard",
+          "when": "true"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "claudeteam.refresh",
+        "title": "ClaudeTeam: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "claudeteam.openRoster",
+        "title": "ClaudeTeam: Open Roster",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "claudeteam.openAgentTranscript",
+        "title": "ClaudeTeam: Open Agent Transcript",
+        "icon": "$(book)"
+      }
+    ],
+    "configuration": {
+      "title": "ClaudeTeam",
+      "properties": {
+        "claudeteam.rosterPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to teams.yaml roster file. Empty string uses the default global location (~/.claudeteam/teams.yaml) with per-project fallback."
+        },
+        "claudeteam.pollIntervalMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 500,
+          "description": "How often (in milliseconds) to poll ~/.claude/ for agent state updates."
+        },
+        "claudeteam.showBackgroundCount": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a count of unrostered (background) agents in the dashboard."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
     "agent-tree": "node dist/cli/agentTree.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:unit": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.30",
+    "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.3.1",
     "@typescript-eslint/parser": "^7.3.1",
     "@vscode/vsce": "^2.24.0",
