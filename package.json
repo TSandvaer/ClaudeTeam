@@ -1,0 +1,29 @@
+{
+  "name": "claudeteam",
+  "version": "0.0.1",
+  "private": true,
+  "description": "VS Code extension that surfaces orchestrated Claude Code agent teams.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@typescript-eslint/eslint-plugin": "^7.3.1",
+    "@typescript-eslint/parser": "^7.3.1",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.2",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.3",
+    "vitest": "^1.4.0"
+  }
+}
