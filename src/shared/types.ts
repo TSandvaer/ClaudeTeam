@@ -181,3 +181,44 @@ export interface RosterLoadResult {
   warnings: string[];
   errors: string[];
 }
+
+// =============================================================================
+// Session registry types — live Claude Code processes read from
+// `~/.claude/sessions/{pid}.json`. See .claude/docs/data-sources.md §1
+// for the on-disk schema + §"Liveness inference" for the liveness rule.
+// =============================================================================
+
+/**
+ * One live (or recently-live) Claude Code session, as derived from a
+ * `~/.claude/sessions/{pid}.json` file plus an OS-level liveness probe.
+ *
+ * The reducer joins these records to per-session subagent state. The
+ * polling loop (M1-09+) re-reads the directory on every tick — there is
+ * no incremental update; rebuild from disk each pass.
+ *
+ * `isAlive` reflects the result of `process.kill(pid, 0)` at the moment
+ * `listSessions` ran. It is NOT cached; the next `listSessions` call
+ * re-probes. See `sessionRegistry.ts` for the exact try/catch shape.
+ */
+export interface SessionRecord {
+  /** OS PID. Matches the source filename (`{pid}.json`). */
+  pid: number;
+  /** UUID; used to find the project transcript under `projects/{slug}/`. */
+  sessionId: string;
+  /** Project working directory. Maps to the project slug under `projects/`. */
+  cwd: string;
+  /** Claude Code version string from the session JSON (e.g. "2.1.145"). */
+  version: string;
+  /** Entry surface (`claude-vscode` vs `cli`). Informational. */
+  entrypoint: string;
+  /** Unix ms timestamp when the session JSON recorded start. */
+  startedAt: number;
+  /**
+   * Result of the liveness probe. `true` when `process.kill(pid, 0)`
+   * succeeded; `false` when it threw (ESRCH = no such process; EPERM =
+   * process exists but cannot be signaled — for V1 we accept the
+   * EPERM-as-dead simplification per data-sources.md "Liveness inference"
+   * cross-reference to JSONL mtime as the secondary signal).
+   */
+  isAlive: boolean;
+}
