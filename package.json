@@ -2,6 +2,7 @@
   "name": "claudeteam",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "description": "VS Code extension that surfaces orchestrated Claude Code agent teams.",
   "license": "UNLICENSED",
   "engines": {
@@ -9,6 +10,7 @@
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "agent-tree": "node dist/cli/agentTree.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
