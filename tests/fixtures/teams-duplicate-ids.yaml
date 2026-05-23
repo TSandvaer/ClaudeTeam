@@ -1,0 +1,24 @@
+# Two teams both claim member id "felix" — loader emits a warning and
+# second-wins by load order (per .claude/docs/roster-matching.md "Loader
+# edge cases" / "Same `id` in two teams").
+#
+# Note: duplicate ids WITHIN a single team are schema-rejected; that's a
+# different bug class (see teams-invalid.yaml shape rules). This fixture
+# tests cross-team duplicates only.
+teams:
+  - id: claudeteam-alpha
+    name: "ClaudeTeam Alpha"
+    members:
+      - id: felix
+        display: "Felix (Alpha)"
+        role: "Extension Host Dev"
+        match:
+          - agentType_equals: "felix"
+  - id: claudeteam-beta
+    name: "ClaudeTeam Beta"
+    members:
+      - id: felix
+        display: "Felix (Beta)"
+        role: "Extension Host Dev"
+        match:
+          - name_prefix: "felix-beta-"

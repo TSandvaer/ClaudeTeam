@@ -1,0 +1,11 @@
+# Intentionally malformed YAML — unterminated string + bad indentation.
+# Loader must return an error in `errors`, NOT throw.
+teams:
+  - id: claudeteam-broken
+    name: "ClaudeTeam Broken
+    members:
+    - id: felix
+       display: "Felix"
+      role: "Extension Host Dev"
+      match:
+        - agentType_equals: "felix"
