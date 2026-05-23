@@ -1,0 +1,33 @@
+# Per-project teams.yaml — overrides member rules from the global file.
+# Pair with teams-valid.yaml (used as the global) for the
+# project-override loader test.
+#
+# Override semantics tested:
+#   - team "claudeteam-alpha" exists in both files.
+#   - member "felix" in this file replaces the global "felix" entirely
+#     (different match rules, different display).
+#   - member "iris" is project-only — appended at the end of alpha.members.
+#   - global "maya" and "bram" stay intact (no project entry by id).
+#   - "claudeteam-gamma" is a project-only team — appended after global teams.
+teams:
+  - id: claudeteam-alpha
+    name: "ClaudeTeam Alpha (project)"
+    members:
+      - id: felix
+        display: "Felix (project)"
+        role: "Extension Host Dev (project rules)"
+        match:
+          - name_prefix: "felix-pr"
+      - id: iris
+        display: "Iris"
+        role: "UX Designer"
+        match:
+          - agentType_equals: "iris"
+  - id: claudeteam-gamma
+    name: "ClaudeTeam Gamma (project-only)"
+    members:
+      - id: nora
+        display: "Nora"
+        role: "Planner"
+        match:
+          - agentType_equals: "nora"

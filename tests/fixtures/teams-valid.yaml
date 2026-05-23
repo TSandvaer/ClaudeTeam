@@ -1,0 +1,35 @@
+# Valid teams.yaml fixture — covers all four match-rule types and both
+# meta.json schema variants for the matcher tests.
+teams:
+  - id: claudeteam-alpha
+    name: "ClaudeTeam Alpha"
+    description: "Production extension build team"
+    members:
+      - id: felix
+        display: "Felix"
+        role: "Extension Host Dev"
+        color: "#5d8aa8"
+        match:
+          - name_prefix: "felix-"        # new-generic v2.1.145 spawn with name populated
+          - agentType_equals: "felix"    # old v2.1.119 + new-persona v2.1.145
+      - id: maya
+        display: "Maya"
+        role: "Webview UI Dev"
+        color: "#9caf88"
+        match:
+          - name_equals: "maya-prod"
+          - agentType_equals: "maya"
+      - id: bram
+        display: "Bram"
+        role: "Internals Consultant"
+        match:
+          - description_contains: "Bram research"   # case-insensitive
+          - agentType_equals: "bram"
+  - id: claudeteam-beta
+    name: "ClaudeTeam Beta"
+    members:
+      - id: sage
+        display: "Sage"
+        role: "QA / Tester"
+        match:
+          - agentType_equals: "sage"
