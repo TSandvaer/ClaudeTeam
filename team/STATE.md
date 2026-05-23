@@ -10,7 +10,7 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-23 (M2 Wave 0 SHIPPED — 4 PRs merged; ClickUp MCP unavailable this session; Wave 1 next)
+## Current state — 2026-05-23 (M2 Wave 0 SHIPPED + ClickUp flushed + NITs tickets filed; Wave 1 ready to dispatch)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
@@ -20,13 +20,12 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 - **Open PRs:** none.
 - **In-flight agents:** none.
 - **Worktrees:** Felix at `6940033` detached (post PR #22 fix), Maya at `df0a225` detached (post PR #20 review), Sage at `1b3ebf3` detached (PR #21 author), Nora at PR #19 head detached. All cleanly detached.
-- **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:09:42Z`.
+- **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:40:00Z` (this cron tick — ClickUp MCP came back mid-tick, flushed + created NITs tickets in same round).
 
-**Pending follow-up work (queued, not blocking Wave 1):**
-
-1. **ClickUp MCP server did not connect this session** — all status flips (ENTRY 014–018) queued in [team/log/clickup-pending.md](team/log/clickup-pending.md) per documented fallback. Flush when MCP available next session.
-2. **M2-03 NITs follow-up ticket** — 6 NITs from Maya's PR #20 review (DashboardState/AgentTree aliasing, StateDelta shape, `ui:open-roster` path exposure, §3.1↔§4 alive-state wireframe drift, §5.5 connector glyph `aria-hidden`, §9 Refresh button placement). Pending MCP for `chore(spec)` ticket creation.
-3. **M2-01 NITs follow-up ticket** — 3 NITs from Maya's PR #22 review: (a) manual-reload screenshot missing per CLAUDE.md hard rule #3 (borderline — M2-01 webview is single text node, M2-05 replaces); (b) redundant `"when":"true"` on view contribution; (c) `messageBus.postState` `_state` param naming. Pending MCP for `chore(scaffold)` ticket creation.
+**ClickUp board state (post-flush):**
+- All Wave 0 tickets `complete` on board: `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01). Direct API calls; intermediate "in review" entries were skipped because the developer-side flip never happened (sub-agent MCP gap, see `.claude/docs/orchestration-overview.md` "ClickUp as hard gate").
+- **M2-03 NITs follow-up:** `86c9y7u44` — to do — Iris owns; 6 NITs.
+- **M2-01 NITs follow-up:** `86c9y7u4p` — to do — Felix owns; 3 NITs.
 
 **This-session structural delta (newest at top):**
 
@@ -39,16 +38,18 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 | `7af93bd` | chore(orch): ENTRY 015 — 86c9y7jn9 -> complete (PR #19 merged) |
 | `ccc05c4` | chore(docs): enumerate APPROVE_WITH_NITS verdict in dispatch-template (M2-09) (#19) |
 
-**Ready to dispatch on next session (Wave 1, parallel):**
+**Ready to dispatch (Wave 1, parallel) — sponsor decision: this session or next?**
 
-- **M2-04 (Felix — file-watcher loop)** — `src/extension/watcher/watcherLoop.ts` + extract `cwdToSlug` to `src/shared/slug.ts` (resolves M1-09-followup duplication item). ClickUp ticket NOT yet created.
-- **M2-05 (Maya — webview tile renderer)** — vanilla TS per Bram's M2-02 prior-art research. ClickUp ticket NOT yet created.
+ClickUp tickets M2-04/05/06/08 NOT yet created (orchestrator deferred creation pending sponsor "go" given session-bloat lessons earlier). Backlog body for each is already canonical in `team/nora-pl/milestone-2-backlog.md`.
+
+- **M2-04 (Felix — file-watcher loop)** — `src/extension/watcher/watcherLoop.ts` + extract `cwdToSlug` to `src/shared/slug.ts` (resolves M1-09-followup duplication item).
+- **M2-05 (Maya — webview tile renderer)** — vanilla TS per Bram's M2-02 prior-art research.
 
 Wave 2 (after Wave 1 lands):
-- **M2-06 (Felix — host↔webview integration)** — M2 shippable gate (extension installs from `.vsix`, Activity Bar tiles render live data). ClickUp ticket NOT yet created.
+- **M2-06 (Felix — host↔webview integration)** — M2 shippable gate (extension installs from `.vsix`, Activity Bar tiles render live data).
 
 Wave 3 (after Wave 2 lands):
-- **M2-08 (Sage — `@vscode/test-electron` Layer-3 tests)**. ClickUp ticket NOT yet created.
+- **M2-08 (Sage — `@vscode/test-electron` Layer-3 tests)**.
 
 After Wave 3 → M2 close + retro at `.claude/retros/retro-YYYY-MM-DD-m2-close.md` using `.claude/retros/RETRO-TEMPLATE.md`.
 

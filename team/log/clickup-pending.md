@@ -43,6 +43,8 @@ Logged this gap explicitly so future planning sessions don't repeat the surprise
 
 Per `.claude/docs/orchestration-overview.md` "ClickUp as hard gate" — sub-agents append intended status transitions here; orchestrator flushes on each tick.
 
+**Last flush:** 2026-05-23 18:40 UTC by orchestrator — flushed through ENTRY 018 (all M2 Wave 0 tickets `86c9y7jn9`/`86c9y7jf4`/`86c9y7jjd`/`86c9y7jdz` set to `complete` directly; intermediate "in review" entries 014 were redundant for sub-agents whose MCP gap meant the orchestrator was already going to be the one writing the final state). M1 entries 002-013 were pre-flushed during M1 via direct MCP calls (boards already at `complete`); they remain here as historical audit.
+
 ```
 ENTRY 002: 86c9y5c4g -> in review
 ENTRY 003: 86c9y5c8m -> in review
