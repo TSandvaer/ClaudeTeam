@@ -83,7 +83,7 @@ Background agents must `git commit && git push` after each milestone — uncommi
 
 Every dispatch / PR-open / merge pairs with a ClickUp status flip in the same tool round. Status names (case-sensitive): `to do` → `in progress` → `in review` → `complete`.
 
-If MCP is unreachable, the agent appends the intended transition to `team/log/clickup-pending.md` as `ENTRY NNN: <ticket_id> -> <new_status>`. The orchestrator flushes on reconnect.
+**Sub-agent MCP gap (permanent).** Persona-declared `mcp__clickup__*` tools are NOT surfaced to sub-agent runtimes in the current Claude Code harness — confirmed 2026-05-23 by Bram's probe ([PR #2](https://github.com/TSandvaer/ClaudeTeam/pull/2), see `team/bram-research/probe-clickup-mcp.md`). This is structural harness behavior, not a transient connection gap (same filtering pattern as the `Agent` tool described in `agents/TEAM.md` line 39). The orchestrator owns ClickUp writes; sub-agents append intended transitions to `team/log/clickup-pending.md` as `ENTRY NNN: <ticket_id> -> <new_status>`, and the orchestrator flushes on each tick. Ticket creation, status flips, and comments happen from the orchestrator's surface — never from a sub-agent dispatch.
 
 ## Autonomy log
 

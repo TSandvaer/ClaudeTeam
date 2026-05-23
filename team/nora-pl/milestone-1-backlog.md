@@ -8,7 +8,7 @@ ClickUp IDs are appended once the tickets are created in the board (list `901523
 
 ---
 
-## M1-01 — `chore(repo): bootstrap TypeScript scaffold + CI`
+## M1-01 — `chore(repo): bootstrap TypeScript scaffold + CI` — [ClickUp 86c9y5c4g](https://app.clickup.com/t/86c9y5c4g)
 
 **Owner:** Felix
 **Peer reviewer:** Maya
@@ -59,7 +59,7 @@ If `vsce --version` fails (toolchain missing), STOP and surface — do not work 
 
 ---
 
-## M1-02 — `research(fixtures): capture meta.json + JSONL + sessions samples`
+## M1-02 — `research(fixtures): capture meta.json + JSONL + sessions samples` — [ClickUp 86c9y5c7v](https://app.clickup.com/t/86c9y5c7v)
 
 **Owner:** Bram
 **Peer reviewer:** orchestrator-direct (Bram's research PRs)
@@ -115,7 +115,7 @@ If the sponsor has not yet answered the "test fixture sourcing" open question (a
 
 ---
 
-## M1-03 — `spec(cli): M1 CLI output layout + glyph spec`
+## M1-03 — `spec(cli): M1 CLI output layout + glyph spec` — [ClickUp 86c9y5c8m](https://app.clickup.com/t/86c9y5c8m)
 
 **Owner:** Iris
 **Peer reviewer:** Felix (Iris design PR with data-shape implications goes to Felix per cross-pair rule)
@@ -152,7 +152,7 @@ Spec what `npm run agent-tree` prints. Even though M1's output is text, the visu
 
 ---
 
-## M1-04 — `test-plan(m1): M1 acceptance test plan`
+## M1-04 — `test-plan(m1): M1 acceptance test plan` — [ClickUp 86c9y5ca3](https://app.clickup.com/t/86c9y5ca3)
 
 **Owner:** Sage
 **Peer reviewer:** Felix (test plan touches host-side surfaces)
@@ -193,7 +193,7 @@ Should wait for M1-03 to land so the CLI's done-when test can cite the spec'd ou
 
 ---
 
-## M1-05 — `feat(parser): meta.json parser (v2.1.119 + v2.1.145)`
+## M1-05 — `feat(parser): meta.json parser (v2.1.119 + v2.1.145)` — [ClickUp 86c9y5cah](https://app.clickup.com/t/86c9y5cah)
 
 **Owner:** Felix
 **Peer reviewer:** Maya
@@ -246,7 +246,7 @@ If the actual fixture shape differs from `.claude/docs/data-sources.md`, update 
 
 ---
 
-## M1-06 — `feat(parser): subagent JSONL tailer + activity extraction`
+## M1-06 — `feat(parser): subagent JSONL tailer + activity extraction` — [ClickUp 86c9y5ccb](https://app.clickup.com/t/86c9y5ccb)
 
 **Owner:** Felix
 **Peer reviewer:** Maya
@@ -292,7 +292,7 @@ npm run test -- subagentTailer
 
 ---
 
-## M1-07 — `feat(parser): sessions/PID registry + liveness`
+## M1-07 — `feat(parser): sessions/PID registry + liveness` — [ClickUp 86c9y5ccn](https://app.clickup.com/t/86c9y5ccn)
 
 **Owner:** Felix
 **Peer reviewer:** Maya
@@ -338,7 +338,7 @@ npm run test -- sessionRegistry
 
 ---
 
-## M1-08 — `feat(roster): YAML loader + matcher`
+## M1-08 — `feat(roster): YAML loader + matcher` — [ClickUp 86c9y5cfe](https://app.clickup.com/t/86c9y5cfe)
 
 **Owner:** Felix
 **Peer reviewer:** Maya
@@ -390,7 +390,7 @@ If `js-yaml` parser behavior surprises you (e.g., a duplicate-id case the doc sa
 
 ---
 
-## M1-09 — `feat(cli): reducer + agent-tree CLI driver`
+## M1-09 — `feat(cli): reducer + agent-tree CLI driver` — [ClickUp 86c9y5chc](https://app.clickup.com/t/86c9y5chc)
 
 **Owner:** Felix
 **Peer reviewer:** Maya
@@ -449,7 +449,7 @@ If composing the four parser modules surfaces a missing type or a contract misma
 
 ---
 
-## M1-10 — `test(m1): integration tests against fixture filesystem`
+## M1-10 — `test(m1): integration tests against fixture filesystem` — [ClickUp 86c9y5cmg](https://app.clickup.com/t/86c9y5cmg)
 
 **Owner:** Sage
 **Peer reviewer:** Felix (host-side surface)
