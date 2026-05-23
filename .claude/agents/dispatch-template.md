@@ -106,6 +106,22 @@ This agent is being dispatched in the background. The orchestrator MUST pair thi
 - **Bram's research PRs** → orchestrator-merge direct (research notes don't need code peer-review). If the research drives a code-change recommendation, file a separate ticket for the change.
 - **Nora's ticket/doc PRs** → orchestrator-merge direct unless they touch shared coordination docs that other roles depend on.
 
+### Cross-review verdict format
+
+Use `gh pr comment --body-file <path>` (never inline `--body "..."`) with the verdict header as the first line:
+
+```
+## REVIEW VERDICT: APPROVE | APPROVE_WITH_NITS | REQUEST_CHANGES
+```
+
+Three valid verdicts — all are load-bearing:
+
+- **`APPROVE`** — PR ships as-is; no outstanding issues.
+- **`APPROVE_WITH_NITS`** — PR ships as-is; NITs are filed as follow-up tickets before the next milestone close, not blocking this merge.
+- **`REQUEST_CHANGES`** — PR does NOT merge until the listed issues are resolved.
+
+`APPROVE_WITH_NITS` is the correct verdict when the PR meets all acceptance criteria but has non-blocking quality issues worth tracking. Do NOT downgrade to `APPROVE` (silently drops the nits) or upgrade to `REQUEST_CHANGES` (incorrectly blocks a shippable PR).
+
 ## Worktree map (reference)
 
 | Role | Worktree path | Default branch |
