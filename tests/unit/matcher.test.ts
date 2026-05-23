@@ -19,7 +19,10 @@ import type { AgentMeta, Team } from "../../src/shared/types.js";
 
 function meta(partial: Partial<AgentMeta> & { description: string; agentType: string }): AgentMeta {
   return {
-    schemaVersion: "v2.1.145",
+    // Default to v2.1.145-general because the helper's default agentType
+    // call-sites use engine types ("general-purpose"). Tests that target
+    // the persona variant pass an explicit schemaVersion override.
+    schemaVersion: "v2.1.145-general",
     name: null,
     toolUseId: "toolu_test",
     ...partial,
@@ -143,7 +146,7 @@ describe("evalRule", () => {
       expect(
         evalRule(
           { agentType_equals: "felix" },
-          { schemaVersion: "v2.1.145", agentType: "felix", name: null, description: "x", toolUseId: "toolu_abc" },
+          { schemaVersion: "v2.1.145-persona", agentType: "felix", name: null, description: "x", toolUseId: "toolu_abc" },
         ),
       ).toBe(true);
     });
@@ -229,7 +232,7 @@ describe("matchAgent", () => {
 
     it("matches v2.1.145 generic schema via name_prefix", () => {
       const result = matchAgent(
-        { schemaVersion: "v2.1.145", agentType: "general-purpose", name: "felix-pr310", description: "new-generic", toolUseId: "toolu_1" },
+        { schemaVersion: "v2.1.145-general", agentType: "general-purpose", name: "felix-pr310", description: "new-generic", toolUseId: "toolu_1" },
         ROSTER,
       );
       expect(result).toEqual({ teamId: "alpha", memberId: "felix" });
@@ -238,7 +241,7 @@ describe("matchAgent", () => {
     it("matches v2.1.145 new-persona variant via agentType_equals (Bram's third variant)", () => {
       // agentType: "felix" + toolUseId present + no name → undocumented v2.1.145 variant.
       const result = matchAgent(
-        { schemaVersion: "v2.1.145", agentType: "felix", name: null, description: "new-persona", toolUseId: "toolu_2" },
+        { schemaVersion: "v2.1.145-persona", agentType: "felix", name: null, description: "new-persona", toolUseId: "toolu_2" },
         ROSTER,
       );
       expect(result).toEqual({ teamId: "alpha", memberId: "felix" });
@@ -249,7 +252,7 @@ describe("matchAgent", () => {
       // name=null. The roster has no rule that would match a nameless general-purpose
       // agent, so this should be background.
       const result = matchAgent(
-        { schemaVersion: "v2.1.145", agentType: "general-purpose", name: null, description: "background", toolUseId: "toolu_3" },
+        { schemaVersion: "v2.1.145-general", agentType: "general-purpose", name: null, description: "background", toolUseId: "toolu_3" },
         ROSTER,
       );
       expect(result).toBeNull();
