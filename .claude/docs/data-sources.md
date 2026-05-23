@@ -38,7 +38,23 @@ Field semantics:
 
 **Path:** `~/.claude/projects/{project-slug}/{sessionId}.jsonl`
 
-**Project slug** = the `cwd` with path separators replaced by `--` (e.g. `c:\Trunk\PRIVATE\ClaudeTeam` → `c--Trunk-PRIVATE-ClaudeTeam`).
+**Project slug** = the `cwd` with path separators replaced per the cwdToSlug rule below (e.g. `c:\Trunk\PRIVATE\ClaudeTeam` → `c--Trunk-PRIVATE-ClaudeTeam`).
+
+### cwdToSlug rule (verified against on-disk directories)
+
+1. Strip the drive colon (e.g. `c:` → `c`, `C:` → `C`).
+2. Replace the **first** path separator (backslash or forward slash) after the drive letter with `--` (double dash).
+3. Replace every **subsequent** path separator with `-` (single dash).
+
+| `cwd` | slug |
+|---|---|
+| `c:\Trunk\PRIVATE\ClaudeTeam` | `c--Trunk-PRIVATE-ClaudeTeam` |
+| `C:\Trunk\PRIVATE\Axelot-tutor` | `C--Trunk-PRIVATE-Axelot-tutor` |
+| `c:\Trunk\PRIVATE\MARIAN-TUTOR` | `c--Trunk-PRIVATE-MARIAN-TUTOR` |
+
+POSIX paths (no drive letter): replace all `/` with `-`; strip any leading `-`.
+
+**Duplication note:** This rule is currently implemented in two places — `src/cli/agentTree.ts` (`cwdToSlug`) and `tests/integration/helpers/tempdir.ts` (`cwdToSlug`). Both copies are intentionally identical; not shared to avoid coupling the test helper to the production module. Extraction to `src/shared/slug.ts` is deferred to M2 (per Sage's M1-10 finding). When that PR lands, delete both copies and import the shared one.
 
 One JSONL line per record. Records include:
 - `type: "user"` — user message.
@@ -63,6 +79,14 @@ Each spawned subagent gets its own JSONL with full transcript. Schema is identic
 - The first assistant message in the file has `message.model` — the resolved model the subagent is actually running on (not the value from the spawn call, which is empty for custom personas).
 
 **Flush cadence:** JSONL files flush in discrete bursts, 2–56 seconds of staleness observed in practice. Polling cadence should be ≥2s; lower polling won't see anything new.
+
+### Tool-argument limitation (M1-06 tailer — tracked, not yet resolved)
+
+The M1-06 subagent tailer (`src/extension/watcher/subagentTailer.ts`) extracts `lastTool` (the tool name from the last `tool_use` content entry) but does **not** preserve tool input arguments. The activity-line format spec (`iris-ux/m1-cli-output-spec.md` §1.4) calls for `tool:<tool-name> <one-line summary>` where the summary is the first argument or path from `tool_use.input`. M1-06 only delivers the first half (`tool:<tool-name>`); the argument summary is silently omitted.
+
+Downstream effect: `buildActivity` in `src/extension/state/reducer.ts` currently emits `tool:Edit` rather than `tool:Edit src/extension/...`. The CLI output and dashboard tile will show the tool name but not the path/argument.
+
+**Deferral:** Extracting tool input arguments into `SubagentActivity.lastToolArg` is filed as a future ticket (`tailer-extract-tool-args`). It is not in the current M2 scope (pending sponsor approval of M2 lanes). Until that ticket ships, `tool:<tool-name>` without an argument summary is the defined V1 behavior.
 
 ### JSONL closing semantics (verified, 2026-05-23)
 

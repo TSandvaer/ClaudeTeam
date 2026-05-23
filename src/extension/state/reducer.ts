@@ -165,7 +165,6 @@ export function buildAgentTree(
         state,
         agentId,
         toolUseId: meta.toolUseId,
-        parentToolUseId: null, // resolved below in tree-link pass
       };
 
       if (!rosterTiles.has(teamId)) {
@@ -173,20 +172,6 @@ export function buildAgentTree(
         teamOrder.push(teamId);
       }
       rosterTiles.get(teamId)!.push(tile);
-    }
-
-    // --- Parent→child tree link pass.
-    // Build a map from toolUseId → agentId for all rostered tiles in this session.
-    // Then for each tile, find its parent if its parentToolUseId can be resolved.
-    // V1: we only resolve one level (per spec §1.5 "Only one level of nesting is
-    // rendered in V1").
-    const toolUseIdToTile = new Map<string, AgentTile>();
-    for (const tiles of rosterTiles.values()) {
-      for (const tile of tiles) {
-        if (tile.toolUseId !== null) {
-          toolUseIdToTile.set(tile.toolUseId, tile);
-        }
-      }
     }
 
     // Sort tiles within each team in roster member-declaration order.
@@ -307,7 +292,10 @@ function buildActivity(
   switch (state) {
     case "running": {
       const tool = activity?.lastTool;
-      if (!tool) return "running";
+      // AC1 (M1-09-followup): when lastTool is null/undefined, return "tool:?"
+      // per spec §1.4 — "If both empty → just `tool:<tool-name>`" implies the
+      // tool name itself must not be omitted; "?" surfaces the unknown cleanly.
+      if (!tool) return "tool:?";
       return `tool:${tool}`;
     }
     case "idle": {
