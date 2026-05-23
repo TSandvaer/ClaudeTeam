@@ -39,6 +39,6 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 **Orchestrator recommendation:** **Option A.** The matcher's already on main; making M2 throw it away just to honor V1-PLAN's table-row separation is mechanical churn without proportional benefit. M1's `npm run agent-tree` already proves the matcher works end-to-end against real `~/.claude/` data. M2's webview should consume the same reducer output, just rendered in a Webview panel instead of stdout.
 
-**Status:** pending sponsor decision. Bram (M2-02 prior-art research) is dispatched in parallel since it's option-agnostic. Iris (M2-03 dashboard tile spec) similarly. The Wave 1 dispatch — M2-04 (file-watcher) + M2-05 (message protocol) — holds pending this answer. M2-01 (extension manifest) holds pending only because all of Wave 1 is gated on this decision; technically option-agnostic.
+**Status:** **answered 2026-05-23: Option A** — sponsor confirmed orchestrator's recommendation. Wave 0 dispatch unblocked. M3 milestone renamed to "Roster config + live refresh" to reflect reduced scope (per Nora's backlog § scope-overlap note decision draft).
 
 **Pointers:** [PR #16 M2 backlog](https://github.com/TSandvaer/ClaudeTeam/pull/16); `team/nora-pl/milestone-2-backlog.md` § AC9 / scope-overlap callout; `docs/V1-PLAN.md` § V1 milestones table; M1 retro `.claude/retros/retro-2026-05-23-m1-close.md` § "Next-session backlog" item 1.

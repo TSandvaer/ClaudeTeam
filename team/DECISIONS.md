@@ -23,6 +23,22 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-23 — M2 absorbs M3's roster-render (Option A); M3 renamed to "Roster config + live refresh"
+
+**Decided:** M2's "Extension scaffold" milestone consumes the already-merged M1-08 roster matcher in the webview render path. V1-PLAN.md's M3 milestone is narrowed from "Load `teams.yaml`, apply matchers, render named tiles vs background bucket" to "Roster config + live refresh" (interactive roster-config UI, live YAML watching, drill-in polish).
+
+**Context:** V1-PLAN.md was authored before the M1 backlog crystallized; the matcher landed in M1-08 (PR #10) ahead of where V1-PLAN had it scoped. Nora's M2 backlog (PR #16) surfaced the resulting M2/M3 scope-overlap as a sponsor-pending decision. Sponsor confirmed orchestrator's recommendation today.
+
+**Alternative considered:** Option B — keep M2 strictly "hardcoded strings" per V1-PLAN's letter; defer matcher consumption to M3. Rejected — ships a throwaway webview at M2-end that gets ripped out at M3-start; ~0.5-1 day of avoidable churn for no benefit, since the matcher is already live and tested (28 tests, M1-10 integration coverage).
+
+**Implication:** Nora's M2 backlog (PR #16) is written for Option A; no re-author needed. M2-05 (Maya webview tile renderer) and M2-06 (Felix host integration) consume `DashboardState` from the live matcher via the reducer. M3 milestone description in V1-PLAN.md will be updated by Nora as part of M2-09 (dispatch-template tightening) or a separate M3-planning ticket.
+
+**Reversibility:** Backing out is one PR to delete the matcher import from `src/extension/messageBus.ts` (M2-06) and revert M2-05's data wiring. ~30 min effort. No external system touched.
+
+**Pointers:** `.claude/away-queue.md` "2026-05-23 1330 UTC — M2/M3 scope-overlap" (now `answered`); `team/nora-pl/milestone-2-backlog.md` § scope-overlap note; PR #16; PR #10 (M1-08 matcher); `docs/V1-PLAN.md` § V1 milestones table (pending M3 description update).
+
+---
+
 ## 2026-05-23 — Adopt RandomGame-style bloat-prevention bundle (this session)
 
 **Decided:** Import three coordination patterns from RandomGame + MarianLearning that ClaudeTeam was missing: (1) `team/log/process-incidents.md` as the append-only failure-mode chronicle (vs growing `.claude/docs/orchestration-overview.md`); (2) `team/STATE.md` as the between-tick source of truth (replaces ad-hoc re-derivation from conversation history); (3) `team/DECISIONS.md` (this file) as the team-decisions log; (4) `.claude/retros/` directory for milestone retros.
