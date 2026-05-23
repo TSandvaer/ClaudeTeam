@@ -10,23 +10,47 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-23 (M1 SHIPPED — 11/11 complete; M2 dispatching to Nora)
+## Current state — 2026-05-23 (M1 SHIPPED; M2 backlog + Bram prior-art ready; HOLDING for sponsor scope-overlap decision)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `29e98f2` (M1-10 merge — `test(m1): integration tests against fixture filesystem`). Verify: `git rev-parse origin/main`.
-- **M1 status: SHIPPED.** 11 / 11 tickets complete. Retro authored at [.claude/retros/retro-2026-05-23-m1-close.md](.claude/retros/retro-2026-05-23-m1-close.md).
-  - M1-09 (Felix reducer + CLI) merged at `2ef2025` — PR #14, Maya APPROVE_WITH_NITS, NITs filed as follow-up `86c9y6e17`.
-  - M1-10 (Sage integration tests) merged at `29e98f2` — PR #15, Felix APPROVE, no bugs in Felix's modules surfaced.
-- **Test counts on main right now:** 99 unit tests + 31 integration tests = **130 tests green** at `29e98f2`. Three CI workflow steps (typecheck + lint + unit + integration) all SUCCESS.
+- **`origin/main` tip:** `697987e` (decisions log update — PR #18 auto-merge entry). Verify: `git rev-parse origin/main`.
+- **M1 status: SHIPPED.** 11 / 11 tickets complete + M1-09-followup (`86c9y6e17`) merged. Retro at [.claude/retros/retro-2026-05-23-m1-close.md](.claude/retros/retro-2026-05-23-m1-close.md).
+- **Test counts:** 127 unit + 31 integration = **158 tests green**. CI: 2x typecheck+lint+unit+integration COMPLETED+SUCCESS.
 - **Open PRs:** none.
-- **Open ClickUp tickets:** M1-09-followup `86c9y6e17` (P2, Felix's lane — Maya's 5 NITs + 2 doc-promotion candidates; not blocking M2).
-- **Worktrees:** all detached post-merge. See § Worktree state below.
+- **Open ClickUp tickets:** none. (M1-09-followup `86c9y6e17` merged in PR #18 at `c31ae02`; ticket flipped `complete`.)
+- **Worktrees:** all detached post-merge.
 - **In-flight agents:** none.
-- **Auto-status:** AWAY (active orchestration tick every 15 min), cron job `f55a798f` (`7,22,37,52 * * * *`). Switched mid-session from local pulse.
-- **M2 scope:** VS Code extension scaffold + webview message protocol + file-watcher loop on top of M1's data plane. Nora authors the backlog (`team/nora-pl/milestone-2-backlog.md`); orchestrator creates ClickUp tickets after sponsor approves M2 scope.
+- **Auto-status:** AWAY (active orchestration tick every 15 min), cron job `f55a798f` (`7,22,37,52 * * * *`).
 
-**Single most useful next action:** dispatch Nora for M2 backlog authoring (in progress as of this STATE update). After backlog lands and sponsor approves the M2 scope, dispatch the first M2 wave in parallel: Bram for VS Code Extension API prior-art research; Iris for the M2 dashboard tile spec inheriting M1-03's vocabulary; Felix for the extension scaffold ticket once Nora's backlog is reviewed.
+**Blocked on sponsor:** [.claude/away-queue.md](.claude/away-queue.md) "2026-05-23 1330 UTC — M2/M3 scope-overlap" — sponsor must pick Option A (absorb M3's roster-render into M2 — orchestrator's recommendation; backlog already written for it) vs Option B (keep V1-PLAN's hardcoded-strings-in-M2 separation). M2-04 (file-watcher) + M2-05 (message protocol) ClickUp ticket creation + dispatch holds pending this answer.
+
+**Ready to dispatch on sponsor-greenlight (Wave 1, parallel):**
+- M2-01 (Felix — extension manifest + activation events, P0)
+- M2-03 (Iris — M2 dashboard tile spec inheriting M1-03 vocabulary, P0)
+- M2-07 (Sage — M2 test plan + Layer-3 manual VS Code reload checklist, P0)
+- M2-09 (Nora — dispatch-template tightening, P2)
+
+After Wave 1 lands and CI green:
+- Wave 2: M2-04 (Felix — file-watcher) + M2-05 (Maya — webview message protocol). Lanes diverge by Option A/B; sponsor scope-overlap answer determines which.
+
+**Already done from M2 backlog:**
+- M2-02 (Bram — VS Code Extension API prior-art): merged at `b0e858b`. Key recs landed: `WebviewViewProvider` Activity Bar surface, `vscode.workspace.createFileSystemWatcher` with absolute-path `RelativePattern` (1.64+), vanilla TypeScript (Pixel Agents' React build = 291 KB cautionary data point), lazy activation via `onView:claudeteam.dashboard`. Pixel Agents lesson: NO CSP — ClaudeTeam must NOT replicate.
+
+**This session's structural delta vs save-session base (`dbab662`):**
+
+| Commit | Subject |
+|---|---|
+| `57c78a7` | docs(orch): capture peer-reviewer-worktree-blocks-delete-branch failure mode (pre-bundle) |
+| `007ce9a` | chore(orch): adopt bloat-prevention scaffolding from sibling projects (STATE/DECISIONS/process-incidents/retros) |
+| `2ef2025` | feat(cli): reducer + agent-tree CLI driver (M1-09) |
+| `29e98f2` | test(m1): integration tests against fixture filesystem (M1-10) |
+| `f71fa09` | docs(orch): M1 close — retro + decisions log + STATE update |
+| `cf6e8f9` | docs(planning): author M2 backlog — extension scaffold + webview milestone |
+| `d68f3b2` | docs(orch): queue M2/M3 scope-overlap question for sponsor |
+| `b0e858b` | research(vscode-api): M2 VS Code Extension API prior-art + webview tech pick (M2-02) |
+| `c31ae02` | fix(reducer+cli): M1-09-followup NIT cleanup — AC1-7 (`86c9y6e17`) |
+| `697987e` | docs(orch): log PR #18 auto-merge decision (M1-09-followup) |
 
 ---
 
