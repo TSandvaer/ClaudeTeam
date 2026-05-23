@@ -30,7 +30,7 @@ Field semantics:
 - `pid` — OS PID; matches the filename.
 - `sessionId` — UUID, used to find the project transcript.
 - `cwd` — project working directory; maps to the project slug under `projects/`.
-- `version` — Claude Code version; **load-bearing for schema detection** (`meta.json` v2.1.119 vs v2.1.145 — see below).
+- `version` — Claude Code version; informational for schema detection. NOTE: feature-detect on `meta.json` field presence is more reliable than version comparison — see §4 "Schema detection rule".
 - `entrypoint` — `claude-vscode` (VS Code integration) vs `cli` (terminal).
 - `kind` — `interactive` for normal sessions; remote/cloud kinds (if they exist) have NOT been observed locally.
 
@@ -64,13 +64,32 @@ Each spawned subagent gets its own JSONL with full transcript. Schema is identic
 
 **Flush cadence:** JSONL files flush in discrete bursts, 2–56 seconds of staleness observed in practice. Polling cadence should be ≥2s; lower polling won't see anything new.
 
+### JSONL closing semantics (verified, 2026-05-23)
+
+**A subagent JSONL never carries a closing assistant message.** Every subagent JSONL examined across 16 agents in two ClaudeTeam sessions ended on a `type: "user"` tool_result record — the agent's final report turn is NOT written into the subagent's own JSONL. The closing result lives exclusively in the **parent** JSONL as a `tool_result` content entry for the `Agent`/`Task` tool_use, identified by `toolUseId` (see §4).
+
+Implications for the tailer:
+- Do NOT use "last record is type:assistant with stop_reason:end_turn" as a finished-detection heuristic — you will never see it in real data.
+- The reliable finished signal is: parent JSONL contains a `tool_result` with `tool_use_id == meta.json.toolUseId`.
+- The `subagent-finished.jsonl` test fixture (`tests/fixtures/subagent-finished.jsonl`) includes one synthesized line 7 with `stop_reason: "end_turn"` for parser branch coverage only — this is marked `"requestId": "req_SYNTHESIZED"` and does NOT reflect real on-disk behavior.
+
+Source: `team/bram-research/m1-fixtures-2026-05-23.md` §AC4.
+
 ## 4. Subagent metadata
 
 **Path:** `~/.claude/projects/{project-slug}/{sessionId}/subagents/agent-{agentId}.meta.json`
 
-Compact metadata about a subagent spawn. **Schema changed between v2.1.119 and v2.1.145** — the matcher must handle both:
+Compact metadata about a subagent spawn. **Three schema variants exist** — the parser must handle all three. Source: `team/bram-research/m1-fixtures-2026-05-23.md` §Schema divergence summary; verified against 16 real meta.json files captured 2026-05-23.
 
-### v2.1.119 (old, April 2026)
+### Variant summary table
+
+| Variant | `agentType` value | `name` field | `toolUseId` | Example source |
+|---|---|---|---|---|
+| **v2.1.119 (old)** | persona slug (e.g. `"devon"`) | absent | absent | `tests/fixtures/meta-old-schema.json` (synthesized) |
+| **v2.1.145 general-purpose** | engine type string (`"general-purpose"`, `"Explore"`) | absent or `null` | present | `tests/fixtures/meta-new-schema.json` |
+| **v2.1.145 persona-named** | persona slug (e.g. `"felix"`, `"bram"`) | absent | present | live captures, session 5652d46e (11/11 persona agents) |
+
+### v2.1.119 (old, April 2026 and earlier)
 
 ```json
 {
@@ -79,32 +98,68 @@ Compact metadata about a subagent spawn. **Schema changed between v2.1.119 and v
 }
 ```
 
-- `agentType` holds the **persona name**.
+- `agentType` holds the **persona slug**.
 - No `name` field.
-- No `toolUseId` (parent→child link must be inferred from JSONL).
+- No `toolUseId` (parent→child link must be inferred from JSONL context).
 
-### v2.1.145 (new, May 2026)
+Test fixture: `tests/fixtures/meta-old-schema.json` (synthesized from documented schema; no v2.1.119 session was available in scope — see research note §AC1).
+
+### v2.1.145 general-purpose (new, May 2026)
 
 ```json
 {
   "agentType": "general-purpose",
-  "description": "Devon cross-review PR #310",
-  "name": "devon-pr310-review",
-  "toolUseId": "toolu_01..."
+  "description": "Agent B: limitations & edge cases",
+  "name": null,
+  "toolUseId": "toolu_01DSwxyg6yrTCn8nxkVwoXqt"
 }
 ```
 
-- `agentType` holds the **engine type** (`general-purpose`, `Explore`, `Plan`, etc.) — NOT the persona.
-- `name` (optional) holds the persona slug or human-supplied name. **~74% of real spawns have no name**, so most agents have only `agentType` + `description` to identify them.
-- `toolUseId` links to the parent transcript's `content[].id` field for the `Agent`/`Task` tool_use entry that spawned this child.
+- `agentType` holds an **engine type string** — observed values: `"general-purpose"`, `"Explore"`. Other values (e.g. `"Plan"`) are possible but not yet observed locally.
+- `name` is **absent or explicitly `null`** in every real capture to date (0 of 16 real meta.json files had a populated `name`). Treat both `undefined` and `null` as "no name".
+- `toolUseId` links to the parent transcript's `content[].id` for the `Agent`/`Task` tool_use entry that spawned this child.
 
-### Schema detection rule
+Test fixture: `tests/fixtures/meta-new-schema.json` (real capture from `C:/Users/538252/.claude/projects/c--Trunk-PRIVATE-ClaudeTeam/7b53d0ee-.../subagents/agent-a1d53b4a2db17f2f5.meta.json`; fixture adds explicit `"name": null` for parser branch coverage).
 
-Read the parent session's `version` from `~/.claude/sessions/{pid}.json`. Compare numerically:
-- `< 2.1.145` (e.g. `2.1.119`, `2.1.130`) → use old schema (persona in `agentType`).
-- `>= 2.1.145` → use new schema (persona in `name` if present; `agentType` is engine type).
+### v2.1.145 persona-named (new, May 2026) — PREVIOUSLY UNDOCUMENTED
 
-When in doubt (mixed historical sessions across the projects tree), feature-detect: if `name` is present, treat as new schema; otherwise treat as old.
+```json
+{
+  "agentType": "felix",
+  "description": "Felix — M1-01 scaffold + CI",
+  "toolUseId": "toolu_01SZsHqGceAQC4Loovg6ion1"
+}
+```
+
+- `agentType` holds the **persona slug** — same position as the old schema, but `toolUseId` IS present.
+- **No `name` field** — identity comes solely from `agentType`.
+- `toolUseId` present (distinguishes from v2.1.119).
+- Observed in **11 of 11 persona agents** in session 5652d46e (felix, bram, sage, maya, iris, nora). This is the dominant variant when the orchestrator dispatches named-persona sub-agents.
+
+No dedicated test fixture yet — can be synthesized from the live examples above. Add `tests/fixtures/meta-new-schema-persona.json` when Felix authors M1-05.
+
+### Schema detection rule (feature-detect — do NOT rely on session version alone)
+
+The session `version` field in `~/.claude/sessions/{pid}.json` is unreliable for discriminating the three variants because all three can appear in v2.1.145+ sessions within the same session. Use field-presence detection instead:
+
+1. **`toolUseId` absent** → v2.1.119 old schema. `agentType` = persona slug.
+2. **`toolUseId` present AND `agentType` is an engine-type string** (i.e. one of `"general-purpose"`, `"Explore"`, or any value that is NOT a known persona slug) → v2.1.145 general-purpose. Persona identity must come from `name` (if non-null) or fall back to `description`.
+3. **`toolUseId` present AND `agentType` is a persona slug** → v2.1.145 persona-named. Persona identity comes from `agentType` directly.
+
+The roster matcher's `agentType_equals` rule works correctly for both variant 1 and variant 3 — it fires on the persona slug in both cases. No rule change needed for the matcher; the parser must normalize `agentType` correctly before handing off.
+
+## 5. Identity & display rules
+
+Given a parsed `meta.json`, resolve the agent's display identity in this priority order:
+
+1. **v2.1.145 persona-named variant** (`toolUseId` present + `agentType` is a persona slug): use `agentType` as the persona slug directly.
+2. **v2.1.145 general-purpose variant** (`toolUseId` present + `agentType` is engine type): check `name` field — if non-null and non-empty, use `name` as the persona slug. If `name` is null/absent, fall back to step 3.
+3. **v2.1.119 old variant** (`toolUseId` absent): use `agentType` as the persona slug.
+4. **Fallback** (no persona slug resolved from above): use `description` for display. The roster matcher will attempt `description_contains` rules. If no match, bucket as background.
+
+**What this means for the matcher:** the `agentType_equals` roster rule correctly matches persona slugs in both variant 1 (new-persona) and variant 3 (old). It will NOT match engine type strings like `"general-purpose"` or `"Explore"` — those only match via `name_prefix`/`name_equals` (if name is present) or `description_contains` (always available as a fallback).
+
+Source: `team/bram-research/m1-fixtures-2026-05-23.md` §Implications; verified against 16 real captures 2026-05-23.
 
 ## Liveness inference
 
