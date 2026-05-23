@@ -31,7 +31,7 @@ import {
   type FinishedSet,
   type SessionAgentData,
 } from "../extension/state/reducer.js";
-import type { AgentTree, SessionTree, AgentTile, BackgroundAgent } from "../shared/types.js";
+import type { AgentTree, SessionTree, AgentTile, BackgroundAgent, Team } from "../shared/types.js";
 
 // =============================================================================
 // CLI argument parsing
@@ -335,8 +335,12 @@ function formatBackgroundLine(bg: BackgroundAgent): string {
 /**
  * Print the tree per the M1-03 spec §3.
  * Writes directly to stdout.
+ *
+ * AC3 (M1-09-followup): teamNameForId is built locally here and passed as a
+ * parameter to printSession — no module-level mutable state. This keeps the
+ * presenter reentrant and safe for M2's webview reuse of this module.
  */
-function printTree(tree: AgentTree): void {
+function printTree(tree: AgentTree, roster: Team[]): void {
   const { sessions } = tree;
 
   if (sessions.length === 0) {
@@ -345,14 +349,19 @@ function printTree(tree: AgentTree): void {
     return;
   }
 
+  // Build the team name lookup from the roster (passed in — no module-level state).
+  const teamNameForId = new Map<string, string>(
+    roster.map((t) => [t.id, t.name]),
+  );
+
   for (const session of sessions) {
-    printSession(session);
+    printSession(session, teamNameForId);
     // Blank line between sessions (per spec §3 example).
     process.stdout.write("\n");
   }
 }
 
-function printSession(session: SessionTree): void {
+function printSession(session: SessionTree, teamNameForId: Map<string, string>): void {
   const stateStr = session.isAlive ? "alive" : "dead";
   const header = `SESSION ${session.shortId}  [${session.entrypoint}]  pid=${session.pid}  v${session.version}  state=${stateStr}`;
   process.stdout.write(header + "\n");
@@ -384,14 +393,10 @@ function printSession(session: SessionTree): void {
     const tiles = session.rosterTiles.get(teamId) ?? [];
     if (tiles.length === 0) continue;
 
-    // Team card header — need team display name. We have teamId; look it up
-    // from the tiles (all tiles in the same team share teamId, and we have
-    // the roster available only via tiles). Use a helper that the presenter
-    // receives via closure.
     const teamName = teamNameForId.get(teamId) ?? teamId;
     const bgCount = session.background.length;
-    const header = `  TEAM ${teamName}  (${tiles.length} rostered, ${bgCount} background in this session)`;
-    process.stdout.write(header + "\n");
+    const teamHeader = `  TEAM ${teamName}  (${tiles.length} rostered, ${bgCount} background in this session)`;
+    process.stdout.write(teamHeader + "\n");
 
     for (const tile of tiles) {
       process.stdout.write(formatTileLine(tile) + "\n");
@@ -399,19 +404,16 @@ function printSession(session: SessionTree): void {
     process.stdout.write("\n");
   }
 
-  // Background chip.
+  // Background chip — AC4: singular vs plural guard.
   if (session.background.length > 0) {
-    process.stdout.write(`    + ${session.background.length} background agents (this session)\n`);
+    const count = session.background.length;
+    const agentWord = count === 1 ? "agent" : "agents";
+    process.stdout.write(`    + ${count} background ${agentWord} (this session)\n`);
     for (const bg of session.background) {
       process.stdout.write(formatBackgroundLine(bg) + "\n");
     }
   }
 }
-
-// Team name lookup — populated from the roster before printing.
-// Using a module-level map avoids threading the roster all the way into every
-// printSession call (the presenter doesn't need the full roster for anything else).
-const teamNameForId = new Map<string, string>();
 
 // =============================================================================
 // Entry point
@@ -422,11 +424,6 @@ async function main(): Promise<void> {
 
   // Load roster.
   const rosterResult = loadRoster(rosterPath);
-
-  // Populate teamNameForId for the presenter.
-  for (const team of rosterResult.roster) {
-    teamNameForId.set(team.id, team.name);
-  }
 
   // Emit roster warnings/errors to stderr (soft — still runs).
   for (const w of rosterResult.warnings) {
@@ -449,7 +446,7 @@ async function main(): Promise<void> {
   const tree = buildAgentTree(sessions, agentData, activities, finishedIds, rosterResult.roster);
 
   // Print.
-  printTree(tree);
+  printTree(tree, rosterResult.roster);
   process.exit(0);
 }
 

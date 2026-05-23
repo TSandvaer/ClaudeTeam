@@ -276,11 +276,6 @@ export interface AgentTile {
    * null on v2.1.119 schema (no toolUseId).
    */
   toolUseId: string | null;
-  /**
-   * toolUseId of this tile's parent agent. null for top-level (directly
-   * spawned by the orchestrator). Used for indentation in the CLI.
-   */
-  parentToolUseId: string | null;
 }
 
 /**

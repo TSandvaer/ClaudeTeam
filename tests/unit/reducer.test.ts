@@ -596,6 +596,149 @@ describe("buildAgentTree", () => {
     });
   });
 
+  // ---------------------------------------------------------------- AC1 — tool:? sentinel
+  describe("buildActivity — tool:? when running with null lastTool (AC1 M1-09-followup)", () => {
+    it("running state with lastTool=null → activity is 'tool:?'", () => {
+      const session = makeSession();
+      const agentId = "agent_ac1a";
+      const meta = makeMeta({ agentType: "felix", description: "Felix AC1" });
+      // Fresh spawn path: mtimeMs=0 → running; no tool.
+      const activity = makeActivity({ mtimeMs: 0, lastTool: null });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      expect(tile).toBeDefined();
+      expect(tile!.state).toBe("running");
+      expect(tile!.activity).toBe("tool:?");
+    });
+
+    it("running state with fresh mtime but lastTool=null → activity is 'tool:?'", () => {
+      const session = makeSession();
+      const agentId = "agent_ac1b";
+      const meta = makeMeta({ agentType: "felix", description: "Felix AC1b" });
+      // Recent mtime → running; no tool yet (agent is between tool calls).
+      const activity = makeActivity({ mtimeMs: NOW_MS - 2_000, lastTool: null });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      expect(tile!.state).toBe("running");
+      // Must be "tool:?" not bare "running"
+      expect(tile!.activity).toBe("tool:?");
+    });
+
+    it("running state with a known lastTool → activity is 'tool:<name>' (not 'tool:?')", () => {
+      const session = makeSession();
+      const agentId = "agent_ac1c";
+      const meta = makeMeta({ agentType: "felix", description: "Felix AC1c" });
+      const activity = makeActivity({ mtimeMs: NOW_MS - 2_000, lastTool: "Bash" });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      expect(tile!.state).toBe("running");
+      expect(tile!.activity).toBe("tool:Bash");
+    });
+  });
+
+  // ---------------------------------------------------------------- AC3 — no parentToolUseId on tile
+  describe("AgentTile shape — no parentToolUseId field (AC2/AC3 M1-09-followup)", () => {
+    it("AgentTile does not expose parentToolUseId property", () => {
+      const session = makeSession();
+      const agentId = "agent_ac3";
+      const meta = makeMeta({ agentType: "felix", description: "Felix AC3" });
+      const activity = makeActivity();
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      expect(tile).toBeDefined();
+      // parentToolUseId was deleted from the type — it must not appear on the output.
+      expect(Object.prototype.hasOwnProperty.call(tile, "parentToolUseId")).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------- AC4 — plural guard (tested at reducer level via background count)
+  describe("background count — plural-guard data (AC4 M1-09-followup)", () => {
+    it("single background agent is recorded with count 1", () => {
+      const session = makeSession();
+      const agentId = "agent_ac4a";
+      const meta = makeMeta({
+        agentType: "general-purpose",
+        description: "One bg agent",
+        schemaVersion: "v2.1.145-general",
+        toolUseId: "toolu_ac4a",
+      });
+      const activity = makeActivity();
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Set(),
+        [], // empty roster → all go to background
+        NOW_MS,
+      );
+
+      expect(tree.sessions[0]!.background).toHaveLength(1);
+    });
+
+    it("three background agents are recorded with count 3", () => {
+      const session = makeSession();
+      const agents = [
+        { id: "agent_ac4b1", meta: makeMeta({ agentType: "general-purpose", description: "bg1", schemaVersion: "v2.1.145-general" as const, toolUseId: "toolu_b1" }) },
+        { id: "agent_ac4b2", meta: makeMeta({ agentType: "general-purpose", description: "bg2", schemaVersion: "v2.1.145-general" as const, toolUseId: "toolu_b2" }) },
+        { id: "agent_ac4b3", meta: makeMeta({ agentType: "Explore", description: "bg3", schemaVersion: "v2.1.145-general" as const, toolUseId: "toolu_b3" }) },
+      ];
+      const activities: ActivityMap = new Map(agents.map(a => [a.id, makeActivity()]));
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, agents.map(a => makeAgentEntry(a.id, a.meta)))],
+        activities,
+        new Set(),
+        [], // empty roster → all go to background
+        NOW_MS,
+      );
+
+      expect(tree.sessions[0]!.background).toHaveLength(3);
+    });
+  });
+
   // ---------------------------------------------------------------- session with no agentData entry
   it("session with no matching agentData entry → empty session tree", () => {
     const session = makeSession();
