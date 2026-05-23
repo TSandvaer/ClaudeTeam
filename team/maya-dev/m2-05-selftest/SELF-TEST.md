@@ -1,6 +1,6 @@
 # M2-05 Self-Test Report
 
-Ticket: [`86c9y7uka`](https://app.clibrate.com/t/86c9y7uka) — `feat(webview): dashboard tile renderer + message receiver`
+Ticket: [`86c9y7uka`](https://app.clickup.com/t/86c9y7uka) — `feat(webview): dashboard tile renderer + message receiver`
 Branch: `maya/m2-05-webview-tile-renderer`
 
 ## How the screenshots were captured
