@@ -89,10 +89,18 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
   }
 
   private _getHtml(webview: vscode.Webview): string {
-    // Resolve the webview bundle URI — the file must exist in dist/webview/
-    // after `npm run build`.
+    // Resolve the webview bundle + stylesheet URIs — both files must exist in
+    // dist/webview/ after `npm run build` (the esbuild config emits both).
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, "dist", "webview", "main.js"),
+    );
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this._extensionUri,
+        "dist",
+        "webview",
+        "dashboard.css",
+      ),
     );
 
     // Content-Security-Policy:
@@ -103,7 +111,9 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
     //
     // ${webview.cspSource} resolves to the VS Code webview origin
     // (e.g. "vscode-webview://..."), ensuring only our bundle can run.
-    // No nonces needed — no inline scripts.
+    // No nonces needed — no inline scripts AND no inline styles. The
+    // dashboard's CSS is loaded via <link rel="stylesheet"> from the same
+    // cspSource origin.
     //
     // Source: VS Code docs https://code.visualstudio.com/api/extension-guides/webview#content-security-policy
     const csp = [
@@ -122,6 +132,7 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
     content="${csp}"
   />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="${styleUri}" />
   <title>ClaudeTeam</title>
 </head>
 <body>

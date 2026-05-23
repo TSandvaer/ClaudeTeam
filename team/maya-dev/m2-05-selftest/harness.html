@@ -1,0 +1,161 @@
+<!--
+  Headless screenshot harness for M2-05 Self-Test Report.
+
+  Loads the built webview JS + CSS from dist/webview/, mirrors the VS Code
+  theme variables that the spec §10.1 fallback table expects, and renders
+  FIXTURE_STATE via the browser-dev fallback (acquireVsCodeApi undefined).
+
+  Usage:
+    npm run build
+    msedge --headless --disable-gpu --window-size=520,1400 \
+      --screenshot=team/maya-dev/m2-05-selftest/<name>.png \
+      file:///<absolute>/team/maya-dev/m2-05-selftest/harness.html?theme=dark
+
+  Query params:
+    theme=dark|light  → toggles which VS Code theme variable block applies.
+                        (Defaults to dark.)
+    state=empty       → renders FIXTURE_EMPTY_STATE.
+    error=1           → injects a roster-error chip.
+    expand=1          → starts with the background chip expanded.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ClaudeTeam — self-test harness</title>
+  <link rel="stylesheet" href="../../../dist/webview/dashboard.css" />
+  <style id="vscode-vars">
+    /* Default: dark theme mirror — values lifted from spec §10.1 fallback table. */
+    :root {
+      --vscode-foreground: #cccccc;
+      --vscode-editor-background: #1e1e1e;
+      --vscode-sideBar-background: #252526;
+      --vscode-list-hoverBackground: rgba(255, 255, 255, 0.07);
+      --vscode-descriptionForeground: #858585;
+      --vscode-panel-border: #444444;
+      --vscode-focusBorder: #007fd4;
+      --vscode-disabledForeground: rgba(204, 204, 204, 0.5);
+      --vscode-badge-background: #4d4d4d;
+      --vscode-badge-foreground: #ffffff;
+      --vscode-inputValidation-errorBackground: #5a1d1d;
+      --vscode-inputValidation-errorBorder: #be1100;
+      --vscode-inputValidation-errorForeground: #f48771;
+      --vscode-inputValidation-warningBackground: #352a05;
+      --vscode-inputValidation-warningBorder: #cca700;
+      --vscode-inputValidation-warningForeground: #cca700;
+      --vscode-button-background: #0e639c;
+      --vscode-button-foreground: #ffffff;
+      --vscode-button-hoverBackground: #1177bb;
+      --vscode-font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      --vscode-font-size: 13px;
+      --vscode-font-weight: normal;
+      --vscode-editor-font-family: Consolas, "Courier New", monospace;
+    }
+    body[data-theme="light"] {
+      --vscode-foreground: #3b3b3b;
+      --vscode-editor-background: #ffffff;
+      --vscode-sideBar-background: #f3f3f3;
+      --vscode-list-hoverBackground: rgba(0, 0, 0, 0.07);
+      --vscode-descriptionForeground: #717171;
+      --vscode-panel-border: #e5e5e5;
+      --vscode-focusBorder: #0090f1;
+      --vscode-disabledForeground: rgba(59, 59, 59, 0.45);
+      --vscode-badge-background: #cccccc;
+      --vscode-badge-foreground: #333333;
+      --vscode-inputValidation-errorBackground: #f1dbd5;
+      --vscode-inputValidation-errorBorder: #be1100;
+      --vscode-inputValidation-errorForeground: #a31515;
+      --vscode-inputValidation-warningBackground: #f6f5d2;
+      --vscode-inputValidation-warningBorder: #b89500;
+      --vscode-inputValidation-warningForeground: #816d1f;
+      --vscode-button-background: #0078d4;
+      --vscode-button-foreground: #ffffff;
+      --vscode-button-hoverBackground: #006bbd;
+    }
+    html, body { margin: 0; min-height: 100vh; }
+    body { background-color: var(--vscode-editor-background); }
+  </style>
+</head>
+<body data-theme="dark">
+  <div id="root">ClaudeTeam loading…</div>
+  <script>
+    // Apply ?theme=... before the bundle boots.
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const theme = params.get("theme") === "light" ? "light" : "dark";
+      document.body.dataset.theme = theme;
+    })();
+  </script>
+  <script src="../../../dist/webview/main.js"></script>
+  <script>
+    /*
+     * Apply post-boot harness variants synchronously, using direct DOM
+     * manipulation rather than window.postMessage. The message-based path is
+     * exercised by tests/unit/webview/dashboardTile.test.ts (which uses jsdom
+     * + real listeners). Here in the headless screenshot capture we want
+     * deterministic results across all virtual-time budgets; postMessage tasks
+     * are not reliably flushed before Edge headless writes the screenshot.
+     *
+     * The CSS and DOM shape these inject are byte-identical to what the
+     * production renderer produces — same class names, same hierarchy.
+     */
+    // Deferred to window.load so it fires AFTER the bundle's boot()
+    // (boot listens on DOMContentLoaded; we must run after that). Without
+    // this deferral our DOM injection would be wiped by boot()'s
+    // mount.replaceChildren() call.
+    window.addEventListener("load", function applyHarness() {
+      const params = new URLSearchParams(window.location.search);
+      const root = document.getElementById("root");
+      if (!root) {
+        return;
+      }
+
+      if (params.get("state") === "empty") {
+        root.replaceChildren();
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = "No live Claude Code sessions.";
+        root.appendChild(empty);
+      }
+
+      if (params.get("error") === "1") {
+        const chip = document.createElement("div");
+        chip.className = "error-chip error-chip--error";
+        chip.setAttribute("role", "alert");
+        chip.setAttribute("aria-live", "polite");
+
+        const icon = document.createElement("span");
+        icon.className = "error-chip-icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = "!";
+        chip.appendChild(icon);
+
+        const body = document.createElement("div");
+        body.className = "error-chip-body";
+        const title = document.createElement("span");
+        title.className = "error-chip-title";
+        title.textContent = "Roster error";
+        body.appendChild(title);
+        const detail = document.createElement("span");
+        detail.className = "error-chip-detail";
+        detail.textContent =
+          "YAML parse error at line 12: unexpected '!' (cannot read teams.yaml)";
+        body.appendChild(detail);
+        const action = document.createElement("button");
+        action.type = "button";
+        action.className = "error-chip-action";
+        action.textContent = "Open Roster File";
+        body.appendChild(action);
+        chip.appendChild(body);
+
+        root.insertBefore(chip, root.firstChild);
+      }
+
+      if (params.get("expand") === "1") {
+        const header = document.querySelector(".background-chip .chip-header");
+        if (header) header.click();
+      }
+    });
+  </script>
+</body>
+</html>

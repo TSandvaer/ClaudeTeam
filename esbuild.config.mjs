@@ -69,6 +69,18 @@ const webviewTarget = {
   external: [],
 };
 
+/**
+ * Webview CSS bundle — esbuild emits CSS to a sibling output file. Linked
+ * from the webview HTML via <link rel="stylesheet"> with the standard CSP
+ * style-src ${webview.cspSource} directive (no inline <style> tags).
+ */
+const webviewCssTarget = {
+  ...commonOptions,
+  entryPoints: ["src/webview/styles/dashboard.css"],
+  outfile: "dist/webview/dashboard.css",
+  loader: { ".css": "css" },
+};
+
 /** CLI bundle — ESM, Node (retained from M1-09). */
 const cliTarget = {
   ...commonOptions,
@@ -85,17 +97,19 @@ const cliTarget = {
 // ---------------------------------------------------------------------------
 
 if (isWatch) {
-  // Watch mode — all three targets run in parallel via esbuild contexts.
+  // Watch mode — all targets run in parallel via esbuild contexts.
   // `npm run watch` passes --watch.
-  const [extCtx, webCtx, cliCtx] = await Promise.all([
+  const [extCtx, webCtx, webCssCtx, cliCtx] = await Promise.all([
     context(extensionHostTarget),
     context(webviewTarget),
+    context(webviewCssTarget),
     context(cliTarget),
   ]);
 
   await Promise.all([
     extCtx.watch(),
     webCtx.watch(),
+    webCssCtx.watch(),
     cliCtx.watch(),
   ]);
 
@@ -108,11 +122,13 @@ if (isWatch) {
   await Promise.all([
     build(extensionHostTarget),
     build(webviewTarget),
+    build(webviewCssTarget),
     build(cliTarget),
   ]);
 
   console.log("[esbuild.config] Build complete:");
-  console.log("  dist/extension/main.js  (extension host, CJS)");
-  console.log("  dist/webview/main.js    (webview, IIFE)");
-  console.log("  dist/cli/agentTree.js   (CLI, ESM)");
+  console.log("  dist/extension/main.js     (extension host, CJS)");
+  console.log("  dist/webview/main.js       (webview JS, IIFE)");
+  console.log("  dist/webview/dashboard.css (webview CSS)");
+  console.log("  dist/cli/agentTree.js      (CLI, ESM)");
 }

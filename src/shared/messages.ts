@@ -33,9 +33,17 @@ export type StateFullMessage = {
 };
 
 /**
- * Partial state delta. At M2 the host only sends `state:full`; the delta
- * message type exists so the webview's message receiver can typecheck
- * against the eventual shape. `StateDelta` is defined in `types.ts`.
+ * Partial state delta. Shape coordinated with Felix's M2-04 watcher plan and
+ * canonicalized in `types.ts` as `StateDelta`:
+ *   - `added`   — tiles newly observed since the last `state:full` baseline.
+ *   - `updated` — tiles whose state / activity / model changed.
+ *   - `removed` — `TileKey`s (`sessionId:agentId`) whose tile should be dropped
+ *                 (session ended, agent disappeared).
+ *
+ * At M2-05 the host only sends `state:full`; the webview MAY no-op on incoming
+ * `state:delta` messages or fall back to a request-state-full pattern. Wiring
+ * delta application is M4 optimization. Defined here so the type is available
+ * across both processes from day one.
  */
 export type StateDeltaMessage = {
   type: "state:delta";
