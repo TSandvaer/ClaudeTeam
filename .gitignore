@@ -7,3 +7,9 @@ dist/
 *.log
 .env
 .env.local
+
+# Orchestration state files (per-user, not version-controlled)
+.claude/auto-status.state
+.claude/*.state
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
