@@ -148,4 +148,32 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 **Status:** pending review.
 
-**Pointers:** PR #27; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/27#issuecomment-4526462647`. 1 informational NIT to file as tiny follow-up ticket. Expected ENTRY 022 collision with PR #25 + PR #26 (all three sub-agents picked ENTRY 022 — same failure-mode documented at `.claude/docs/orchestration-overview.md` § Common failure modes; recovery via rebase + drop-or-checkout-ours pattern).
+**Pointers:** PR #27; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/27#issuecomment-4526462647`. 1 informational NIT left as PR comment for Iris to pick up (§3.2 empty-state Refresh-button affordance — too small to warrant a separate ticket). Expected ENTRY 022 collision with PR #25 + PR #26 materialized; recovery via orchestrator-side `checkout --ours` rebase (log-only conflict, no code merge — within orchestrator scope per `.claude/docs/orchestration-overview.md` § Common failure modes).
+
+## 2026-05-23 2038 UTC — Auto-merge PR #25 (M2-05 NITs follow-up) on Felix APPROVE
+
+**Decided:** Admin-merge PR #25 (Maya's M2-05 NITs — messageReceiver tests + SELF-TEST typo fix, ClickUp `86c9y7yzf`) via `gh pr merge 25 --admin --squash --delete-branch` after Felix posted clean `APPROVE` (no NITs). Orchestrator-rebased to resolve ENTRY 022 collision against main (PR #27's now-landed entry); kept main's `clickup-pending.md` via `git checkout --ours`. Maya's branch tip moved `f1d2711 → 3711e40`. CI green on rebased head before merge.
+
+**Foundation:** Same promoted auto-decide class as all prior — orch-autonomy rule 6 + memory `[[merge-authorization-in-normal-autonomy]]`. PR #25 routine impl (test addition + typo fix). CI green. Peer-reviewer Felix posted clean APPROVE. Not on never-list.
+
+**Alternative:** Dispatch Maya to rebase her own branch. Rejected — log-only conflict (no code merge needed) is within orchestrator scope per the documented failure-mode (`.claude/docs/orchestration-overview.md` § Common failure modes — only code-level conflicts MUST escalate to author).
+
+**Reversibility:** `git revert <merge-sha>` ≤1 PR / ~10 min.
+
+**Status:** pending review.
+
+**Pointers:** PR #25; Felix's review at `https://github.com/TSandvaer/ClaudeTeam/pull/25#issuecomment-4526465789`; merge SHA `e97dc7a`; rebased CI runs (both COMPLETED/SUCCESS post-`3711e40`).
+
+## 2026-05-23 2039 UTC — Auto-merge PR #26 (M2-01 NITs follow-up) on Maya APPROVE_WITH_NITS
+
+**Decided:** Admin-merge PR #26 (Felix's M2-01 NITs — testing-strategy placeholder-PR exception, `package.json` `"when":"true"` removal, NIT #3 moot-closure, ClickUp `86c9y7u4p`) via `gh pr merge 26 --admin --squash --delete-branch` after Maya posted `APPROVE_WITH_NITS`. Orchestrator-rebased to resolve ENTRY 022 collision (same pattern as PR #25). Maya's 1 NIT (line 84 "No exceptions" wording adjacent to new exception subsection) is non-blocking scan-friction — left as PR comment, no separate ticket (single-line nit).
+
+**Foundation:** Same promoted auto-decide class — orch-autonomy rule 6. CI green. Peer-reviewer Maya APPROVE_WITH_NITS. Not on never-list.
+
+**Alternative:** File Maya's wording NIT as another follow-up ticket. Rejected — too small (one-word edit); leaving as PR comment captures the audit trail without adding ticket-overhead.
+
+**Reversibility:** `git revert <merge-sha>` ≤1 PR / ~10 min.
+
+**Status:** pending review.
+
+**Pointers:** PR #26; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/26#issuecomment-4526469642`; merge SHA `caf78a7`; rebased branch tip `40f46f6 → ad59f11`.

@@ -10,26 +10,24 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-23 (M2 Wave 1 SHIPPED — Wave 2 / M2-06 next; sponsor decision queued)
+## Current state — 2026-05-23 (M2 Wave 1 + 3 NITs follow-ups SHIPPED; only M2-04 NITs + Wave 2 left, both queued on sponsor)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `09f95d3` (PR #24 merge — M2-05 webview dashboard tile renderer + message receiver). Verify: `git rev-parse origin/main`.
+- **`origin/main` tip:** `caf78a7` (PR #26 merge — M2-01 NITs follow-up). Verify: `git rev-parse origin/main`.
 - **M2 Wave 0 status: SHIPPED.** PR #19/#20/#21/#22 (M2-09/03/07/01).
 - **M2 Wave 1 status: SHIPPED.** PR #23 (Felix M2-04 file-watcher polling loop) `807c3c6` — Maya APPROVE_WITH_NITS, auto-merged. PR #24 (Maya M2-05 webview dashboard tile renderer) `09f95d3` — Felix APPROVE_WITH_NITS, rebased + auto-merged (resolved expected ENTRY 019 collision + unexpected `src/shared/messages.ts` code conflict). Wave 1 unblocked Wave 2 (M2-06 = M2 shippable gate).
 - **Test counts:** 175 unit + 41 integration = **216 tests green** post-Wave-1 (Maya verified locally during rebase).
-- **Open PRs:** none yet (3 NITs dispatches just fired).
-- **In-flight agents (auto-dispatched per orch-autonomy rule 6 — log entry at 2024 UTC):** Felix on `86c9y7u4p` (M2-01 NITs, branch `felix/m2-01-nits-followup`); Iris on `86c9y7u44` (M2-03 NITs, branch `iris/m2-03-nits-followup`); Maya on `86c9y7yzf` (M2-05 NITs, branch `maya/m2-05-nits-followup`). All independent of Wave 2 ordering. HOLDING: M2-04 NITs (`86c9y7y9z`) + M2-06 — both depend on sponsor's Path X/Y choice still queued in this header.
+- **Open PRs:** none (3 NITs follow-up PRs all shipped — #25 `e97dc7a`, #26 `caf78a7`, #27 `fa05bf4`).
+- **In-flight agents:** none. All worktrees detached.
+- **HOLDING on sponsor:** Wave 2 ordering decision (Path X vs Path Y) still queued. Affects M2-04 NITs (`86c9y7y9z`) + M2-06 dispatch.
 - **Worktrees:** Felix worktree active on M2-04 lane (was detached at `6940033`); Maya worktree active on M2-05 lane (was detached at `df0a225`). Sage + Nora + Iris + Bram idle (no current dispatches).
 - **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:42:00Z` (this cron tick — sponsor picked Path A, Wave 1 dispatched).
 
 **ClickUp board state:**
-- **Complete (all Wave 0 + Wave 1):** `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01), `86c9y7uhz` (M2-04), `86c9y7uka` (M2-05).
-- **To do (NITs follow-ups, 4 tickets queued):**
-  - `86c9y7u44` — M2-03 NITs (Iris, 6 items — spec polish + type alignment with M2-04's shipped types).
-  - `86c9y7u4p` — M2-01 NITs (Felix, 3 items — scaffold cleanup).
+- **Complete (Wave 0 + Wave 1 + 3 NITs follow-ups):** `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01), `86c9y7uhz` (M2-04), `86c9y7uka` (M2-05), `86c9y7u44` (M2-03 NITs), `86c9y7yzf` (M2-05 NITs), `86c9y7u4p` (M2-01 NITs).
+- **To do (1 ticket held pending Wave 2 ordering):**
   - `86c9y7y9z` — M2-04 NITs (Felix, 2 items — **NIT #2 should land before M2-06 dispatch**: `SerializedStateFullMessage` typed union eliminating the cast in `messageBus.ts:81`).
-  - `86c9y7yzf` — M2-05 NITs (Maya, 3 items — messageReceiver tests, M2-06 cross-link, typo fix).
 
 **This-session structural delta (newest at top):**
 
