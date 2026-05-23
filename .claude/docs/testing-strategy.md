@@ -83,6 +83,17 @@ Every PR that affects UX (which is most of them) requires a Self-Test Report com
 
 If the Self-Test Report is missing, Sage REQUESTs CHANGES with "Self-Test Report required" as the reason. No exceptions.
 
+### Placeholder-PR screenshot exception
+
+If the PR's webview is a **placeholder slated for replacement in a downstream ticket** (i.e., a scaffold/stub that the next milestone PR overwrites end-to-end), the manual-reload screenshot binds at the **downstream** PR — not retroactively to the placeholder PR. The placeholder PR's Self-Test Report still includes AC walkthroughs and failure-mode probes, but the screenshot row can cite "screenshot binds at <downstream-ticket-id>" with a one-line justification.
+
+**Originating example:** M2-01 (PR #22, scaffold + CSP-strict placeholder webview) → M2-05 (PR #24, real dashboard tile renderer). M2-05 shipped the manual-reload screenshots for the tile UI; re-shooting M2-01's empty-placeholder webview after the fact would have produced a screenshot of a deleted code path. Once a downstream PR replaces the placeholder, that downstream PR's screenshots are the binding artifact for the surface.
+
+This exception does NOT apply when:
+- The "placeholder" is the final shipped UI (no downstream PR planned).
+- The downstream PR has not yet been scoped — speculation about future replacement is not a basis for skipping the screenshot.
+- The placeholder PR changes user-visible chrome (icons, view titles, command palette entries) — those bind at the PR that introduces them, regardless of downstream UI work.
+
 ## Sage's QA contract
 
 When the orchestrator dispatches Sage to QA a PR (vs author tests):

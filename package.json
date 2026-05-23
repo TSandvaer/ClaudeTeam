@@ -37,8 +37,7 @@
         {
           "type": "webview",
           "id": "claudeteam.dashboard",
-          "name": "Dashboard",
-          "when": "true"
+          "name": "Dashboard"
         }
       ]
     },
