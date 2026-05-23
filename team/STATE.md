@@ -10,32 +10,59 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-23 (M1 SHIPPED; M2 backlog + Bram prior-art ready; HOLDING for sponsor scope-overlap decision)
+## Current state — 2026-05-23 (M2 Wave 0 SHIPPED — 4 PRs merged; ClickUp MCP unavailable this session; Wave 1 next)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `697987e` (decisions log update — PR #18 auto-merge entry). Verify: `git rev-parse origin/main`.
-- **M1 status: SHIPPED.** 11 / 11 tickets complete + M1-09-followup (`86c9y6e17`) merged. Retro at [.claude/retros/retro-2026-05-23-m1-close.md](.claude/retros/retro-2026-05-23-m1-close.md).
-- **Test counts:** 127 unit + 31 integration = **158 tests green**. CI: 2x typecheck+lint+unit+integration COMPLETED+SUCCESS.
+- **`origin/main` tip:** `8494e58` (PR #22 merge — M2-01 extension scaffold + build pipeline). Verify: `git rev-parse origin/main`.
+- **M2 Wave 0 status: SHIPPED.** PR #19 (Nora M2-09 dispatch-template) `ccc05c4`, PR #20 (Iris M2-03 dashboard tile spec) `e989eed`, PR #21 (Sage M2-07 acceptance test plan) `5c650b4`, PR #22 (Felix M2-01 extension scaffold + build pipeline) `8494e58`. Sponsor scope-overlap (Option A) confirmed earlier this session.
+- **Test counts:** Maya verified locally on PR #22 worktree: 140 unit + 31 integration = **171 tests green** post-M2-01 merge.
 - **Open PRs:** none.
-- **Open ClickUp tickets:** none. (M1-09-followup `86c9y6e17` merged in PR #18 at `c31ae02`; ticket flipped `complete`.)
-- **Worktrees:** all detached post-merge.
 - **In-flight agents:** none.
-- **Auto-status:** AWAY (active orchestration tick every 15 min), cron job `f55a798f` (`7,22,37,52 * * * *`).
+- **Worktrees:** Felix at `6940033` detached (post PR #22 fix), Maya at `df0a225` detached (post PR #20 review), Sage at `1b3ebf3` detached (PR #21 author), Nora at PR #19 head detached. All cleanly detached.
+- **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:09:42Z`.
 
-**Blocked on sponsor:** [.claude/away-queue.md](.claude/away-queue.md) "2026-05-23 1330 UTC — M2/M3 scope-overlap" — sponsor must pick Option A (absorb M3's roster-render into M2 — orchestrator's recommendation; backlog already written for it) vs Option B (keep V1-PLAN's hardcoded-strings-in-M2 separation). M2-04 (file-watcher) + M2-05 (message protocol) ClickUp ticket creation + dispatch holds pending this answer.
+**Pending follow-up work (queued, not blocking Wave 1):**
 
-**Ready to dispatch on sponsor-greenlight (Wave 1, parallel):**
-- M2-01 (Felix — extension manifest + activation events, P0)
-- M2-03 (Iris — M2 dashboard tile spec inheriting M1-03 vocabulary, P0)
-- M2-07 (Sage — M2 test plan + Layer-3 manual VS Code reload checklist, P0)
-- M2-09 (Nora — dispatch-template tightening, P2)
+1. **ClickUp MCP server did not connect this session** — all status flips (ENTRY 014–018) queued in [team/log/clickup-pending.md](team/log/clickup-pending.md) per documented fallback. Flush when MCP available next session.
+2. **M2-03 NITs follow-up ticket** — 6 NITs from Maya's PR #20 review (DashboardState/AgentTree aliasing, StateDelta shape, `ui:open-roster` path exposure, §3.1↔§4 alive-state wireframe drift, §5.5 connector glyph `aria-hidden`, §9 Refresh button placement). Pending MCP for `chore(spec)` ticket creation.
+3. **M2-01 NITs follow-up ticket** — 3 NITs from Maya's PR #22 review: (a) manual-reload screenshot missing per CLAUDE.md hard rule #3 (borderline — M2-01 webview is single text node, M2-05 replaces); (b) redundant `"when":"true"` on view contribution; (c) `messageBus.postState` `_state` param naming. Pending MCP for `chore(scaffold)` ticket creation.
 
-After Wave 1 lands and CI green:
-- Wave 2: M2-04 (Felix — file-watcher) + M2-05 (Maya — webview message protocol). Lanes diverge by Option A/B; sponsor scope-overlap answer determines which.
+**This-session structural delta (newest at top):**
+
+| Commit | Subject |
+|---|---|
+| `8494e58` | feat(scaffold): VS Code extension manifest + build pipeline (M2-01) (#22) |
+| `5c650b4` | test-plan(m2): M2 acceptance test plan + webview-smoke gate spec (M2-07) (#21) |
+| `ddf302d` | chore(orch): ENTRY 016 + PR #20 auto-merge decision log |
+| `e989eed` | spec(ux): M2 dashboard tile spec — webview layout + interaction (#20) |
+| `7af93bd` | chore(orch): ENTRY 015 — 86c9y7jn9 -> complete (PR #19 merged) |
+| `ccc05c4` | chore(docs): enumerate APPROVE_WITH_NITS verdict in dispatch-template (M2-09) (#19) |
+
+**Ready to dispatch on next session (Wave 1, parallel):**
+
+- **M2-04 (Felix — file-watcher loop)** — `src/extension/watcher/watcherLoop.ts` + extract `cwdToSlug` to `src/shared/slug.ts` (resolves M1-09-followup duplication item). ClickUp ticket NOT yet created.
+- **M2-05 (Maya — webview tile renderer)** — vanilla TS per Bram's M2-02 prior-art research. ClickUp ticket NOT yet created.
+
+Wave 2 (after Wave 1 lands):
+- **M2-06 (Felix — host↔webview integration)** — M2 shippable gate (extension installs from `.vsix`, Activity Bar tiles render live data). ClickUp ticket NOT yet created.
+
+Wave 3 (after Wave 2 lands):
+- **M2-08 (Sage — `@vscode/test-electron` Layer-3 tests)**. ClickUp ticket NOT yet created.
+
+After Wave 3 → M2 close + retro at `.claude/retros/retro-YYYY-MM-DD-m2-close.md` using `.claude/retros/RETRO-TEMPLATE.md`.
+
+**Open dispatch-time questions for Wave 1+ (per Iris's M2-03 PR report):**
+- `DashboardState` vs `AgentTree` type aliasing — surface to Felix for M2-04
+- `StateDelta` shape not yet defined — Felix M2-04 or Maya M2-05 to define
+- Roster file path needed for `ui:open-roster` handler — Felix M2-06
+
+**Process insight captured this session (maintain-docs):** ENTRY-number collision in `clickup-pending.md` — parallel sub-agent dispatches each picked the next sequential ENTRY number from current main, so two dispatches in the same round → same N → merge conflict on the second PR. Hit 2× this session (PR #19/PR #22 both took ENTRY 014; PR #20/PR #21 both took ENTRY 016). Recovery: orchestrator rebases the colliding PR onto current main + drops the colliding commit (or keeps main's clickup-pending content via `git checkout --ours` when commit also has other content), then adds canonical entry post-merge. Captured in `.claude/docs/orchestration-overview.md` § Common failure modes.
+
+**M1 status: SHIPPED earlier this session.** 11/11 tickets complete + M1-09-followup (`86c9y6e17`) merged at `c31ae02`. Retro at [.claude/retros/retro-2026-05-23-m1-close.md](.claude/retros/retro-2026-05-23-m1-close.md).
 
 **Already done from M2 backlog:**
-- M2-02 (Bram — VS Code Extension API prior-art): merged at `b0e858b`. Key recs landed: `WebviewViewProvider` Activity Bar surface, `vscode.workspace.createFileSystemWatcher` with absolute-path `RelativePattern` (1.64+), vanilla TypeScript (Pixel Agents' React build = 291 KB cautionary data point), lazy activation via `onView:claudeteam.dashboard`. Pixel Agents lesson: NO CSP — ClaudeTeam must NOT replicate.
+- M2-02 (Bram — VS Code Extension API prior-art): merged at `b0e858b`. Key recs: `WebviewViewProvider` Activity Bar surface, `vscode.workspace.createFileSystemWatcher` with absolute-path `RelativePattern` (1.64+), vanilla TypeScript, lazy activation via `onView:claudeteam.dashboard`. Pixel Agents lesson: NO CSP — ClaudeTeam must NOT replicate.
 
 **This session's structural delta vs save-session base (`dbab662`):**
 
