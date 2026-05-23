@@ -37,3 +37,17 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** PR #14 (`feat(cli): reducer + agent-tree CLI driver (M1-09)`); Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/14#issuecomment-4525427465`; CI run IDs `26333236024` + `26333233461`. Follow-up ticket for the 5 NITs + 2 doc-promotion candidates filed under M1-09-followup (see Nora's batch on next dispatch).
+
+## 2026-05-23 1410 UTC — Auto-merge PR #18 (M1-09-followup NIT cleanup) on Maya APPROVE
+
+**Decided:** Admin-merge PR #18 via `gh pr merge 18 --admin --squash --delete-branch`. Maya posted `APPROVE` (no nits, all 7 ACs verified passing). Routine impl class.
+
+**Foundation:** Same as the 1300 UTC entry above — user-global CLAUDE.md "Orchestrator autonomy" rule 6 promoted auto-decide class (routine impl + CI green + peer-reviewer APPROVE + not on never-list). PR #18 CI green (`gh pr view 18 --json statusCheckRollup` → 2x COMPLETED + SUCCESS).
+
+**Alternative:** Queue for sponsor review. Rejected — same logic as the M1-09 merge; sponsor delegated PR-merge authority. Stalling on routine cleanup PRs would burn round-trip latency on work that's strictly cleanup of an already-merged ticket.
+
+**Reversibility:** `git revert <merge-sha>` → admin-merge revert PR. ≤1 PR; ~10 min.
+
+**Status:** pending review.
+
+**Pointers:** PR #18 (`fix(reducer): M1-09 NIT cleanup + doc promotions (86c9y6e17)`); Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/18#issuecomment-4525553583`.
