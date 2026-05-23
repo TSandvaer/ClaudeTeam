@@ -93,3 +93,17 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** PR #22; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/22#issuecomment-4526205819`; CI run `26340202005` on head `6940033`. Pre-merge history: Felix's CI fix commit added `npm run build` step before `vsce package` (root cause: `dist/` correctly gitignored, fresh CI checkout had no bundles). Branch was rebased earlier this round to resolve a `clickup-pending.md` ENTRY-014 collision with PR #19 (the colliding sub-agent log commit was dropped via `git rebase --skip`; orchestrator adds canonical ENTRY post-merge). 3 NIT follow-up ticket: `chore(scaffold): M2-01 NITs follow-up` — to be created on next MCP-available tick.
+
+## 2026-05-23 1933 UTC — Auto-merge PR #23 (M2-04 file-watcher polling loop) on Maya APPROVE_WITH_NITS
+
+**Decided:** Admin-merge PR #23 (`feat(watcher): file-watcher polling loop (M2-04)` — M2-04, ClickUp `86c9y7uhz`) via `gh pr merge 23 --admin --squash --delete-branch` after Maya posted `APPROVE_WITH_NITS`. Maya verified locally on Windows: typecheck clean, 151/151 unit tests + 41/41 integration tests pass, watcherLoop.test.ts 10/10 in 3.8s. All targets verified: `DashboardState=AgentTree` alias consistent, `StateDelta {added,updated,removed}` typed (computation deferred per OOS), `cwdToSlug` single source at `src/shared/slug.ts:30`, dispose path clears interval + FS-watcher handlers, `serializeState` Map→object pattern matches the doc just merged, no chokidar dep.
+
+**Foundation:** Same promoted auto-decide class as all 5 prior merge entries — user-global CLAUDE.md "Orchestrator autonomy" rule 6 promoted class "**Routine-PR-merge calls when CI green + orch-docs / cleanup class with peer reviewer attached.**" PR #23 is routine impl (M2-04 in-backlog file-watcher); CI green (`26341073136` SUCCESS); peer-reviewer Maya posted APPROVE_WITH_NITS (mergeable verdict per dispatch-template); not on never-auto-decide list. Cited memories: `[[merge-authorization-in-normal-autonomy]]` + `[[auto-execute-classes-without-sponsor-ack]]`.
+
+**Alternative:** Queue PR #23 + NITs for sponsor review. Rejected — Wave 1 momentum matters (M2-04 unblocks M2-06); routine peer-review + CI gates already cleared.
+
+**Reversibility:** `git revert <merge-sha>` → admin-merge revert PR. ≤1 PR; ~10 min. NITs reversible by editing in subsequent PR.
+
+**Status:** pending review.
+
+**Pointers:** PR #23; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/23#issuecomment-4526334827`; CI run `26341073136` on Felix's branch. 2 NITs to file as follow-up ticket (`chore(watcher): M2-04 NITs follow-up`): (1) `src/extension/main.ts:69-74` subscription leak in resolveWebviewView (closure-shared watcher means only one is active, but `context.subscriptions` array grows across reload cycles); (2) `messageBus.ts:81` `as unknown as DashboardState` cast hides on-wire shape — recommends `SerializedStateFullMessage` typed union in `src/shared/messages.ts` before M2-06 (M2-05 already shipped with `Object.entries` workaround per dispatch brief). Expected ENTRY-019 collision with PR #24 on `clickup-pending.md` per the failure-mode documented in `.claude/docs/orchestration-overview.md`.
