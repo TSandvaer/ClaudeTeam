@@ -15,25 +15,31 @@
  * Source: .claude/docs/vscode-extension-conventions.md "Message protocol"
  */
 
-import type { AgentTree, Team } from "./types.js";
+import type { DashboardState, StateDelta, Team } from "./types.js";
 
 // =============================================================================
 // Host → Webview
 // =============================================================================
 
-/** Full state snapshot sent on every poll tick (and on initial view load). */
+/**
+ * Full state snapshot sent on every poll tick (and on initial view load).
+ *
+ * `DashboardState` is an alias of the reducer's `AgentTree` — the names are
+ * interchangeable; see `types.ts` for the rationale.
+ */
 export type StateFullMessage = {
   type: "state:full";
-  payload: AgentTree;
+  payload: DashboardState;
 };
 
 /**
- * Partial state delta — reserved for M4 optimization.
- * At M2 scope the host only sends `state:full`.
+ * Partial state delta. At M2 the host only sends `state:full`; the delta
+ * message type exists so the webview's message receiver can typecheck
+ * against the eventual shape. `StateDelta` is defined in `types.ts`.
  */
 export type StateDeltaMessage = {
   type: "state:delta";
-  payload: Record<string, unknown>;
+  payload: StateDelta;
 };
 
 /** Roster loaded successfully. */

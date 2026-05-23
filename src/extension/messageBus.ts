@@ -10,27 +10,75 @@
  */
 
 import type * as vscode from "vscode";
-import type { AgentTree } from "../shared/types.js";
+import type { DashboardState, SessionTree, AgentTile } from "../shared/types.js";
 import type { HostMessage } from "../shared/messages.js";
+
+/**
+ * JSON-serializable shape of one session. `rosterTiles` is a plain object
+ * keyed by teamId, NOT a Map (Map values do not survive JSON.stringify;
+ * VS Code's postMessage serializes via JSON internally).
+ */
+export interface SerializedSessionTree
+  extends Omit<SessionTree, "rosterTiles"> {
+  rosterTiles: Record<string, AgentTile[]>;
+}
+
+/** JSON-serializable shape of the full state. */
+export interface SerializedDashboardState {
+  sessions: SerializedSessionTree[];
+}
+
+/**
+ * Convert a `DashboardState` to a JSON-serializable shape.
+ *
+ * The reducer's `SessionTree.rosterTiles` is a `Map<string, AgentTile[]>`.
+ * Maps do NOT round-trip through JSON.stringify (`{}` is the result), so we
+ * convert each session's map to a plain object keyed by teamId before
+ * handing the payload to `webview.postMessage`.
+ *
+ * Pure function; preserves all other fields verbatim.
+ */
+export function serializeState(state: DashboardState): SerializedDashboardState {
+  return {
+    sessions: state.sessions.map((session) => ({
+      shortId: session.shortId,
+      sessionId: session.sessionId,
+      pid: session.pid,
+      entrypoint: session.entrypoint,
+      version: session.version,
+      isAlive: session.isAlive,
+      cwd: session.cwd,
+      title: session.title,
+      // Map<string, AgentTile[]> → Record<string, AgentTile[]>
+      rosterTiles: Object.fromEntries(session.rosterTiles),
+      teamOrder: session.teamOrder,
+      background: session.background,
+    })),
+  };
+}
 
 /**
  * Serialize and post a `state:full` message to the given webview.
  *
- * VS Code serializes the message via JSON.stringify internally, so the
- * payload must be JSON-serializable. `AgentTree.sessions[].rosterTiles` is a
- * `Map<string, AgentTile[]>` — which is NOT JSON-serializable. M2-06 must
- * convert it to a plain object before calling this function.
+ * Maps are flattened to plain objects via `serializeState` before posting,
+ * because `webview.postMessage` serializes the payload via JSON internally.
+ * The webview receives a `DashboardState` shape but with `rosterTiles` as a
+ * plain object — the renderer must use `Object.entries` instead of
+ * `Map.entries` on the receiving side.
  *
- * At M2-01 scope this is a type-correct stub. Full implementation in M2-06.
+ * Returns the postMessage promise so callers can await delivery in tests.
  */
 export function postState(
   webview: vscode.Webview,
-  _state: AgentTree,
+  state: DashboardState,
 ): Thenable<boolean> {
-  // M2-06: serialize state (convert Map fields to plain objects) then post.
   const msg: HostMessage = {
     type: "state:full",
-    payload: _state,
+    // The runtime payload differs from DashboardState (rosterTiles is plain).
+    // We cast at this boundary because the host→webview contract is "JSON
+    // round-trips of DashboardState"; the on-wire shape is the serialized
+    // variant. Maya's M2-05 renders against the same SerializedDashboardState.
+    payload: serializeState(state) as unknown as DashboardState,
   };
   return webview.postMessage(msg);
 }

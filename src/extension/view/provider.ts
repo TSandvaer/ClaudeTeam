@@ -23,10 +23,31 @@ import * as vscode from "vscode";
 /** The view-id registered in package.json contributes.views. */
 export const VIEW_ID = "claudeteam.dashboard";
 
+/**
+ * Optional callback invoked once the webview view resolves. Used by the
+ * extension host's activation flow to kick off the file-watcher loop only
+ * when the view is actually visible (avoids paying the cost on every
+ * extension activation event).
+ */
+export type ViewResolvedHandler = (webview: vscode.Webview) => void;
+
 export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
   private _view: vscode.WebviewView | undefined;
+  private _onResolved: ViewResolvedHandler | undefined;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
+
+  /**
+   * Register a callback that fires when `resolveWebviewView` runs.
+   *
+   * The callback receives the live `vscode.Webview` and can use it as the
+   * sink for posted state messages. Replacing an existing handler is
+   * supported (last-write-wins) — useful in tests but should not happen in
+   * production where `activate` registers exactly once.
+   */
+  onResolved(handler: ViewResolvedHandler): void {
+    this._onResolved = handler;
+  }
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -45,6 +66,21 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
     };
 
     webviewView.webview.html = this._getHtml(webviewView.webview);
+
+    // Notify the activation flow that the webview is live. M2-06 wires the
+    // file-watcher loop here. The handler is invoked AFTER the HTML is set,
+    // so initial state posted from it lands after the webview script has a
+    // message listener attached.
+    if (this._onResolved) {
+      try {
+        this._onResolved(webviewView.webview);
+      } catch (err) {
+        // Defensive: don't let a downstream handler error break view init.
+        console.error(
+          `[claudeteam] onResolved handler threw: ${(err as Error).message}`,
+        );
+      }
+    }
   }
 
   /** Returns the current WebviewView if resolved; undefined otherwise. */
