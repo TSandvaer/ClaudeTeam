@@ -44,11 +44,18 @@ Before any other work: read CLAUDE.md and every .claude/docs/*.md file IN PARALL
 
 ```
 **ClickUp lifecycle for this dispatch:**
-- On task acceptance: move ticket <ID> `to do → in progress` via mcp__clickup__clickup_update_task.
-- On PR open: move ticket <ID> `in progress → in review` via mcp__clickup__clickup_update_task. Post PR URL in ticket comment.
-- Orchestrator handles `in review → complete` on merge.
 
-If MCP is unreachable, append the intended transition to `team/log/clickup-pending.md` as `ENTRY NNN: <ticket_id> -> <new_status>` and surface in your final report. Orchestrator flushes on reconnect.
+The Claude Code harness does NOT surface `mcp__clickup__*` tools to sub-agent runtimes (permanent gap, see `.claude/docs/orchestration-overview.md` "ClickUp as hard gate"). The orchestrator owns ClickUp writes; sub-agents append intended transitions to `team/log/clickup-pending.md` and orchestrator flushes on each tick.
+
+For YOU (the dispatched persona):
+
+- Ticket <ID> has been pre-flipped to `in progress` by the orchestrator in the same tool round as this dispatch. No action on accept.
+- On PR open, append (IN YOUR OWN WORKTREE at `<base>-<role>-wt/team/log/clickup-pending.md`, NEVER the orchestrator-survey path) inside the EXISTING code fence under the `## Status-flip queue (sub-agent dispatch fallback)` section:
+    ```
+    ENTRY NNN: <ticket_id> -> in review
+    ```
+  Do NOT create a new section header — that produces merge conflicts (see orchestration-overview.md "Common failure modes"). Commit + push through your PR.
+- Orchestrator handles `in review → complete` flip on merge.
 ```
 
 ### 5. Tightened final-report contract (≤200 words)
