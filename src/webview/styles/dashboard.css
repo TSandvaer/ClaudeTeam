@@ -1,0 +1,430 @@
+/*
+ * dashboard.css — ClaudeTeam webview styles.
+ *
+ * Theme-variable discipline (CLAUDE.md hard rule + spec §10):
+ *   - All colors except the four semantic state hex values come from
+ *     `--vscode-*` variables. Fallback values are the VS Code defaults from
+ *     the spec §10.1 table — they only fire when a theme has not defined the
+ *     variable (unusual).
+ *   - The four semantic state hex values are hardcoded per spec §10.2.
+ *     Their meaning (green=active, amber=paused, grey=done, red=broken) must
+ *     remain stable across theme switches.
+ *
+ * Layout discipline:
+ *   - No fixed pixel widths beyond design tokens (--ct-state-dot-size etc.).
+ *   - Activity text wraps; never truncated (spec divergence D1).
+ *   - Hover/focus uses --vscode-list-hoverBackground + --vscode-focusBorder.
+ *
+ * Source: team/iris-ux/m2-dashboard-tile-spec.md §10 design tokens
+ *         .claude/docs/vscode-extension-conventions.md "Webview rules"
+ */
+
+/* ===========================================================================
+ * Design tokens — ClaudeTeam-namespaced variables (spec §10.3)
+ * =========================================================================== */
+
+:root {
+  --ct-space-xs: 4px;
+  --ct-space-s: 8px;
+  --ct-space-m: 12px;
+  --ct-space-l: 16px;
+  --ct-state-dot-size: 10px;
+  --ct-state-dot-gap: 8px;
+}
+
+/* ===========================================================================
+ * Body — inherit VS Code typography + base colors (spec §10.4)
+ * =========================================================================== */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  font-weight: var(--vscode-font-weight);
+  color: var(--vscode-foreground, #cccccc);
+  background-color: var(--vscode-editor-background, #1e1e1e);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-l);
+  padding: var(--ct-space-m);
+}
+
+/* ===========================================================================
+ * Empty state (spec §3.2)
+ * =========================================================================== */
+
+.empty-state {
+  color: var(--vscode-descriptionForeground, #858585);
+  padding: var(--ct-space-l);
+  text-align: left;
+}
+
+/* ===========================================================================
+ * Session block (spec §4)
+ * =========================================================================== */
+
+.session-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-m);
+  padding: var(--ct-space-l);
+  background-color: var(
+    --vscode-sideBar-background,
+    var(--vscode-editor-background, #1e1e1e)
+  );
+  border: 1px solid var(--vscode-panel-border, #444444);
+  border-radius: 4px;
+}
+
+.session-block--dead {
+  opacity: 0.5;
+  color: var(--vscode-disabledForeground, rgba(204, 204, 204, 0.5));
+}
+
+.session-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ct-space-s);
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.session-id {
+  font-weight: 600;
+}
+
+.session-entrypoint,
+.session-pid,
+.session-cwd,
+.session-title {
+  color: var(--vscode-descriptionForeground, #858585);
+  font-size: smaller;
+}
+
+.session-cwd {
+  font-family: var(--vscode-editor-font-family, monospace);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.session-title {
+  font-style: italic;
+}
+
+.session-dead-badge {
+  margin-left: auto;
+  padding: 0 var(--ct-space-s);
+  border: 1px solid var(--vscode-disabledForeground, rgba(204, 204, 204, 0.5));
+  border-radius: 2px;
+  text-transform: uppercase;
+  font-size: smaller;
+}
+
+/* ===========================================================================
+ * Team card (spec §6)
+ * =========================================================================== */
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+  padding: var(--ct-space-m);
+}
+
+.team-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-space-s);
+  padding-bottom: var(--ct-space-xs);
+  border-bottom: 1px solid var(--vscode-panel-border, #444444);
+  color: var(--vscode-descriptionForeground, #858585);
+}
+
+.team-name {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.team-count {
+  font-size: smaller;
+}
+
+/* ===========================================================================
+ * Agent tile (spec §5)
+ * =========================================================================== */
+
+.agent-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  padding: var(--ct-space-s);
+  border-radius: 4px;
+  background-color: transparent;
+  cursor: pointer;
+  outline: 0 solid transparent;
+  transition: none;
+}
+
+.agent-tile:hover,
+.agent-tile:focus-visible {
+  background-color: var(
+    --vscode-list-hoverBackground,
+    rgba(255, 255, 255, 0.07)
+  );
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+}
+
+.tile-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-state-dot-gap);
+}
+
+/* Rows 2-4 indent past the state dot for alignment with the display name. */
+.tile-row--role,
+.tile-row--activity,
+.tile-row--model {
+  padding-left: calc(var(--ct-state-dot-size) + var(--ct-state-dot-gap));
+}
+
+.agent-display {
+  font-weight: 600;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.agent-role {
+  color: var(--vscode-descriptionForeground, #858585);
+  font-size: smaller;
+}
+
+.agent-activity {
+  color: var(--vscode-foreground, #cccccc);
+  font-family: var(--vscode-editor-font-family, monospace);
+  /* Spec D1: wrap, never truncate. */
+  word-break: break-word;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.agent-model {
+  color: var(--vscode-descriptionForeground, #858585);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+}
+
+/* ---------------------------------------------------------------------------
+ * State dot (spec §5.3 — semantic hardcoded hex; do NOT theme)
+ * --------------------------------------------------------------------------- */
+
+.state-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--ct-state-dot-size);
+  height: var(--ct-state-dot-size);
+  border-radius: 50%;
+  background-color: var(--vscode-descriptionForeground, #858585);
+}
+
+.state-dot[data-state="running"] {
+  background-color: #4caf50;
+}
+
+.state-dot[data-state="idle"] {
+  background-color: #ffa726;
+}
+
+.state-dot[data-state="finished"] {
+  background-color: #78909c;
+}
+
+.state-dot[data-state="error"] {
+  background-color: #ef5350;
+}
+
+/* ===========================================================================
+ * Background chip (spec §7)
+ * =========================================================================== */
+
+.background-chip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+  padding: var(--ct-space-m);
+  border: 1px dashed var(--vscode-panel-border, #444444);
+  border-radius: 4px;
+}
+
+.chip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--ct-space-xs) var(--ct-space-s);
+  background-color: transparent;
+  border: 0;
+  color: var(--vscode-descriptionForeground, #858585);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.chip-header:hover,
+.chip-header:focus-visible {
+  background-color: var(
+    --vscode-list-hoverBackground,
+    rgba(255, 255, 255, 0.07)
+  );
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  border-radius: 2px;
+}
+
+.chip-count {
+  font-weight: 600;
+}
+
+.chip-chevron {
+  font-size: smaller;
+  opacity: 0.7;
+}
+
+.chip-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+}
+
+.chip-detail-list[hidden] {
+  display: none;
+}
+
+.bg-agent-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: var(--ct-space-s);
+  align-items: baseline;
+  padding: var(--ct-space-xs) var(--ct-space-s);
+}
+
+.bg-agent-type {
+  color: var(--vscode-foreground, #cccccc);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+}
+
+.bg-agent-description {
+  color: var(--vscode-descriptionForeground, #858585);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.bg-agent-state {
+  color: var(--vscode-descriptionForeground, #858585);
+  font-size: smaller;
+  text-transform: lowercase;
+}
+
+.bg-agent-model {
+  color: var(--vscode-descriptionForeground, #858585);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+}
+
+/* ===========================================================================
+ * Error chip (spec §8)
+ * =========================================================================== */
+
+.error-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ct-space-s);
+  padding: var(--ct-space-m);
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+
+.error-chip--error {
+  background-color: var(
+    --vscode-inputValidation-errorBackground,
+    #5a1d1d
+  );
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+  color: var(--vscode-inputValidation-errorForeground, #f48771);
+}
+
+.error-chip--warning {
+  background-color: var(
+    --vscode-inputValidation-warningBackground,
+    #352a05
+  );
+  border-color: var(--vscode-inputValidation-warningBorder, #cca700);
+  color: var(--vscode-inputValidation-warningForeground, #cca700);
+}
+
+.error-chip-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.error-chip-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  flex: 1;
+}
+
+.error-chip-title {
+  font-weight: 600;
+}
+
+.error-chip-detail {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+  overflow-wrap: anywhere;
+}
+
+.error-chip-action {
+  align-self: flex-start;
+  margin-top: var(--ct-space-xs);
+  padding: var(--ct-space-xs) var(--ct-space-s);
+  background-color: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.error-chip-action:hover,
+.error-chip-action:focus-visible {
+  background-color: var(--vscode-button-hoverBackground, #1177bb);
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+}
+
+.error-chip-dismiss {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background-color: transparent;
+  color: inherit;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
