@@ -137,12 +137,20 @@ Felix's dispatch on M1-09 will start with `git -C <felix-wt> fetch origin && git
 
 ### Nora (Project Lead)
 
-- Last updated: 2026-05-23 (M1 backlog complete; pre-bloat-prevention-bundle this session)
-- Status: idle (M1 backlog complete; M2 backlog not yet authored)
+- Last updated: 2026-05-24 (M2-close retro authored)
+- Status: idle (M2-close retro shipped)
 - Working on: nothing in flight
-- Blocked on: nothing — M2 planning starts after M1-10 merges
+- Blocked on: nothing — M3 backlog authoring is the next likely dispatch
 
 **Run log of substantive coordination-doc PRs (newest at top):**
+
+#### 2026-05-24 — M2-close retro authored
+
+- Retro: `.claude/retros/retro-2026-05-24-m2-close.md` (~3100 words; comparable to M1 retro depth, slightly longer to cover 12 merged PRs + 10 auto-decisions)
+- Surfaced 10/10 auto-decide / 0-reversal calibration finding → recommendation to promote more rule 6.6 classes (NITs-ticket-creation, log-only-conflict recovery, NITs-absorption-into-downstream)
+- Surfaced chain-of-deferred-validations anti-pattern (M2-01 placeholder-screenshot deferral → M2-06 sub-agent-GUI deferral → CJS shim bug only caught at M2-08 Layer-3 in PR #29)
+- 8 next-session backlog items filed (M3 scope confirm, auto-decide promotion draft, ENTRY-NNN collision prevention, cross-project port of GUI-gap + permission-rule, test-plan executor mapping discipline, install-path validation at first-shipping PR, main-thread merge-narration tightening, M3 Layer-3 expansion)
+- Branch: `nora/m2-close-retro`
 
 #### 2026-05-23 — M1 backlog created
 
