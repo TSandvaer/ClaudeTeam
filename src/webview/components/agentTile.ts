@@ -34,6 +34,7 @@
 
 import type { AgentTile, AgentState } from "../../shared/types.js";
 import type { OpenTranscriptMessage } from "../../shared/messages.js";
+import { formatFreshness } from "../freshness.js";
 
 /** Human-readable label per state — used in aria-label and title tooltip. */
 const STATE_LABEL: Record<AgentState, string> = {
@@ -50,10 +51,39 @@ export interface AgentTileProps {
   tile: AgentTile;
   sessionId: string;
   postMessage: PostMessageFn;
+  /**
+   * Wall-clock epoch ms when the webview FIRST observed this tile in
+   * `finished` state. Used only when `tile.state === "finished"` to render
+   * a freshness suffix (`finished Xs / Xm / Xh`) parallel to the host-side
+   * `idle Xs` convention.
+   *
+   * The caller (render.ts → main.ts) owns the tracker; this component is a
+   * pure renderer. When omitted (or when the tile is not finished), the
+   * activity field renders verbatim from `tile.activity` — back-compat with
+   * pre-NIT#3 callers and with non-finished states.
+   *
+   * `nowMs` is also injected so tests don't need to mock `Date.now()`.
+   * Defaults to `Date.now()` in production.
+   *
+   * Source: ClickUp 86c9ybtut (M3-04 NIT #3)
+   */
+  finishedAtMs?: number;
+  /** Current wall-clock ms — defaults to Date.now(). Test injection point. */
+  nowMs?: number;
 }
 
 export function renderAgentTile(props: AgentTileProps): HTMLElement {
-  const { tile, sessionId, postMessage } = props;
+  const { tile, sessionId, postMessage, finishedAtMs, nowMs } = props;
+
+  // Compose the activity text — for finished tiles with a tracked first-seen
+  // timestamp, suffix with " Xs / Xm / Xh" for freshness visibility (NIT #3).
+  // Stale tiles look identical to fresh-finished tiles without this signal —
+  // sponsor flagged the gap from the 2026-05-24 screenshot (Iris's tile
+  // showed bare "finished" alongside Maya's "idle 14s" / Bram's "idle 47s").
+  const activityText =
+    tile.state === "finished" && typeof finishedAtMs === "number"
+      ? `${tile.activity} ${formatFreshness((nowMs ?? Date.now()) - finishedAtMs)}`
+      : tile.activity;
 
   const article = document.createElement("article");
   article.className = "agent-tile";
@@ -92,7 +122,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
 
   // Row 3 — activity (no truncation, CSS wraps).
   article.appendChild(
-    buildRow("tile-row--activity", "agent-activity", tile.activity),
+    buildRow("tile-row--activity", "agent-activity", activityText),
   );
 
   // Row 4 — model.

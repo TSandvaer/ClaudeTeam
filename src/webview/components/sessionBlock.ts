@@ -29,14 +29,22 @@ import type { SessionTree } from "../../shared/types.js";
 import { renderTeamCard, teamFromId } from "./teamCard.js";
 import { renderBackgroundChip } from "./backgroundChip.js";
 import type { PostMessageFn } from "./agentTile.js";
+import type { FinishedTracker } from "../finishedTracker.js";
 
 export interface SessionBlockProps {
   session: SessionTree;
   postMessage: PostMessageFn;
+  /**
+   * Optional webview-local first-seen tracker for finished-tile freshness
+   * (M3-04 NIT #3). Threaded down to teamCard → agentTile.
+   */
+  finishedTracker?: FinishedTracker;
+  /** Current wall-clock ms — defaults to Date.now() downstream. */
+  nowMs?: number;
 }
 
 export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
-  const { session, postMessage } = props;
+  const { session, postMessage, finishedTracker, nowMs } = props;
 
   const block = document.createElement("section");
   block.className = "session-block";
@@ -86,6 +94,8 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
         tiles,
         sessionId: session.sessionId,
         postMessage,
+        ...(finishedTracker ? { finishedTracker } : {}),
+        ...(nowMs !== undefined ? { nowMs } : {}),
       }),
     );
   }
