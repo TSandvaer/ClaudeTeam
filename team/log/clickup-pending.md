@@ -96,6 +96,7 @@ ENTRY-2026-05-24T22:30:00Z: 86c9ybrk0 -> complete (FLUSHED — was queued at 19:
 ENTRY-2026-05-24T22:30:01Z: 86c9ybtut -> in progress (M3-04 NITs dispatch — Felix host NIT #1+#2 + Maya webview NIT #3, parallel split per sponsor)
 ENTRY-2026-05-24T23:35:00Z: 86c9ybtut -> in review (Maya webview NIT #3 PR opened — finished-status freshness suffix)
 ENTRY-2026-05-24T23:35:01Z: 86c9ybtut -> in review (PR #45 opened — Felix host NITs #1+#2: parse-error model fallback + human-readable error format)
+ENTRY-2026-05-25T00:58:00Z: 86c9ydug9 -> in review (PR #47 opened — Maya webview render + Self-Test + 86c9ydz4k NIT absorbed)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
