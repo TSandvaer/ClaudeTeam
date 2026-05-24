@@ -14,12 +14,14 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `b8ada36` (PR #28 merge — M2-06 + absorbed M2-04 NITs). Verify: `git rev-parse origin/main`. **M2 milestone shippable gate cleared.**
+- **`origin/main` tip:** `4a41634` (PR #30 merge — CJS shim production fix `86c9y9yzu`). Verify: `git rev-parse origin/main`. **M2 fully closed + production .vsix activation bug fixed.**
 - **M2 Wave 0 status: SHIPPED.** PR #19/#20/#21/#22 (M2-09/03/07/01).
 - **M2 Wave 1 status: SHIPPED.** PR #23 (Felix M2-04 file-watcher) `807c3c6`. PR #24 (Maya M2-05 webview renderer) `09f95d3`.
 - **M2 Wave 1 NITs follow-ups status: SHIPPED.** PR #25 (Maya M2-05 NITs) `e97dc7a`. PR #26 (Felix M2-01 NITs) `caf78a7`. PR #27 (Iris M2-03 NITs) `fa05bf4`.
 - **M2 Wave 2 status: SHIPPED.** PR #28 (Felix M2-06 + absorbed M2-04 NITs) merged at `b8ada36` after Maya APPROVE_WITH_NITS. Sponsor authorized merge with webview-smoke AC7(b-d) screenshots deferred as post-merge sponsor verification (sub-agent runtime can't drive interactive VS Code). Ticket `86c9y9q6h` → `complete`.
-- **M2 Wave 3 status: QUEUED.** M2-08 (Sage `@vscode/test-electron` Layer-3 tests) ticket not yet created; sponsor decides whether to dispatch this session or next.
+- **M2 Wave 3 status: SHIPPED.** PR #29 (Sage M2-08 Layer-3 tests) merged at `ec8977f` after Felix clean APPROVE. 14/14 Layer-3 tests green on CI Ubuntu via xvfb-run; existing layers all stay green (215 unit + 49 integration). Ticket `86c9y9v7r` → `complete`. **M2 milestone fully closed.**
+- **P0 follow-up SHIPPED:** `86c9y9yzu` (CJS shim production fix) merged at `4a41634` after Maya clean APPROVE. Production .vsix activation bug fixed (Node 22+ ERR_REQUIRE_ESM resolved via `.cjs` bundle rename + `package.json main` field update). Comment posted on `86c9y9q6h` informing sponsor the M2-06 AC7(b-d) screenshots are unblocked.
+- **M2-close retro:** **READY TO AUTHOR.** All M2 work complete + the post-M2 P0 follow-up shipped. Sponsor decides: dispatch Nora now to author `.claude/retros/retro-2026-05-24-m2-close.md`, or defer to next session.
 - **Test counts:** ~181 unit + 41 integration = **~222 tests green** on main post-Wave-1-NITs (CI green on every push). Felix's M2-06 PR will add integration coverage.
 - **Open PRs:** none yet — Felix's M2-06 PR forthcoming.
 - **In-flight agents:** none — Maya posted APPROVE_WITH_NITS on PR #28 at 2026-05-24 ~08:24 UTC. AC7(a) live-runTick smoke verified through Maya's actual `~/.claude/` (real `claudeteam-alpha` team materialized). AC7(e) integration test passes (subscription leak). Both absorbed M2-04 NITs verified clean. 215 unit + 49 integration tests green. Worktree detached at `12ce4bf` — merge unblocked. **PR is mergeable on content; webview-smoke gate (AC7(b-d) screenshots) is the open question — see "Sponsor-pending" below.**

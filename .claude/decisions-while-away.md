@@ -177,3 +177,17 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** PR #26; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/26#issuecomment-4526469642`; merge SHA `caf78a7`; rebased branch tip `40f46f6 → ad59f11`.
+
+## 2026-05-24 0949 UTC — Auto-merge PR #30 (CJS shim production fix, P0) on Maya APPROVE
+
+**Decided:** Admin-merge PR #30 (`fix(scaffold): dist/extension CJS shim for Node 22+ require()` — ClickUp `86c9y9yzu`) via `gh pr merge 30 --admin --squash --delete-branch` after Maya posted clean `APPROVE`. Merge SHA `4a41634`. Ticket flipped `in review → complete`. M2-06 sponsor screenshot blocker now cleared.
+
+**Foundation:** Promoted auto-decide class — orch-autonomy rule 6.6 #1 "Routine-PR-merge calls when CI green + orch-docs / cleanup class with peer reviewer attached." PR #30 is routine impl (P0 bug fix); CI green (both push + pull_request COMPLETED/SUCCESS); peer-reviewer Maya posted clean APPROVE with 4-of-4 sanity checks verified; not on never-auto-decide list. Cited memories: `[[merge-authorization-in-normal-autonomy]]` + `[[auto-execute-classes-without-sponsor-ack]]`. Sponsor's prior session-wide pattern (8 auto-merges, 0 reversals) supports this class.
+
+**Alternative:** Queue for sponsor review. Rejected — same precedent as PR #20/#22/#23/#24/#25/#26/#27/#29 (all auto-merged this multi-session arc). Sponsor explicitly authorized parallel dispatch for this P0 fix in the prior tick — pre-authorizing the merge by extension.
+
+**Reversibility:** `git revert <merge-sha>` → admin-merge revert PR. ≤1 PR; ~10 min. Production bundle rollback would only re-introduce the activation bug (worse for sponsor than the fix).
+
+**Status:** pending review.
+
+**Pointers:** PR #30; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/30#issuecomment-4528010955`; merge SHA `4a41634`; Felix's commit `50f3919` (the `.cjs` rename + esbuild config), Felix's ENTRY-029 commit `3dc7839`. Comment posted on `86c9y9q6h` informing sponsor activation bug is fixed.

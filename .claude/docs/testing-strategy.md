@@ -94,6 +94,31 @@ This exception does NOT apply when:
 - The downstream PR has not yet been scoped — speculation about future replacement is not a basis for skipping the screenshot.
 - The placeholder PR changes user-visible chrome (icons, view titles, command palette entries) — those bind at the PR that introduces them, regardless of downstream UI work.
 
+### Sub-agent GUI gap — webview-smoke workaround
+
+Sub-agents (Felix, Maya, and any other persona) run in a headless harness with no GUI session. They cannot drive `Developer: Reload Window`, take screenshots, or interact with VS Code's Activity Bar. This makes CLAUDE.md hard rule #3 ("Maya or the PR author posts a Self-Test Report confirming a manual webview reload worked end-to-end") structurally unachievable pre-merge for any webview-touching PR.
+
+**Established pattern (first applied: M2-06, PR #28, 2026-05-24):**
+
+- **AC(a) — data-plane smoke via live runTick:** the sub-agent runs the production `runTick()` path against real `~/.claude/` data and confirms the expected team/agent objects materialise end-to-end (e.g., Maya's M2-06 review materialized `claudeteam-alpha` with Felix + Maya tiles + 7 background agents). This is the load-bearing verification — it exercises the full parse → match → state-emit pipeline that drives the webview. Sub-agents CAN perform this; it is required pre-merge.
+- **AC(b-d) — interactive screenshots** (`Reload Window`, tile click, Output channel capture over 30s, theme toggle): become **sponsor-side post-merge confirm-no-regression** rather than a blocking pre-merge gate. The Self-Test Report notes "screenshot AC deferred to sponsor post-merge per sub-agent GUI gap" for each affected AC.
+
+**Why this is acceptable:** AC(a) covers the failure mode most likely to ship a regression (data-plane breakage). The screenshot ACs are visual-confirmation checks; if the data plane is correct and the webview rendering code is unchanged, regression risk from deferring screenshots is low.
+
+**Criteria for applying this reframe:**
+1. Both the PR author AND the designated reviewer are sub-agents (no human or GUI-capable agent in the loop).
+2. The PR's data-plane smoke is performed and cited with verifiable evidence (real file path, real team name, observable output).
+3. The sponsor is explicitly informed at merge time that (b-d) are deferred to post-merge confirm.
+
+**This reframe does NOT apply when:**
+- A human (sponsor) or a GUI-capable agent is available to perform the manual reload before merge.
+- The PR changes webview rendering logic or CSS (not just data-plane code) — request a sponsor manual confirm before merge, not after.
+- A Layer-3 `@vscode/test-electron` integration test (per M2-08) already covers the webview reload path — the automated test is the gate, not a screenshot.
+
+**Sponsor obligation:** at first convenient opportunity after merging a PR where screenshots were deferred, open the extension, click through the affected views, note any visual regression in the originating ClickUp ticket comment. No formal Self-Test Report required — a one-line "confirmed no regression" or a follow-up bug ticket suffices.
+
+**Sage QA gate:** accept the `sub-agent has no GUI` deferral for interactive-screenshot rows when a live data-plane smoke is present and cited. Do NOT REQUEST CHANGES solely for missing screenshots if the smoke evidence is there.
+
 ## Sage's QA contract
 
 When the orchestrator dispatches Sage to QA a PR (vs author tests):
