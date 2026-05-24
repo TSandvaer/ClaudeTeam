@@ -24,6 +24,24 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 <!-- New entries are appended below this line. -->
 
+## 2026-05-25 — M3-10 close (PR #47 + #48 merged); 86c9ydug9 + 86c9ydz4k → complete; vocabulary-divergence incident → 4th staged global rule
+
+**Decided:** Admin-merge PR #47 (Maya M3-10 webview + 86c9ydz4k NIT absorbed) at `be3b70b` and PR #48 (Felix M3-10 host) at `7a0a6e7`. Flipped tickets `86c9ydug9 → complete` and `86c9ydz4k → complete` via MCP. Filed NIT-class follow-up `86c9yee3g` (2 cosmetic NITs from Felix's APPROVE_WITH_NITS review on PR #47).
+
+**Foundation:** Rule 6.6 #1 (routine PR-merge with CI green + peer APPROVE; both PRs had cross-reviewer verdict). PR #47 took Felix APPROVE_WITH_NITS → 2 NITs filed per rule 6.6 #5 (mechanical NIT ticket creation) → ticket `86c9yee3g`. PR #48 took Maya APPROVE (clean).
+
+**Vocabulary-divergence incident:** Felix + Maya independently picked different type names for the M3-10 wrapper concept (`PersonaGroup`/`TileOrGroup`/`isPersonaGroup`/`kind:"group"` vs `CollapsedPersonaGroup`/`RosterTileEntry`/`isCollapsedPersonaGroup`/`kind:"collapsed-persona"`). Cross-review missed it. PR #47 merged first (Maya canonical landed on main); PR #48 then non-mergeable with conflicts across 4 files. Recovery: Felix re-dispatched for reconciliation rebase — `git checkout --ours` for 4 webview/messages files + sed-rename types in his reducer/tests + drop redundant defs. Force-pushed at `cd63f5c`. Then CI failure on Layer-3 (`rosterHotReload.test.ts:289,336` accessed `.memberId` on widened union); Felix re-dispatched again to add `flattenTiles` narrow helper. Force-pushed at `0690623`. CI green. Merged.
+
+**Staged-diff rule:** 4th staged global discipline rule authored to prevent recurrence — `team/log/proposed-global-rule-parallel-agent-vocabulary-discipline-2026-05-25.md` (commit `c37dae9`). Two patterns: (A) sequence dispatches so type-author merges first, (B) parallel with explicit "Vocabulary contract" block naming 5 identifiers. Cross-review must check inter-PR vocabulary alignment.
+
+**Alternative:** Closing PR #48 + filing a fresh ticket for Felix's host work against Maya's canonical vocabulary. Rejected — reconciliation rebase was cheaper (~10 min) and preserved Felix's reducer + config wiring work.
+
+**Reversibility:** Each merge → `git revert <sha>` + admin-merge revert PR. ≤1 PR + 5-10 min. M3-10 is the final M3 ticket; reverting either half breaks the feature.
+
+**Status:** pending review.
+
+**Pointers:** PR #47 (`be3b70b`); PR #48 (`7a0a6e7`); NIT ticket `86c9yee3g`; staged rule `c37dae9`; process-incident chronicle in `team/log/process-incidents.md` 2026-05-25 entries.
+
 ## 2026-05-25 0010 UTC — Auto-merge PR #45 (Felix 86c9ybtut host NIT #1+#2) + flip 86c9ybtut → complete + absorb 86c9ydz4k NIT into Maya's M3-10 dispatch
 
 **Decided:** Admin-merge PR #45 `chore(dashboard): M3-04 NITs host — parse-error model fallback + human-readable error format (86c9ybtut)` via `gh pr merge 45 --admin --squash --delete-branch`. Merged at `2e7c66c`. Required orch-side rebase + manual both-add merge on `team/log/clickup-pending.md` (BOTH `86c9ybtut -> in review` entries from Felix's + Maya's PRs preserved; Felix's bumped to 23:35:01Z to differentiate). Flipped ticket `86c9ybtut → complete` via MCP (both PRs landed = ticket done). Absorbing NIT-follow-up ticket `86c9ydz4k` (formatFreshness rollover, Maya-owned) into Maya's M3-10 dispatch per promoted rule 6.6 #6 (NITs-absorption-into-downstream when same persona + same PR cycle).

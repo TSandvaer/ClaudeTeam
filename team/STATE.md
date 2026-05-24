@@ -10,18 +10,18 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-24 2230 UTC (resume — ClickUp MCP back; M3-09 + M3-10 tickets filed; 86c9ybtut M3-04 NITs DISPATCHED to Felix + Maya in parallel)
+## Current state — 2026-05-25 (M3 Wave 1 FULLY CLOSED — PR #47 + #48 merged, M3-10 + NIT done; 4 staged global rules pending sponsor application; ready for save + M3 retro)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
 - **`origin/main` tip:** `0fbf028` (PR #41 merge — Felix + Maya M3-03 DEAD-bleed fix). Three PRs merged this tick: #41 (`0fbf028`), #42 (`0a5bc5e` — M3-07 Nora install-path validation), #43 (`236c3f8` — M3-08 Nora main-thread narration). Auto-merge audit logged at `.claude/decisions-while-away.md` 1934 UTC.
 - **M3 Wave 0 SHIPPED end-to-end** (prior session — 6 PRs merged to main): M3-01 hot-reload (PR #35, `a74cb94`), M3-02 openRoster command (PR #37, `d0225aa`), M3-03 window-scoped session filtering (PR #38, `1bc422c`), M3-04 webview chip + filtered-empty + open-roster button (PR #39, `b22de25`), M3-01-NITs cleanup (PR #40, `9c0572c`), plus M3-06 dispatch-template update (PR #36, `cd3553c`). Sponsor's M3 scope-correction directive ("show only sessions from this VS Code window") addressed via M3-03 default-on window-scoping with `claudeteam.showAllSessionsGlobally` opt-out.
 - **Test counts:** 281 unit (+2 pre-existing skips) + 68 integration + 23 Layer-3 green on main as of PR #44 merge (M3-09 added 3 new Layer-3 suites + 13 NIT-gap unit tests).
-- **Open PRs:** none. PR #45 merged at `2e7c66c` (required orch-side rebase + manual both-add merge on `clickup-pending.md`).
-- **In-flight agents:** none (Felix done, Maya done — both ready for M3-10 re-dispatch).
-- **`86c9ybtut` complete** — flipped via MCP after both PRs landed (PR #45 + PR #46).
-- **Tickets created this session:** `86c9ydufh` (M3-09 retrospective), `86c9ydug9` (M3-10 to do), `86c9ydz4k` (NIT, will be absorbed into Maya's M3-10 PR per rule 6.6 #6).
-- **Dispatch pending:** Felix + Maya on M3-10 (`86c9ydug9`) per sponsor's confirmed sequencing.
+- **Open PRs:** none. M3-10 PRs both merged: PR #47 (Maya webview + NIT absorbed) at `be3b70b`; PR #48 (Felix host) at `7a0a6e7`. PR #48 required reconciliation rebase (vocab divergence) + Layer-3 compile fix.
+- **In-flight agents:** none.
+- **All M3 tickets COMPLETE:** `86c9ydug9` (M3-10) + `86c9ydz4k` (formatFreshness NIT) flipped via MCP this round. M3 Wave 1 fully closed.
+- **NIT follow-up filed:** `86c9yee3g` (PR #47 collapsedPersonaTile cosmetic NITs — JSDoc drift + count/instances redundancy). Maya-owned, Felix-reviewer, P3, XS.
+- **4 staged global rules awaiting sponsor application** (commits `c4bc59b`, `b6cd975`, `8cc02b0`, `c37dae9`): wake-discipline, cross-session continuity, main-thread bloat, parallel-agent shared-concept vocabulary. All at `team/log/proposed-global-rule-*-2026-05-25.md` with "How to apply" sections written for direct paste into `~/.claude/CLAUDE.md`.
 - **Auto-decide this tick (logged at `.claude/decisions-while-away.md` 2026-05-24 1801 UTC):** Path 1 absorb webview-scope into `86c9ybrk0` + redispatch Felix on same PR, vs Path 2 (close as misdiagnosed + new ticket for Maya). Foundation: Felix's audit + Path Y economy precedent. Reversibility ≤1 PR.
 - **Queued for sponsor (non-blocking):**
   - **M3-10 ticket creation** — sponsor authorized `File M3-10 ticket now (P3)` at session resume; heuristic chosen = `group by roster persona-name, show 'Felix ×3' with expandable list`. Orchestrator's ClickUp MCP did not connect this session, so NEW-TICKET-REQUEST block added to `team/log/clickup-pending.md` for next session with live MCP. Sponsor can also file manually using the body block already drafted there.
