@@ -345,6 +345,17 @@ export interface SessionTree {
  * about the `claudeteam.showAllSessionsGlobally` setting; the latter gets the
  * generic empty-state. Optional for back-compat with consumers (CLI driver,
  * older tests) that don't supply or read it; absent → treated as false.
+ *
+ * `rosterErrors` / `rosterWarnings` (M3-04): mirror the `RosterLoadResult`
+ * surface for the most recent roster reload. The webview renders the roster
+ * error chip from `rosterErrors` (first message verbatim + "(+N more)";
+ * click body for full list + Edit Roster button). Strings are passed
+ * verbatim from the loader (e.g. `global roster YAML parse error (...):
+ * ...`). Both optional for back-compat with the CLI driver and pre-M3-04
+ * tests that don't supply or read them; absent → treated as empty array.
+ * Plain `string[]` — JSON-safe across the host↔webview boundary per
+ * `.claude/docs/vscode-extension-conventions.md` § "JSON-serialization
+ * constraint".
  */
 export interface AgentTree {
   /** One entry per SessionRecord, in the order supplied. */
@@ -356,6 +367,16 @@ export interface AgentTree {
    * See `src/extension/watcher/sessionFilter.ts` § isFilterApplied.
    */
   filterApplied?: boolean;
+  /**
+   * Roster load errors from the most recent tick's `loadRoster` call
+   * (M3-04). Non-empty → render the error chip. Verbatim from the loader.
+   */
+  rosterErrors?: string[];
+  /**
+   * Roster load warnings from the most recent tick (M3-04). Non-empty →
+   * render the warning chip subtype. Verbatim from the loader.
+   */
+  rosterWarnings?: string[];
 }
 
 /**

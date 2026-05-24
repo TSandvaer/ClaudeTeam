@@ -111,6 +111,20 @@ export function hydrateState(wire: SerializedDashboardState): AgentTree {
         background: s.background,
       }),
     ),
+    // M3-03 / M3-04: top-level scalar / string-array fields pass through
+    // verbatim. The renderer treats `undefined` as default per the type's
+    // contract (false / empty array). Preserving `undefined` rather than
+    // coercing keeps the in-memory shape distinguishable from a host that
+    // explicitly sent the field.
+    ...(wire.filterApplied !== undefined
+      ? { filterApplied: wire.filterApplied }
+      : {}),
+    ...(wire.rosterErrors !== undefined
+      ? { rosterErrors: wire.rosterErrors }
+      : {}),
+    ...(wire.rosterWarnings !== undefined
+      ? { rosterWarnings: wire.rosterWarnings }
+      : {}),
   };
 }
 
@@ -130,6 +144,15 @@ function boot(): void {
   const api = acquireApi();
   let currentError: DashboardErrorState | null = null;
   let currentState: AgentTree = FIXTURE_STATE;
+  /**
+   * M3-04 AC1: most-recently-dismissed roster-error first-message. Tracked
+   * here (boot-level closure) so it persists across re-renders WITHOUT
+   * leaking into host state. When the FIRST error message changes between
+   * ticks, the cached key no longer matches `state.rosterErrors[0]` →
+   * chip re-appears next render. Reset to null on any successful
+   * `roster:loaded` (the user explicitly recovered).
+   */
+  let rosterErrorDismissedKey: string | null = null;
 
   // Browser dev mode → render fixture immediately. VS Code mode → render the
   // fixture too as an "until first message arrives" placeholder. The first
@@ -138,6 +161,13 @@ function boot(): void {
     mount,
     postMessage: api.postMessage,
     error: currentError,
+    rosterErrorDismissedKey,
+    onRosterErrorDismiss: (key) => {
+      // Persist the dismissal until the first error string changes. The
+      // chip removed itself from the DOM already; this stores the key so
+      // the NEXT render with the same first-error stays empty.
+      rosterErrorDismissedKey = key;
+    },
   });
 
   renderFull(buildCtx(), currentState);
@@ -167,6 +197,11 @@ function boot(): void {
     onRosterLoaded: () => {
       // Roster reloaded successfully → clear any roster-error chip.
       currentError = null;
+      // M3-04: also clear the dismiss-key so a future error (different
+      // first-message OR identical-but-after-recovery) re-appears on its
+      // own merit — the user's prior dismissal applied to the prior
+      // failure context, not this new run.
+      rosterErrorDismissedKey = null;
       renderFull(buildCtx(), currentState);
     },
     onRosterError: (msg) => {
