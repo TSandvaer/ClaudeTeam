@@ -24,6 +24,20 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 <!-- New entries are appended below this line. -->
 
+## 2026-05-25 0010 UTC — Auto-merge PR #45 (Felix 86c9ybtut host NIT #1+#2) + flip 86c9ybtut → complete + absorb 86c9ydz4k NIT into Maya's M3-10 dispatch
+
+**Decided:** Admin-merge PR #45 `chore(dashboard): M3-04 NITs host — parse-error model fallback + human-readable error format (86c9ybtut)` via `gh pr merge 45 --admin --squash --delete-branch`. Merged at `2e7c66c`. Required orch-side rebase + manual both-add merge on `team/log/clickup-pending.md` (BOTH `86c9ybtut -> in review` entries from Felix's + Maya's PRs preserved; Felix's bumped to 23:35:01Z to differentiate). Flipped ticket `86c9ybtut → complete` via MCP (both PRs landed = ticket done). Absorbing NIT-follow-up ticket `86c9ydz4k` (formatFreshness rollover, Maya-owned) into Maya's M3-10 dispatch per promoted rule 6.6 #6 (NITs-absorption-into-downstream when same persona + same PR cycle).
+
+**Foundation:** (a) User-global CLAUDE.md rule 6.6 #1 — promoted auto-decide class for routine PR-merge with CI green + peer-reviewer APPROVE. Maya posted APPROVE (no NITs) at https://github.com/TSandvaer/ClaudeTeam/pull/45#issuecomment-4530030391. CI green on rebased SHA `5c91195`: `gh pr view 45` shows both `typecheck + lint + unit` runs COMPLETED + SUCCESS. (b) Rule 6.6 #5 promoted class for log-only-conflict `--ours` recovery doesn't fully apply here because both PRs ADDED entries (not one's add vs main's add) — manual merge per documented `process-incidents.md` "Orch-side rebase conflict resolution" addendum: "when BOTH PRs ADD to the same coord-log file (one PR appends entries, the other appends a marker), pure `git checkout --ours` would LOSE the other side's add — manual merge to preserve BOTH adds is required." (c) Rule 6.6 #6 promoted class for NITs-absorption-into-downstream-ticket — `86c9ydz4k` is Maya-owned XS scope; M3-10 has Maya in flight on the same webview surface; absorbing into M3-10 saves a PR cycle without scope creep beyond formatter-level edits.
+
+**Alternative:** (a) Hold PR #45 merge until sponsor returns. Rejected per sponsor-delegated PR-merge authority. (b) Dispatch `86c9ydz4k` as a separate Maya PR after M3-10 ships. Rejected per rule 6.6 #6 — same persona, same cycle, mechanical scope; one PR is cheaper.
+
+**Reversibility:** Each merge revertable via `git revert <sha>` + admin-merge revert PR. ≤1 PR each. NIT absorption: if M3-10 PR is rejected, `86c9ydz4k` can be re-dispatched standalone (ticket stays at `to do`).
+
+**Status:** pending review.
+
+**Pointers:** PR #45 (`2e7c66c`); Maya APPROVE comment URL above; CI runs both SUCCESS on rebased SHA; ticket `86c9ybtut` now `complete` at https://app.clickup.com/t/86c9ybtut; NIT follow-up ticket `86c9ydz4k` to be absorbed (orch will flip → complete when M3-10 PR merges).
+
 ## 2026-05-24 2335 UTC — Auto-merge PR #46 (Maya 86c9ybtut webview NIT #3) + file NIT follow-up ticket 86c9ydz4k
 
 **Decided:** Admin-merge PR #46 `chore(webview): finished tiles render Xs/Xm/Xh freshness suffix (86c9ybtut NIT #3)` via `gh pr merge 46 --admin --squash --delete-branch`. Merged at `1b28152`. Filed 1 NIT-class follow-up ticket `86c9ydz4k` (formatFreshness rollover at 59_999ms returns "60s" instead of "59s"; cosmetic, ~2s poll re-renders away).
