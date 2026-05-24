@@ -58,6 +58,8 @@ V1 supports two locations (project overrides global):
 1. **Global:** `~/.claudeteam/teams.yaml` (Windows: `C:\Users\<user>\.claudeteam\teams.yaml`)
 2. **Per-project:** `<project-root>/.claude/teams.yaml` — applies only when the live agent's session has `cwd == project-root`.
 
+**Watcher implementation note:** monitoring `~/.claudeteam/teams.yaml` requires `createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(rosterDir), '*.yaml'))` — plain-string globs do not fire for paths outside `workspace.workspaceFolders`. Use `*.yaml` glob (not literal `teams.yaml` — VS Code bug #164925) and filter by filename in the callback. Full caveats + polling fallback in `vscode-extension-conventions.md` § "Open questions (decide during M2)" filesystem-watcher entry. (Verified PR #32, merge `7d14976`.)
+
 The matcher loads both, merges (project takes precedence per `id` collision), and rebuilds the match table whenever either file changes (file-watcher both paths).
 
 ## Why this shape

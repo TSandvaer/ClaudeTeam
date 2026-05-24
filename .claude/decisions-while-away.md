@@ -191,3 +191,179 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** PR #30; Maya's review at `https://github.com/TSandvaer/ClaudeTeam/pull/30#issuecomment-4528010955`; merge SHA `4a41634`; Felix's commit `50f3919` (the `.cjs` rename + esbuild config), Felix's ENTRY-029 commit `3dc7839`. Comment posted on `86c9y9q6h` informing sponsor activation bug is fixed.
+
+## 2026-05-24 1125 UTC — Auto-dispatch Nora on M3 backlog authoring (`nora/m3-backlog`)
+
+**AMENDMENT 2026-05-24 1145 UTC:** This dispatch claim was spurious — the tool-call batch contained only the Bram `Agent` call; the Nora `Agent` call was silently dropped between reasoning-phase brief authoring and submission. Only Bram actually fired. Failure mode now documented in `.claude/docs/orchestration-overview.md` § Common failure modes. Actual Nora dispatch fires at the 1145 UTC entry below.
+
+**Decided:** Spawn Nora as `subagent_type=nora` to author `team/nora-pl/milestone-3-backlog.md` for M3 ("Roster config + live refresh"). Inputs: 8 next-session backlog items from `.claude/retros/retro-2026-05-24-m2-close.md` § "Next-session backlog" (items 2–8 are M3-relevant) + 2 newly-surfaced AC7 confirm findings rolled in per sponsor's "(b) roll into M3 backlog" decision: (1) noisy roster-warning log spam (every watcher tick → ~80+ console floods per short session — throttle / log-once / debug-level), (2) dev-mode webview CSP source-map block (`default-src 'none'` blocks devtools fetching `.map` files — add `connect-src 'self'` in dev builds). Branch `nora/m3-backlog`. PR title `chore(backlog): M3 — Roster config + live refresh`. ≤200 word final report contract.
+
+**Foundation:** Session-state action #2 from `sessions/session-2026-05-24-1013-m2-fully-closed-m3-staged.md` — M3 dispatch explicitly pre-authorized. Sponsor confirmed M3 scope last session. Sponsor's same-session response: "(b)" = roll the 2 findings into Nora's M3 backlog. M1+M2 precedent for backlog authoring as orch-direct dispatch. Promoted auto-decide class rule 6.6 #4 (NITs-absorption-into-downstream-ticket) — the 2 AC7 findings absorb into downstream M3 backlog file overlap.
+
+**Alternative:** Sponsor authors M3 backlog directly OR delays dispatch one tick to gather more inputs. Rejected — M1+M2 precedent is Nora-authored backlog; further delay wastes the active-orchestration tick.
+
+**Reversibility:** TaskStop the agent if dispatched in error; delete the branch if pushed. ≤5 min.
+
+**Status:** pending review.
+
+**Pointers:** Agent type=nora; brief absorbs retro items 2-8 + 2 AC7 findings; Bram dispatched in parallel for prior-art research (Nora does not block on Bram).
+
+## 2026-05-24 1125 UTC — Auto-dispatch Bram on M3 prior-art research (`bram/m3-prior-art`)
+
+**Decided:** Spawn Bram as `subagent_type=bram` to research 2 M3-implementation design questions and write findings to `team/bram-research/m3-prior-art-2026-05-24.md`: (a) VS Code settings-UI patterns — `vscode.workspace.getConfiguration` + `contributes.configuration` (native Settings UI) vs custom webview-form roster editor, with pros/cons for sponsor-curated YAML roster + canonical extension examples + write-back semantics; (b) `vscode.workspace.createFileSystemWatcher` behavior for paths outside any workspace folder — specifically `~/.claudeteam/teams.yaml` (global config dir) — documented behavior, edge cases, fallback patterns. Branch `bram/m3-prior-art`. PR title `research(m3): prior-art on settings-UI patterns + global FS watching`. ≤200 word final report.
+
+**Foundation:** Session-state action #2 — Bram dispatch explicitly pre-authorized with the 2 research questions named. M2-02 precedent (Bram's prior-art research preceded every M2 implementation wave and was used directly with zero mid-implementation pivots — see retro § "What went well" bullet "Bram's M2-02 prior-art research paid out at every M2 ticket boundary").
+
+**Alternative:** Have M3 implementers (Felix/Maya) research mid-implementation. Rejected — M2-02 validated the upfront-research pattern; reversing it would risk mid-implementation pivots.
+
+**Reversibility:** TaskStop the agent if dispatched in error; delete the branch if pushed. ≤5 min.
+
+**Status:** pending review.
+
+**Pointers:** Agent type=bram; output `team/bram-research/m3-prior-art-2026-05-24.md`; cross-review by Felix (technical spec edges).
+
+## 2026-05-24 1145 UTC — Re-dispatch Nora on M3 backlog authoring (`nora/m3-backlog`) — corrects spurious 1125 UTC claim + folds in sponsor's new window-scoping requirement
+
+**Decided:** Re-dispatch Nora as `subagent_type=nora` to author `team/nora-pl/milestone-3-backlog.md` for M3 ("Roster config + live refresh"). Same 10 inputs as the 1125 UTC entry (8 retro items + 2 AC7 confirm findings) PLUS 1 new sponsor M3 requirement surfaced this session: **window-scoped session filtering** — dashboard should only show sessions matching the current VS Code window's `workspace.workspaceFolders`, not all sessions globally (current M2 behavior shows all). Optional "show all" toggle as opt-in setting per sponsor's call. Branch `nora/m3-backlog`. PR title `chore(backlog): M3 — Roster config + live refresh`. ≤200 word final report.
+
+**Foundation:** Same as 1125 UTC entry (session-state action #2 + sponsor's "(b) roll into M3 backlog" + M1/M2 backlog precedent) plus this session's explicit sponsor feedback "should only see agents from the session relevant to the vs code window" (this conversation, just before this dispatch).
+
+**Alternative:** Defer to sponsor for "show-all-vs-window-scoped" toggle decision. Rejected — Nora's backlog file is a draft; sponsor reviews the PR; default toggle behavior can be decided at M3-XX ticket implementation time, not at backlog-authoring time.
+
+**Reversibility:** TaskStop the agent if dispatched in error; delete the branch if pushed. ≤5 min.
+
+**Status:** pending review.
+
+**Pointers:** Agent type=nora; brief absorbs 11 input themes; references PR #32 (Bram's research) as the prior-art basis for the M3 implementation tickets.
+
+## 2026-05-24 1145 UTC — Auto-dispatch Felix on PR #32 peer-review (Bram's M3 prior-art research)
+
+**Decided:** Spawn Felix as `subagent_type=felix` to peer-review Bram's PR #32 (`research(m3): prior-art on settings-UI patterns + global FS watching`). Brief: verify cited paths/SHAs exist (per `[[verify-subagent-cited-paths]]` memory rule), particularly the Claude Code extension `claudeCode.environmentVariables` schema cite at `C:\Users\538252\.vscode\extensions\anthropic.claude-code-2.1.145-win32-x64\package.json`, the VS Code 1.64 floor for `RelativePattern` outside-workspace support, and the issue #164925 caveat Bram flagged as unverifiable. Verdict: APPROVE / APPROVE_WITH_NITS / REQUEST_CHANGES per project convention. ≤200 word final report.
+
+**Foundation:** Bram's original dispatch brief (1125 UTC log entry) specified "Cross-review: Felix (technical spec edges)" — Felix as reviewer was pre-authorized at dispatch time. Promoted auto-decide class rule 6.6 #3 (Cross-persona review routing when the peer pair is mechanically obvious from PR surface). `[[verify-subagent-cited-paths]]` makes spec-edge verification high-value — Bram self-flagged issue #164925 as unverifiable, exactly the kind of thing a peer-reviewer is best positioned to confirm.
+
+**Alternative:** Orch-direct merge (research PRs sometimes go orch-direct like retros). Rejected — sponsor's same-session response recommended (b) peer-review path; Bram self-flagged a research blocker (#164925) worth Felix's verification.
+
+**Reversibility:** TaskStop the agent if dispatched in error; if Felix posts incorrect review, comment correction. ≤5 min.
+
+**Status:** pending review.
+
+**Pointers:** PR #32 https://github.com/TSandvaer/ClaudeTeam/pull/32; Agent type=felix; brief targets the 3 named cite-verification points + final verdict.
+
+## 2026-05-24 1155 UTC — Auto-merge PR #32 (Bram M3 prior-art research) on Felix APPROVE_WITH_NITS
+
+**Decided:** Admin-merge PR #32 (`research(m3): prior-art on settings-UI patterns + global FS watching`) via `gh pr merge 32 --admin --squash --delete-branch` after Felix posted `APPROVE_WITH_NITS`. Felix verified all 3 cite-verification points (Claude Code extension `claudeCode.environmentVariables` schema confirmed array-of-objects with verbatim "Prefer setting environment variables in Claude's settings.json" description hint; VS Code 1.64 RelativePattern outside-workspace API confirmed against our `^1.85.0` engines floor; issue #164925 confirmed closed with fix-version unpinned, summary matches Bram's). 2 NITs filed both non-blocking: (a) M3 implementer should do 30-sec in-person probe of Settings UI rendering before final approach decision; (b) keep `*.yaml` glob recommendation pending #164925 fix-version clarification. CI: green (`typecheck + lint + unit` COMPLETED/SUCCESS).
+
+**Foundation:** Promoted auto-decide class — orch-autonomy rule 6.6 #1 ("Routine-PR-merge calls when CI green + orch-docs / cleanup class with peer reviewer attached"). PR #32 is orch-docs class (research, no production code); CI green; peer-reviewer Felix posted APPROVE_WITH_NITS with concrete cite verification; not on never-auto-decide list. Cited memories: `[[merge-authorization-in-normal-autonomy]]` + `[[auto-execute-classes-without-sponsor-ack]]`.
+
+**Alternative:** Queue for sponsor pre-merge review of the research findings. Rejected — M2 cycle precedent (10/10 auto-merges, 0 reversals) supports auto-decide for routine peer-reviewed PRs; sponsor reviews on return via the audit trail (PR + this log entry).
+
+**Reversibility:** `git revert <merge-sha>` ≤1 PR / ~10 min. Research note is informational, no production impact from revert.
+
+**Status:** pending review.
+
+**Pointers:** PR #32; Felix's review at https://github.com/TSandvaer/ClaudeTeam/pull/32 (verdict comment); NITs absorption decision in the next entry below.
+
+## 2026-05-24 1155 UTC — Auto-absorb Felix's PR #32 NITs into M3-01 / M3-02 dispatch briefs at wave-kickoff time
+
+**Decided:** Both NITs from Felix's PR #32 APPROVE_WITH_NITS verdict will be added to the dispatch briefs at M3 Wave 0 kickoff time (when M3-01 hot-reload and M3-02 settings-UI dispatches fire), NOT as a follow-up ticket and NOT as a follow-up commit to the M3 backlog file. NIT (a) "manually verify Settings UI rendering in-person before final approach decision" → goes into the M3-02 (settings-UI) dispatch brief's AC list. NIT (b) "keep `*.yaml` glob recommendation; #164925 fix-version unknown" → goes into the M3-01 (hot-reload) dispatch brief's implementation-notes section.
+
+**Foundation:** Promoted auto-decide class — orch-autonomy rule 6.6 #4 ("NITs-absorption-into-downstream-ticket when files overlap AND downstream is scheduled"). Both NITs cleanly map to M3-01/02 which are scheduled in M3 Wave 0 per Nora's PR #33; M3-01/02 touch the watcher + settings-UI files exactly where the NITs apply; rolling into dispatch briefs avoids creating a separate NITs ticket for mechanical implementation notes. Not scope-expanding — both NITs are "do this when implementing" notes, not new work.
+
+**Alternative:** File a separate `chore(...) NITs follow-up` ticket OR push a small commit to the M3 backlog file before merging PR #33. Rejected — separate ticket adds tracking-overhead for mechanical notes; backlog-edit risks divergence with dispatch-brief authority.
+
+**Reversibility:** If the absorption choice proves wrong at wave-kickoff time, file as separate ticket then; orch can pivot. ≤5 min.
+
+**Status:** pending review.
+
+**Pointers:** Felix's PR #32 review verdict comment; M3-01 + M3-02 in Nora's `team/nora-pl/milestone-3-backlog.md` (post-PR-#33-merge).
+
+## 2026-05-24 1155 UTC — Auto-merge PR #33 (Nora M3 backlog) orch-direct (chore-class, sponsor-confirmed convention)
+
+**Decided:** Admin-merge PR #33 (`chore(backlog): M3 — Roster config + live refresh`) via `gh pr merge 33 --admin --squash --delete-branch` orch-direct (no peer-reviewer). 9 M3 tickets across 3 waves (5 ClickUp-needing + 4 orch-direct chores); Wave 0 fires 5-6 in parallel (Felix on M3-01 hot-reload + M3-03 window filter; Nora batches M3-05/06/07/08 orch-direct chores); folds in sponsor's new window-scoping requirement as M3-03 with opt-out toggle option captured. CI: green (`typecheck + lint + unit` COMPLETED/SUCCESS).
+
+**Foundation:** Sponsor-confirmed convention this session — "keep status-quo" for retros + `chore(orch)` work going forward (M1+M2 precedent: backlog + retro PRs are orch-direct). Backlog file is coordination doc, not production code. CI green. Not on never-auto-decide list. Same auto-merge precedent as PR #19 (Nora's M2-09 dispatch-template tightening) and PR #31 (Nora's M2-close retro) — both orch-direct merges with sponsor-acceptance.
+
+**Alternative:** Sponsor pre-merge review of the 9-ticket backlog. Rejected — sponsor reviews on return via main; if any ticket needs cutting / re-scoping, that happens at wave-kickoff time before tickets get ClickUp entries (so no irreversible ticket sprawl). The 5 ClickUp-needing tickets in the backlog will only become ClickUp entries at dispatch time.
+
+**Reversibility:** `git revert <merge-sha>` ≤1 PR / ~10 min. No code impact; backlog file revert just removes a planning doc.
+
+**Status:** pending review.
+
+**Pointers:** PR #33; merge SHA `cd4cb81`; backlog file at `team/nora-pl/milestone-3-backlog.md` on main.
+
+## 2026-05-24 1205 UTC — Auto-dispatch Felix on M3-01 (`felix/m3-01-roster-watcher`) + create ClickUp ticket `86c9yaq1e`
+
+**AMENDMENT 2026-05-24 1215 UTC:** The Felix `Agent` tool call was REJECTED by sponsor mid-flight (foreground dispatch flooded the main thread; sponsor interrupted with explicit feedback to use `run_in_background: true` going forward — see new memory `[[always-background-dispatch-subagents]]`). Felix never started M3-01. ClickUp ticket `86c9yaq1e` remains created but in `to do` (no developer pickup). M3-01 is unblocked for re-dispatch in BACKGROUND mode whenever sponsor approves. The Nora dispatch from this batch DID succeed (PR #34, orch-direct chore, was already small/quick so the bloat impact was minimal).
+
+**Decided:** (1) Create ClickUp ticket `86c9yaq1e` in list 901523520912 for M3-01 (`feat(roster): live YAML watch + hot-reload at ~/.claudeteam/teams.yaml`, priority=2=high, status=to-do, pointer-style description linking to `team/nora-pl/milestone-3-backlog.md § M3-01` for full ACs). (2) Spawn Felix as `subagent_type=felix` with the M3-01 dispatch brief. Anchor ticket of M3 milestone (L-size, P0); other roster-UX tickets depend on it. AC2 absorbs Bram's PR #32 NIT (b) re #164925 — `*.yaml` glob not literal filename. Branch `felix/m3-01-roster-watcher`. Peer reviewer Maya. Felix flips ticket `to do → in progress` on pickup, `in progress → in review` on PR open.
+
+**Foundation:** Nora's PR #33 backlog (merged `cd4cb81`) explicitly assigns Felix as M3-01 owner with full dispatch-ready ACs (the backlog § M3-01 says "the orchestrator can lift any ticket into a brief without further clarification from Nora"). Session-state action #2 from prior session pre-authorized M3 dispatch. Promoted auto-decide class: ticket-flesh-out follow-ups (rule 6.6 #2) covers ClickUp ticket creation as mechanical workflow. `[[sponsor-trusts-tactical-defaults]]` for routine wave-kickoff dispatch.
+
+**Alternative:** Wait for sponsor to give an explicit M3 Wave 0 go-ahead. Rejected — prior tick's summary explicitly stated "Next tick: M3 Wave 0 dispatch ... Will fire automatically at next cron unless you redirect"; sponsor has not redirected in the intervening period; M3 is sponsor-confirmed scope.
+
+**Reversibility:** TaskStop the agent if dispatched in error; archive the ClickUp ticket; delete the branch if pushed. ~10 min.
+
+**Status:** pending review.
+
+**Pointers:** ClickUp `86c9yaq1e` https://app.clickup.com/t/86c9yaq1e; Agent type=felix; brief includes the 3 Bram PR #32 caveats; M3-05 (Nora's ENTRY-NNN timestamp switch) is dispatched in parallel — Felix should use the new timestamp-based ENTRY scheme already in his clickup-pending.md entry to preempt collision with Nora.
+
+## 2026-05-24 1205 UTC — Auto-dispatch Nora on M3-05 (`nora/m3-05-entry-timestamp-switch`) — orch-direct chore, no ClickUp ticket
+
+**Decided:** Spawn Nora as `subagent_type=nora` to ship M3-05 (`chore(orch-logs): switch clickup-pending.md ENTRY-NNN IDs to timestamp-based`). S-sized, P1, orch-direct chore class (no ClickUp ticket per project convention). Per Nora's own backlog file, target ≤30 lines diff. Independent of Felix's M3-01 — can run fully in parallel. Branch `nora/m3-05-entry-timestamp-switch`.
+
+**Foundation:** Backlog § M3-05 is dispatch-ready (Nora's own authoring). Sponsor authorized ENTRY-NNN scheme switch last session (carried forward via session-state action #3). Orch-direct chore class per sponsor-confirmed convention this session. `[[sponsor-trusts-tactical-defaults]]` for routine coord-doc work.
+
+**Alternative:** Defer until Felix's PR lands so the new scheme demonstrates on fresh entries first. Rejected — M3-05 is independent and small; running in parallel ships the convention switch ahead of multi-persona dispatches that risk fresh collisions.
+
+**Reversibility:** TaskStop the agent if dispatched in error; delete the branch if pushed. ~5 min.
+
+**Status:** pending review.
+
+**Pointers:** Agent type=nora; PR target ≤30 lines per AC4; updates `.claude/agents/dispatch-template.md` + `team/log/clickup-pending.md` + `.claude/docs/orchestration-overview.md` bullet 10 prevention-applied marker.
+
+## 2026-05-24 1220 UTC — Sponsor-directed: merge PR #34 (Nora M3-05) + re-dispatch Felix on M3-01 in BACKGROUND mode
+
+**Decided:** (1) Admin-merge PR #34 (`chore(orch-logs): switch clickup-pending.md ENTRY-NNN IDs to timestamp-based`) via `gh pr merge 34 --admin --squash --delete-branch` per sponsor explicit "merge PR #34". (2) Re-dispatch Felix as `subagent_type=felix` with `run_in_background: true` and `name: "felix-m3-01"` on M3-01 (anchor M3 ticket — live YAML watch + hot-reload) per sponsor explicit "dispatch Felix on M3-01". Brief same as 1205 UTC attempt (which was rejected mid-flight due to foreground bloat). Background-dispatch is now the global rule per the new `~/.claude/CLAUDE.md` section "Sub-agent dispatch (background-only)" added this turn at sponsor explicit direction.
+
+**Foundation:** Sponsor explicit directive this turn ("dispatch Felix on M3-01 and merge PR #34"). For the merge: same auto-merge class as PR #33 (Nora's M3 backlog, orch-direct chore). For Felix: ClickUp ticket `86c9yaq1e` already created at 1205 UTC; background mode complies with the new global rule.
+
+**Alternative:** Sequence the actions (merge first, then dispatch, or vice versa). Both can fire in parallel — no dependency.
+
+**Reversibility:** `git revert <merge-sha>` ≤1 PR / ~10 min for PR #34. `TaskStop felix-m3-01` ≤1 min for Felix dispatch.
+
+**Status:** pending review (sponsor explicit-directive class — minimal audit gap).
+
+**Pointers:** PR #34 merge SHA `59ead3e`; Felix Agent name="felix-m3-01" addressable via `SendMessage`; ClickUp `86c9yaq1e` Felix flipped `to do → in review` (PR open).
+
+## 2026-05-24 1230 UTC — Auto-dispatch Maya on PR #35 peer-review BACKGROUND (Felix M3-01 roster watcher)
+
+**Decided:** Spawn Maya as `subagent_type=maya` with `run_in_background: true` and `name: "maya-pr-35-review"` to peer-review PR #35 (`feat(roster): live YAML watch + hot-reload at ~/.claudeteam/teams.yaml`). Brief: verify ACs 1-10 from `team/nora-pl/milestone-3-backlog.md § M3-01` (especially AC2 RelativePattern + `*.yaml` glob; AC8 polling fallback; AC9 integration test coverage); sanity-check the CI-flake fix Felix shipped (split `watchedIdentityKeys` Set vs `watchedPathPairs` Array — `fs.statSync` against on-disk path, `lastMtimes` keyed by identity key); verdict APPROVE / APPROVE_WITH_NITS / REQUEST_CHANGES.
+
+**Foundation:** Cross-review pairing per `[[claudeteam-team-roster]]` (Felix ↔ Maya). Promoted auto-decide rule 6.6 #3 (Cross-persona review routing when the peer pair is mechanically obvious from PR surface). New global rule "Sub-agent dispatch (background-only)" applies — Maya dispatched in background.
+
+**Alternative:** Sponsor pre-review PR #35 directly. Rejected — peer-review is the project's standing convention for code PRs; sponsor reviews on return via merge auto-decide audit trail.
+
+**Reversibility:** `TaskStop maya-pr-35-review` ≤1 min.
+
+**Status:** pending review.
+
+**Pointers:** PR #35 https://github.com/TSandvaer/ClaudeTeam/pull/35; Agent name="maya-pr-35-review"; CI green via run 26361064407 at `14a1988`.
+
+## 2026-05-24 1230 UTC — AMENDMENT: prior session ended; Maya re-dispatched this tick
+
+**Amendment to 1230 UTC entry above.** The named-`maya-pr-35-review` agent dispatched by the prior session died at session restart (session-bounded). This tick (cron-fired at ~1225 UTC, this re-armed session) re-dispatches a fresh Maya peer-reviewer for PR #35 — same brief contract, agent ID `a0e00e614cb9589df`. No new auto-decide foundation needed — same rule 6.6 #3 cross-review-routing as the parent entry. Status of parent entry rolls to `re-fired this tick`; new Maya is the live reviewer.
+
+## 2026-05-24 1232 UTC — Log-only conflict on PR #35 diagnosed (auto-decide: rule 6.6 #5 applies, deferred to post-review)
+
+**Decided:** Diagnose-only, no fix this tick. `gh pr view 35 --json mergeable` reports `CONFLICTING` / `mergeStateStatus: DIRTY`. `git merge-tree` against `origin/main` + `origin/felix/m3-01-roster-watcher` shows the conflict scope is **`team/log/clickup-pending.md` ONLY** (1 unmerged file; all 6 changed files in the PR are otherwise clean). Cause: Felix branched before PR #34 (Nora M3-05) landed the timestamp-switchover comment, then independently added `ENTRY-2026-05-24T11:58:00Z`. Now main has the switchover comment + Felix's branch has a new-format entry without it. Resolution per rule 6.6 #5 = log-only-conflict auto-decide via `git checkout --ours` (or manual 3-way merge to preserve both the switchover comment AND Felix's new entry) + force-push-with-lease. Deferred to post-review tick — no point rebasing before Maya's verdict (REQUEST_CHANGES would re-rebase anyway; APPROVE clears the path).
+
+**Foundation:** Rule 6.6 #5 (log-only-conflict recovery, sponsor-authorized 2026-05-23 cross-project audit at 28/0 reversal rate; validated 4× in M2 cycle). `.claude/docs/orchestration-overview.md` § Common failure modes — ENTRY-NNN collision pattern.
+
+**Alternative:** Resolve rebase now in Felix's worktree (parallel with Maya's review). Rejected — Maya's review may surface code-level changes requiring a re-rebase, so an early rebase wastes work. Resolution at merge-gate is cleaner.
+
+**Reversibility:** N/A this tick — diagnosis only. Resolution tick will be `git checkout --ours` or 3-way merge in Felix's worktree, force-push-with-lease, ≤2 min.
+
+**Status:** pending review.
+
+**Pointers:** Conflict 3-way trees from `git merge-tree --write-tree`: base `b8d46c6`, ours (main) `b7aa4ec`, theirs (PR #35) `7511c3e`. Resolution-tick target output: keep main's switchover comment line + append Felix's `ENTRY-2026-05-24T11:58:00Z` line below it.
