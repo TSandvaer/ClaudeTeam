@@ -170,3 +170,121 @@ describe("hydrateState — wire shape → in-memory shape", () => {
     expect(out.sessions[0]!.rosterTiles.size).toBe(0);
   });
 });
+
+// ===========================================================================
+// M3-09 bonus — back-compat hydrator branches for filterApplied /
+// rosterErrors / rosterWarnings. These three top-level fields were added in
+// M3-03 (filterApplied) and M3-04 (rosterErrors/rosterWarnings). The hydrator
+// conditionally spreads them so the output preserves the host's "field
+// present" vs "field absent" intent — older host code that doesn't yet wire
+// these fields stays compatible (the renderer treats absence as "false" /
+// "empty []"). These tests catch the regression where a future refactor
+// flattens the conditional spreads and forces every output to carry a
+// concrete value (which would break diff-based optimizations downstream).
+//
+// Source: src/webview/main.ts hydrateState top-level field branches
+//         src/shared/messages.ts SerializedDashboardState field optionality
+//         M3-09 PR #39-review gap (1): "hydrateState carrying rosterErrors /
+//                                       rosterWarnings / filterApplied"
+// ===========================================================================
+
+describe("hydrateState — back-compat top-level field handling (M3-09 NIT)", () => {
+  // Minimal wire fixture — no sessions, used to isolate the top-level
+  // field assertions from session-rebuild noise.
+  const EMPTY_WIRE: SerializedDashboardState = { sessions: [] };
+
+  it("absent filterApplied / rosterErrors / rosterWarnings → absent on output (back-compat)", () => {
+    const out = hydrateState(EMPTY_WIRE);
+    // Use the `in` operator (not `=== undefined`) to distinguish "key
+    // genuinely absent" from "key present with undefined value". The
+    // hydrator's conditional spread is meant to produce the former, not
+    // the latter — a regression that always sets the key would still pass
+    // `=== undefined` but fail this `in` check.
+    expect("filterApplied" in out).toBe(false);
+    expect("rosterErrors" in out).toBe(false);
+    expect("rosterWarnings" in out).toBe(false);
+  });
+
+  it("filterApplied=true on wire → filterApplied=true on output", () => {
+    const wire: SerializedDashboardState = {
+      sessions: [],
+      filterApplied: true,
+    };
+    const out = hydrateState(wire);
+    expect(out.filterApplied).toBe(true);
+  });
+
+  it("filterApplied=false on wire → filterApplied=false on output (preserves the explicit false)", () => {
+    // Regression target: an early version of the hydrator collapsed
+    // `false` to "absent" via a truthiness check. The explicit `false`
+    // distinguishes "host told us no filter ran" from "host didn't
+    // include the field" — the renderer's diff logic uses both signals.
+    const wire: SerializedDashboardState = {
+      sessions: [],
+      filterApplied: false,
+    };
+    const out = hydrateState(wire);
+    expect("filterApplied" in out).toBe(true);
+    expect(out.filterApplied).toBe(false);
+  });
+
+  it("rosterErrors=[] on wire → rosterErrors=[] on output (preserves the explicit empty)", () => {
+    // Distinguishing empty-array from absent matters because the chip's
+    // dismiss-key reset logic fires on transition between "errors present"
+    // and "errors absent" — if hydrator drops `[]` to undefined, the diff
+    // shape changes spuriously.
+    const wire: SerializedDashboardState = {
+      sessions: [],
+      rosterErrors: [],
+    };
+    const out = hydrateState(wire);
+    expect("rosterErrors" in out).toBe(true);
+    expect(out.rosterErrors).toEqual([]);
+  });
+
+  it("rosterErrors with values on wire → preserved verbatim on output", () => {
+    const errors = [
+      "global roster YAML parse error (/x/teams.yaml): bad indent at line 3",
+      "global roster schema error at teams.0.members.0.id: required",
+    ];
+    const wire: SerializedDashboardState = {
+      sessions: [],
+      rosterErrors: errors,
+    };
+    const out = hydrateState(wire);
+    expect(out.rosterErrors).toEqual(errors);
+    // Identity check: hydrator should pass-through, not deep-clone (no
+    // reason to spend the bytes; consumers treat the array as read-only).
+    expect(out.rosterErrors).toBe(errors);
+  });
+
+  it("rosterWarnings on wire → preserved verbatim on output", () => {
+    // Same path as rosterErrors but for the warnings field (separate
+    // optional spread in the hydrator). If both fields share a generic
+    // helper that drops one of them, this catches the regression.
+    const warnings = [
+      "global roster file is empty: /x/teams.yaml",
+      'duplicate member id "felix" across teams "alpha" and "beta" — second wins by load order',
+    ];
+    const wire: SerializedDashboardState = {
+      sessions: [],
+      rosterWarnings: warnings,
+    };
+    const out = hydrateState(wire);
+    expect(out.rosterWarnings).toEqual(warnings);
+    expect(out.rosterWarnings).toBe(warnings);
+  });
+
+  it("all three top-level fields together → all preserved independently", () => {
+    const wire: SerializedDashboardState = {
+      sessions: [],
+      filterApplied: true,
+      rosterErrors: ["err A"],
+      rosterWarnings: ["warn B"],
+    };
+    const out = hydrateState(wire);
+    expect(out.filterApplied).toBe(true);
+    expect(out.rosterErrors).toEqual(["err A"]);
+    expect(out.rosterWarnings).toEqual(["warn B"]);
+  });
+});

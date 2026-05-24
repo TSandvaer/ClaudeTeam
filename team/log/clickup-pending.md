@@ -90,6 +90,7 @@ ENTRY-2026-05-24T17:30:00Z: 86c9yb0yg -> in review (M3-01 NITs PR opened)
 ENTRY-2026-05-24T17:46:00Z: 86c9ybrk0 -> in progress (M3-03 DEAD-session bleed fix — Felix dispatched, orch-side MCP unavailable so flip queued)
 ENTRY-2026-05-24T18:07:00Z: 86c9ybrk0 -> in review (PR #41 ready for Maya — scope-corrected to webview-boot fixture; host AC3 + webview boot-bleed fix + 4 jsdom tests at HEAD 77cbe6c, CI green)
 ENTRY-2026-05-24T19:34:57Z: 86c9ybrk0 -> complete (PR #41 merged at 0fbf028 — Maya APPROVE, host AC3 + webview boot-bleed fix landed; 268 unit + 68 integration green)
+ENTRY-2026-05-24T20:08:00Z: M3-09 -> in review (M3-09 PR opened — Sage Layer-3 expansion + bonus NIT-coverage absorb; placeholder ID — orch substitutes real ClickUp ID after MCP-mediated creation per NEW-TICKET-REQUEST block below)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
@@ -147,3 +148,69 @@ Resolved 2026-05-24. NIT #1 (package.json description/clamp mismatch) + NIT #2 (
 ```
 
 Create with: `list_id=901523520912`, `status=to do`, `name="feat(webview): persona-tile-collapse — group by roster persona name (M3-10)"`, `markdown_description=` the body above.
+
+## NEW-TICKET-REQUEST — M3-09 Layer-3 expansion (PENDING)
+
+**Status:** queued — orchestrator's ClickUp MCP unavailable this session per dispatch brief; ticket creation deferred to next session with live MCP. PR opened in parallel; ENTRY line above uses `M3-09` as the placeholder ID for the orch to substitute after creation.
+
+### Draft body (for ClickUp markdown_description)
+
+```
+**Ticket:** M3-09 — `test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip`
+**Owner:** Sage
+**Peer reviewer:** Felix (host-side primary touch — runTick + sessionFilter wiring; webview rendering is incidental)
+**Size:** M
+**Priority:** P2
+**Source:** team/nora-pl/milestone-3-backlog.md § M3-09 (depends on M3-01 + M3-03 + M3-04 all merged); M2-08 PR #29 set up the Layer-3 pipeline this ticket extends.
+
+**Scope:**
+
+Extend the `@vscode/test-electron` Layer-3 suite (`tests/vscode-integration/`) with three new test cases covering the M3 surfaces:
+
+1. **YAML hot-reload smoke (M3-01):** write a roster YAML to a tempdir, drive `runTick` against the tempdir paths, mutate the YAML mid-test, re-tick, assert the `DashboardState.rosterTiles` reflects the new member id (and the old one is gone — leaky-reducer regression test).
+2. **Window-scoped filtering smoke (M3-03):** seed three sessions across three workspaces in a tempdir; pin `workspaceFolders` to ONE of them; assert the filtered set + `filterApplied === true`. Negative-path pair asserts the don't-strand passthrough on undefined folders AND the `showAllSessionsGlobally` override branch.
+3. **Roster-error chip smoke (M3-04):** write malformed YAML to the roster path; assert `state.rosterErrors` non-empty AND `serializeState` carries it to the wire shape the chip reads from. Control test (valid YAML → empty errors) gives the assertion meaning.
+
+Test-plan executor-mapping discipline (M3-06) applies to this PR's ACs.
+
+**Acceptance criteria:**
+
+- AC1: `tests/vscode-integration/suite/rosterHotReload.test.ts` — YAML hot-reload smoke. Tempdir + direct `runTick` invocation. Asserts member id present in `state.sessions[].rosterTiles` BEFORE and AFTER mutation; mutation changes the visible id; old id is gone post-mutation.
+- AC2: `tests/vscode-integration/suite/windowFilter.test.ts` — window-scoped filtering smoke. Asserts `filterApplied === true` + filtered session count == 1 of 3 seeded. Negative-path pair covers don't-strand passthrough + `showAllSessionsGlobally` override.
+- AC3: `tests/vscode-integration/suite/rosterErrorChip.test.ts` — error-chip smoke. Writes malformed YAML; asserts `state.rosterErrors` non-empty + the wire-shape preserves it. Control test asserts valid YAML → empty errors.
+- AC4: All three test suites green on CI: `npm run test:vscode`. Existing M2-08 suites still green.
+- AC5: Sage posts findings of any bugs surfaced in Felix/Maya's M3 modules as follow-up tickets (M2-08 AC7 discipline — do not fix production code in this PR). [No bugs surfaced this round — all three M3 paths behaved correctly under Layer-3 exercise.]
+- AC6: Executor-mapping table in the test plan section of the PR body lists each AC's executor — AC1-3 are Layer-3-automated (`@vscode/test-electron` headless via xvfb on Ubuntu CI per M2-08's pipeline).
+
+**Bonus (absorbed from PR-#39 Sage review NIT gaps):**
+
+- 7 new unit tests in `tests/unit/webview/hydrateState.test.ts` covering the M3-03/M3-04 back-compat hydrator branches (`filterApplied`, `rosterErrors`, `rosterWarnings` top-level fields).
+- 6 new unit tests in `tests/unit/webview/dashboardTile.test.ts` covering `renderEmptyState({filtered: true})` (PR-#39 gap 1) + `renderFull` empty-with-filter variant + chip-above-empty layering invariant (PR-#39 gap 3).
+
+**Out of scope:**
+
+- Layer-1 or Layer-2 test changes (those live in M3-01/03/04 PRs).
+- New CI infrastructure beyond extending the existing `test:vscode` step from M2-08.
+- Coverage of the M3-02 `openRoster` command (host-side command unit-tested cheaply in Layer-1; Layer-3 coverage adds little).
+- Production code fixes — file follow-up tickets if any bugs surface (AC5).
+
+**Done-when test:**
+
+```bash
+cd c:/Trunk/PRIVATE/ClaudeTeam-sage-wt
+npm test && npm run test:integration && npm run test:vscode
+# All three layers green; 281 unit + 68 integration + 23 Layer-3 (9 new + 14 from M2-08)
+```
+
+**Webview-smoke / extension-manifest gate:**
+
+- Webview-smoke gate: NO — this PR adds Layer-3 tests (the tests themselves ARE the webview-smoke verification for M3 surfaces). No production rendering changes here.
+- Extension-manifest gate: NO.
+
+**Files in play:**
+
+- Owned (Sage writes): `tests/vscode-integration/suite/rosterHotReload.test.ts` (new), `tests/vscode-integration/suite/windowFilter.test.ts` (new), `tests/vscode-integration/suite/rosterErrorChip.test.ts` (new), `tests/unit/webview/hydrateState.test.ts` (bonus extension), `tests/unit/webview/dashboardTile.test.ts` (bonus extension), `tsconfig.vscode-integration.json` (include src/ for Layer-3 host-module imports).
+- Read-only references: `.claude/docs/testing-strategy.md`, M2-08 PR #29 (existing suite structure), M3-01 / M3-03 / M3-04 merged code.
+```
+
+Create with: `list_id=901523520912`, `status=to do`, `name="test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip (M3-09)"`, `markdown_description=` the body above. After creation, substitute the placeholder `M3-09` in the ENTRY line above with the assigned ClickUp ID.
