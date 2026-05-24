@@ -20,6 +20,20 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-25 — Session restart with in-flight Agents — lucky-no-loss outcome exposed cross-session continuity gap
+
+**Symptom:** Mid-flight background Agent dispatches (Felix + Maya on `86c9ydug9` M3-10) died when the session ended unexpectedly between turns. SessionStart hook re-armed auto-status on the next session. Worktree audit showed both Felix and Maya at `b198403` (the orch commit just BEFORE M3-10 dispatch) — no branches pushed = no code lost. Re-dispatch was cheap. Sponsor asked **"can this be prevented or helped in some way?"** — exposing that resume worked through patient re-derivation (worktrees + ClickUp + git log), not a documented checklist. Lucky outcome masked a real fragility.
+
+**Cause:** Session-end cause not observable from orchestrator side (candidates: VS Code window close, auto-compact, crash, sponsor invoking /clear, harness restart). Background Agent tasks are session-scoped — they die with the session even though their `<task-notification>` mechanism is reliable mid-session. CronCreate tasks also die per CronCreate docs ("Jobs live only in this Claude session"). What DOES survive: project doc preload (SessionStart hook), auto-status state file, memory entries, ClickUp / GitHub PR state, all coord docs on disk + git, worktree branches/commits.
+
+**Recovery:** On SessionStart, orchestrator (a) re-armed auto-status via skill invocation; (b) checked `git worktree list` + per-worktree `git log --oneline -3` to verify each persona's branch state; (c) confirmed `gh pr list --state open` returned `[]` (no in-flight PRs); (d) re-dispatched Felix + Maya on `86c9ydug9` from scratch. ~30 seconds total recovery time, zero code loss because agents hadn't pushed.
+
+**Prevention:** Stage-diff-then-apply for a new user-global rule **"Cross-session orchestrator continuity discipline"** at `team/log/proposed-global-rule-cross-session-continuity-2026-05-25.md`. Three disciplines bundled: (1) STATE.md "Resume next-action" header — single sentence at top, always current; (2) sponsor-feedback immediate-persistence — write to memory / DECISIONS.md / STATE.md / ClickUp ticket comment BEFORE acting on chat-expressed observations; (3) proactive /save-session at risk signals — auto-invoke when sponsor says "going to sleep" / "stepping away" / etc. without waiting for the explicit command. The wake-discipline rule (2026-05-24) covers in-session wake signals; this new rule covers cross-session continuity.
+
+**Code/process pointer:** Resume worktree check at this session start showed Felix + Maya wt at `b198403`; staged-diff doc `team/log/proposed-global-rule-cross-session-continuity-2026-05-25.md`; companion wake-discipline doc `team/log/proposed-global-rule-wake-discipline-2026-05-25.md`; sponsor catch was "can this be prevented or helped in some way?" prompt.
+
+---
+
 ## 2026-05-24/25 — Orchestrator stuck on Bash background CI poll (zero-output completion didn't surface)
 
 **Symptom:** Orchestrator dispatched a `Bash` task with `run_in_background: true` running an `until <CI green>; do sleep 10; done` polling loop, then emitted "Waiting on PR #45 CI" and ended turn. The bash task completed successfully (CI was green ~2 min after the poll started), but the completion `<task-notification>` was never rendered to the orchestrator's main thread. Orchestrator was effectively stuck until sponsor reached out ~10 min later asking "are you stuck right now?" — well inside the 15-min auto-status cron cadence gap.
