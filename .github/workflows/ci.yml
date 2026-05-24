@@ -42,3 +42,11 @@ jobs:
       - name: Package VSIX (manifest gate)
         run: npx vsce package --no-yarn
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
+
+      - name: VS Code integration tests (Layer 3 — M2-08)
+        # @vscode/test-electron spawns a real Electron binary; Ubuntu Actions
+        # runners are headless, so we wrap with xvfb-run for the display.
+        # `npm run test:vscode` performs its own `npm run build` + tsc -p
+        # tsconfig.vscode-integration.json before invoking the test runner.
+        run: xvfb-run -a npm run test:vscode
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'

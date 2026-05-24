@@ -23,6 +23,10 @@ docs/
 # Build artifacts that are NOT the extension bundles
 dist/cli/
 
+# Layer-3 (@vscode/test-electron) compiled test output + VS Code cache
+out/
+.vscode-test/
+
 # Environment / editor
 .env
 .vscode/
