@@ -77,7 +77,7 @@ ENTRY 029: 86c9y9yzu -> in review (PR #30 opened — fix(scaffold): dist/extensi
 # --- Switchover 2026-05-24 (M3-05): entries above use legacy sequential ENTRY-NNN; entries below use timestamp-based ENTRY-<ISO-8601-UTC>. ---
 ENTRY-2026-05-24T11:58:00Z: 86c9yaq1e -> in review (M3-01 PR opened — feat(roster): live YAML watch + hot-reload)
 ENTRY-2026-05-24T12:36:00Z: 86c9yaq1e -> complete (PR #35 merged at a74cb94 — Maya APPROVE_WITH_NITS, 3 NITs non-blocking, NIT #3 absorbs into M3-02 per Maya's recommendation)
-ENTRY-2026-05-24T13:30:01Z: NEW-TICKET-REQUEST -> to do (M3-01 NITs follow-up — orchestrator to create in list 901523520912; see body block below)
+ENTRY-2026-05-24T13:30:01Z: 86c9yb0yg -> to do (M3-01 NITs follow-up — ticket created; see NEW-TICKET-REQUEST body block below for audit trail)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (orchestrator to create)
