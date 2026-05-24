@@ -77,4 +77,52 @@ ENTRY 029: 86c9y9yzu -> in review (PR #30 opened — fix(scaffold): dist/extensi
 # --- Switchover 2026-05-24 (M3-05): entries above use legacy sequential ENTRY-NNN; entries below use timestamp-based ENTRY-<ISO-8601-UTC>. ---
 ENTRY-2026-05-24T11:58:00Z: 86c9yaq1e -> in review (M3-01 PR opened — feat(roster): live YAML watch + hot-reload)
 ENTRY-2026-05-24T12:36:00Z: 86c9yaq1e -> complete (PR #35 merged at a74cb94 — Maya APPROVE_WITH_NITS, 3 NITs non-blocking, NIT #3 absorbs into M3-02 per Maya's recommendation)
+ENTRY-2026-05-24T13:30:01Z: NEW-TICKET-REQUEST -> to do (M3-01 NITs follow-up — orchestrator to create in list 901523520912; see body block below)
 ```
+
+## NEW-TICKET-REQUEST — M3-01 NITs follow-up (orchestrator to create)
+
+Sub-agent MCP gap (persistent — see `.claude/docs/orchestration-overview.md` § "Sub-agent MCP gap"): Nora cannot call `mcp__clickup__clickup_create_task` from this dispatch. Orchestrator creates the ticket on next tick and substitutes the resulting task ID in the ENTRY-2026-05-24T13:30:01Z line above.
+
+- **List ID:** `901523520912`
+- **Title:** `chore(roster): M3-01 NITs follow-up`
+- **Status:** `to do`
+- **Owner (assignee field):** Felix (peer reviewer: Maya)
+- **Priority:** P2
+
+### Body (markdown_description)
+
+```markdown
+M3-01 NITs from Maya's peer-review at https://github.com/TSandvaer/ClaudeTeam/pull/35#issuecomment-4528643161 (APPROVE_WITH_NITS, 3 NITs, 2 actionable here):
+
+**NIT #1** — `package.json` `claudeteam.rosterPollIntervalMs` description/minimum mismatch.
+- Current: description says "e.g. 5000" but in-code clamp `ROSTER_POLL_MIN_MS` is 250ms (lowered from 1000 in commit 397bd09 for CI flake fix).
+- Fix: align them. Either raise the in-code clamp back to 1000 (preferred — `e.g. 5000` makes sense for prod) and find a different CI-flake fix, OR update the package.json description to reflect 250ms minimum (cheaper but signals to users that very-frequent polling is fine, which it's not for prod).
+- Files: `package.json` (contributes.configuration description), `src/extension/roster/rosterWatcher.ts:320` (ROSTER_POLL_MIN_MS clamp value).
+
+**NIT #2** — PR-body wording (no code fix): the M3-01 PR body claimed "Atomic-replace editor save: Verified by the coalescing test" — but the coalescing test exercises rapid rewrites, not vim `delete+create`. Mechanism is the same (250ms debounce coalesces), but the phrasing was loose. Action: note in dispatch brief / PR-author checklist for future PRs that body claims must match test fixture shapes exactly. No code or test change needed here.
+
+**NIT #3** — DOES NOT NEED A TICKET — absorbs into M3-02 (`claudeteam.openRoster` command). The `registerDirWatcher` `existsSync` → `createFileSystemWatcher` race is acceptable for V1 (covered by try/catch, no retry-on-reappearance). M3-02 will auto-create the directory + roster file when `openRoster` is invoked, eliminating the race entirely. Backlog edit applied: `team/nora-pl/milestone-3-backlog.md § M3-02` explicitly states the NIT #3 absorption.
+
+## Acceptance criteria
+- AC1: `package.json` `rosterPollIntervalMs` description and clamp value are aligned (either-direction fix, dev's call with peer reviewer).
+- AC2: All existing tests still green; new test if behavior changes.
+- AC3: PR body documents which alignment direction was chosen and why.
+
+## OOS
+- Any other roster watcher tweaks beyond NITs #1 + #2.
+- The NIT #3 scope (handled by M3-02 instead).
+
+## Size: XS (≤30 line code change expected).
+## Priority: P2 (non-blocking polish on shipped feature).
+```
+
+### Comment to post on M3-01 (`86c9yaq1e`) when flipping to complete
+
+```
+M3-01 merged at SHA `a74cb94`. Peer-reviewer: Maya — verdict APPROVE_WITH_NITS at https://github.com/TSandvaer/ClaudeTeam/pull/35#issuecomment-4528643161.
+
+NITs follow-up: separate ticket created (M3-01 NITs follow-up) covering NIT #1 (package.json description/clamp mismatch) and NIT #2 (PR-body wording note). NIT #3 absorbed into M3-02 (auto-create roster directory + starter YAML in `claudeteam.openRoster` eliminates the `existsSync`→`createFileSystemWatcher` race).
+```
+
+**Note (orch comment to add):** the M3-01 → complete flip itself was already performed by the orchestrator on the parallel path (ENTRY-2026-05-24T12:36:00Z, commit 33bf117). This dispatch's remaining load-bearing action is the NEW-TICKET-REQUEST above. Orchestrator: please also post the comment block above on `86c9yaq1e` if it wasn't already added during the T12:36 flip.

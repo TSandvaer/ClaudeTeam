@@ -102,6 +102,8 @@ Implement the `claudeteam.openRoster` command (already declared in `package.json
 
 This is the explicit "no custom webview form" decision from PR #32 §Q1: the canonical roster edit surface is the user's own YAML editing in VS Code, with M3-01 providing the live-reload feedback loop.
 
+**Absorbs NIT #3 from M3-01 peer-review:** auto-create the global roster directory (`~/.claudeteam/`) + a starter `teams.yaml` if missing, when the user invokes `claudeteam.openRoster`. This eliminates the `registerDirWatcher` `existsSync`→`createFileSystemWatcher` race documented in Maya's M3-01 review (PR #35 comment 4528643161). AC2 + AC3 below already cover this — the absorption is recorded here for cross-reference traceability.
+
 ### Acceptance criteria
 
 - AC1: `src/extension/commands/openRoster.ts` (new) exports `registerOpenRosterCommand(context): Disposable` and is registered in `activate()`.
