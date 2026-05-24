@@ -88,6 +88,7 @@ ENTRY-2026-05-24T16:35:30Z: 86c9ybdxe -> in review (M3-04 PR #39 opened)
 ENTRY-2026-05-24T17:15:00Z: 86c9yb0yg -> in progress (M3-01 NITs follow-up — Felix accepted dispatch)
 ENTRY-2026-05-24T17:30:00Z: 86c9yb0yg -> in review (M3-01 NITs PR opened)
 ENTRY-2026-05-24T17:46:00Z: 86c9ybrk0 -> in progress (M3-03 DEAD-session bleed fix — Felix dispatched, orch-side MCP unavailable so flip queued)
+ENTRY-2026-05-24T18:07:00Z: 86c9ybrk0 -> in review (PR #41 ready for Maya — scope-corrected to webview-boot fixture; host AC3 + webview boot-bleed fix + 4 jsdom tests at HEAD 77cbe6c, CI green)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
