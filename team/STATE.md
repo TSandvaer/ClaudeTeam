@@ -10,18 +10,15 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-24 1746 UTC (M3 Wave 0 SHIPPED; Felix dispatched on `86c9ybrk0` P2 DEAD-bleed fix; auto-status AWAY re-engaged)
+## Current state — 2026-05-24 1935 UTC (M3 Wave 1 — `86c9ybrk0` + M3-07 + M3-08 all SHIPPED this tick; 3 PRs merged; M3-04 NITs + M3-09 + M3-10 remaining)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `f6af8c5` (chore(orch): parallel-orch-race failure mode + M3-10 NEW-TICKET-REQUEST + 86c9ybrk0 dispatch flip — orch-direct push this tick). Previous shippable PR was `9c0572c` (PR #40 — M3-01-NITs cleanup, Felix). Verify: `git rev-parse origin/main`.
+- **`origin/main` tip:** `0fbf028` (PR #41 merge — Felix + Maya M3-03 DEAD-bleed fix). Three PRs merged this tick: #41 (`0fbf028`), #42 (`0a5bc5e` — M3-07 Nora install-path validation), #43 (`236c3f8` — M3-08 Nora main-thread narration). Auto-merge audit logged at `.claude/decisions-while-away.md` 1934 UTC.
 - **M3 Wave 0 SHIPPED end-to-end** (prior session — 6 PRs merged to main): M3-01 hot-reload (PR #35, `a74cb94`), M3-02 openRoster command (PR #37, `d0225aa`), M3-03 window-scoped session filtering (PR #38, `1bc422c`), M3-04 webview chip + filtered-empty + open-roster button (PR #39, `b22de25`), M3-01-NITs cleanup (PR #40, `9c0572c`), plus M3-06 dispatch-template update (PR #36, `cd3553c`). Sponsor's M3 scope-correction directive ("show only sessions from this VS Code window") addressed via M3-03 default-on window-scoping with `claudeteam.showAllSessionsGlobally` opt-out.
-- **Test counts:** 262 unit (+2 pre-existing skips) + 68 integration green on main as of PR #40 merge.
-- **Open PRs:** PR #41 — `fix(watcher): dead-session bleed past M3-03 window-scope filter` (title de-suffixed by Felix; HEAD `77cbe6c`, CI green at runs 26370456410/26370455680). Awaiting Maya review. Self-Test Report posted at https://github.com/TSandvaer/ClaudeTeam/pull/41#issuecomment-4529730137 (mechanical coverage only — sub-agent GUI gap reframe defers in-VS-Code probe to sponsor post-merge). Test counts: 268 unit + 68 integration green.
-- **In-flight agents (3):**
-  - **Maya** on PR #41 peer review (agentId `a91102eb44370bea9`, dispatched 2026-05-24T18:07Z background).
-  - **Nora** on M3-07 + M3-08 bundled (agentId `a623fd1cf634ee32a`, dispatched 2026-05-24T18:07Z background — 2 sequential orch-direct doc PRs, install-path validation discipline + main-thread merge-narration tightening).
-  - **Felix** done (completed PR #41 redispatch; worktree detached). Iris, Sage, Bram idle.
+- **Test counts:** 268 unit (+2 pre-existing skips) + 68 integration green on main as of PR #41 merge (added 4 bootBleed jsdom tests + 2 AC3 sessionFilter tests from PR #41).
+- **Open PRs:** none (all 3 from this tick merged).
+- **In-flight agents:** none (Felix done; Maya done with APPROVE on PR #41; Nora done with M3-07 + M3-08 both shipped).
 - **Auto-decide this tick (logged at `.claude/decisions-while-away.md` 2026-05-24 1801 UTC):** Path 1 absorb webview-scope into `86c9ybrk0` + redispatch Felix on same PR, vs Path 2 (close as misdiagnosed + new ticket for Maya). Foundation: Felix's audit + Path Y economy precedent. Reversibility ≤1 PR.
 - **Queued for sponsor (non-blocking):**
   - **M3-10 ticket creation** — sponsor authorized `File M3-10 ticket now (P3)` at session resume; heuristic chosen = `group by roster persona-name, show 'Felix ×3' with expandable list`. Orchestrator's ClickUp MCP did not connect this session, so NEW-TICKET-REQUEST block added to `team/log/clickup-pending.md` for next session with live MCP. Sponsor can also file manually using the body block already drafted there.
@@ -35,17 +32,17 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 **ClickUp board state:**
 - **Complete (M3 Wave 0):** `86c9yaq1e` (M3-01), `86c9yb473` (M3-02), `86c9yb59k` (M3-03), `86c9ybdxe` (M3-04), `86c9yb0yg` (M3-01-NITs).
-- **In progress:** `86c9ybrk0` (M3-03 DEAD-bleed fix, Felix) — orch-side flip queued via clickup-pending.md (MCP unavailable).
+- **Complete (M3 Wave 1 this session):** `86c9ybrk0` (M3-03 DEAD-bleed fix, PR #41 merged `0fbf028`) — orch-side `-> complete` flip queued via clickup-pending.md (MCP unavailable).
+- **In progress:** none.
 - **To do (open follow-ups):** `86c9ybtut` (M3-04 NITs split, P3); `86c9y7y9z` (M2-04 NITs, sponsor-held).
 - **To do (pending creation):** M3-10 persona-tile-collapse (P3, sponsor-authorized, NEW-TICKET-REQUEST queued).
+- **Orch-direct Wave 1 (no ClickUp):** M3-07 (PR #42 merged `0a5bc5e`), M3-08 (PR #43 merged `236c3f8`) — DONE.
 
 **Wave 1 remaining (per Nora's backlog):**
-- **`86c9ybrk0`** — DEAD-bleed fix (Felix, in-flight this tick).
-- **`86c9ybtut`** — M3-04 NITs (Felix host + Maya webview split, 2 PRs).
-- **M3-07** — `docs(testing): install-path validation discipline at first-shipping PR` (Nora orch-direct, S, P1).
-- **M3-08** — `docs(orch): main-thread merge-narration tightening` (Nora orch-direct, S, P2).
+- **`86c9ybtut`** — M3-04 NITs (Felix host NIT #1+#2 + Maya webview NIT #3 split per sponsor's preference, 2 PRs).
 - **M3-09** — Sage Layer-3 expansion absorbing Sage's PR-#39 coverage-gap NITs.
 - **M3-10** — persona-tile-collapse (post ticket-creation, Felix reducer + Maya webview).
+- **DONE this session:** `86c9ybrk0`, M3-07, M3-08.
 
 **This-session structural delta (newest at top):**
 

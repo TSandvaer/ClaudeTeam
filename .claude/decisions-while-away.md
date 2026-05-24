@@ -24,6 +24,20 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 <!-- New entries are appended below this line. -->
 
+## 2026-05-24 1934 UTC — Auto-merge PRs #41 + #42 + #43 (M3-03 bleed fix + Nora M3-07 + Nora M3-08)
+
+**Decided:** Admin-merge 3 PRs in single tick: (1) PR #41 `fix(watcher+webview): dead-session bleed past M3-03 window-scope filter` — Felix author, Maya APPROVE, merged at `0fbf028`; (2) PR #42 `docs(testing): install-path validation discipline at first-shipping PR (M3-07)` — Nora orch-direct, merged at `0a5bc5e`; (3) PR #43 `docs(orch): main-thread merge-narration tightening (M3-08)` — Nora orch-direct, merged at `236c3f8`. PR #41 required orch-side rebase + `--ours` recovery on `clickup-pending.md` log-only conflict.
+
+**Foundation:** (a) User-global CLAUDE.md "Orchestrator autonomy" rule 6.6 #1 — promoted auto-decide class "Routine PR-merge calls when CI green + orch-docs / cleanup class with peer reviewer attached." PR #41 routine impl, CI green on rebased SHA `265475f` (run conclusion SUCCESS), peer-reviewer Maya posted APPROVE at https://github.com/TSandvaer/ClaudeTeam/pull/41#issuecomment-4529743687 (no NITs). (b) PRs #42 and #43 are `ClickUp:NO — orch-direct chore class` per `team/nora-pl/milestone-3-backlog.md` M3-07 § 401, M3-08 § 451 — orch-direct merge per project CLAUDE.md "retros + chore(orch) work go orch-direct without ClickUp tickets" precedent. (c) Rebase conflict on PR #41 was log-only (clickup-pending.md both-add of `86c9ybrk0 -> in review` entry with stale Felix-side text "BLOCKED" and current orch-side text "ready for Maya, CI green") — resolved via rule 6.6 #5 (`git checkout --ours` recovery for log-only conflicts), per `.claude/docs/orchestration-overview.md` § Common failure modes "Orch-side rebase conflict resolution" guidance. Felix's stale entry semantically replaced by orch's current entry. Force-push-with-lease verified clean (no markers); rebase --continue verified.
+
+**Alternative:** (a) For PR #41: queue for sponsor review of merge or wait for explicit sponsor sign-off. Rejected per sponsor-delegated PR-merge authority (`feedback_sponsor_doesnt_review_prs`) + Maya's APPROVE = peer-review gate met. (b) For PRs #42/#43: file ClickUp tickets retroactively + queue. Rejected — backlog explicitly designates orch-direct (M3-07/08 lines `ClickUp:NO`). (c) Could have merged PR #41 first before PRs #42/#43 to keep main monotone; rejected because PR #41 had pending CI on rebased SHA while #42/#43 were CLEAN — merging the latter first reduced PR #41's rebase footprint window.
+
+**Reversibility:** Each merge can be `git revert <merge-sha>` + admin-merge revert PR. ≤1 PR + 5-10 min each. Three independent merges; reverting one doesn't affect the others. clickup-pending.md `--ours` recovery is durable — Felix's stale BLOCKED entry was never on main anyway.
+
+**Status:** pending review.
+
+**Pointers:** PR #41 (`0fbf028`), PR #42 (`0a5bc5e`), PR #43 (`236c3f8`); CI runs for PR #41 rebased SHA `265475f` SUCCESS; Maya APPROVE comment https://github.com/TSandvaer/ClaudeTeam/pull/41#issuecomment-4529743687; Nora's final report tool call `toolu_01CxBhNBGMYQTjqVkmx8GpHJ`; Felix's redispatch report tool call `toolu_0192jJhzBtUwJ9yT5SbgSBkE`.
+
 ## 2026-05-24 1801 UTC — Auto-decide: absorb webview-scope fix into 86c9ybrk0 + redispatch Felix (instead of new ticket for Maya)
 
 **Decided:** Endorse Felix's recommended option (1) from his PR #41 final report — keep ticket `86c9ybrk0` open with corrected surface (webview boot fixture-bleed at `src/webview/main.ts:146`, not host-side filter), redispatch Felix to add the 1-line webview fix + webview test to PR #41 in the same worktree/branch. Maya peer-reviews as planned. Original dispatch brief OOS line "Webview changes (this is host-side only)" is explicitly revised.
