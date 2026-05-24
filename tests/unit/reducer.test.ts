@@ -22,6 +22,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildAgentTree,
   IDLE_THRESHOLD_MS,
+  resolveModelOnParseError,
   type AgentMetaEntry,
   type ActivityMap,
   type FinishedSet,
@@ -785,5 +786,154 @@ describe("buildAgentTree", () => {
     );
 
     expect(tree.sessions[0]!.title).toBe("(no title yet)");
+  });
+
+  // ---------------------------------------------------------------- NIT #1 — parse-error model fallback (M3-04 follow-up)
+  describe("parse-error model fallback (NIT #1 — M3-04 follow-up)", () => {
+    // Source: sponsor screenshot 2026-05-24 — Sage tile showed
+    //   activity: "error: meta.json parse failed (missing-agentType)"
+    //   model:   "model:?"
+    // The JSONL was readable (the watcher tails every agent-*.jsonl regardless
+    // of meta validity), so the bare `?` was actionable info lost. Brief AC1:
+    // when meta.json fails, the agent should show the JSONL-derived model if
+    // available, falling back to a clearer placeholder than `?` if not.
+
+    it("background entry uses activity.model when present and meta is null", () => {
+      const session = makeSession();
+      const agentId = "agent_nit1_a";
+      const activity = makeActivity({
+        model: "claude-sonnet-4-5",
+        mtimeMs: NOW_MS - 5_000,
+      });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [
+          makeSessionData(session.sessionId, [
+            makeAgentEntry(agentId, null, "meta.json parse failed: missing field 'agentType'"),
+          ]),
+        ],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const s = tree.sessions[0]!;
+      expect(s.background).toHaveLength(1);
+      const bg = s.background[0]!;
+      expect(bg.agentType).toBe("(parse error)");
+      // AC1: real model from JSONL invocation surfaces, NOT "model:?".
+      expect(bg.model).toBe("claude-sonnet-4-5");
+      expect(bg.model).not.toBe("model:?");
+    });
+
+    it("background entry uses 'model:unknown' when meta is null AND no activity entry", () => {
+      const session = makeSession();
+      const agentId = "agent_nit1_b";
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, null, "meta.json parse failed: missing field 'agentType'")])],
+        new Map(), // no activity at all
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const bg = tree.sessions[0]!.background[0]!;
+      // AC1: clearer placeholder than bare `?` — distinguishes "meta invalid"
+      // from "no assistant message yet" (the other `model:?` cause).
+      expect(bg.model).toBe("model:unknown");
+      expect(bg.model).not.toBe("model:?");
+    });
+
+    it("background entry uses 'model:unknown' when meta is null AND activity.model is null", () => {
+      const session = makeSession();
+      const agentId = "agent_nit1_c";
+      const activity = makeActivity({ model: null });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, null, "meta.json parse failed: not a JSON object")])],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const bg = tree.sessions[0]!.background[0]!;
+      expect(bg.model).toBe("model:unknown");
+    });
+
+    it("rostered tiles still use the standard resolveModel path (unchanged behavior)", () => {
+      // Regression guard: the NIT #1 fix touches ONLY the parse-error branch.
+      // A non-parse-error agent with activity.model=null should still resolve
+      // to "model:?" via the standard resolveModel helper.
+      const session = makeSession();
+      const agentId = "agent_nit1_d";
+      const meta = makeMeta({ agentType: "felix", description: "Felix no-model" });
+      const activity = makeActivity({ model: null });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      // Standard "model:?" — NOT the new "model:unknown" placeholder, because
+      // this agent is rostered (meta parsed fine), so the NIT #1 path doesn't apply.
+      expect(tile!.model).toBe("model:?");
+    });
+  });
+
+  // ---------------------------------------------------------------- resolveModelOnParseError direct exercise
+  describe("resolveModelOnParseError — direct exercise (NIT #1)", () => {
+    it("returns activity.model verbatim when present and non-empty", () => {
+      expect(
+        resolveModelOnParseError({
+          model: "claude-opus-4-7",
+          lastTool: "Bash",
+          lastTimestamp: NOW_MS,
+          mtimeMs: NOW_MS,
+        }),
+      ).toBe("claude-opus-4-7");
+    });
+
+    it("returns 'model:unknown' when activity is undefined", () => {
+      expect(resolveModelOnParseError(undefined)).toBe("model:unknown");
+    });
+
+    it("returns 'model:unknown' when activity.model is null", () => {
+      expect(
+        resolveModelOnParseError({
+          model: null,
+          lastTool: null,
+          lastTimestamp: 0,
+          mtimeMs: 0,
+        }),
+      ).toBe("model:unknown");
+    });
+
+    it("returns 'model:unknown' when activity.model is an empty string", () => {
+      // Defensive — the tailer normalizes to null when no assistant message
+      // exists, but pin the behavior anyway so a future tailer regression
+      // (empty-string sneak-through) doesn't render a blank model on the tile.
+      expect(
+        resolveModelOnParseError({
+          model: "",
+          lastTool: null,
+          lastTimestamp: 0,
+          mtimeMs: 0,
+        }),
+      ).toBe("model:unknown");
+    });
   });
 });

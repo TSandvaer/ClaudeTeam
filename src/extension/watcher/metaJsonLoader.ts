@@ -31,6 +31,36 @@ import type { AgentMeta, AgentMetaSchemaVersion } from "../../shared/types";
 import { MetaParseError } from "../../shared/types";
 
 /**
+ * Human-readable error format helper (M3-04 NIT #2).
+ *
+ * Maps a {@link MetaParseError} to a consistent, dashboard-friendly string.
+ * The chosen convention is `meta.json parse failed: <human phrase>` — full
+ * sentences, no hybrid-case enum codes leaking through. Prior behavior used
+ * `err.message` (terse) or the raw `reason` enum literal (hybrid-case, e.g.
+ * `missing-agentType`); both surfaces are normalized through this helper.
+ *
+ * Convention (documented for future parser additions):
+ *   - prefix is always `meta.json parse failed: `.
+ *   - reason text uses lowercase words separated by spaces.
+ *   - field names appear in single quotes (`'agentType'`).
+ *
+ * When a new {@link MetaParseError} reason is added, extend the switch below
+ * AND update `tests/unit/metaJsonLoader.test.ts` to pin the new phrase.
+ */
+export function formatMetaParseError(err: MetaParseError): string {
+  switch (err.reason) {
+    case "not-object":
+      return "meta.json parse failed: not a JSON object";
+    case "missing-agentType":
+      return "meta.json parse failed: missing field 'agentType'";
+    case "missing-description":
+      return "meta.json parse failed: missing field 'description'";
+    case "invalid-field-type":
+      return "meta.json parse failed: invalid field type";
+  }
+}
+
+/**
  * Engine-type values for `agentType` in v2.1.145-general meta.json.
  *
  * Observed in real captures (data-sources.md §4):

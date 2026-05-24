@@ -22,8 +22,12 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { readActivity } from "../extension/watcher/subagentTailer.js";
 import { listSessions } from "../extension/watcher/sessionRegistry.js";
-import { parseMetaFromString } from "../extension/watcher/metaJsonLoader.js";
+import {
+  formatMetaParseError,
+  parseMetaFromString,
+} from "../extension/watcher/metaJsonLoader.js";
 import { loadRoster } from "../extension/roster/loader.js";
+import { MetaParseError } from "../shared/types.js";
 import { cwdToSlug } from "../shared/slug.js";
 import {
   buildAgentTree,
@@ -161,7 +165,14 @@ function collectAgentMetas(subagentsDir: string): AgentMetaEntry[] {
       const meta = parseMetaFromString(raw);
       entries.push({ agentId, meta });
     } catch (err) {
-      entries.push({ agentId, meta: null, parseError: (err as Error).message });
+      // NIT #2 (M3-04 follow-up): format MetaParseError consistently with the
+      // host watcher (collectAgentMetas in watcherLoop.ts). Non-MetaParseError
+      // errors still fall through to `err.message` for diagnostic visibility.
+      const parseError =
+        err instanceof MetaParseError
+          ? formatMetaParseError(err)
+          : (err as Error).message;
+      entries.push({ agentId, meta: null, parseError });
     }
   }
   return entries;
