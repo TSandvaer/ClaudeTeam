@@ -54,8 +54,17 @@ vi.mock("vscode", () => {
         get: (key: string) => {
           if (key === "pollIntervalMs") return 60_000; // No-op cadence for the test.
           if (key === "rosterPath") return "";
+          if (key === "rosterPollIntervalMs") return 0; // Polling fallback OFF.
           return undefined;
         },
+      }),
+      // M3-01: rosterWatcher requires createFileSystemWatcher. Inert stub —
+      // we're not testing watcher firing here, just activation lifecycle.
+      createFileSystemWatcher: () => ({
+        onDidChange: () => ({ dispose: () => undefined }),
+        onDidCreate: () => ({ dispose: () => undefined }),
+        onDidDelete: () => ({ dispose: () => undefined }),
+        dispose: () => undefined,
       }),
     },
     commands: {
@@ -65,6 +74,18 @@ vi.mock("vscode", () => {
       file: (p: string) => mockUri(p),
       joinPath: (base: { fsPath: string }, ...parts: string[]) =>
         mockUri(`${base.fsPath}/${parts.join("/")}`),
+    },
+    // M3-01 surface: activate() now starts a rosterWatcher which uses
+    // createFileSystemWatcher + RelativePattern. We stub them as inert
+    // (the watcher's directory-missing branch will fire here anyway since
+    // the test's home directory probably doesn't have ~/.claudeteam/), but
+    // having the symbols present silences the "No 'RelativePattern' export"
+    // warning when the directory DOES exist on the test machine.
+    RelativePattern: class {
+      constructor(
+        public readonly base: { fsPath: string } | string,
+        public readonly pattern: string,
+      ) {}
     },
     WebviewViewResolveContext: {},
     CancellationToken: {},

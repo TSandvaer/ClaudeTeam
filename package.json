@@ -72,6 +72,12 @@
           "minimum": 500,
           "description": "How often (in milliseconds) to poll ~/.claude/ for agent state updates."
         },
+        "claudeteam.rosterPollIntervalMs": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "description": "Fallback polling cadence (in milliseconds) for the roster YAML watcher. 0 = OFF (rely on VS Code's FileSystemWatcher). Set to a positive value (e.g. 5000) only if the FileSystemWatcher proves unreliable on your platform (some WSL paths, network drives)."
+        },
         "claudeteam.showBackgroundCount": {
           "type": "boolean",
           "default": true,
