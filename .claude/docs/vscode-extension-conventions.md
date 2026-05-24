@@ -66,6 +66,26 @@ The `package.json` `contributes` block needs (at minimum):
 - **State minimalism.** State that exists in the host should NOT be mirrored in the webview. The webview is a renderer; it owns ephemeral UI (hover, expansion, scroll), not domain data.
 - **Re-render discipline.** A state change in the host should not cause a full re-render in the webview — diff at the message-receiver level.
 
+## Webview boot state — dev-fixture gating
+
+**Rule:** never initialize `currentState` from `FIXTURE_STATE` unconditionally. `FIXTURE_STATE` embeds `FIXTURE_DEAD_SESSION` (real dev-fixture values: `pid=99999`, `cwd=c:\Trunk\PRIVATE\Axelot-tutor`, `shortId=a91f3c20`) — these render in production for the window between webview mount and the first `state:full` arriving from the host.
+
+**Fix pattern** (verified `src/webview/main.ts:155-158`, PR #41 SHA `0fbf028`):
+
+```ts
+const isVsCodeMode = typeof acquireVsCodeApi === "function";
+let currentState: AgentTree = isVsCodeMode ? FIXTURE_EMPTY_STATE : FIXTURE_STATE;
+```
+
+- VS Code mode (`isVsCodeMode` true) → boot with `FIXTURE_EMPTY_STATE` (`sessions: []`) so no tiles render until `state:full` arrives.
+- Browser dev mode → boot with `FIXTURE_STATE` so Maya can iterate on layout without a live host.
+
+**Fixture export discipline** (`src/shared/fixtures.ts`): maintain two named exports — `FIXTURE_STATE` (full realistic tree for browser dev / component tests) and `FIXTURE_EMPTY_STATE` (empty sessions array for VS Code boot and empty-state rendering tests). Do not use `FIXTURE_STATE` as the VS Code boot default.
+
+**Diagnostic heuristic:** if production renders tiles with `pid=99999` or `cwd=Axelot-tutor` before real data arrives, the gating predicate is absent or wrong — check `src/webview/main.ts` boot block first, not the host-side filter.
+
+**Test coverage:** `tests/unit/webview/bootBleed.test.ts` (4 jsdom tests, landed PR #41).
+
 ## Message protocol (host ↔ webview)
 
 Every message is a typed object with a `type` discriminator. Source of truth: `src/shared/messages.ts` — both sides import it.
