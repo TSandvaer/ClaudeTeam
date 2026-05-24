@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "target": "ES2022",
+    "outDir": "out/vscode-integration",
+    "rootDir": ".",
+    "sourceMap": true,
+    "isolatedModules": false,
+    "types": ["node", "vscode", "mocha"]
+  },
+  "include": ["tests/vscode-integration/**/*.ts"],
+  "exclude": ["node_modules", "dist", "out"]
+}

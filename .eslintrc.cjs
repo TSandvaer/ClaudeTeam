@@ -16,7 +16,15 @@ module.exports = {
     node: true,
     es2022: true,
   },
-  ignorePatterns: ["dist/", "node_modules/", "*.vsix", ".claude/", "team/", "docs/"],
+  ignorePatterns: [
+    "dist/",
+    "node_modules/",
+    "out/",
+    "*.vsix",
+    ".claude/",
+    "team/",
+    "docs/",
+  ],
   rules: {
     "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
   },
@@ -25,6 +33,15 @@ module.exports = {
       files: ["*.cjs", "*.mjs"],
       rules: {
         "@typescript-eslint/no-var-requires": "off",
+      },
+    },
+    {
+      // Layer-3 (@vscode/test-electron) tests use Mocha's TDD globals
+      // (suite, test, suiteSetup, suiteTeardown) — declare the env so eslint
+      // doesn't flag them as undefined.
+      files: ["tests/vscode-integration/**/*.ts"],
+      env: {
+        mocha: true,
       },
     },
   ],
