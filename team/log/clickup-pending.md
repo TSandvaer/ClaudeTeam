@@ -83,6 +83,8 @@ ENTRY-2026-05-24T14:54:25Z: 86c9yb473 -> complete (PR #37 merged at d0225aa — 
 ENTRY-2026-05-24T15:30:00Z: 86c9yb59k -> in progress (M3-03 dispatch — feat(host): window-scoped session filtering)
 ENTRY-2026-05-24T15:30:01Z: 86c9yb59k -> in review (M3-03 PR #38 opened)
 ENTRY-2026-05-24T16:00:57Z: 86c9yb59k -> complete (PR #38 merged at 1bc422c — Maya APPROVE 10/10 ACs)
+ENTRY-2026-05-24T16:30:00Z: 86c9ybdxe -> in progress (M3-04 dispatch — feat(webview): roster-error chip + filtered-empty state + open-roster button)
+ENTRY-2026-05-24T16:35:30Z: 86c9ybdxe -> in review (M3-04 PR #39 opened)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)

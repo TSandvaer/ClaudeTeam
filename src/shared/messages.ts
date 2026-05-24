@@ -52,6 +52,11 @@ export interface SerializedSessionTree
  * Map/Set/Date — JSON-safe as-is per the wire-shape constraint documented in
  * `.claude/docs/vscode-extension-conventions.md` "JSON-serialization
  * constraint"). Defaults to false on the wire when omitted by the host.
+ *
+ * `rosterErrors` / `rosterWarnings` (M3-04): mirror `AgentTree.rosterErrors`
+ * / `.rosterWarnings`. Plain `string[]` — JSON-safe; no flatten step
+ * needed. Webview MUST treat `undefined` as empty array. Verbatim loader
+ * strings — the webview renders them as-is in the chip / details panel.
  */
 export interface SerializedDashboardState {
   sessions: SerializedSessionTree[];
@@ -60,6 +65,16 @@ export interface SerializedDashboardState {
    * Optional for back-compat — webview MUST treat `undefined` as `false`.
    */
   filterApplied?: boolean;
+  /**
+   * Roster load errors from the most recent tick (M3-04). Optional for
+   * back-compat — webview MUST treat `undefined` as empty array.
+   */
+  rosterErrors?: string[];
+  /**
+   * Roster load warnings from the most recent tick (M3-04). Optional for
+   * back-compat — webview MUST treat `undefined` as empty array.
+   */
+  rosterWarnings?: string[];
 }
 
 /**

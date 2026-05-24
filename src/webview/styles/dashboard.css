@@ -428,3 +428,77 @@ body {
   font: inherit;
   line-height: 1;
 }
+
+/* ===========================================================================
+ * Roster-error chip (M3-04) — extends .error-chip / .error-chip--error
+ * --------------------------------------------------------------------------- */
+
+/* The body is a click-to-expand surface; give it a clear affordance. */
+.roster-error-chip-body {
+  cursor: pointer;
+  outline: 0 solid transparent;
+  border-radius: 2px;
+}
+
+.roster-error-chip-body:hover,
+.roster-error-chip-body:focus-visible {
+  background-color: var(
+    --vscode-list-hoverBackground,
+    rgba(255, 255, 255, 0.07)
+  );
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+}
+
+/* Details panel — all errors when expanded. Indented under the summary line. */
+.roster-error-chip-details {
+  list-style: disc inside;
+  margin: var(--ct-space-xs) 0 0 0;
+  padding: 0 0 0 var(--ct-space-s);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+}
+
+.roster-error-chip-details[hidden] {
+  display: none;
+}
+
+.roster-error-chip-detail-item {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+  overflow-wrap: anywhere;
+}
+
+/* ===========================================================================
+ * Filtered-empty state (M3-04 AC4)
+ * --------------------------------------------------------------------------- */
+
+.empty-state--filtered {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+}
+
+.empty-state-headline {
+  margin: 0;
+  color: var(--vscode-foreground, #cccccc);
+  font-weight: 600;
+}
+
+.empty-state-guidance {
+  margin: 0;
+  color: var(--vscode-descriptionForeground, #858585);
+}
+
+.empty-state-code {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+  background-color: var(
+    --vscode-textBlockQuote-background,
+    rgba(255, 255, 255, 0.04)
+  );
+  padding: 1px var(--ct-space-xs);
+  border-radius: 2px;
+  /* Long setting names should wrap rather than overflow the sidebar. */
+  overflow-wrap: anywhere;
+}

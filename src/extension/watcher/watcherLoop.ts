@@ -372,7 +372,16 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
   // M3-03 AC7: stamp the window-filter flag on the produced tree. Reducer
   // is workspace-agnostic — it doesn't know about the filter, just the
   // input set — so the watcher layer owns the flag.
-  return { ...tree, filterApplied };
+  // M3-04 AC5: stamp the roster errors / warnings on the produced tree so
+  // the webview can render the error chip + warning subtype. Verbatim from
+  // RosterLoadResult; reducer is roster-error-agnostic, so the watcher
+  // layer owns this surfacing too (parallel to filterApplied).
+  return {
+    ...tree,
+    filterApplied,
+    rosterErrors: rosterResult.errors,
+    rosterWarnings: rosterResult.warnings,
+  };
 }
 
 // =============================================================================
@@ -405,7 +414,16 @@ export function hashState(state: DashboardState): string {
   // (or opening/closing a workspace folder) re-emits state even when the
   // visible session set is unchanged. Webview empty-state messaging depends
   // on this flag, so a state change must propagate.
-  return JSON.stringify({ sessions, filterApplied: state.filterApplied === true });
+  // M3-04: include rosterErrors / rosterWarnings — when the user fixes (or
+  // breaks) a YAML and the visible tile set is unchanged, the chip must
+  // appear/disappear within one tick. Excluding from the hash would skip
+  // the emission.
+  return JSON.stringify({
+    sessions,
+    filterApplied: state.filterApplied === true,
+    rosterErrors: state.rosterErrors ?? [],
+    rosterWarnings: state.rosterWarnings ?? [],
+  });
 }
 
 /** Read the `ai-title` record from a parent JSONL. Null on miss/error. */

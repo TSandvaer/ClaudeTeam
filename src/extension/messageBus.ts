@@ -59,6 +59,11 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
     // flatten step needed. Default to false when the in-memory state omits it
     // so the webview always sees a real boolean on the wire.
     filterApplied: state.filterApplied === true,
+    // M3-04: roster errors / warnings are plain string[] — JSON-safe; pass
+    // verbatim. Empty arrays on the wire when the host omits them so the
+    // webview always sees real arrays (no `undefined` branch in the renderer).
+    rosterErrors: state.rosterErrors ?? [],
+    rosterWarnings: state.rosterWarnings ?? [],
   };
 }
 
