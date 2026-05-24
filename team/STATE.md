@@ -10,91 +10,54 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-24 1255 UTC (PR #36 Nora M3-06 MERGED at `cd3553c`; Felix in-flight on M3-02; M3-01 NITs ticket creation queued for sponsor-MCP session)
+## Current state — 2026-05-24 1746 UTC (M3 Wave 0 SHIPPED; Felix dispatched on `86c9ybrk0` P2 DEAD-bleed fix; auto-status AWAY re-engaged)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `cd4cb81` (PR #33 merge — Nora's M3 backlog). Verify: `git rev-parse origin/main`. **M3 kicked off; Wave 0 ready to dispatch.**
-- **M3 status: backlog landed.** Nora's M3 backlog (PR #33 → `cd4cb81`) authored 9 tickets across 3 waves (5 ClickUp-needing + 4 orch-direct chores). Wave 0 fires 5-6 in parallel: **Felix on M3-01 (hot-reload, L) + M3-03 (window-scoped session filtering, M); Nora batches M3-05/06/07/08 orch-direct chores.** Backlog file: `team/nora-pl/milestone-3-backlog.md`.
-- **M3 prior-art research SHIPPED:** PR #32 (Bram `research(m3): prior-art on settings-UI patterns + global FS watching`) merged at `7d14976` after Felix APPROVE_WITH_NITS (all 3 cite-verifications passed). Two NITs (non-blocking) absorbed into M3-01/02 dispatch briefs at wave-kickoff time per rule 6.6 #4: (a) M3-02 implementer should do 30-sec in-person probe of Settings UI rendering; (b) M3-01 keep `*.yaml` glob recommendation pending VS Code #164925 fix-version clarification. Research note at `team/bram-research/m3-prior-art-2026-05-24.md`. **Recommendations: native Settings UI cannot render arrays-of-objects (falls to "Edit in settings.json") — use `claudeteam.openRoster` opening YAML in native editor; `createFileSystemWatcher(new RelativePattern(...))` works outside workspace folders since VS Code 1.64 (within our `^1.85.0` floor).**
-- **M2 fully closed (unchanged):** all 12 PRs merged + P0 CJS shim + retro PR #31. Production .vsix activates on Node 22+. M2-06 AC7(b-d) sponsor-confirmed **PASS** this session via in-person install → reload → render → drill-in verification (audit comment posted on `86c9y9q6h`).
-- **Rule 6.6 additions APPLIED to `~/.claude/CLAUDE.md` (2026-05-24):** all 3 sponsor-authorized auto-decide classes from M2-close retro (NITs-ticket-creation, log-only-conflict recovery, NITs-absorption-into-downstream) landed via explicit sponsor re-authorization this session. Classifier-blocked-last-session edit is now resolved. Audit trail: staged diff at `team/log/proposed-rule-6.6-additions-2026-05-24.md` (now applied — orch can move to `team/log/applied/` or leave as audit per sponsor's later call).
-- **Test counts:** unchanged from M2 close — **215 unit + 49 integration + 14 Layer-3 = 278 tests green** on main. CI green on every push. M3 Wave 0 implementation will add coverage.
-- **Open PRs:** none (last merged: PR #36 Nora M3-06 at `cd3553c`; Felix's M3-02 PR not yet opened — Felix still mid-implementation).
-- **In-flight agents:** **Felix** on M3-02 (`feat(roster): claudeteam.openRoster command + auto-create starter YAML`, absorbs NIT #3 from M3-01), agentId `a70a509db51158efb`, branch `felix/m3-02-open-roster`. Nora returned (M3-06 shipped at `cd3553c`). Maya idle (M3-04 depends on M3-03 state shape — M3-03 not yet dispatched). Bram + Iris + Sage idle.
-- **Queued for sponsor:** none. M3-01 NITs follow-up ticket was created at `86c9yb0yg` (commit `c997121` — orch resolved the queued NEW-TICKET-REQUEST during this round; details in commit message).
-- **Sponsor-pending (not blocking):** none. M2-06 AC7(b-d) verdict was confirmed PASS this session. 2 polish findings (noisy roster-warning log spam; dev-mode webview CSP source-map block) rolled into M3 backlog per sponsor's "(b) into M3 backlog" decision — captured as M3 backlog items #8 and #9 in `team/nora-pl/milestone-3-backlog.md`.
-- **`86c9y7y9z` standing call (unchanged):** sponsor's standing decision — leave at `to do` with comment-only audit trail. No action; do NOT auto-decide to close.
-- **Convention confirmed this session:** retros + `chore(orch)` work go orch-direct without ClickUp tickets (M1+M2 precedent). Applies to backlog files too (PR #33 was orch-direct).
-- **New documented failure mode (this session):** parallel-Agent batch silently drops one call (hit 1× this session — only Bram's `Agent` call landed in a batch that intended Nora+Bram). Documented in `.claude/docs/orchestration-overview.md` § Common failure modes. Prevention rule: state intended dispatch count in user-visible text + verify tool-call array count before submitting; batches ≥3 prefer sequential.
-- **Worktrees:** all detached at last activity (Felix on PR #32 review; Nora on PR #33; Bram on PR #32 author). Sync to main before M3 Wave 0 dispatch.
-- **Auto-status:** AWAY, this-session cron `65f92980` (`7,22,37,52 * * * *` — re-armed on session start), last_tick `2026-05-24T12:32:00Z`.
+- **`origin/main` tip:** `f6af8c5` (chore(orch): parallel-orch-race failure mode + M3-10 NEW-TICKET-REQUEST + 86c9ybrk0 dispatch flip — orch-direct push this tick). Previous shippable PR was `9c0572c` (PR #40 — M3-01-NITs cleanup, Felix). Verify: `git rev-parse origin/main`.
+- **M3 Wave 0 SHIPPED end-to-end** (prior session — 6 PRs merged to main): M3-01 hot-reload (PR #35, `a74cb94`), M3-02 openRoster command (PR #37, `d0225aa`), M3-03 window-scoped session filtering (PR #38, `1bc422c`), M3-04 webview chip + filtered-empty + open-roster button (PR #39, `b22de25`), M3-01-NITs cleanup (PR #40, `9c0572c`), plus M3-06 dispatch-template update (PR #36, `cd3553c`). Sponsor's M3 scope-correction directive ("show only sessions from this VS Code window") addressed via M3-03 default-on window-scoping with `claudeteam.showAllSessionsGlobally` opt-out.
+- **Test counts:** 262 unit (+2 pre-existing skips) + 68 integration green on main as of PR #40 merge.
+- **Open PRs:** none.
+- **In-flight agents:** **Felix** on `86c9ybrk0` (M3-03 DEAD-session bleed fix — P2 follow-up filed last session, sponsor-verified via screenshot), agentId `a00029c1b2e467da9`, dispatched 2026-05-24T17:46Z background-mode, branch `felix/86c9ybrk0-dead-session-bleed-fix` (TBD on first push). Maya idle (will review Felix's PR when opened). Nora, Iris, Sage, Bram idle.
+- **Queued for sponsor (non-blocking):**
+  - **M3-10 ticket creation** — sponsor authorized `File M3-10 ticket now (P3)` at session resume; heuristic chosen = `group by roster persona-name, show 'Felix ×3' with expandable list`. Orchestrator's ClickUp MCP did not connect this session, so NEW-TICKET-REQUEST block added to `team/log/clickup-pending.md` for next session with live MCP. Sponsor can also file manually using the body block already drafted there.
+  - **M3-04 NITs (`86c9ybtut`) split-preference** noted for Wave 1 dispatch: Felix host (NIT #1 model:? fallback + NIT #2 error format), Maya webview (NIT #3 finished timestamp). Sponsor's explicit "Split per surface" answer overrides "bundle" recommendation.
+  - **M3 close + retro timing:** deferred until all Wave 1 work (NITs + chores M3-07/08/09) ships, per sponsor's explicit answer.
+- **Sponsor-held tickets (no action):** `86c9y7y9z` (M2-04 NITs) — standing "leave at to do" call, do NOT auto-close.
+- **Auto-status:** AWAY re-engaged 2026-05-24T17:45Z, this-session cron `dfc3430f` (`7,22,37,52 * * * *`). State file `enabled=true, mode=away, interval=15m, last_tick=2026-05-24T17:45:00Z`.
+- **Working tree:** clean of code modifications. 4 untracked Maya scratch files at `team/maya-dev/pr-*.md` (sub-agent review-body drafts from prior PRs; NOT coord state — leave untracked or sponsor moves to `.scratch/` at later call).
+- **New documented failure mode this session:** parallel-orchestrator race condition (two Claude Code sessions on same project). Documented in `.claude/docs/orchestration-overview.md` § Common failure modes + full entry in `team/log/process-incidents.md`. Prevention: only ONE Claude Code session should orchestrate a given project at a time; kill the other's auto-status via `/auto-status off` first.
+- **CLAUDE.md global rule #8 added** (prior session, sponsor-authorized): tickets/bugs/postmortems must cite sources for concrete values; speculative claims labeled `Hypothesis:` / `Likely:` / `Predicted:`. Triggered by ticket `86c9ybrk0` fabrication incident (now corrected via audit-trail comment).
 
 **ClickUp board state:**
-- **Complete (Wave 0 + Wave 1 + 3 NITs follow-ups, 9 tickets):** `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01), `86c9y7uhz` (M2-04), `86c9y7uka` (M2-05), `86c9y7u44` (M2-03 NITs), `86c9y7yzf` (M2-05 NITs), `86c9y7u4p` (M2-01 NITs).
-- **In progress (Wave 2, Felix):**
-  - **`86c9y9q6h`** — M2-06 (host↔webview integration) + absorbed M2-04 NITs. M2 shippable gate.
-- **To do — left open by sponsor decision (scope absorbed into `86c9y9q6h`):**
-  - `86c9y7y9z` — M2-04 NITs follow-up. Sponsor chose 2026-05-24 to leave at `to do` rather than close-as-duplicate; comment on ticket records the absorption. No PR will open against it.
-- **Not yet created:**
-  - M2-08 (Sage Layer-3 tests) — Wave 3, post-M2-06.
+- **Complete (M3 Wave 0):** `86c9yaq1e` (M3-01), `86c9yb473` (M3-02), `86c9yb59k` (M3-03), `86c9ybdxe` (M3-04), `86c9yb0yg` (M3-01-NITs).
+- **In progress:** `86c9ybrk0` (M3-03 DEAD-bleed fix, Felix) — orch-side flip queued via clickup-pending.md (MCP unavailable).
+- **To do (open follow-ups):** `86c9ybtut` (M3-04 NITs split, P3); `86c9y7y9z` (M2-04 NITs, sponsor-held).
+- **To do (pending creation):** M3-10 persona-tile-collapse (P3, sponsor-authorized, NEW-TICKET-REQUEST queued).
+
+**Wave 1 remaining (per Nora's backlog):**
+- **`86c9ybrk0`** — DEAD-bleed fix (Felix, in-flight this tick).
+- **`86c9ybtut`** — M3-04 NITs (Felix host + Maya webview split, 2 PRs).
+- **M3-07** — `docs(testing): install-path validation discipline at first-shipping PR` (Nora orch-direct, S, P1).
+- **M3-08** — `docs(orch): main-thread merge-narration tightening` (Nora orch-direct, S, P2).
+- **M3-09** — Sage Layer-3 expansion absorbing Sage's PR-#39 coverage-gap NITs.
+- **M3-10** — persona-tile-collapse (post ticket-creation, Felix reducer + Maya webview).
 
 **This-session structural delta (newest at top):**
 
 | Commit | Subject |
 |---|---|
-| `8494e58` | feat(scaffold): VS Code extension manifest + build pipeline (M2-01) (#22) |
-| `5c650b4` | test-plan(m2): M2 acceptance test plan + webview-smoke gate spec (M2-07) (#21) |
-| `ddf302d` | chore(orch): ENTRY 016 + PR #20 auto-merge decision log |
-| `e989eed` | spec(ux): M2 dashboard tile spec — webview layout + interaction (#20) |
-| `7af93bd` | chore(orch): ENTRY 015 — 86c9y7jn9 -> complete (PR #19 merged) |
-| `ccc05c4` | chore(docs): enumerate APPROVE_WITH_NITS verdict in dispatch-template (M2-09) (#19) |
+| `f6af8c5` | chore(orch): parallel-orch-race failure mode + M3-10 NEW-TICKET-REQUEST + 86c9ybrk0 dispatch flip (this tick) |
+| `9c0572c` | chore(m3-01-nits): clamp-vs-description alignment + PR-claim discipline note (#40) |
+| `b22de25` | feat(webview): roster-error chip + filtered-empty state + open-roster button (M3-04) (#39) |
+| `8887c4b` | chore(orch): clickup-pending.md cleanup — substitute M3-02/03 placeholders + remove fulfilled NEW-TICKET-REQUEST blocks |
+| `1bc422c` | feat(host): window-scoped session filtering (M3-03) (#38) |
+| `d0225aa` | feat(roster): claudeteam.openRoster command + auto-create starter YAML (#37) |
+| `d702826` | chore(orch): STATE — M3-01 NITs ticket 86c9yb0yg created, queue cleared |
 
-**Wave 2 ready to dispatch — sponsor decision queued:**
+**M2 fully closed (unchanged):** all 12 PRs merged + P0 CJS shim + retro PR #31. Production .vsix activates on Node 22+.
 
-**M2-06 is the M2 shippable gate.** Extension installs from `.vsix`, Activity Bar tiles render live data, drill-in works. Once M2-06 merges, M2 is shippable.
-
-**Two ordering options (sponsor: pick one):**
-
-- **Path X — NITs-first.** Dispatch Felix on the M2-04 NITs follow-up (`86c9y7y9z`) *first*, then M2-06 (Felix again). Rationale: NIT #2 (`SerializedStateFullMessage` typed union) eliminates the `as unknown as DashboardState` cast that M2-06 will rely on for the live-data wire. Cleaner contract going into M2-06. ~2 sequential PRs from Felix.
-- **Path Y — M2-06-first.** Create M2-06 ticket now, dispatch Felix on M2-06 directly. Roll the M2-04 NIT #2 fix INTO the M2-06 PR (since M2-06 is the consumer that benefits). Roll the M2-04 NIT #1 (subscription leak) in too. Closes `86c9y7y9z` as duplicate-of-M2-06. ~1 PR from Felix, slightly larger.
-
-Orchestrator recommendation: **Path Y** — M2-06 is going to touch `messageBus.ts` and `main.ts` anyway (the two files with NITs), so combining is more economical than two PRs. Also lets the M2-05 NITs (`86c9y7yzf`) sit cleanly as Maya's separate small-PR follow-up.
-
-Wave 3 (after Wave 2 lands):
-- **M2-08 (Sage — `@vscode/test-electron` Layer-3 tests)**. Ticket not yet created.
-
-Wave 3 (after Wave 2 lands):
-- **M2-08 (Sage — `@vscode/test-electron` Layer-3 tests)**.
-
-After Wave 3 → M2 close + retro at `.claude/retros/retro-YYYY-MM-DD-m2-close.md` using `.claude/retros/RETRO-TEMPLATE.md`.
-
-**Open dispatch-time questions for Wave 1+ (per Iris's M2-03 PR report):**
-- `DashboardState` vs `AgentTree` type aliasing — surface to Felix for M2-04
-- `StateDelta` shape not yet defined — Felix M2-04 or Maya M2-05 to define
-- Roster file path needed for `ui:open-roster` handler — Felix M2-06
-
-**Process insight captured this session (maintain-docs):** ENTRY-number collision in `clickup-pending.md` — parallel sub-agent dispatches each picked the next sequential ENTRY number from current main, so two dispatches in the same round → same N → merge conflict on the second PR. Hit 2× this session (PR #19/PR #22 both took ENTRY 014; PR #20/PR #21 both took ENTRY 016). Recovery: orchestrator rebases the colliding PR onto current main + drops the colliding commit (or keeps main's clickup-pending content via `git checkout --ours` when commit also has other content), then adds canonical entry post-merge. Captured in `.claude/docs/orchestration-overview.md` § Common failure modes.
-
-**M1 status: SHIPPED earlier this session.** 11/11 tickets complete + M1-09-followup (`86c9y6e17`) merged at `c31ae02`. Retro at [.claude/retros/retro-2026-05-23-m1-close.md](.claude/retros/retro-2026-05-23-m1-close.md).
-
-**Already done from M2 backlog:**
-- M2-02 (Bram — VS Code Extension API prior-art): merged at `b0e858b`. Key recs: `WebviewViewProvider` Activity Bar surface, `vscode.workspace.createFileSystemWatcher` with absolute-path `RelativePattern` (1.64+), vanilla TypeScript, lazy activation via `onView:claudeteam.dashboard`. Pixel Agents lesson: NO CSP — ClaudeTeam must NOT replicate.
-
-**This session's structural delta vs save-session base (`dbab662`):**
-
-| Commit | Subject |
-|---|---|
-| `57c78a7` | docs(orch): capture peer-reviewer-worktree-blocks-delete-branch failure mode (pre-bundle) |
-| `007ce9a` | chore(orch): adopt bloat-prevention scaffolding from sibling projects (STATE/DECISIONS/process-incidents/retros) |
-| `2ef2025` | feat(cli): reducer + agent-tree CLI driver (M1-09) |
-| `29e98f2` | test(m1): integration tests against fixture filesystem (M1-10) |
-| `f71fa09` | docs(orch): M1 close — retro + decisions log + STATE update |
-| `cf6e8f9` | docs(planning): author M2 backlog — extension scaffold + webview milestone |
-| `d68f3b2` | docs(orch): queue M2/M3 scope-overlap question for sponsor |
-| `b0e858b` | research(vscode-api): M2 VS Code Extension API prior-art + webview tech pick (M2-02) |
-| `c31ae02` | fix(reducer+cli): M1-09-followup NIT cleanup — AC1-7 (`86c9y6e17`) |
-| `697987e` | docs(orch): log PR #18 auto-merge decision (M1-09-followup) |
+**M1 status: SHIPPED 2026-05-23.** 11/11 tickets + M1-09-followup. Retro at [.claude/retros/retro-2026-05-23-m1-close.md](.claude/retros/retro-2026-05-23-m1-close.md).
 
 ---
 
