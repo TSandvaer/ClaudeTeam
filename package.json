@@ -76,7 +76,7 @@
           "type": "number",
           "default": 0,
           "minimum": 0,
-          "description": "Fallback polling cadence (in milliseconds) for the roster YAML watcher. 0 = OFF (rely on VS Code's FileSystemWatcher). Set to a positive value (e.g. 5000) only if the FileSystemWatcher proves unreliable on your platform (some WSL paths, network drives)."
+          "description": "Fallback polling cadence (in milliseconds) for the roster YAML watcher. 0 = OFF (rely on VS Code's FileSystemWatcher). Set to a positive value (e.g. 5000) only if the FileSystemWatcher proves unreliable on your platform (some WSL paths, network drives). Values below 250 are clamped to the 250ms debounce floor — anything tighter would fire inside the same debounce reset cycle and waste CPU."
         },
         "claudeteam.showBackgroundCount": {
           "type": "boolean",
