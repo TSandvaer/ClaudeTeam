@@ -24,6 +24,20 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 <!-- New entries are appended below this line. -->
 
+## 2026-05-24 2335 UTC — Auto-merge PR #46 (Maya 86c9ybtut webview NIT #3) + file NIT follow-up ticket 86c9ydz4k
+
+**Decided:** Admin-merge PR #46 `chore(webview): finished tiles render Xs/Xm/Xh freshness suffix (86c9ybtut NIT #3)` via `gh pr merge 46 --admin --squash --delete-branch`. Merged at `1b28152`. Filed 1 NIT-class follow-up ticket `86c9ydz4k` (formatFreshness rollover at 59_999ms returns "60s" instead of "59s"; cosmetic, ~2s poll re-renders away).
+
+**Foundation:** (a) User-global CLAUDE.md rule 6.6 #1 — promoted auto-decide class for routine PR-merge with CI green + peer-reviewer APPROVE. Felix posted APPROVE_WITH_NITS at https://github.com/TSandvaer/ClaudeTeam/pull/46#issuecomment-4530028284; per project `.claude/agents/dispatch-template.md` § Cross-review verdict format, APPROVE_WITH_NITS = "ships as-is; NITs filed as follow-up ticket before next milestone close, not blocking this merge." CI green: `gh pr view 46` shows both `typecheck + lint + unit` runs COMPLETED + SUCCESS. (b) Rule 6.6 #5 — promoted auto-decide class for "NITs-ticket-creation from APPROVE_WITH_NITS review comments when scope is mechanical." Felix's NIT is a numbered list with file:line ref (`src/webview/freshness.ts:50`), scope mechanically derivable from comment, no scope-expansion. Ticket `86c9ydz4k` filed at P3 / XS / Maya-owned / Felix-reviewer.
+
+**Alternative:** Hold PR #46 until PR #45 also reviewed, merge both in sequence to reduce log-only-conflict risk on `clickup-pending.md`. Rejected: per rule 6.6 #1, auto-merge on peer APPROVE is the documented class; the conflict pattern is well-documented + recoverable (rule 6.6 #5 `--ours` log-only recovery for the second PR). The 1 extra rebase cycle is cheap.
+
+**Reversibility:** `git revert 1b28152` + admin-merge revert PR. ≤1 PR + 5-10 min. Webview-only change, isolated surface. NIT ticket `86c9ydz4k` can be closed-as-not-doing if revert.
+
+**Status:** pending review.
+
+**Pointers:** PR #46 (`1b28152`); Felix APPROVE_WITH_NITS comment URL above; NIT ticket `86c9ydz4k` (P3); ticket `86c9ybtut` stays at `in progress` until PR #45 (Felix's host NIT #1+#2) also merges, then orch flips to `complete`.
+
 ## 2026-05-24 2023 UTC — Auto-merge PR #44 (M3-09 Sage Layer-3 expansion)
 
 **Decided:** Admin-merge PR #44 `test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip (M3-09)` via `gh pr merge 44 --admin --squash --delete-branch`. Merged at `e9d2457`. No rebase needed (mergeable=MERGEABLE on first probe after force-refresh).
