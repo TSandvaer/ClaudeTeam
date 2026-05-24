@@ -55,6 +55,10 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
       teamOrder: session.teamOrder,
       background: session.background,
     })),
+    // M3-03: pass through the window-filter flag. Boolean is JSON-safe — no
+    // flatten step needed. Default to false when the in-memory state omits it
+    // so the webview always sees a real boolean on the wire.
+    filterApplied: state.filterApplied === true,
   };
 }
 
