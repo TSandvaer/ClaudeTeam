@@ -44,6 +44,10 @@ import {
 } from "./view/provider.js";
 import { startWatcher, type WatcherHandle } from "./watcher/watcherLoop.js";
 import { startRosterWatcher } from "./roster/rosterWatcher.js";
+import {
+  openRoster,
+  registerOpenRosterCommand,
+} from "./commands/openRoster.js";
 import { postState } from "./messageBus.js";
 import { cwdToSlug } from "../shared/slug.js";
 
@@ -66,8 +70,13 @@ export function activate(context: vscode.ExtensionContext): void {
    */
   let rosterWatcherDisposable: vscode.Disposable | null = null;
 
-  /** Track which roster path the most recent tick used (for `ui:open-roster`). */
-  let resolvedRosterPath: string | null = null;
+  // Note (M3-02): the `claudeteam.openRoster` command and the
+  // `ui:open-roster` webview message both delegate to
+  // {@link openRoster} from `./commands/openRoster.js`, which resolves the
+  // GLOBAL roster path via `claudeteam.rosterPath` config (or the
+  // documented default `~/.claudeteam/teams.yaml`). No `resolvedRosterPath`
+  // closure is needed on this side — `openRoster()` reads config fresh
+  // every invocation, so the most recent edited value always wins.
 
   // Cleanup wrapper registered ONCE on activation. It tracks the *current*
   // watcher reference at the time `deactivate()` runs — not a snapshot from
@@ -108,14 +117,6 @@ export function activate(context: vscode.ExtensionContext): void {
     // folder is open. Falls through to undefined (loader treats absent paths
     // as "no project roster").
     const projectRosterPath = resolveProjectRosterPath();
-
-    // Track which path the host considers "the resolved roster". Project
-    // overrides global per .claude/docs/roster-matching.md "Config locations";
-    // we use the project path when present, falling back to global.
-    resolvedRosterPath =
-      projectRosterPath && existsSync(projectRosterPath)
-        ? projectRosterPath
-        : globalRosterPath;
 
     watcherHandle = startWatcher({
       claudeHome,
@@ -168,7 +169,12 @@ export function activate(context: vscode.ExtensionContext): void {
         );
       },
       onOpenRoster: () => {
-        handleOpenRoster(resolvedRosterPath);
+        // M3-02 AC6: the webview "Edit Roster" button surfaces the same
+        // openRoster flow as the command palette — auto-creates the file
+        // if missing. Eliminates the NIT #3 (M3-01 PR #35 comment 4528643161)
+        // existsSync→createFileSystemWatcher race by guaranteeing the
+        // directory + file exist after this handler returns.
+        void openRoster();
       },
       onRefresh: () => {
         watcherHandle?.triggerTick();
@@ -186,13 +192,15 @@ export function activate(context: vscode.ExtensionContext): void {
   // Register commands declared in package.json contributes.commands.
   // These are thin shims that delegate to the webview message handlers so
   // the command palette and webview UI funnel through the same code paths.
+  //
+  // `claudeteam.openRoster` is registered separately via
+  // {@link registerOpenRosterCommand} — it owns its own auto-create-on-
+  // missing logic and does not need a closure over `watcherHandle`.
+  registerOpenRosterCommand(context);
+
   context.subscriptions.push(
     vscode.commands.registerCommand("claudeteam.refresh", () => {
       watcherHandle?.triggerTick();
-    }),
-
-    vscode.commands.registerCommand("claudeteam.openRoster", () => {
-      handleOpenRoster(resolvedRosterPath);
     }),
 
     vscode.commands.registerCommand(
@@ -281,27 +289,9 @@ export function handleOpenTranscript(
   void vscode.window.showTextDocument(vscode.Uri.file(jsonlPath));
 }
 
-/**
- * Open the resolved roster YAML file in the editor (AC4).
- *
- * Defensive behavior:
- *   - No resolved path yet (view never resolved) → error message.
- *   - File doesn't exist on disk → error message.
- *
- * Exported for unit test coverage.
- */
-export function handleOpenRoster(rosterPath: string | null): void {
-  if (!rosterPath) {
-    void vscode.window.showErrorMessage(
-      "ClaudeTeam: roster path not yet resolved — open the dashboard first.",
-    );
-    return;
-  }
-  if (!existsSync(rosterPath)) {
-    void vscode.window.showErrorMessage(
-      `ClaudeTeam: roster file not found: ${rosterPath}`,
-    );
-    return;
-  }
-  void vscode.window.showTextDocument(vscode.Uri.file(rosterPath));
-}
+// `handleOpenRoster` (M2-06) was removed in M3-02 in favor of the
+// auto-creating `openRoster` flow in `./commands/openRoster.ts`. The
+// auto-create behavior absorbs NIT #3 from M3-01's peer-review (the
+// existsSync→createFileSystemWatcher race in registerDirWatcher). Both
+// the command palette entry and the `ui:open-roster` webview message now
+// route through the new flow.
