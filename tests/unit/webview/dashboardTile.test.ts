@@ -274,6 +274,50 @@ describe("renderEmptyState", () => {
     expect(el.textContent).toBe("No live Claude Code sessions.");
     expect(el.className).toBe("empty-state");
   });
+
+  // M3-09 NIT — gap (1) from Sage's PR-#39 review: filtered-empty variant
+  // had no direct coverage. The generic variant is tested above; this is
+  // the M3-04 AC4 split branch.
+  it("filtered=true → renders the filtered-empty variant (M3-04 AC4)", () => {
+    const el = renderEmptyState({ filtered: true });
+    // CSS scoping marker so the renderer can style the filtered variant
+    // distinctly (`.empty-state--filtered` modifier per BEM-ish convention).
+    expect(el.classList.contains("empty-state")).toBe(true);
+    expect(el.classList.contains("empty-state--filtered")).toBe(true);
+
+    // Headline text — sponsor's workspace-specific phrasing.
+    const headline = el.querySelector(".empty-state-headline");
+    expect(headline?.textContent).toBe(
+      "No Claude Code sessions for this workspace.",
+    );
+
+    // Guidance line mentions BOTH the `claude` command and the
+    // showAllSessionsGlobally setting — both must appear so the user can
+    // either run a session here OR flip the global switch.
+    const guidance = el.querySelector(".empty-state-guidance");
+    expect(guidance?.textContent).toContain("Run ");
+    expect(guidance?.textContent).toContain(" in this folder, or enable ");
+    expect(guidance?.textContent).toContain(
+      "to see sessions from other workspaces.",
+    );
+
+    // Both code spans should be rendered with the monospace class so the
+    // user sees the literal command + setting name visually distinct from
+    // surrounding prose.
+    const codeSpans = el.querySelectorAll(".empty-state-code");
+    expect(codeSpans.length).toBe(2);
+    expect(codeSpans[0]!.textContent).toBe("claude");
+    expect(codeSpans[1]!.textContent).toBe(
+      "claudeteam.showAllSessionsGlobally",
+    );
+  });
+
+  it("filtered=false → generic variant (back-compat: explicit false same as omitted)", () => {
+    const el = renderEmptyState({ filtered: false });
+    expect(el.textContent).toBe("No live Claude Code sessions.");
+    expect(el.className).toBe("empty-state");
+    expect(el.classList.contains("empty-state--filtered")).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -410,5 +454,128 @@ describe("renderFull", () => {
     expect(mount.firstElementChild?.classList.contains("error-chip")).toBe(
       true,
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // M3-09 NIT — gap (3) from Sage's PR-#39 review: renderFull's empty-with-
+  // filter branch + chip-above-empty layering invariant had no direct
+  // coverage. These tests pin the M3-04 AC4 + M3-04 AC1 layering contract.
+  // -------------------------------------------------------------------------
+
+  it("empty sessions + filterApplied=true → renders the FILTERED empty variant", () => {
+    // Build a synthetic state matching the M3-03 filtered-to-empty case
+    // (window-scoped filter ate every session for this workspace). The
+    // renderer must pick the filtered variant, not the generic one.
+    renderFull(
+      { mount, postMessage: vi.fn() },
+      { sessions: [], filterApplied: true },
+    );
+    const emptyState = mount.querySelector(".empty-state");
+    expect(emptyState).not.toBeNull();
+    expect(emptyState!.classList.contains("empty-state--filtered")).toBe(
+      true,
+    );
+    // Sanity: the headline text proves the M3-04 AC4 branch fired (the
+    // generic variant has neither a headline nor a guidance line).
+    expect(
+      emptyState!.querySelector(".empty-state-headline")?.textContent,
+    ).toBe("No Claude Code sessions for this workspace.");
+  });
+
+  it("empty sessions + filterApplied=false → renders the GENERIC empty variant", () => {
+    // Negative-path pair for the above — explicit false should NOT pick
+    // the filtered variant. A regression that treated the `state.filterApplied
+    // === true` predicate as truthy would still pass the filtered test but
+    // would fail this one (because filterApplied=false would be coerced
+    // to true under loose truthiness).
+    renderFull(
+      { mount, postMessage: vi.fn() },
+      { sessions: [], filterApplied: false },
+    );
+    const emptyState = mount.querySelector(".empty-state");
+    expect(emptyState).not.toBeNull();
+    expect(emptyState!.classList.contains("empty-state--filtered")).toBe(
+      false,
+    );
+    expect(emptyState!.textContent).toBe("No live Claude Code sessions.");
+  });
+
+  it("rosterErrors non-empty + empty sessions + filterApplied → chip renders ABOVE empty-state", () => {
+    // M3-04 layering invariant (render.ts header comment): the roster-error
+    // chip is rendered FIRST (above any other content), then the empty
+    // state. This catches the regression where a future refactor renders
+    // the empty state first and pushes the chip below the fold.
+    //
+    // The bug class is "chip becomes invisible when the dashboard is
+    // empty" — a real risk because the empty-state container often gets
+    // styled to fill the viewport, which could hide a chip rendered
+    // beneath it.
+    renderFull(
+      { mount, postMessage: vi.fn() },
+      {
+        sessions: [],
+        filterApplied: true,
+        rosterErrors: ["global roster YAML parse error: bad indent at line 3"],
+      },
+    );
+
+    // The chip must be in the DOM at all.
+    const chip = mount.querySelector(".roster-error-chip");
+    expect(chip).not.toBeNull();
+
+    // The chip must precede the empty-state in document order (chip is
+    // mount's FIRST child, empty-state is SECOND or later).
+    const emptyState = mount.querySelector(".empty-state");
+    expect(emptyState).not.toBeNull();
+
+    // Use the DOM's compareDocumentPosition to assert chip is BEFORE
+    // emptyState. Node.DOCUMENT_POSITION_FOLLOWING (4) on chip's compare
+    // result means emptyState follows chip in the tree — exactly what we
+    // want.
+    const positionMask = chip!.compareDocumentPosition(emptyState!);
+    expect(positionMask & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
+
+    // Also assert the chip is the FIRST mount child specifically — render.ts
+    // documents this layering invariant and downstream CSS may depend on
+    // it (e.g. top-margin compensation).
+    expect(mount.firstElementChild).toBe(chip);
+
+    // And the empty-state should still be the FILTERED variant — the chip
+    // doesn't change the filter context.
+    expect(emptyState!.classList.contains("empty-state--filtered")).toBe(
+      true,
+    );
+  });
+
+  it("rosterErrors non-empty + populated sessions → chip renders ABOVE session blocks", () => {
+    // Parallel invariant for the non-empty case — chip stays at the top
+    // regardless of session count. Defends against the bug class where
+    // the chip is inserted AFTER the session blocks in the populated
+    // path (the empty-path render and the populated-path render are
+    // separate code branches in render.ts).
+    renderFull(
+      { mount, postMessage: vi.fn() },
+      {
+        ...FIXTURE_STATE,
+        rosterErrors: ["YAML parse error: unexpected key 'teemz' at line 1"],
+      },
+    );
+
+    const chip = mount.querySelector(".roster-error-chip");
+    expect(chip).not.toBeNull();
+    expect(mount.firstElementChild).toBe(chip);
+
+    // Sanity: session blocks still rendered alongside the chip.
+    const sessionBlocks = mount.querySelectorAll(".session-block");
+    expect(sessionBlocks.length).toBe(FIXTURE_STATE.sessions.length);
+
+    // And every session block must follow the chip in document order.
+    // `Array.from` because the tsconfig's ES2022 lib target gives NodeListOf
+    // a `forEach` but not a `[Symbol.iterator]` reachable from `for…of`
+    // under strict mode without a downlevel-iteration flag.
+    Array.from(sessionBlocks).forEach((block) => {
+      const mask = chip!.compareDocumentPosition(block);
+      expect(mask & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
+    });
   });
 });

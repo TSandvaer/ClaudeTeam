@@ -10,6 +10,18 @@
     "isolatedModules": false,
     "types": ["node", "vscode", "mocha"]
   },
-  "include": ["tests/vscode-integration/**/*.ts"],
-  "exclude": ["node_modules", "dist", "out"]
+  // M3-09: include src/ so Layer-3 tests can import host-side modules
+  // (runTick, loadRoster, etc.) directly under VS Code's Electron
+  // runtime. The production extension bundle is still built separately
+  // by esbuild (`dist/extension/main.cjs`); these compile outputs land
+  // under `out/vscode-integration/src/...` and exist solely for the
+  // Layer-3 Mocha suite's `require()` chain. The `compile:vscode-
+  // integration` npm script writes `out/vscode-integration/package.json`
+  // with `{type: "commonjs"}`, so every compiled .js is treated as CJS
+  // even though the repo root package.json declares `"type": "module"`.
+  // `src/cli/**` + `src/webview/**` are excluded — neither is needed by
+  // Layer-3 tests and src/webview imports DOM globals that don't resolve
+  // under node types.
+  "include": ["tests/vscode-integration/**/*.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "out", "src/cli/**", "src/webview/**"]
 }
