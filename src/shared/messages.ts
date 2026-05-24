@@ -15,21 +15,55 @@
  * Source: .claude/docs/vscode-extension-conventions.md "Message protocol"
  */
 
-import type { DashboardState, StateDelta, Team } from "./types.js";
+import type {
+  AgentTile,
+  SessionTree,
+  StateDelta,
+  Team,
+} from "./types.js";
 
 // =============================================================================
 // Host → Webview
 // =============================================================================
 
 /**
+ * JSON-safe variant of `SessionTree` — `rosterTiles` is flattened from
+ * `Map<string, AgentTile[]>` to a plain object keyed by teamId. Maps do not
+ * round-trip through `JSON.stringify` (they serialize to `{}`), and VS Code's
+ * `webview.postMessage` uses JSON internally. See
+ * `.claude/docs/vscode-extension-conventions.md` "JSON-serialization constraint".
+ */
+export interface SerializedSessionTree
+  extends Omit<SessionTree, "rosterTiles"> {
+  rosterTiles: Record<string, AgentTile[]>;
+}
+
+/**
+ * JSON-safe variant of `DashboardState` — `sessions[].rosterTiles` flattened
+ * from Maps to plain objects. Mirror image of the on-wire shape produced by
+ * `serializeState` in `src/extension/messageBus.ts`.
+ *
+ * Why a distinct type (M2-06 absorbed-NIT #2): previously `postState` cast its
+ * payload via `as unknown as DashboardState` because the wire shape differed
+ * from the in-memory shape. Introducing `SerializedDashboardState` removes the
+ * cast — the message type now matches the actual JSON payload.
+ */
+export interface SerializedDashboardState {
+  sessions: SerializedSessionTree[];
+}
+
+/**
  * Full state snapshot sent on every poll tick (and on initial view load).
  *
- * `DashboardState` is an alias of the reducer's `AgentTree` — the names are
- * interchangeable; see `types.ts` for the rationale.
+ * **Wire shape:** `SerializedDashboardState` (Maps flattened to plain objects).
+ * The webview reads `payload.sessions[].rosterTiles` as `Record<string, AgentTile[]>`
+ * via `Object.entries`, NOT `Map.entries`. The in-memory `DashboardState` /
+ * `AgentTree` shape with `Map` lives only inside the extension host; the boundary
+ * conversion happens in `serializeState`.
  */
 export type StateFullMessage = {
   type: "state:full";
-  payload: DashboardState;
+  payload: SerializedDashboardState;
 };
 
 /**

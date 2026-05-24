@@ -104,7 +104,27 @@ export interface WatcherOptions {
 export const MIN_POLL_MS = 250;
 
 /**
- * Start the polling watcher loop. Returns a disposable that stops it.
+ * Extended disposable returned by `startWatcher` (M2-06 AC5).
+ *
+ * In addition to standard `dispose()`, exposes:
+ *   - `triggerTick()` — fire an immediate out-of-band tick. Called by the
+ *     host's `ui:refresh` handler so the user can force a re-poll without
+ *     waiting for the next interval.
+ *   - `getLastState()` — the most recently emitted `DashboardState`, or
+ *     `null` before the first tick completes. Host uses this to derive
+ *     paths from `sessionId` for `ui:open-transcript` without re-reading
+ *     disk.
+ */
+export interface WatcherHandle extends vscode.Disposable {
+  /** Fire an immediate tick (in addition to the regular poll cadence). */
+  triggerTick(): void;
+  /** Most recently emitted state; null before the first emission. */
+  getLastState(): DashboardState | null;
+}
+
+/**
+ * Start the polling watcher loop. Returns a {@link WatcherHandle} that
+ * stops the loop and exposes the extras documented on the interface.
  *
  * Behavior:
  *   - Fires one tick immediately (so the webview gets initial state on
@@ -114,15 +134,19 @@ export const MIN_POLL_MS = 250;
  *     filesystem event (create/change/delete in the sessions/ directory).
  *   - Skips re-emitting state when the new tick produces an identical
  *     shape to the previous tick.
+ *   - `triggerTick()` invocations bypass the regular interval but still
+ *     respect the hash-skip (no-op emission on unchanged state).
  *
  * Idempotent: calling `dispose()` twice is safe.
  */
-export function startWatcher(opts: WatcherOptions): vscode.Disposable {
+export function startWatcher(opts: WatcherOptions): WatcherHandle {
   const pollMs = Math.max(MIN_POLL_MS, opts.pollIntervalMs);
   const logger = opts.logger ?? { warn: () => {} };
 
-  // Prior-state cache — used for the hash-skip in runTick.
+  // Prior-state cache — used for the hash-skip in runTick AND surfaced via
+  // getLastState() for the host's `ui:open-transcript` slug derivation.
   let priorStateHash: string | null = null;
+  let lastState: DashboardState | null = null;
   let stopped = false;
 
   /**
@@ -138,6 +162,9 @@ export function startWatcher(opts: WatcherOptions): vscode.Disposable {
         projectRosterPath: opts.projectRosterPath,
         logger,
       });
+      // Always update lastState — even on hash-skip — so host lookups against
+      // the most recent reduction see fresh `cwd` values for `ui:open-transcript`.
+      lastState = state;
       const hash = hashState(state);
       if (hash === priorStateHash) {
         // Nothing changed — skip the webview update.
@@ -175,6 +202,10 @@ export function startWatcher(opts: WatcherOptions): vscode.Disposable {
   }
 
   return {
+    triggerTick: () => {
+      void tick();
+    },
+    getLastState: () => lastState,
     dispose: () => {
       if (stopped) return;
       stopped = true;

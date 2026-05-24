@@ -1,30 +1,50 @@
 /**
- * ClaudeTeam extension entry point.
+ * ClaudeTeam extension entry point (M2-06 — live host ↔ webview bridge).
  *
  * Exports `activate` and `deactivate` per the VS Code extension lifecycle.
- * `activate` is called lazily on `onView:claudeteam.dashboard` (per package.json
- * activationEvents). It:
+ * `activate` is called lazily on `onView:claudeteam.dashboard` (per
+ * package.json activationEvents). It:
  *   1. Registers the WebviewViewProvider.
- *   2. Wires the file-watcher loop to start when the view resolves.
- *   3. Registers the placeholder command handlers (live wiring in M2-06).
+ *   2. On view-resolved: starts the file-watcher loop, wires its emissions
+ *      to `postState(webview, state)`, and installs the webview → host
+ *      message handlers (`ui:open-transcript`, `ui:open-roster`,
+ *      `ui:refresh`).
+ *   3. Registers the command palette entries (Refresh, Open Roster, Open
+ *      Transcript-of-the-selected-tile) — thin shims around the webview
+ *      handlers.
  *
  * The file-watcher loop is gated on view resolution — it does NOT start at
  * activation time, only when the user opens the Activity Bar tile. This
  * preserves the <100ms cold-activation target per
  * `.claude/docs/vscode-extension-conventions.md` § "Activation cost".
  *
- * Source: .claude/docs/vscode-extension-conventions.md "Activation cost"
- *         team/nora-pl/milestone-2-backlog.md § M2-04 AC6
+ * **Subscription-leak fix (M2-06 absorbed-NIT #1).** Prior to this PR,
+ * `onResolved` pushed a fresh `dispose` wrapper onto `context.subscriptions`
+ * on every invocation — VS Code calls `resolveWebviewView` on every webview
+ * reload (e.g. `Developer: Reload Window`), and the subscription stack would
+ * grow unbounded across reload cycles. The fix: hold the prior disposable
+ * out-of-band and call its `dispose()` BEFORE rebinding, and only register
+ * the cleanup wrapper on `context.subscriptions` ONCE during `activate`.
+ *
+ * Source: .claude/docs/vscode-extension-conventions.md
+ *         .claude/docs/data-sources.md §2 (cwdToSlug for transcript path)
+ *         team/nora-pl/milestone-2-backlog.md §M2-06 AC2/AC3/AC4/AC5/AC6/AC7(e)
  */
 
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import * as vscode from "vscode";
 
-import { ClaudeTeamViewProvider, VIEW_ID } from "./view/provider.js";
-import { startWatcher } from "./watcher/watcherLoop.js";
+import {
+  ClaudeTeamViewProvider,
+  VIEW_ID,
+  type WebviewMessageHandlers,
+} from "./view/provider.js";
+import { startWatcher, type WatcherHandle } from "./watcher/watcherLoop.js";
 import { postState } from "./messageBus.js";
+import { cwdToSlug } from "../shared/slug.js";
 
 /**
  * Called by VS Code when the extension activates (lazy — fires on first
@@ -34,14 +54,30 @@ import { postState } from "./messageBus.js";
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new ClaudeTeamViewProvider(context.extensionUri);
 
-  // Disposable wrapper for the active watcher (null until view resolves).
-  let watcherDisposable: vscode.Disposable | null = null;
+  // Held out-of-band across resolveWebviewView invocations. Disposed-and-
+  // replaced on every rebind so the subscription stack stays bounded
+  // (M2-06 absorbed-NIT #1 — see AC7(e) verification).
+  let watcherHandle: WatcherHandle | null = null;
 
-  // When the view resolves, start the file-watcher loop and pipe its
-  // emitted state into postState(). Replaces any prior watcher (e.g. on a
-  // webview reload — VS Code resolves the view again after `Reload Window`).
+  /** Track which roster path the most recent tick used (for `ui:open-roster`). */
+  let resolvedRosterPath: string | null = null;
+
+  // Cleanup wrapper registered ONCE on activation. It tracks the *current*
+  // watcher reference at the time `deactivate()` runs — not a snapshot from
+  // the closure captured at resolve-time. Avoiding the per-resolve push is
+  // the leak fix.
+  context.subscriptions.push({
+    dispose: () => {
+      watcherHandle?.dispose();
+      watcherHandle = null;
+    },
+  });
+
   provider.onResolved((webview) => {
-    watcherDisposable?.dispose();
+    // Dispose any prior watcher BEFORE rebinding — VS Code resolves the view
+    // again after `Reload Window`, and a stale watcher would keep ticking
+    // against a disposed webview (postMessage throws → caught in messageBus).
+    watcherHandle?.dispose();
 
     const config = vscode.workspace.getConfiguration("claudeteam");
     const pollIntervalMs = config.get<number>("pollIntervalMs") ?? 2000;
@@ -53,9 +89,23 @@ export function activate(context: vscode.ExtensionContext): void {
         ? rosterPathOverride
         : join(homedir(), ".claudeteam", "teams.yaml");
 
-    watcherDisposable = startWatcher({
+    // Project roster: <first workspace folder>/.claude/teams.yaml when a
+    // folder is open. Falls through to undefined (loader treats absent paths
+    // as "no project roster").
+    const projectRosterPath = resolveProjectRosterPath();
+
+    // Track which path the host considers "the resolved roster". Project
+    // overrides global per .claude/docs/roster-matching.md "Config locations";
+    // we use the project path when present, falling back to global.
+    resolvedRosterPath =
+      projectRosterPath && existsSync(projectRosterPath)
+        ? projectRosterPath
+        : globalRosterPath;
+
+    watcherHandle = startWatcher({
       claudeHome,
       globalRosterPath,
+      projectRosterPath,
       pollIntervalMs,
       onStateChange: (state) => {
         void postState(webview, state);
@@ -65,13 +115,27 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     });
 
-    // Register the disposable for cleanup on `deactivate()`.
-    context.subscriptions.push({
-      dispose: () => {
-        watcherDisposable?.dispose();
-        watcherDisposable = null;
+    // Wire webview → host message dispatch. Handlers close over the current
+    // watcherHandle / webview / resolvedRosterPath — replacing the handler
+    // set on every resolve is intentional (the prior set referenced the
+    // now-disposed watcher).
+    const handlers: WebviewMessageHandlers = {
+      onOpenTranscript: (msg) => {
+        handleOpenTranscript(
+          msg.payload.sessionId,
+          msg.payload.agentId,
+          claudeHome,
+          () => watcherHandle?.getLastState() ?? null,
+        );
       },
-    });
+      onOpenRoster: () => {
+        handleOpenRoster(resolvedRosterPath);
+      },
+      onRefresh: () => {
+        watcherHandle?.triggerTick();
+      },
+    };
+    provider.setMessageHandlers(handlers);
   });
 
   // Register the WebviewViewProvider for the Activity Bar tile.
@@ -81,28 +145,124 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Register commands declared in package.json contributes.commands.
-  // Implementations are stubs at M2-04 scope; live handlers land in M2-06.
+  // These are thin shims that delegate to the webview message handlers so
+  // the command palette and webview UI funnel through the same code paths.
   context.subscriptions.push(
     vscode.commands.registerCommand("claudeteam.refresh", () => {
-      // M2-06: trigger an immediate watcher tick via messageBus.
+      watcherHandle?.triggerTick();
     }),
 
     vscode.commands.registerCommand("claudeteam.openRoster", () => {
-      // M2-06: open the resolved teams.yaml path in the editor.
+      handleOpenRoster(resolvedRosterPath);
     }),
 
-    vscode.commands.registerCommand("claudeteam.openAgentTranscript", () => {
-      // M2-06: open a selected agent's JSONL in VS Code's native viewer.
-    }),
+    vscode.commands.registerCommand(
+      "claudeteam.openAgentTranscript",
+      // The command palette has no way to pre-select an agent; surface a
+      // hint to use the dashboard tiles. Tile clicks go through the
+      // `ui:open-transcript` webview message above.
+      () => {
+        void vscode.window.showInformationMessage(
+          "ClaudeTeam: click an agent tile in the dashboard to open its transcript.",
+        );
+      },
+    ),
   );
 }
 
 /**
- * Called by VS Code on extension deactivation (window close, disable, reload).
- * No-op — every disposable is registered on `context.subscriptions` and VS
- * Code disposes them automatically. Kept as an explicit export for the
- * VS Code lifecycle.
+ * Called by VS Code on extension deactivation (window close, disable,
+ * reload). Cleanup runs via `context.subscriptions` — the dispose wrapper
+ * registered in `activate` tears down the live watcher.
  */
 export function deactivate(): void {
   // No-op — cleanup via context.subscriptions on deactivate.
+}
+
+// =============================================================================
+// Webview-message handlers (exported for unit test coverage)
+// =============================================================================
+
+/**
+ * Resolve project roster path from the first workspace folder, if any.
+ * Returns undefined when no folder is open (extension running without a
+ * workspace — still valid; only global roster applies).
+ *
+ * Exported for tests.
+ */
+export function resolveProjectRosterPath(): string | undefined {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) return undefined;
+  return join(folder.uri.fsPath, ".claude", "teams.yaml");
+}
+
+/**
+ * Open the JSONL transcript for a given (sessionId, agentId). The path is
+ * derived from the last-known state's `cwd` via the canonical `cwdToSlug`
+ * rule (see `.claude/docs/data-sources.md` §2).
+ *
+ * Defensive behavior (per AC3):
+ *   - Unknown sessionId → error message; do NOT throw.
+ *   - File doesn't exist on disk → error message; do NOT throw.
+ *   - showTextDocument failure → error message swallowed; do NOT throw.
+ *
+ * Exported for unit test coverage.
+ */
+export function handleOpenTranscript(
+  sessionId: string,
+  agentId: string,
+  claudeHome: string,
+  getLastState: () => { sessions: { sessionId: string; cwd: string }[] } | null,
+): void {
+  const state = getLastState();
+  const session = state?.sessions.find((s) => s.sessionId === sessionId);
+  if (!session) {
+    void vscode.window.showErrorMessage(
+      `ClaudeTeam: session ${sessionId} not found in current state.`,
+    );
+    return;
+  }
+  const slug = cwdToSlug(session.cwd);
+  const jsonlPath = join(
+    claudeHome,
+    "projects",
+    slug,
+    sessionId,
+    "subagents",
+    `agent-${agentId}.jsonl`,
+  );
+  if (!existsSync(jsonlPath)) {
+    void vscode.window.showErrorMessage(
+      `ClaudeTeam: transcript not found: ${jsonlPath}`,
+    );
+    return;
+  }
+  // Open the file in the active editor group. The preview/preserve flags
+  // are defaults — the user gets a normal editor tab.
+  void vscode.window.showTextDocument(vscode.Uri.file(jsonlPath));
+}
+
+/**
+ * Open the resolved roster YAML file in the editor (AC4).
+ *
+ * Defensive behavior:
+ *   - No resolved path yet (view never resolved) → error message.
+ *   - File doesn't exist on disk → error message.
+ *
+ * Exported for unit test coverage.
+ */
+export function handleOpenRoster(rosterPath: string | null): void {
+  if (!rosterPath) {
+    void vscode.window.showErrorMessage(
+      "ClaudeTeam: roster path not yet resolved — open the dashboard first.",
+    );
+    return;
+  }
+  if (!existsSync(rosterPath)) {
+    void vscode.window.showErrorMessage(
+      `ClaudeTeam: roster file not found: ${rosterPath}`,
+    );
+    return;
+  }
+  void vscode.window.showTextDocument(vscode.Uri.file(rosterPath));
 }

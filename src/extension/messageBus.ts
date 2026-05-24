@@ -1,40 +1,41 @@
 /**
- * messageBus — host → webview message dispatch (stub).
+ * messageBus — host → webview message dispatch.
  *
- * Exports the typed `postState` function used to send `state:full` messages
- * to the webview. The actual call site is in M2-06 (extension host ↔ webview
- * message bridge); this stub ensures the module import chain typechecks.
+ * Exports `postState(webview, state)` which serializes the in-memory
+ * `DashboardState` (containing `Map<string, AgentTile[]>`) to the JSON-safe
+ * `SerializedDashboardState` shape (containing plain `Record<string, AgentTile[]>`)
+ * before calling `webview.postMessage`.
  *
- * Source: .claude/docs/vscode-extension-conventions.md "Message protocol"
+ * The wire shape lives in `src/shared/messages.ts` as `SerializedDashboardState`,
+ * which is what `StateFullMessage.payload` is typed as. This eliminates the
+ * `as unknown as DashboardState` cast that lived here in M2-04 (absorbed M2-04
+ * NIT #2 — see ClickUp 86c9y9q6h AC1).
+ *
+ * Source: .claude/docs/vscode-extension-conventions.md "Message protocol" +
+ *         "JSON-serialization constraint"
  *         team/nora-pl/milestone-2-backlog.md §M2-06 AC1
  */
 
 import type * as vscode from "vscode";
-import type { DashboardState, SessionTree, AgentTile } from "../shared/types.js";
-import type { HostMessage } from "../shared/messages.js";
+import type { DashboardState } from "../shared/types.js";
+import type {
+  HostMessage,
+  SerializedDashboardState,
+  SerializedSessionTree,
+} from "../shared/messages.js";
+
+// Re-export the shared types so existing consumers (Maya's webview helpers,
+// older tests) keep their import paths stable across the M2-04 → M2-06
+// transition. New code SHOULD import from `src/shared/messages.ts` directly.
+export type { SerializedDashboardState, SerializedSessionTree };
 
 /**
- * JSON-serializable shape of one session. `rosterTiles` is a plain object
- * keyed by teamId, NOT a Map (Map values do not survive JSON.stringify;
- * VS Code's postMessage serializes via JSON internally).
- */
-export interface SerializedSessionTree
-  extends Omit<SessionTree, "rosterTiles"> {
-  rosterTiles: Record<string, AgentTile[]>;
-}
-
-/** JSON-serializable shape of the full state. */
-export interface SerializedDashboardState {
-  sessions: SerializedSessionTree[];
-}
-
-/**
- * Convert a `DashboardState` to a JSON-serializable shape.
+ * Convert an in-memory `DashboardState` to its JSON-safe wire shape.
  *
  * The reducer's `SessionTree.rosterTiles` is a `Map<string, AgentTile[]>`.
- * Maps do NOT round-trip through JSON.stringify (`{}` is the result), so we
- * convert each session's map to a plain object keyed by teamId before
- * handing the payload to `webview.postMessage`.
+ * Maps do NOT round-trip through `JSON.stringify` — they serialize to `{}`.
+ * VS Code's `webview.postMessage` uses JSON internally, so we convert each
+ * session's Map to a plain object keyed by teamId before sending.
  *
  * Pure function; preserves all other fields verbatim.
  */
@@ -60,13 +61,12 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
 /**
  * Serialize and post a `state:full` message to the given webview.
  *
- * Maps are flattened to plain objects via `serializeState` before posting,
- * because `webview.postMessage` serializes the payload via JSON internally.
- * The webview receives a `DashboardState` shape but with `rosterTiles` as a
- * plain object — the renderer must use `Object.entries` instead of
- * `Map.entries` on the receiving side.
- *
  * Returns the postMessage promise so callers can await delivery in tests.
+ *
+ * Defensive: catches synchronous errors from `webview.postMessage` (which
+ * can throw when the view has been disposed mid-tick — e.g. the user
+ * collapses the Activity Bar panel while a tick is in flight). Returns
+ * `Thenable<false>` in that case so callers can short-circuit.
  */
 export function postState(
   webview: vscode.Webview,
@@ -74,11 +74,16 @@ export function postState(
 ): Thenable<boolean> {
   const msg: HostMessage = {
     type: "state:full",
-    // The runtime payload differs from DashboardState (rosterTiles is plain).
-    // We cast at this boundary because the host→webview contract is "JSON
-    // round-trips of DashboardState"; the on-wire shape is the serialized
-    // variant. Maya's M2-05 renders against the same SerializedDashboardState.
-    payload: serializeState(state) as unknown as DashboardState,
+    payload: serializeState(state),
   };
-  return webview.postMessage(msg);
+  try {
+    return webview.postMessage(msg);
+  } catch (err) {
+    // The webview has been disposed (or some other host-side failure). Log
+    // but do not propagate — the watcher loop must keep running.
+    console.warn(
+      `[claudeteam.messageBus] postState failed: ${(err as Error).message}`,
+    );
+    return Promise.resolve(false);
+  }
 }

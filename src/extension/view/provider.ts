@@ -5,8 +5,10 @@
  * `vscode.window.registerWebviewViewProvider`. On `resolveWebviewView`:
  *   1. Sets a strict Content-Security-Policy using `webview.cspSource`.
  *   2. Injects the compiled webview bundle via `webview.asWebviewUri`.
- *   3. Returns static placeholder HTML ("ClaudeTeam loading…") — live data
- *      wired in M2-06.
+ *   3. Registers an `onDidReceiveMessage` listener that dispatches typed
+ *      `WebviewMessage` objects to the per-type handler (M2-06 AC2).
+ *   4. Invokes the `onResolved` callback so the activation flow can wire
+ *      the file-watcher loop to this specific `vscode.Webview` instance.
  *
  * CSP rationale: Pixel Agents ships with NO CSP; ClaudeTeam renders
  * user-controlled data (agent descriptions, JSONL paths) and must not
@@ -14,11 +16,20 @@
  * for M2 because there are no inline scripts — the bundle is injected as
  * a `<script src="...">` using `webview.cspSource`.
  *
- * Source: .claude/docs/vscode-extension-conventions.md "Webview rules"
+ * Source: .claude/docs/vscode-extension-conventions.md "Webview rules" +
+ *         "Message protocol"
  *         team/bram-research/m2-vscode-prior-art-2026-05-23.md §"Webview CSP"
+ *         team/nora-pl/milestone-2-backlog.md §M2-06 AC2
  */
 
 import * as vscode from "vscode";
+
+import type {
+  OpenRosterMessage,
+  OpenTranscriptMessage,
+  RefreshMessage,
+  WebviewMessage,
+} from "../../shared/messages.js";
 
 /** The view-id registered in package.json contributes.views. */
 export const VIEW_ID = "claudeteam.dashboard";
@@ -31,9 +42,27 @@ export const VIEW_ID = "claudeteam.dashboard";
  */
 export type ViewResolvedHandler = (webview: vscode.Webview) => void;
 
+/**
+ * Per-type handlers for `WebviewMessage` (webview → host). All optional —
+ * a missing handler means the corresponding message is silently dropped
+ * (with a warning logged in `onUnknown`'s default).
+ *
+ * Wired from `main.ts` so the activation flow controls the actual side
+ * effects (open document, refresh watcher) — the provider only does the
+ * type-dispatch.
+ */
+export interface WebviewMessageHandlers {
+  onOpenTranscript?(msg: OpenTranscriptMessage): void;
+  onOpenRoster?(msg: OpenRosterMessage): void;
+  onRefresh?(msg: RefreshMessage): void;
+  /** Called for messages that don't match a known discriminator. */
+  onUnknown?(raw: unknown): void;
+}
+
 export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
   private _view: vscode.WebviewView | undefined;
   private _onResolved: ViewResolvedHandler | undefined;
+  private _messageHandlers: WebviewMessageHandlers = {};
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
 
@@ -47,6 +76,15 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
    */
   onResolved(handler: ViewResolvedHandler): void {
     this._onResolved = handler;
+  }
+
+  /**
+   * Register the per-type handlers for `WebviewMessage` (webview → host).
+   * Replaces any prior handler set (last-write-wins). Handlers are invoked
+   * inside the `onDidReceiveMessage` listener attached in `resolveWebviewView`.
+   */
+  setMessageHandlers(handlers: WebviewMessageHandlers): void {
+    this._messageHandlers = handlers;
   }
 
   resolveWebviewView(
@@ -67,10 +105,17 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtml(webviewView.webview);
 
-    // Notify the activation flow that the webview is live. M2-06 wires the
-    // file-watcher loop here. The handler is invoked AFTER the HTML is set,
-    // so initial state posted from it lands after the webview script has a
-    // message listener attached.
+    // Wire the webview → host message dispatch (M2-06 AC2). The listener's
+    // disposable is owned by the WebviewView itself — VS Code disposes it
+    // when the view is disposed. No need to push onto context.subscriptions.
+    webviewView.webview.onDidReceiveMessage((raw: unknown) => {
+      this._dispatchWebviewMessage(raw);
+    });
+
+    // Notify the activation flow that the webview is live. The file-watcher
+    // loop is wired here. The handler is invoked AFTER the HTML is set and
+    // AFTER the message listener is attached, so any state initial state
+    // posted from it lands cleanly.
     if (this._onResolved) {
       try {
         this._onResolved(webviewView.webview);
@@ -86,6 +131,31 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
   /** Returns the current WebviewView if resolved; undefined otherwise. */
   get view(): vscode.WebviewView | undefined {
     return this._view;
+  }
+
+  /**
+   * Type-guard + dispatch for `WebviewMessage`. Exposed via prototype only —
+   * external callers should use `setMessageHandlers` to register, not call
+   * this directly. Exported for tests via the `_dispatchWebviewMessage` name.
+   */
+  _dispatchWebviewMessage(raw: unknown): void {
+    if (!isWebviewMessage(raw)) {
+      const unknownHandler =
+        this._messageHandlers.onUnknown ?? defaultUnknownHandler;
+      unknownHandler(raw);
+      return;
+    }
+    switch (raw.type) {
+      case "ui:open-transcript":
+        this._messageHandlers.onOpenTranscript?.(raw);
+        return;
+      case "ui:open-roster":
+        this._messageHandlers.onOpenRoster?.(raw);
+        return;
+      case "ui:refresh":
+        this._messageHandlers.onRefresh?.(raw);
+        return;
+    }
   }
 
   private _getHtml(webview: vscode.Webview): string {
@@ -149,6 +219,33 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
   static fromExtensionPath(extensionPath: string): ClaudeTeamViewProvider {
     return new ClaudeTeamViewProvider(vscode.Uri.file(extensionPath));
   }
+}
+
+/**
+ * Structural type-guard for `WebviewMessage`. Validates the discriminator
+ * and the minimum shape — the handler is responsible for any deeper payload
+ * checks. Exported for tests.
+ */
+export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
+  if (typeof raw !== "object" || raw === null) return false;
+  const t = (raw as { type?: unknown }).type;
+  if (t === "ui:refresh" || t === "ui:open-roster") {
+    return true;
+  }
+  if (t === "ui:open-transcript") {
+    const p = (raw as { payload?: unknown }).payload;
+    if (typeof p !== "object" || p === null) return false;
+    const { sessionId, agentId } = p as {
+      sessionId?: unknown;
+      agentId?: unknown;
+    };
+    return typeof sessionId === "string" && typeof agentId === "string";
+  }
+  return false;
+}
+
+function defaultUnknownHandler(raw: unknown): void {
+  console.warn("[claudeteam.provider] unknown webview message shape:", raw);
 }
 
 /**
