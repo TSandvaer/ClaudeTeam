@@ -76,6 +76,34 @@ import * as vscode from "vscode";
 
 import { runTick } from "../../../src/extension/watcher/watcherLoop.js";
 import { cwdToSlug } from "../../../src/shared/slug.js";
+import {
+  isCollapsedPersonaGroup,
+  type AgentTile,
+  type RosterTileEntry,
+} from "../../../src/shared/types.js";
+
+/**
+ * M3-10 narrowing helper: flatten a `RosterTileEntry[]` to the underlying
+ * leaf `AgentTile[]` so `.memberId` is accessible. `RosterTileEntry` widened
+ * to `AgentTile | CollapsedPersonaGroup` (M3-10); the wrapper itself does
+ * not carry `memberId` — its `instances[]` do. The reducer's default path
+ * (`collapsePersonaTiles: true`) only emits a wrapper when N>=2 same-persona
+ * tiles share a team key; this suite's fixtures spawn 1 per persona, so in
+ * practice every entry is a bare `AgentTile`. The flattening branch is
+ * defensive (matches the integration suite's `findTile` pattern at
+ * `tests/integration/fixtureFs.test.ts:75-88`).
+ */
+function flattenTiles(entries: readonly RosterTileEntry[]): AgentTile[] {
+  const out: AgentTile[] = [];
+  for (const entry of entries) {
+    if (isCollapsedPersonaGroup(entry)) {
+      out.push(...entry.instances);
+    } else {
+      out.push(entry);
+    }
+  }
+  return out;
+}
 
 const EXTENSION_ID = "claudeteam.claudeteam";
 
@@ -286,7 +314,7 @@ suite("M3-09 AC1 — YAML hot-reload smoke (Layer-3)", () => {
         `failed to route agentType="hotreload-alice" against the ` +
         `agentType_equals rule.`,
     );
-    const memberIds = teamTiles.map((t) => t.memberId);
+    const memberIds = flattenTiles(teamTiles).map((t) => t.memberId);
     assert.ok(
       memberIds.includes("alice"),
       `Expected pre-mutation rosterTiles to contain "alice"; got ` +
@@ -333,7 +361,7 @@ suite("M3-09 AC1 — YAML hot-reload smoke (Layer-3)", () => {
         `"hot-reload-team" (team id unchanged across the mutation); got ` +
         `teamOrder=${JSON.stringify(session.teamOrder)}.`,
     );
-    const memberIds = teamTiles.map((t) => t.memberId);
+    const memberIds = flattenTiles(teamTiles).map((t) => t.memberId);
     assert.ok(
       memberIds.includes("bob"),
       `Expected post-mutation rosterTiles to contain "bob"; got ` +

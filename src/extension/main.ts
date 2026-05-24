@@ -135,6 +135,12 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.workspace
           .getConfiguration("claudeteam")
           .get<boolean>("showAllSessionsGlobally") ?? false,
+      // M3-10 AC5: read fresh every tick so toggling the setting applies
+      // on the next tick without Reload Window. Default true (grouping ON).
+      getCollapsePersonaTiles: () =>
+        vscode.workspace
+          .getConfiguration("claudeteam")
+          .get<boolean>("collapsePersonaTiles") ?? true,
       onStateChange: (state) => {
         void postState(webview, state);
       },
@@ -151,6 +157,11 @@ export function activate(context: vscode.ExtensionContext): void {
     const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
       (e) => {
         if (e.affectsConfiguration("claudeteam.showAllSessionsGlobally")) {
+          watcherHandle?.triggerTick();
+        }
+        // M3-10 AC5: same instant-effect pattern for collapsePersonaTiles —
+        // toggling the setting re-renders within one tick without Reload Window.
+        if (e.affectsConfiguration("claudeteam.collapsePersonaTiles")) {
           watcherHandle?.triggerTick();
         }
       },

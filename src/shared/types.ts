@@ -339,14 +339,37 @@ export interface CollapsedPersonaGroup {
 export type RosterTileEntry = AgentTile | CollapsedPersonaGroup;
 
 /**
+ * Type-narrowing helper: discriminate a `RosterTileEntry` between a bare
+ * `AgentTile` and a `CollapsedPersonaGroup` wrapper. The wrapper carries the
+ * `kind: "collapsed-persona"` discriminator; bare `AgentTile`s have no
+ * `kind` field, so the absence is the discriminator on the unwrapped side.
+ *
+ * Pure / cheap — safe to call repeatedly during render or per-tick.
+ * Mirrors the webview-side guard in
+ * `src/webview/components/collapsedPersonaTile.ts` (kept in sync — both
+ * variants check the same shape). Host-side callers (reducer, CLI flattener,
+ * integration tests) import from here.
+ */
+export function isCollapsedPersonaGroup(
+  entry: RosterTileEntry,
+): entry is CollapsedPersonaGroup {
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    "kind" in entry &&
+    (entry as { kind?: unknown }).kind === "collapsed-persona"
+  );
+}
+
+/**
  * One session's slice of the agent tree — one entry per live SessionRecord.
  *
- * `rosterTiles` is typed as `Map<string, AgentTile[]>` here — the **host-side
- * in-memory** shape produced by `buildAgentTree`. The M3-10 wrapper
- * (`CollapsedPersonaGroup`) is introduced at the host→webview boundary in
- * Felix's parallel reducer change; until that lands, host-side consumers see
- * bare AgentTiles only. The webview side widens to `RosterTileEntry[]` via
- * `WebviewSessionTree` post-hydration (see below).
+ * `rosterTiles` is typed as `Map<string, RosterTileEntry[]>` — the host-side
+ * reducer (`buildAgentTree`) emits bare `AgentTile`s for N=1 per-persona and
+ * `CollapsedPersonaGroup` wrappers for N>=2 (M3-10), controlled by the
+ * `claudeteam.collapsePersonaTiles` config flag (default true). When the
+ * flag is false, only bare `AgentTile`s are emitted (no wrappers) — full
+ * back-compat with pre-M3-10 callers.
  */
 export interface SessionTree {
   /** First 8 chars of sessionId UUID (used in CLI header). */
@@ -370,9 +393,16 @@ export interface SessionTree {
   title: string;
   /**
    * Rostered tiles grouped by team.
-   * Key = teamId; value = ordered list of AgentTiles for that team.
+   * Key = teamId; value = ordered list of `RosterTileEntry` entries
+   * (bare `AgentTile` for N=1 per-persona, `CollapsedPersonaGroup` wrapper
+   * for N>=2 — see M3-10).
+   *
+   * Consumers MUST discriminate via the `kind` field (or
+   * `isCollapsedPersonaGroup` type guard). Back-compat with pre-M3-10
+   * callers holds when `claudeteam.collapsePersonaTiles` is false or every
+   * persona has N=1 (no wrappers emitted).
    */
-  rosterTiles: Map<string, AgentTile[]>;
+  rosterTiles: Map<string, RosterTileEntry[]>;
   /**
    * Ordered list of teams in roster declaration order (for stable output).
    * Only teams with >= 1 matched tile in this session are included.
@@ -383,15 +413,15 @@ export interface SessionTree {
 }
 
 /**
- * Post-hydration session shape used by the webview (M3-10). Widens
- * `rosterTiles` to `Map<string, RosterTileEntry[]>` so the renderer can route
- * per entry between bare AgentTile and CollapsedPersonaGroup wrapper. The
- * extension-host side keeps `SessionTree` (bare AgentTiles only) until
- * Felix's host PR (parallel work on the same ticket) emits the wrapper.
+ * Post-hydration session shape used by the webview (M3-10). Currently
+ * structurally identical to `SessionTree` — both already type `rosterTiles`
+ * as `Map<string, RosterTileEntry[]>` since the host-side reducer emits
+ * wrappers directly. Retained as a distinct named type for webview-side
+ * code clarity and to avoid churn in webview imports; collapsing the alias
+ * is filed as deferred cleanup (see `WebviewAgentTree` doc).
  *
  * Hydrator (`src/webview/main.ts` → `hydrateState`) consumes the wire shape
- * (`SerializedSessionTree`, which already permits wrappers) and produces this
- * webview-side widened shape directly.
+ * (`SerializedSessionTree`) and produces this webview-side shape.
  */
 export interface WebviewSessionTree extends Omit<SessionTree, "rosterTiles"> {
   rosterTiles: Map<string, RosterTileEntry[]>;
@@ -461,17 +491,13 @@ export interface AgentTree {
 export type DashboardState = AgentTree;
 
 /**
- * Post-hydration agent-tree shape used by the webview (M3-10). Mirrors
- * `AgentTree` except `sessions[].rosterTiles` is widened to
- * `RosterTileEntry[]` to permit `CollapsedPersonaGroup` wrappers alongside
- * bare `AgentTile`s.
- *
- * The host-side reducer continues to produce the narrower `AgentTree`
- * (bare AgentTiles only) until Felix's parallel M3-10 host-side PR lands;
- * `hydrateState` widens at the boundary. Once Felix's PR merges, the
- * cleanest convergence is to unify `AgentTree.sessions[].rosterTiles` value
- * type to `RosterTileEntry[]` and drop `WebviewAgentTree` /
- * `WebviewSessionTree` entirely.
+ * Post-hydration agent-tree shape used by the webview (M3-10). Currently
+ * structurally identical to `AgentTree` — the host-side reducer now emits
+ * `RosterTileEntry[]` directly (M3-10 host PR), so `WebviewAgentTree` /
+ * `WebviewSessionTree` are no-op widenings. Retained as distinct named
+ * types for webview-side code clarity; collapsing them into `AgentTree`
+ * directly is deferred cleanup (no functional change — drop and re-point
+ * webview imports in a follow-up NIT PR).
  */
 export interface WebviewAgentTree extends Omit<AgentTree, "sessions"> {
   sessions: WebviewSessionTree[];

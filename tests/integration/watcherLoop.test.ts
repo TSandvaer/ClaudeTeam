@@ -40,6 +40,7 @@ import {
   MIN_POLL_MS,
 } from "../../src/extension/watcher/watcherLoop.js";
 import type { DashboardState } from "../../src/shared/types.js";
+import { isCollapsedPersonaGroup } from "../../src/shared/types.js";
 
 const DEAD_PID = 2_000_010;
 const SESSION_A = "aaaabbbb-0000-0000-0000-00000000aa01";
@@ -239,12 +240,22 @@ describe("M2-04 AC8: file mutation triggers onStateChange within 4 seconds", () 
     });
 
     // Initial emission — felix tile present, not finished.
+    // M3-10: rosterTiles is `RosterTileEntry[]`; in this scenario N=1 per
+    // persona so every entry is a bare AgentTile — narrow with a runtime
+    // guard against the CollapsedPersonaGroup branch.
     expect(
       await waitFor(
-        () =>
-          emissions.length >= 1 &&
-          (emissions[0]!.sessions[0]?.rosterTiles.get("claudeteam-alpha")?.[0]
-            ?.state ?? "missing") !== "finished",
+        () => {
+          if (emissions.length < 1) return false;
+          const entry = emissions[0]!.sessions[0]?.rosterTiles.get(
+            "claudeteam-alpha",
+          )?.[0];
+          if (entry === undefined) return false;
+          const state = isCollapsedPersonaGroup(entry)
+            ? entry.instances[0]?.state
+            : entry.state;
+          return (state ?? "missing") !== "finished";
+        },
         2000,
       ),
     ).toBe(true);
@@ -256,9 +267,13 @@ describe("M2-04 AC8: file mutation triggers onStateChange within 4 seconds", () 
     const ok = await waitFor(() => {
       if (emissions.length <= baselineCount) return false;
       const latest = emissions[emissions.length - 1]!;
-      const tile = latest.sessions[0]?.rosterTiles
+      const entry = latest.sessions[0]?.rosterTiles
         .get("claudeteam-alpha")?.[0];
-      return tile?.state === "finished";
+      if (entry === undefined) return false;
+      const state = isCollapsedPersonaGroup(entry)
+        ? entry.instances[0]?.state
+        : entry.state;
+      return state === "finished";
     }, 4000);
     expect(ok).toBe(true);
   });

@@ -118,6 +118,14 @@ export interface WatcherOptions {
    */
   getShowAllSessionsGlobally?: () => boolean;
 
+  /**
+   * Optional resolver for the `claudeteam.collapsePersonaTiles` setting
+   * (M3-10 AC5). Read fresh every tick so toggling the setting applies on
+   * the next tick without restart. When omitted, treated as `true`
+   * (grouping ON — same default as the package.json config schema).
+   */
+  getCollapsePersonaTiles?: () => boolean;
+
   /** Optional logger; defaults to a no-op so silent in production. */
   logger?: { warn: (msg: string) => void };
 }
@@ -187,6 +195,10 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // emission without restarting the watcher.
         workspaceFolders: opts.getWorkspaceFolders?.(),
         showAllSessionsGlobally: opts.getShowAllSessionsGlobally?.() ?? false,
+        // M3-10 AC5: same read-fresh-every-tick pattern for the
+        // collapse-persona-tiles toggle. Default true (grouping ON)
+        // matches package.json config default.
+        collapsePersonaTiles: opts.getCollapsePersonaTiles?.() ?? true,
         logger,
       });
       // Always update lastState — even on hash-skip — so host lookups against
@@ -267,6 +279,12 @@ export interface RunTickOptions {
    * sessions on the machine are visible.
    */
   showAllSessionsGlobally?: boolean;
+  /**
+   * Value of `claudeteam.collapsePersonaTiles` (M3-10 AC5). Defaults to
+   * `true` (grouping ON). When `false`, the reducer emits every tile bare
+   * (no CollapsedPersonaGroup wrappers) — same shape as pre-M3-10.
+   */
+  collapsePersonaTiles?: boolean;
   logger?: { warn: (msg: string) => void };
 }
 
@@ -369,6 +387,11 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     activities,
     finishedIds,
     rosterResult.roster,
+    Date.now(),
+    {
+      // M3-10 AC5: default true (grouping ON) when omitted by the caller.
+      collapsePersonaTiles: opts.collapsePersonaTiles !== false,
+    },
   );
   // M3-03 AC7: stamp the window-filter flag on the produced tree. Reducer
   // is workspace-agnostic — it doesn't know about the filter, just the

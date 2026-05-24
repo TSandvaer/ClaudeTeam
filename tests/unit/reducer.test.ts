@@ -21,6 +21,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildAgentTree,
+  groupTilesByPersona,
   IDLE_THRESHOLD_MS,
   resolveModelOnParseError,
   type AgentMetaEntry,
@@ -30,10 +31,52 @@ import {
 } from "../../src/extension/state/reducer.js";
 import type {
   AgentMeta,
+  AgentTile,
+  CollapsedPersonaGroup,
+  RosterTileEntry,
   SessionRecord,
   SubagentActivity,
   Team,
 } from "../../src/shared/types.js";
+import { isCollapsedPersonaGroup } from "../../src/shared/types.js";
+
+/**
+ * Test helper: assert a `RosterTileEntry` is a bare AgentTile (N=1, no
+ * wrapper) and return it narrowed. Most pre-M3-10 reducer tests assume N=1
+ * per persona — they fail fast if a group wrapper appears unexpectedly.
+ */
+function expectTile(entry: RosterTileEntry | undefined): AgentTile {
+  expect(entry).toBeDefined();
+  expect(isCollapsedPersonaGroup(entry!)).toBe(false);
+  return entry as AgentTile;
+}
+
+/**
+ * Test helper: assert a `RosterTileEntry` IS a `CollapsedPersonaGroup`
+ * wrapper and return it narrowed. Used by M3-10 grouping tests.
+ */
+function expectGroup(entry: RosterTileEntry | undefined): CollapsedPersonaGroup {
+  expect(entry).toBeDefined();
+  expect(isCollapsedPersonaGroup(entry!)).toBe(true);
+  return entry as CollapsedPersonaGroup;
+}
+
+/**
+ * Test helper: predicate "is there a tile with memberId X in this entry
+ * list?". Narrows past `CollapsedPersonaGroup` wrappers by descending into
+ * `instances`. Used by N=1-per-persona tests that pre-date M3-10 and don't
+ * exercise the wrapper branch.
+ */
+function hasTileForMember(
+  entries: readonly RosterTileEntry[],
+  memberId: string,
+): boolean {
+  return entries.some((e) =>
+    isCollapsedPersonaGroup(e)
+      ? e.instances.some((t) => t.memberId === memberId)
+      : e.memberId === memberId,
+  );
+}
 
 // =============================================================================
 // Helpers
@@ -160,7 +203,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile).toBeDefined();
       expect(tile!.state).toBe("running");
     });
@@ -181,7 +224,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("running");
       // Activity string should start with "tool:" since lastTool is "Edit"
       expect(tile!.activity).toMatch(/^tool:Edit/);
@@ -204,7 +247,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("idle");
       expect(tile!.activity).toMatch(/^idle \d+s$/);
       // Elapsed seconds should be ~11
@@ -229,7 +272,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("finished");
       expect(tile!.activity).toBe("finished");
     });
@@ -254,7 +297,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       // Should be idle (stale), not finished
       expect(tile!.state).toBe("idle");
     });
@@ -397,11 +440,11 @@ describe("buildAgentTree", () => {
       // S1 has felix; S2 has maya.
       const s1Tiles = s1.rosterTiles.get("alpha") ?? [];
       const s2Tiles = s2.rosterTiles.get("alpha") ?? [];
-      expect(s1Tiles.some((t) => t.memberId === "felix")).toBe(true);
-      expect(s2Tiles.some((t) => t.memberId === "maya")).toBe(true);
+      expect(hasTileForMember(s1Tiles, "felix")).toBe(true);
+      expect(hasTileForMember(s2Tiles, "maya")).toBe(true);
       // S1 does NOT have maya; S2 does NOT have felix.
-      expect(s1Tiles.some((t) => t.memberId === "maya")).toBe(false);
-      expect(s2Tiles.some((t) => t.memberId === "felix")).toBe(false);
+      expect(hasTileForMember(s1Tiles, "maya")).toBe(false);
+      expect(hasTileForMember(s2Tiles, "felix")).toBe(false);
     });
 
     it("dead session (isAlive:false) → session renders but tiles still included", () => {
@@ -454,7 +497,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile).toBeDefined();
       expect(tile!.memberId).toBe("felix");
     });
@@ -509,7 +552,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile).toBeDefined();
       expect(tile!.memberId).toBe("felix");
       // Confirm it's the persona-named variant flowing through correctly
@@ -535,7 +578,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.model).toBe("model:?");
     });
 
@@ -553,7 +596,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.model).toBe("model:?");
     });
   });
@@ -616,7 +659,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile).toBeDefined();
       expect(tile!.state).toBe("running");
       expect(tile!.activity).toBe("tool:?");
@@ -639,7 +682,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("running");
       // Must be "tool:?" not bare "running"
       expect(tile!.activity).toBe("tool:?");
@@ -661,7 +704,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("running");
       expect(tile!.activity).toBe("tool:Bash");
     });
@@ -685,7 +728,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile).toBeDefined();
       // parentToolUseId was deleted from the type — it must not appear on the output.
       expect(Object.prototype.hasOwnProperty.call(tile, "parentToolUseId")).toBe(false);
@@ -887,7 +930,7 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = tree.sessions[0]!.rosterTiles.get("alpha")?.[0];
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       // Standard "model:?" — NOT the new "model:unknown" placeholder, because
       // this agent is rostered (meta parsed fine), so the NIT #1 path doesn't apply.
       expect(tile!.model).toBe("model:?");
@@ -934,6 +977,389 @@ describe("buildAgentTree", () => {
           mtimeMs: 0,
         }),
       ).toBe("model:unknown");
+    });
+  });
+
+  // ---------------------------------------------------------------- M3-10 — persona-tile collapse
+  describe("M3-10 — persona-tile collapse (AC1/AC4/AC5/AC6)", () => {
+    // Helper: build N rostered tiles with the same persona under one session.
+    // Each spawn gets a unique agentId so they're distinct AgentTile instances.
+    function buildSessionDataWithFelixCount(
+      sessionId: string,
+      count: number,
+    ): { data: SessionAgentData; activities: ActivityMap } {
+      const agents: AgentMetaEntry[] = [];
+      const activities: ActivityMap = new Map();
+      for (let i = 0; i < count; i++) {
+        const agentId = `felix_${i.toString().padStart(3, "0")}`;
+        const meta = makeMeta({
+          agentType: "felix",
+          description: `Felix dispatch #${i + 1}`,
+          toolUseId: `toolu_felix_${i}`,
+        });
+        agents.push(makeAgentEntry(agentId, meta));
+        activities.set(
+          agentId,
+          makeActivity({ lastTool: i === 0 ? "Edit" : "Bash" }),
+        );
+      }
+      return { data: makeSessionData(sessionId, agents), activities };
+    }
+
+    // ---------- AC1 — reducer grouping when N>1 ----------
+    it("AC1: N=3 same-persona tiles collapse into one CollapsedPersonaGroup wrapper", () => {
+      const session = makeSession();
+      const { data, activities } = buildSessionDataWithFelixCount(
+        session.sessionId,
+        3,
+      );
+
+      const tree = buildAgentTree(
+        [session],
+        [data],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+        // Default options — collapse ON.
+      );
+
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      expect(entries).toHaveLength(1);
+      const group = expectGroup(entries[0]);
+      expect(group.kind).toBe("collapsed-persona");
+      expect(group.personaName).toBe("Felix");
+      expect(group.count).toBe(3);
+      expect(group.instances).toHaveLength(3);
+      // Per-instance shape unchanged. memberId / teamId / role live on the
+      // wrapped instances (canonical `CollapsedPersonaGroup` carries only
+      // kind / personaName / count / instances).
+      for (const inst of group.instances) {
+        expect(inst.memberId).toBe("felix");
+        expect(inst.display).toBe("Felix");
+        expect(inst.state).toBe("running");
+        expect(inst.teamId).toBe("alpha");
+        expect(inst.role).toBe("Extension Host Dev");
+      }
+    });
+
+    it("AC3 (N=1): single rostered tile renders as bare AgentTile (no wrapper)", () => {
+      const session = makeSession();
+      const { data, activities } = buildSessionDataWithFelixCount(
+        session.sessionId,
+        1,
+      );
+
+      const tree = buildAgentTree(
+        [session],
+        [data],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      expect(entries).toHaveLength(1);
+      const tile = expectTile(entries[0]);
+      expect(tile.memberId).toBe("felix");
+      // Guard: no CollapsedPersonaGroup discriminator on the bare-tile output.
+      expect("kind" in tile).toBe(false);
+    });
+
+    it("AC4: unrostered (background) agents bypass grouping entirely — even N>1", () => {
+      const session = makeSession();
+      const agents: AgentMetaEntry[] = [];
+      const activities: ActivityMap = new Map();
+      for (let i = 0; i < 3; i++) {
+        const agentId = `bg_${i}`;
+        agents.push(
+          makeAgentEntry(
+            agentId,
+            makeMeta({
+              agentType: "general-purpose",
+              description: `bg ${i}`,
+              schemaVersion: "v2.1.145-general",
+              toolUseId: `toolu_bg_${i}`,
+            }),
+          ),
+        );
+        activities.set(agentId, makeActivity());
+      }
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, agents)],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const s = tree.sessions[0]!;
+      // Three background agents — flat list, no group wrapper.
+      expect(s.background).toHaveLength(3);
+      // No rostered tiles at all → no CollapsedPersonaGroup anywhere.
+      expect(s.rosterTiles.size).toBe(0);
+    });
+
+    // ---------- AC5 — config flag opt-out ----------
+    it("AC5: collapsePersonaTiles=false → N=3 emit as 3 bare AgentTile entries (no wrapper)", () => {
+      const session = makeSession();
+      const { data, activities } = buildSessionDataWithFelixCount(
+        session.sessionId,
+        3,
+      );
+
+      const tree = buildAgentTree(
+        [session],
+        [data],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+        { collapsePersonaTiles: false },
+      );
+
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      expect(entries).toHaveLength(3);
+      // Every entry is a bare AgentTile — no group wrapper.
+      for (const entry of entries) {
+        const tile = expectTile(entry);
+        expect(tile.memberId).toBe("felix");
+      }
+    });
+
+    it("AC5: collapsePersonaTiles=true (explicit) → N=3 → one group (matches default)", () => {
+      const session = makeSession();
+      const { data, activities } = buildSessionDataWithFelixCount(
+        session.sessionId,
+        3,
+      );
+
+      const tree = buildAgentTree(
+        [session],
+        [data],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+        { collapsePersonaTiles: true },
+      );
+
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      expect(entries).toHaveLength(1);
+      const group = expectGroup(entries[0]);
+      expect(group.count).toBe(3);
+    });
+
+    it("AC5: default (no options arg) groups when N>1 — matches package.json default true", () => {
+      const session = makeSession();
+      const { data, activities } = buildSessionDataWithFelixCount(
+        session.sessionId,
+        2,
+      );
+
+      const tree = buildAgentTree(
+        [session],
+        [data],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+        // Omit options entirely.
+      );
+
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      expect(entries).toHaveLength(1);
+      expectGroup(entries[0]);
+    });
+
+    // ---------- mixed: rostered N>1 + N=1 + background in same session ----------
+    it("mixed session: Felix×2 group + Maya×1 bare + 1 background coexist correctly", () => {
+      const session = makeSession();
+      const agents: AgentMetaEntry[] = [
+        makeAgentEntry(
+          "felix_a",
+          makeMeta({ agentType: "felix", description: "Felix A", toolUseId: "t1" }),
+        ),
+        makeAgentEntry(
+          "felix_b",
+          makeMeta({ agentType: "felix", description: "Felix B", toolUseId: "t2" }),
+        ),
+        makeAgentEntry(
+          "maya_a",
+          makeMeta({ agentType: "maya", description: "Maya solo", toolUseId: "t3" }),
+        ),
+        makeAgentEntry(
+          "bg_a",
+          makeMeta({
+            agentType: "general-purpose",
+            description: "noise",
+            schemaVersion: "v2.1.145-general",
+            toolUseId: "t4",
+          }),
+        ),
+      ];
+      const activities: ActivityMap = new Map(
+        agents.map((a) => [a.agentId, makeActivity()]),
+      );
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, agents)],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const s = tree.sessions[0]!;
+      const alpha = s.rosterTiles.get("alpha") ?? [];
+      // Felix bucket (N=2) → group; Maya bucket (N=1) → bare tile. Order
+      // is roster-declaration: felix first (member[0]), maya second.
+      expect(alpha).toHaveLength(2);
+      const felixGroup = expectGroup(alpha[0]);
+      expect(felixGroup.personaName).toBe("Felix");
+      expect(felixGroup.instances[0]!.memberId).toBe("felix");
+      expect(felixGroup.count).toBe(2);
+      const mayaTile = expectTile(alpha[1]);
+      expect(mayaTile.memberId).toBe("maya");
+      // Background unchanged.
+      expect(s.background).toHaveLength(1);
+      expect(s.background[0]!.agentType).toBe("general-purpose");
+    });
+
+    it("groupTilesByPersona preserves instance order within a group", () => {
+      // Direct exercise of the exported helper — pin the order contract:
+      // instances[] preserves input order (insertion order from disk read).
+      const felixA: AgentTile = {
+        memberId: "felix",
+        teamId: "alpha",
+        display: "Felix",
+        role: "Extension Host Dev",
+        activity: "tool:Edit",
+        model: "claude-opus-4-7",
+        state: "running",
+        agentId: "felix_first",
+        toolUseId: "tu_A",
+      };
+      const felixB: AgentTile = { ...felixA, agentId: "felix_second", toolUseId: "tu_B" };
+      const felixC: AgentTile = { ...felixA, agentId: "felix_third", toolUseId: "tu_C" };
+
+      const out = groupTilesByPersona([felixA, felixB, felixC]);
+      expect(out).toHaveLength(1);
+      const group = expectGroup(out[0]);
+      expect(group.instances.map((i) => i.agentId)).toEqual([
+        "felix_first",
+        "felix_second",
+        "felix_third",
+      ]);
+    });
+
+    it("groupTilesByPersona: cross-group order = first-occurrence-of-memberId", () => {
+      // Pin: Felix appears before Maya in input → Felix group before Maya tile,
+      // regardless of how many Maya tiles are interleaved.
+      const felix: AgentTile = {
+        memberId: "felix",
+        teamId: "alpha",
+        display: "Felix",
+        role: "Extension Host Dev",
+        activity: "tool:Edit",
+        model: "claude-opus-4-7",
+        state: "running",
+        agentId: "felix_x",
+        toolUseId: "tu_fx",
+      };
+      const felix2: AgentTile = { ...felix, agentId: "felix_y", toolUseId: "tu_fy" };
+      const maya: AgentTile = {
+        memberId: "maya",
+        teamId: "alpha",
+        display: "Maya",
+        role: "Webview UI Dev",
+        activity: "tool:Read",
+        model: "claude-opus-4-7",
+        state: "running",
+        agentId: "maya_x",
+        toolUseId: "tu_mx",
+      };
+      // Input: felix, maya, felix2 — felix's first occurrence (idx 0) before
+      // maya's (idx 1). Output order: felix-group, maya-tile.
+      const out = groupTilesByPersona([felix, maya, felix2]);
+      expect(out).toHaveLength(2);
+      const fg = expectGroup(out[0]);
+      expect(fg.personaName).toBe("Felix");
+      expect(fg.instances[0]!.memberId).toBe("felix");
+      expect(fg.count).toBe(2);
+      const mt = expectTile(out[1]);
+      expect(mt.memberId).toBe("maya");
+    });
+
+    it("groupTilesByPersona: empty input → empty output", () => {
+      expect(groupTilesByPersona([])).toEqual([]);
+    });
+
+    it("groupTilesByPersona: single tile → bare AgentTile (not wrapped)", () => {
+      const tile: AgentTile = {
+        memberId: "felix",
+        teamId: "alpha",
+        display: "Felix",
+        role: "Extension Host Dev",
+        activity: "tool:Edit",
+        model: "claude-opus-4-7",
+        state: "running",
+        agentId: "only",
+        toolUseId: "tu",
+      };
+      const out = groupTilesByPersona([tile]);
+      expect(out).toHaveLength(1);
+      // Must be reference-equal — no copy/wrap when N=1.
+      expect(out[0]).toBe(tile);
+    });
+
+    it("groupTilesByPersona: does NOT mutate the input array or its tiles", () => {
+      const a: AgentTile = {
+        memberId: "felix", teamId: "alpha", display: "Felix",
+        role: "Extension Host Dev", activity: "tool:Edit",
+        model: "m", state: "running", agentId: "a", toolUseId: "ta",
+      };
+      const b: AgentTile = { ...a, agentId: "b", toolUseId: "tb" };
+      const input = [a, b];
+      const inputCopy = input.slice();
+      const aCopy = { ...a };
+      groupTilesByPersona(input);
+      expect(input).toEqual(inputCopy);
+      expect(a).toEqual(aCopy);
+    });
+
+    // ---------- AC1 — JSON-safety / round-trip of the wrapper ----------
+    it("CollapsedPersonaGroup wrapper round-trips through JSON.stringify cleanly", () => {
+      // Per .claude/docs/vscode-extension-conventions.md "JSON-serialization
+      // constraint" — wire-shape must survive postMessage's JSON.stringify.
+      const session = makeSession();
+      const { data, activities } = buildSessionDataWithFelixCount(
+        session.sessionId,
+        2,
+      );
+
+      const tree = buildAgentTree(
+        [session],
+        [data],
+        activities,
+        new Set(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const group = expectGroup(
+        tree.sessions[0]!.rosterTiles.get("alpha")?.[0],
+      );
+      const wire = JSON.parse(JSON.stringify(group)) as unknown;
+      expect(wire).toEqual(group);
+      // Discriminator survives.
+      expect((wire as CollapsedPersonaGroup).kind).toBe("collapsed-persona");
+      expect((wire as CollapsedPersonaGroup).count).toBe(2);
+      expect((wire as CollapsedPersonaGroup).instances).toHaveLength(2);
     });
   });
 });
