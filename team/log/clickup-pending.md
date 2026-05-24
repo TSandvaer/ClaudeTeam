@@ -90,15 +90,17 @@ ENTRY-2026-05-24T17:30:00Z: 86c9yb0yg -> in review (M3-01 NITs PR opened)
 ENTRY-2026-05-24T17:46:00Z: 86c9ybrk0 -> in progress (M3-03 DEAD-session bleed fix — Felix dispatched, orch-side MCP unavailable so flip queued)
 ENTRY-2026-05-24T18:07:00Z: 86c9ybrk0 -> in review (PR #41 ready for Maya — scope-corrected to webview-boot fixture; host AC3 + webview boot-bleed fix + 4 jsdom tests at HEAD 77cbe6c, CI green)
 ENTRY-2026-05-24T19:34:57Z: 86c9ybrk0 -> complete (PR #41 merged at 0fbf028 — Maya APPROVE, host AC3 + webview boot-bleed fix landed; 268 unit + 68 integration green)
-ENTRY-2026-05-24T20:08:00Z: M3-09 -> in review (M3-09 PR opened — Sage Layer-3 expansion + bonus NIT-coverage absorb; placeholder ID — orch substitutes real ClickUp ID after MCP-mediated creation per NEW-TICKET-REQUEST block below)
-ENTRY-2026-05-24T20:23:00Z: M3-09 -> complete (PR #44 merged at e9d2457 — Felix APPROVE, 281 unit + 68 integration + 23 Layer-3 green; placeholder ID — orch substitutes real ClickUp ID after MCP-mediated creation)
+ENTRY-2026-05-24T20:08:00Z: 86c9ydufh -> in review (M3-09 PR opened — Sage Layer-3 expansion + bonus NIT-coverage absorb) [placeholder M3-09 substituted post-MCP-reconnect 2026-05-24T22:30Z]
+ENTRY-2026-05-24T20:23:00Z: 86c9ydufh -> complete (PR #44 merged at e9d2457 — Felix APPROVE, 281 unit + 68 integration + 23 Layer-3 green) [created retrospectively at `complete` status via MCP 2026-05-24T22:30Z, so these flips are historical-only audit]
+ENTRY-2026-05-24T22:30:00Z: 86c9ybrk0 -> complete (FLUSHED — was queued at 19:34Z while MCP down; flushed via MCP at session resume)
+ENTRY-2026-05-24T22:30:01Z: 86c9ybtut -> in progress (M3-04 NITs dispatch — Felix host NIT #1+#2 + Maya webview NIT #3, parallel split per sponsor)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
 
 Resolved 2026-05-24. NIT #1 (package.json description/clamp mismatch) + NIT #2 (PR-body wording process note) tracked in `86c9yb0yg`. NIT #3 absorbed into M3-02 per backlog edit.
 
-## NEW-TICKET-REQUEST — M3-09 Sage Layer-3 expansion (PENDING — orch authorized 2026-05-24T19:52Z, dispatched same tick)
+## NEW-TICKET-REQUEST — M3-09 Sage Layer-3 expansion (FULFILLED — ticket `86c9ydufh`, created retrospectively at `complete` status 2026-05-24T22:30Z post-MCP-reconnect; PR #44 already merged at `e9d2457`)
 
 **Status:** queued — orchestrator's ClickUp MCP did not connect this session, so ticket creation deferred to next session with live MCP. Sage has been dispatched IN PARALLEL — she'll author the body inline with her PR and append her own ENTRY when the PR opens. Orch substitutes the placeholder `M3-09` ID for the real ClickUp ID post-creation.
 
@@ -106,7 +108,7 @@ Resolved 2026-05-24. NIT #1 (package.json description/clamp mismatch) + NIT #2 (
 
 **Body to file** (per backlog M3-09 lines 498-543): name=`test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip (M3-09)`, list_id=`901523520912`, status=`to do`, markdown_description=Sage's PR body (Layer-3 test suite expansion — see backlog spec for ACs).
 
-## NEW-TICKET-REQUEST — M3-10 persona-tile-collapse (PENDING — sponsor authorized 2026-05-24T17:40Z)
+## NEW-TICKET-REQUEST — M3-10 persona-tile-collapse (FULFILLED — ticket `86c9ydug9`, created at `to do` status 2026-05-24T22:30Z post-MCP-reconnect; ready to dispatch when Felix+Maya have capacity)
 
 **Status:** queued — orchestrator's ClickUp MCP did not connect this session, so ticket creation deferred to next session with live MCP, or sponsor can file manually.
 
