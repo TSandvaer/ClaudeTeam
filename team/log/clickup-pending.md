@@ -78,6 +78,25 @@ ENTRY 029: 86c9y9yzu -> in review (PR #30 opened — fix(scaffold): dist/extensi
 ENTRY-2026-05-24T11:58:00Z: 86c9yaq1e -> in review (M3-01 PR opened — feat(roster): live YAML watch + hot-reload)
 ENTRY-2026-05-24T12:36:00Z: 86c9yaq1e -> complete (PR #35 merged at a74cb94 — Maya APPROVE_WITH_NITS, 3 NITs non-blocking, NIT #3 absorbs into M3-02 per Maya's recommendation)
 ENTRY-2026-05-24T13:30:01Z: 86c9yb0yg -> to do (M3-01 NITs follow-up — ticket created; see NEW-TICKET-REQUEST body block below for audit trail)
+ENTRY-2026-05-24T14:53:00Z: NEW-TICKET-REQUEST -> in review (M3-02 PR opened — feat(roster): claudeteam.openRoster command + auto-create starter YAML; orchestrator to create in list 901523520912 and substitute the resulting task ID; see M3-02 body block below)
+```
+
+## NEW-TICKET-REQUEST — M3-02 (orchestrator to create)
+
+Sub-agent MCP gap (persistent — see `.claude/docs/orchestration-overview.md` § "Sub-agent MCP gap"): Felix cannot call `mcp__clickup__clickup_create_task` from this dispatch. Orchestrator creates the ticket on next tick and substitutes the resulting task ID in the ENTRY-2026-05-24T14:53:00Z line above (flip the status to `in review` directly since the PR is already open).
+
+- **List ID:** `901523520912`
+- **Title:** `feat(roster): claudeteam.openRoster command + auto-create starter YAML`
+- **Status:** `in review` (PR is already open)
+- **Owner (assignee field):** Felix (peer reviewer: Maya)
+- **Priority:** P0
+
+### Body (markdown_description)
+
+```markdown
+M3-02 from milestone-3 backlog at `team/nora-pl/milestone-3-backlog.md § M3-02`. Implements the `claudeteam.openRoster` command (already declared in `package.json` since M2-01 but never wired). Absorbs NIT #3 from M3-01's peer-review (PR #35 comment 4528643161 — the `registerDirWatcher` existsSync→createFileSystemWatcher race) by auto-creating `~/.claudeteam/` + a starter `teams.yaml` when the user invokes the command.
+
+PR URL substituted by orchestrator at creation time.
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (orchestrator to create)

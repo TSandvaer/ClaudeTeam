@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/extension/main.ts (M2-06).
+ * Unit tests for src/extension/main.ts.
  *
  * Coverage:
  *   - `handleOpenTranscript` derives the JSONL path from cwd + sessionId +
@@ -8,17 +8,19 @@
  *     session is not in the current state.
  *   - `handleOpenTranscript` shows an error message (no throw) when the
  *     resolved JSONL file does not exist on disk.
- *   - `handleOpenRoster` opens the resolved roster path.
- *   - `handleOpenRoster` shows an error message when the path is null
- *     (view never resolved) or the file doesn't exist on disk.
  *
  * Plus the AC7(e) absorbed-NIT-#1 verification: `context.subscriptions.length`
  * stays bounded across 3 `resolveWebviewView` cycles (the subscription leak
  * fix). That test lives in `tests/integration/subscriptionLeak.test.ts` —
  * see the file header there.
  *
+ * Note (M3-02): the M2-06 `handleOpenRoster` function was retired when
+ * `claudeteam.openRoster` adopted auto-create behavior. The new flow's
+ * coverage lives in `tests/unit/openRoster.test.ts`.
+ *
  * Source: src/extension/main.ts
- *         team/nora-pl/milestone-2-backlog.md §M2-06 AC3, AC4
+ *         team/nora-pl/milestone-2-backlog.md §M2-06 AC3
+ *         team/nora-pl/milestone-3-backlog.md §M3-02 AC7
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -58,10 +60,7 @@ vi.mock("vscode", () => {
   };
 });
 
-import {
-  handleOpenTranscript,
-  handleOpenRoster,
-} from "../../src/extension/main.js";
+import { handleOpenTranscript } from "../../src/extension/main.js";
 
 // ---------------------------------------------------------------------------
 // handleOpenTranscript
@@ -134,50 +133,6 @@ describe("handleOpenTranscript — AC3", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// handleOpenRoster
-// ---------------------------------------------------------------------------
-
-describe("handleOpenRoster — AC4", () => {
-  let tempRoot: string;
-
-  beforeEach(() => {
-    showErrorMessage.mockReset();
-    showTextDocument.mockReset();
-    tempRoot = mkdtempSync(join(tmpdir(), "ct-m2-06-roster-"));
-  });
-
-  afterEach(() => {
-    rmSync(tempRoot, { recursive: true, force: true });
-  });
-
-  it("opens the roster file when path resolves AND file exists", () => {
-    const rosterPath = join(tempRoot, "teams.yaml");
-    writeFileSync(rosterPath, "teams: []\n");
-
-    handleOpenRoster(rosterPath);
-
-    expect(showErrorMessage).not.toHaveBeenCalled();
-    expect(showTextDocument).toHaveBeenCalledTimes(1);
-    const arg = showTextDocument.mock.calls[0]![0] as { fsPath: string };
-    expect(arg.fsPath).toBe(rosterPath);
-  });
-
-  it("shows error when rosterPath is null (view never resolved)", () => {
-    handleOpenRoster(null);
-
-    expect(showTextDocument).not.toHaveBeenCalled();
-    expect(showErrorMessage).toHaveBeenCalledTimes(1);
-    expect(showErrorMessage.mock.calls[0]![0]).toContain("not yet resolved");
-  });
-
-  it("shows error when rosterPath points to a non-existent file", () => {
-    const rosterPath = join(tempRoot, "missing.yaml");
-
-    handleOpenRoster(rosterPath);
-
-    expect(showTextDocument).not.toHaveBeenCalled();
-    expect(showErrorMessage).toHaveBeenCalledTimes(1);
-    expect(showErrorMessage.mock.calls[0]![0]).toContain("not found");
-  });
-});
+// handleOpenRoster (M2-06) was retired in M3-02 — the auto-creating
+// `openRoster` flow replaces it. Coverage moved to
+// `tests/unit/openRoster.test.ts`.
