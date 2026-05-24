@@ -24,6 +24,20 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 <!-- New entries are appended below this line. -->
 
+## 2026-05-24 1801 UTC — Auto-decide: absorb webview-scope fix into 86c9ybrk0 + redispatch Felix (instead of new ticket for Maya)
+
+**Decided:** Endorse Felix's recommended option (1) from his PR #41 final report — keep ticket `86c9ybrk0` open with corrected surface (webview boot fixture-bleed at `src/webview/main.ts:146`, not host-side filter), redispatch Felix to add the 1-line webview fix + webview test to PR #41 in the same worktree/branch. Maya peer-reviews as planned. Original dispatch brief OOS line "Webview changes (this is host-side only)" is explicitly revised.
+
+**Foundation:** (a) Felix's audit (PR #41 body + final report) cites file:line evidence — `src/webview/main.ts:146` initializes `currentState = FIXTURE_STATE`; `FIXTURE_STATE` (`src/shared/fixtures.ts:138-159`) embeds `FIXTURE_DEAD_SESSION` with `pid=99999`, `cwd=Axelot-tutor`, `shortId=a91f3c20` — the EXACT shape from sponsor's verifying screenshot. Host-side `filterSessionsToWindow` is `isAlive`-agnostic and already correct (Felix added AC3 host-side tests, 264/264 passing). (b) The ticket's symptom (DEAD session in dashboard against window-scope expectation) is unchanged — only the implementation surface was misdiagnosed in the dispatch brief. (c) Economy heuristic — `[[NITs-absorption-into-downstream]]` (rule 6.6 #6, applied analogously here for surface-correction-absorption): same files NOT overlapping, but same TICKET CONTRACT + same DEVELOPER + same PR cycle = absorb is cheaper than file-new-ticket + redispatch-Maya + spin-up new review cycle. (d) Felix already in worktree with full context; redispatch is incremental (1 line + 1 test) on top of existing AC3 work, not from-scratch.
+
+**Alternative:** Path 2 — close `86c9ybrk0` as misdiagnosed (host-side already correct, AC3 tests prove it), file new ticket `fix(webview): suppress FIXTURE_STATE boot render in VS Code mode` for Maya, dispatch Maya separately. Cost: 2 tickets, 2 PRs (or merge PR #41 first + new PR #42 from Maya), 2 review cycles, context-cold dispatch for Maya. Path 1 absorbs into 1 PR + 1 review cycle. Path 2 has the audit-trail advantage of cleaner ticket scoping but at meaningful round-trip latency cost.
+
+**Reversibility:** ≤1 PR. If the webview fix turns out to be insufficient or wrong-surface again, revert via `git revert <merge-sha>` and re-file. The host-side AC3 tests already in PR #41 stand independent of the webview hunk — they're valid defensive coverage either way. Effort to revert if rejected: ~5 min.
+
+**Status:** pending review.
+
+**Pointers:** PR #41 (`https://github.com/TSandvaer/ClaudeTeam/pull/41`); Felix's final report this session's tool call `toolu_011fEHfRe18SE6x5r22dN6MT`; root-cause file:line `src/webview/main.ts:146`; fixture origin `src/shared/fixtures.ts:138-159`; host-side AC3 test additions in `tests/unit/sessionFilter.test.ts`; ticket `86c9ybrk0`.
+
 ## 2026-05-23 1300 UTC — Auto-merge PR #14 (M1-09 reducer + CLI driver) on Maya APPROVE_WITH_NITS
 
 **Decided:** Admin-merge PR #14 (`feat(cli): reducer + agent-tree CLI driver` — M1-09) via `gh pr merge 14 --admin --squash --delete-branch` immediately after Maya posted `APPROVE_WITH_NITS`. Maya's 5 NITs + 2 doc-promotion candidates are filed as a single follow-up ticket for next-session triage, not blocking this merge.
