@@ -25,7 +25,8 @@
       "Bash(npx:*)",
       "Bash(yarn:*)",
       "Bash(vsce:*)",
-      "Edit(.claude/agents/*.md)"
+      "Edit(.claude/agents/*.md)",
+      "mcp__clickup__update_task"
     ]
   },
   "hooks": {

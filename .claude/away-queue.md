@@ -26,6 +26,24 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 <!-- New entries are appended below this line. -->
 
+## 2026-05-24 0820 UTC — Permission-rule for `mcp__clickup__update_task` on pre-existing tickets?
+
+**Question:** Should the project's `.claude/settings.json` (or sponsor's user-global settings) carry a permission rule that allows `mcp__clickup__update_task` writes unconditionally — so the orchestrator can flip ClickUp ticket statuses across session boundaries without per-action denials?
+
+**Context:** Auto-mode classifier blocked the orchestrator's `mcp__clickup__update_task` on two ticket flips today, both involving tickets categorized as "pre-existing" (created in a prior Claude-process session): (1) `86c9y7y9z → complete` after sponsor's Path Y duplicate-absorption decision (sponsor chose to leave at `to do` rather than authorize); (2) `86c9y9q6h → in review` after Felix's PR #28 opened (orchestrator must own this flip per CLAUDE.md hard rule #5). Failure mode captured in `.claude/docs/orchestration-overview.md` § Common failure modes as the 12th bullet. The `86c9y9q6h → in review` flip currently relies on Felix's `team/log/clickup-pending.md` ENTRY 026 fallback (sub-agent queueing pattern) — will be processed in the merge-flip pair when PR #28 merges, but means the board is temporarily showing `in progress` even though the PR is open.
+
+**Options:**
+
+- **Option A — add `mcp__clickup__update_task` to the allow-list in project `.claude/settings.json`.** Orchestrator can flip any ticket status without prompt. Project-scoped (only affects ClaudeTeam). Trade-off: gives the orchestrator one fewer human-in-the-loop checkpoint on a class of externally-visible action.
+- **Option B — add `mcp__clickup__*` writes to sponsor's user-global settings.** Broader scope (affects every orchestrated project using ClickUp). Same trade-off as A but with wider blast radius.
+- **Option C — leave as-is.** Every cross-session ticket flip becomes a sponsor-prompt or relies on the `clickup-pending.md` fallback (sub-agent queue + merge-flip pair). Trade-off: slower orchestration; some ticket-status latency between PR open and ticket flip; sponsor stays in the loop on every status change.
+
+**Orchestrator recommendation:** **Option A.** Project-scoped is the right blast radius; the orchestrator's status flips ARE the same external action as the dispatch / PR-open / merge they pair with (which already proceed without prompt). The classifier's session-boundary heuristic makes a category mistake on `mcp__clickup__update_task` calls that are themselves the well-understood orchestrator workflow CLAUDE.md hard rule #5 mandates.
+
+**Status:** **answered 2026-05-24: Option A.** `mcp__clickup__update_task` added to project `.claude/settings.json` allow array; verified by retrying the previously-denied `86c9y9q6h → in review` flip immediately after the settings change (succeeded). Failure-mode bullet in `.claude/docs/orchestration-overview.md` § Common failure modes remains as historical reference but should be marked as resolved-by-permission-rule in a future doc pass.
+
+---
+
 ## 2026-05-23 1330 UTC — M2/M3 scope-overlap: absorb roster-render into M2, or keep hardcoded per V1-PLAN?
 
 **Question:** V1-PLAN.md M2 says "Extension scaffold — VS Code extension showing M1 data in a hardcoded webview"; M3 says "Roster config — Load `teams.yaml`, apply matchers, render named tiles vs background bucket". But the roster matcher already shipped in M1 (M1-08, on main). So the M2 webview can either (A) skip the hardcoded-strings interim and consume the live matcher output directly, OR (B) stay literally hardcoded per V1-PLAN's letter and defer matcher consumption to M3. The M2 backlog Nora authored (`team/nora-pl/milestone-2-backlog.md`, merged in PR #16) is written for **Option A** but flags this decision explicitly.

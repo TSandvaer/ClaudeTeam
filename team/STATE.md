@@ -10,24 +10,33 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-23 (M2 Wave 1 + 3 NITs follow-ups SHIPPED; only M2-04 NITs + Wave 2 left, both queued on sponsor)
+## Current state — 2026-05-24 (M2 SHIPPED — PR #28 merged at b8ada36; Wave 3 / M2-08 + M2-close retro queued)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
-- **`origin/main` tip:** `caf78a7` (PR #26 merge — M2-01 NITs follow-up). Verify: `git rev-parse origin/main`.
+- **`origin/main` tip:** `b8ada36` (PR #28 merge — M2-06 + absorbed M2-04 NITs). Verify: `git rev-parse origin/main`. **M2 milestone shippable gate cleared.**
 - **M2 Wave 0 status: SHIPPED.** PR #19/#20/#21/#22 (M2-09/03/07/01).
-- **M2 Wave 1 status: SHIPPED.** PR #23 (Felix M2-04 file-watcher polling loop) `807c3c6` — Maya APPROVE_WITH_NITS, auto-merged. PR #24 (Maya M2-05 webview dashboard tile renderer) `09f95d3` — Felix APPROVE_WITH_NITS, rebased + auto-merged (resolved expected ENTRY 019 collision + unexpected `src/shared/messages.ts` code conflict). Wave 1 unblocked Wave 2 (M2-06 = M2 shippable gate).
-- **Test counts:** 175 unit + 41 integration = **216 tests green** post-Wave-1 (Maya verified locally during rebase).
-- **Open PRs:** none (3 NITs follow-up PRs all shipped — #25 `e97dc7a`, #26 `caf78a7`, #27 `fa05bf4`).
-- **In-flight agents:** none. All worktrees detached.
-- **HOLDING on sponsor:** Wave 2 ordering decision (Path X vs Path Y) still queued. Affects M2-04 NITs (`86c9y7y9z`) + M2-06 dispatch.
-- **Worktrees:** Felix worktree active on M2-04 lane (was detached at `6940033`); Maya worktree active on M2-05 lane (was detached at `df0a225`). Sage + Nora + Iris + Bram idle (no current dispatches).
-- **Auto-status:** AWAY, session cron `0d78272c` (`7,22,37,52 * * * *`), last_tick `2026-05-23T18:42:00Z` (this cron tick — sponsor picked Path A, Wave 1 dispatched).
+- **M2 Wave 1 status: SHIPPED.** PR #23 (Felix M2-04 file-watcher) `807c3c6`. PR #24 (Maya M2-05 webview renderer) `09f95d3`.
+- **M2 Wave 1 NITs follow-ups status: SHIPPED.** PR #25 (Maya M2-05 NITs) `e97dc7a`. PR #26 (Felix M2-01 NITs) `caf78a7`. PR #27 (Iris M2-03 NITs) `fa05bf4`.
+- **M2 Wave 2 status: SHIPPED.** PR #28 (Felix M2-06 + absorbed M2-04 NITs) merged at `b8ada36` after Maya APPROVE_WITH_NITS. Sponsor authorized merge with webview-smoke AC7(b-d) screenshots deferred as post-merge sponsor verification (sub-agent runtime can't drive interactive VS Code). Ticket `86c9y9q6h` → `complete`.
+- **M2 Wave 3 status: QUEUED.** M2-08 (Sage `@vscode/test-electron` Layer-3 tests) ticket not yet created; sponsor decides whether to dispatch this session or next.
+- **Test counts:** ~181 unit + 41 integration = **~222 tests green** on main post-Wave-1-NITs (CI green on every push). Felix's M2-06 PR will add integration coverage.
+- **Open PRs:** none yet — Felix's M2-06 PR forthcoming.
+- **In-flight agents:** none — Maya posted APPROVE_WITH_NITS on PR #28 at 2026-05-24 ~08:24 UTC. AC7(a) live-runTick smoke verified through Maya's actual `~/.claude/` (real `claudeteam-alpha` team materialized). AC7(e) integration test passes (subscription leak). Both absorbed M2-04 NITs verified clean. 215 unit + 49 integration tests green. Worktree detached at `12ce4bf` — merge unblocked. **PR is mergeable on content; webview-smoke gate (AC7(b-d) screenshots) is the open question — see "Sponsor-pending" below.**
+- **Sponsor-pending:** PR #28 webview-smoke gate. CLAUDE.md hard rule #3 requires "Maya (or the PR author) to post a Self-Test Report confirming a manual webview reload in VS Code worked end-to-end." Both Felix and Maya are sub-agents — no GUI runtime, can't drive `Install from VSIX → Reload Window → screenshot`. Maya's NIT #1 reframes AC7(b-d) as sponsor-side post-merge verification (AC7(a) already covered the data plane via live runTick smoke). Sponsor: merge now + screenshot post-merge, OR install+screenshot first then merge?
+- **Permission-rule landed (2026-05-24):** `mcp__clickup__update_task` added to project `.claude/settings.json` allow array per sponsor's Option A on the away-queue entry. Resolves the recurring auto-mode-classifier denials on orchestrator status flips of pre-existing tickets.
+- **Sponsor decision (2026-05-24 ~07:57 UTC):** Sponsor chose to **leave `86c9y7y9z` at `to do`** rather than flip to `complete` — comment-on-ticket explaining "scope absorbed into M2-06 (`86c9y9q6h`)" provides the audit trail; no PR will open against the ticket. Board carries one extra `to do` row as a side-effect but this is stable, not pending.
+- **Worktrees:** Felix worktree active on M2-06 lane; Maya / Sage / Nora / Iris / Bram idle.
+- **Auto-status:** AWAY, session cron `130f53a0` (`8,23,38,53 * * * *`), last_tick `2026-05-24T07:56:32Z` (this session start — re-armed after prior disable).
 
 **ClickUp board state:**
-- **Complete (Wave 0 + Wave 1 + 3 NITs follow-ups):** `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01), `86c9y7uhz` (M2-04), `86c9y7uka` (M2-05), `86c9y7u44` (M2-03 NITs), `86c9y7yzf` (M2-05 NITs), `86c9y7u4p` (M2-01 NITs).
-- **To do (1 ticket held pending Wave 2 ordering):**
-  - `86c9y7y9z` — M2-04 NITs (Felix, 2 items — **NIT #2 should land before M2-06 dispatch**: `SerializedStateFullMessage` typed union eliminating the cast in `messageBus.ts:81`).
+- **Complete (Wave 0 + Wave 1 + 3 NITs follow-ups, 9 tickets):** `86c9y7jn9` (M2-09), `86c9y7jf4` (M2-03), `86c9y7jjd` (M2-07), `86c9y7jdz` (M2-01), `86c9y7uhz` (M2-04), `86c9y7uka` (M2-05), `86c9y7u44` (M2-03 NITs), `86c9y7yzf` (M2-05 NITs), `86c9y7u4p` (M2-01 NITs).
+- **In progress (Wave 2, Felix):**
+  - **`86c9y9q6h`** — M2-06 (host↔webview integration) + absorbed M2-04 NITs. M2 shippable gate.
+- **To do — left open by sponsor decision (scope absorbed into `86c9y9q6h`):**
+  - `86c9y7y9z` — M2-04 NITs follow-up. Sponsor chose 2026-05-24 to leave at `to do` rather than close-as-duplicate; comment on ticket records the absorption. No PR will open against it.
+- **Not yet created:**
+  - M2-08 (Sage Layer-3 tests) — Wave 3, post-M2-06.
 
 **This-session structural delta (newest at top):**
 
