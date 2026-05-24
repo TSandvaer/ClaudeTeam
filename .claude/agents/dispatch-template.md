@@ -52,9 +52,9 @@ For YOU (the dispatched persona):
 - Ticket <ID> has been pre-flipped to `in progress` by the orchestrator in the same tool round as this dispatch. No action on accept.
 - On PR open, append (IN YOUR OWN WORKTREE at `<base>-<role>-wt/team/log/clickup-pending.md`, NEVER the orchestrator-survey path) inside the EXISTING code fence under the `## Status-flip queue (sub-agent dispatch fallback)` section:
     ```
-    ENTRY NNN: <ticket_id> -> in review
+    ENTRY-<ISO-8601-UTC-timestamp>: <ticket_id> -> in review
     ```
-  Do NOT create a new section header — that produces merge conflicts (see orchestration-overview.md "Common failure modes"). Commit + push through your PR.
+  Use `ENTRY-<ISO-8601-UTC-timestamp>:` as the line prefix, where the timestamp is captured at the moment the persona writes the entry (e.g., `ENTRY-2026-05-24T08:30:00Z:`). DO NOT use sequential numeric IDs — they collide under parallel dispatch. Do NOT create a new section header — that produces merge conflicts (see orchestration-overview.md "Common failure modes"). Commit + push through your PR.
 - Orchestrator handles `in review → complete` flip on merge.
 ```
 

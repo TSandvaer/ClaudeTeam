@@ -74,4 +74,5 @@ ENTRY 026: 86c9y9q6h -> in review
 ENTRY 027: 86c9y9q6h -> complete
 ENTRY 028: 86c9y9v7r -> in review
 ENTRY 029: 86c9y9yzu -> in review (PR #30 opened — fix(scaffold): dist/extension CJS shim for Node 22+ require())
+# --- Switchover 2026-05-24 (M3-05): entries above use legacy sequential ENTRY-NNN; entries below use timestamp-based ENTRY-<ISO-8601-UTC>. ---
 ```
