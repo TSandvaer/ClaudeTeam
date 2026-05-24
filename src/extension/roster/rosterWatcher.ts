@@ -170,13 +170,34 @@ export function startRosterWatcher(
   };
 
   /**
-   * Set of fs paths whose changes should trigger a reload. Populated below
-   * from the configured paths; the FS-event handler filters event URIs
-   * against this set so we ignore unrelated YAML files in the same dir.
+   * Set of normalized identity keys (lowercased + forward-slashed) for fast
+   * cross-platform equality checks in the FS-event filter. Compared against
+   * `normalizePath(uri.fsPath)` from VS Code's event callbacks.
    */
-  const watchedPaths = new Set<string>();
-  if (opts.globalPath) watchedPaths.add(normalizePath(opts.globalPath));
-  if (opts.projectPath) watchedPaths.add(normalizePath(opts.projectPath));
+  const watchedIdentityKeys = new Set<string>();
+  /**
+   * The ORIGINAL (case-preserving, OS-native) paths for filesystem operations.
+   * The polling fallback's `fs.statSync` MUST be given the on-disk path, not
+   * the lowercased identity key — case-sensitive filesystems (Linux ext4,
+   * macOS APFS opt-in) reject the lowercased form when `mkdtempSync` (and
+   * many real-world dirs) contains mixed-case characters. This was the root
+   * cause of the Ubuntu-CI-only test failures: every `statSync` against
+   * `/tmp/ct-m3-01-rw-XXXxxx` lowercased to `/tmp/ct-m3-01-rw-xxxxxx`
+   * returned ENOENT → `lastMtimes` never updated → no `scheduleReload`.
+   * Production paths from `os.homedir()` are typically all-lowercase on
+   * Linux, masking the bug locally on Windows (case-insensitive NTFS).
+   */
+  const watchedPathPairs: Array<{ key: string; path: string }> = [];
+  if (opts.globalPath) {
+    const key = normalizePath(opts.globalPath);
+    watchedIdentityKeys.add(key);
+    watchedPathPairs.push({ key, path: opts.globalPath });
+  }
+  if (opts.projectPath) {
+    const key = normalizePath(opts.projectPath);
+    watchedIdentityKeys.add(key);
+    watchedPathPairs.push({ key, path: opts.projectPath });
+  }
 
   const disposables: vscode.Disposable[] = [];
   let debounceTimer: NodeJS.Timeout | null = null;
@@ -201,9 +222,11 @@ export function startRosterWatcher(
         const result = loadRoster(opts.globalPath, opts.projectPath);
         // Update mtime snapshots so the polling fallback (if active) doesn't
         // re-fire on the same change that already came through via fs events.
-        for (const p of watchedPaths) {
-          const m = safeMtimeMs(p);
-          if (m !== null) lastMtimes.set(p, m);
+        // statSync against the original (case-preserving) path; key by the
+        // normalized identity key for cross-platform map lookup parity.
+        for (const { key, path } of watchedPathPairs) {
+          const m = safeMtimeMs(path);
+          if (m !== null) lastMtimes.set(key, m);
         }
         try {
           opts.onRosterChange(result);
@@ -240,7 +263,7 @@ export function startRosterWatcher(
    * also trigger events; ignore them).
    */
   const onFsEvent = (uri: vscode.Uri): void => {
-    if (!watchedPaths.has(normalizePath(uri.fsPath))) return;
+    if (!watchedIdentityKeys.has(normalizePath(uri.fsPath))) return;
     scheduleReload();
   };
 
@@ -299,27 +322,28 @@ export function startRosterWatcher(
       Number.isFinite(requestedPoll) ? requestedPoll : ROSTER_POLL_FALLBACK_MS,
     );
     // Seed lastMtimes so the FIRST poll doesn't fire a spurious "changed"
-    // event for files that existed before the watcher started.
-    for (const p of watchedPaths) {
-      const m = safeMtimeMs(p);
-      if (m !== null) lastMtimes.set(p, m);
+    // event for files that existed before the watcher started. Stat against
+    // the original path; key by identity key for cross-platform parity.
+    for (const { key, path } of watchedPathPairs) {
+      const m = safeMtimeMs(path);
+      if (m !== null) lastMtimes.set(key, m);
     }
     pollInterval = setInterval(() => {
       if (disposed) return;
-      for (const p of watchedPaths) {
-        const current = safeMtimeMs(p);
-        const prev = lastMtimes.get(p);
+      for (const { key, path } of watchedPathPairs) {
+        const current = safeMtimeMs(path);
+        const prev = lastMtimes.get(key);
         if (current === null) {
           // File vanished — if we had a prev mtime, that's a delete event.
           if (prev !== undefined) {
-            lastMtimes.delete(p);
+            lastMtimes.delete(key);
             scheduleReload();
           }
           continue;
         }
         if (prev === undefined || current !== prev) {
           // File created or mtime changed since last poll.
-          lastMtimes.set(p, current);
+          lastMtimes.set(key, current);
           scheduleReload();
         }
       }
