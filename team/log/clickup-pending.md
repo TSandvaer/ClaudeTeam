@@ -87,8 +87,53 @@ ENTRY-2026-05-24T16:30:00Z: 86c9ybdxe -> in progress (M3-04 dispatch — feat(we
 ENTRY-2026-05-24T16:35:30Z: 86c9ybdxe -> in review (M3-04 PR #39 opened)
 ENTRY-2026-05-24T17:15:00Z: 86c9yb0yg -> in progress (M3-01 NITs follow-up — Felix accepted dispatch)
 ENTRY-2026-05-24T17:30:00Z: 86c9yb0yg -> in review (M3-01 NITs PR opened)
+ENTRY-2026-05-24T17:46:00Z: 86c9ybrk0 -> in progress (M3-03 DEAD-session bleed fix — Felix dispatched, orch-side MCP unavailable so flip queued)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
 
 Resolved 2026-05-24. NIT #1 (package.json description/clamp mismatch) + NIT #2 (PR-body wording process note) tracked in `86c9yb0yg`. NIT #3 absorbed into M3-02 per backlog edit.
+
+## NEW-TICKET-REQUEST — M3-10 persona-tile-collapse (PENDING — sponsor authorized 2026-05-24T17:40Z)
+
+**Status:** queued — orchestrator's ClickUp MCP did not connect this session, so ticket creation deferred to next session with live MCP, or sponsor can file manually.
+
+**Sponsor authorization:** explicit `File M3-10 ticket now (P3)` answer to orchestrator's AskUserQuestion at session resume (2026-05-24T17:40Z). Heuristic choice: `Group by roster persona-name; show 'Felix ×3' with expandable list`.
+
+**Foundation for ticket scope:** sponsor's screenshot earlier this session showed 16 rostered tiles in a dashboard whose roster has 6 personas — each sub-agent dispatch creates its own tile, so multiple Felix/Maya/etc dispatches in the same session accumulate visually.
+
+### Draft body (for ClickUp markdown_description)
+
+```
+**Ticket:** M3-10 — `feat(webview): persona-tile-collapse — group by roster persona name`
+**Owner:** Felix (reducer-side change primary) + Maya (webview render hunk)
+**Peer reviewer:** Maya (host-side) / Felix (webview)
+**Size:** M
+**Priority:** P3
+**Source:** sponsor inspection 2026-05-24 — dashboard showed 16 tiles for a 6-persona roster
+
+**Scope:**
+- When N>1 rostered tiles match the same persona name (matched roster entry), they collapse into a single header tile showing `<persona-name> ×N`.
+- Collapsed tile is expandable to show per-session details (session ID, last-activity timestamp, dispatched-ticket when known).
+- Unrostered subagents continue to flow into the existing per-session noise counter (unchanged).
+- Single-instance tiles (N=1) render unchanged.
+
+**Acceptance criteria:**
+- AC1: Reducer groups by roster persona-name; output state shape includes `{personaName, count, instances[]}` for groups with N>1.
+- AC2: Webview renders collapsed header tile + expand/collapse chevron + expanded list of `instances[]`.
+- AC3: When N=1, tile renders as today (no header wrapper).
+- AC4: Unrostered subagents bypass grouping and continue to flow into the noise counter.
+- AC5: Optional config `claudeteam.collapsePersonaTiles` (default true) — opt-out for users who prefer flat list.
+- AC6: Unit tests cover the reducer grouping (N=1, N=2, mixed rostered+unrostered).
+- AC7: Webview tests cover render with collapsed/expanded state.
+- AC8: Self-Test Report — install .vsix in fresh VS Code window, observe collapse with multiple dispatches of same persona.
+
+**Out of scope:**
+- Animation/transitions on expand/collapse (M4 polish).
+- Sponsor-configurable threshold beyond simple `collapsePersonaTiles` boolean.
+- Grouping by anything other than roster persona name.
+
+**Done-when test:** `npm test && npm run test:integration` green + Self-Test Report shows collapse working in installed `.vsix`.
+```
+
+Create with: `list_id=901523520912`, `status=to do`, `name="feat(webview): persona-tile-collapse — group by roster persona name (M3-10)"`, `markdown_description=` the body above.

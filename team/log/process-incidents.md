@@ -20,6 +20,23 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-24 — Parallel-orchestrator race (two Claude Code sessions on same project)
+
+**Symptom:** During M3 Wave 0, a second Claude Code session was orchestrating ClaudeTeam in parallel — its cron tick + away-mode loop ran independently of the primary session. Symptoms observed: (a) PR #35 showed MERGED at a commit SHA the primary session didn't push; (b) `team/log/clickup-pending.md` had entries appearing "from nowhere" between the primary's last read and current state; (c) NEW-TICKET-REQUEST blocks were resolved by the parallel session while the primary was mid-rebase. Sponsor noticed the divergent activity and told the parallel thread to save + step down.
+
+**Cause:** SessionStart hook auto-re-armed auto-status on the second session because `auto-status.state` still had `enabled=true` from a prior fresh session boundary. Both sessions then ran the same `7,22,37,52 * * * *` cron and each thought it was the canonical orchestrator. There is no machine-level lock — the state file is single-writer-assumed.
+
+**Recovery:** Sponsor told the parallel session to `/save-session`; primary session absorbed the parallel's state via the saved-session one-liner (already had the merge/edits propagated via origin). Both sessions then had `/auto-status off` applied. The primary continued M3 Wave 0 dispatch from the absorbed state without re-doing work.
+
+**Prevention:**
+- **Only ONE Claude Code session should orchestrate a given project at a time.** When opening a second window, kill the other's `auto-status` via `/auto-status off` first.
+- Before any merge / status-flip / dispatch action, re-read authoritative state: `gh pr view --json state`, `mcp__clickup__get_tasks` (when MCP live), `git fetch && git log origin/main`. Skip the action if it's already been done.
+- One-line terse summary added to `.claude/docs/orchestration-overview.md` § Common failure modes for inline awareness in future session loads.
+
+**Code/process pointer:** Hit 1× this session. Terse pointer in `.claude/docs/orchestration-overview.md` § Common failure modes (line ~128). Full narrative here. Memory entry `[[parallel-orchestrator-race-condition]]` may be worth saving if this recurs across other orchestrated projects.
+
+---
+
 ## 2026-05-23 — Peer-reviewer worktree blocks `gh pr merge --delete-branch`
 
 **Symptom:** Orchestrator's `gh pr merge --admin --squash --delete-branch` succeeded the remote merge but failed local branch delete with `cannot delete branch ... used by worktree at <reviewer-wt>`.
