@@ -24,8 +24,16 @@
  */
 
 import { FIXTURE_STATE } from "../shared/fixtures.js";
-import type { AgentTree } from "../shared/types.js";
-import type { WebviewMessage } from "../shared/messages.js";
+import type {
+  AgentTile,
+  AgentTree,
+  SessionTree,
+} from "../shared/types.js";
+import type {
+  SerializedDashboardState,
+  SerializedSessionTree,
+  WebviewMessage,
+} from "../shared/messages.js";
 import { initMessageReceiver } from "./messageReceiver.js";
 import {
   renderFull,
@@ -72,6 +80,41 @@ function acquireApi(): WebviewApi {
 }
 
 // =============================================================================
+// Wire-shape rehydration
+// =============================================================================
+
+/**
+ * Rehydrate a `SerializedDashboardState` (the JSON-safe wire shape) into the
+ * in-memory `AgentTree` shape the renderer expects.
+ *
+ * The only field that differs is `sessions[].rosterTiles`:
+ *   - on the wire: `Record<string, AgentTile[]>` (plain object).
+ *   - in memory:   `Map<string, AgentTile[]>` (renderer uses `.get`).
+ *
+ * All other fields pass through verbatim. Pure function — exported for unit
+ * test coverage.
+ */
+export function hydrateState(wire: SerializedDashboardState): AgentTree {
+  return {
+    sessions: wire.sessions.map(
+      (s: SerializedSessionTree): SessionTree => ({
+        shortId: s.shortId,
+        sessionId: s.sessionId,
+        pid: s.pid,
+        entrypoint: s.entrypoint,
+        version: s.version,
+        isAlive: s.isAlive,
+        cwd: s.cwd,
+        title: s.title,
+        rosterTiles: new Map<string, AgentTile[]>(Object.entries(s.rosterTiles)),
+        teamOrder: s.teamOrder,
+        background: s.background,
+      }),
+    ),
+  };
+}
+
+// =============================================================================
 // Boot
 // =============================================================================
 
@@ -101,7 +144,12 @@ function boot(): void {
 
   initMessageReceiver({
     onStateFull: (msg) => {
-      currentState = msg.payload;
+      // Rehydrate the wire-shape (rosterTiles: Record<string, AgentTile[]>)
+      // back into the in-memory shape the renderer expects
+      // (rosterTiles: Map<string, AgentTile[]>). The host flattens Maps to
+      // plain objects in `serializeState` because JSON.stringify drops Map
+      // contents to `{}` — see `src/shared/messages.ts` SerializedDashboardState.
+      currentState = hydrateState(msg.payload);
       // A successful state:full clears any prior watcher-error chip because
       // we just received fresh data — but it does NOT clear a roster YAML
       // error (that requires a roster:loaded). Track which subtype is active.
