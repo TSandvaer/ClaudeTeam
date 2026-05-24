@@ -132,6 +132,71 @@ describe("filterSessionsToWindow — AC1 matching", () => {
     );
     expect(got).toEqual([]);
   });
+
+  // ---------------------------------------------------------------------------
+  // 86c9ybrk0 AC3 — dead-session bleed regression.
+  //
+  // The filter must reject out-of-window sessions REGARDLESS of `isAlive`.
+  // A previous mis-hypothesis (ticket dispatch brief) suggested DEAD-overlay
+  // attachment ran AFTER `filterSessionsToWindow` or bypassed it; the audit
+  // (see PR body) confirmed the host-side filter is `isAlive`-agnostic and
+  // already correct — but coverage was missing for the explicit
+  // dead-cross-workspace combination, so the AC adds it here.
+  //
+  // Pipeline reference (verified 2026-05-24): the only producer of
+  // `isAlive: false` SessionRecords on the host is
+  // `sessionRegistry.tryParseSessionFile` (via `isPidAlive`); the filter
+  // runs unconditionally on EVERY SessionRecord regardless of liveness,
+  // and `buildAgentTree` receives only the filtered set. There is no
+  // host-side path that synthesizes a DEAD session outside the filter.
+  // ---------------------------------------------------------------------------
+  describe("86c9ybrk0 AC3 — mixed alive/DEAD across in/out-of-window", () => {
+    function deadSession(cwd: string, sessionId: string): SessionRecord {
+      return { ...session(cwd, sessionId), isAlive: false };
+    }
+
+    const IN_WORKSPACE = "c:\\Trunk\\PRIVATE\\ClaudeTeam";
+    const OUT_OF_WORKSPACE = "c:\\Trunk\\PRIVATE\\Axelot-tutor";
+    const IN_ALIVE = "aaaabbbb-0000-0000-0000-00000000ali1";
+    const IN_DEAD = "aaaabbbb-0000-0000-0000-00000000ded1";
+    const OUT_ALIVE = "aaaabbbb-0000-0000-0000-00000000ali2";
+    const OUT_DEAD = "aaaabbbb-0000-0000-0000-00000000ded2";
+
+    it("window-scope on: passes in-window-alive AND in-window-DEAD; rejects both out-of-window", () => {
+      const sessions: SessionRecord[] = [
+        session(IN_WORKSPACE, IN_ALIVE),
+        deadSession(IN_WORKSPACE, IN_DEAD),
+        session(OUT_OF_WORKSPACE, OUT_ALIVE),
+        deadSession(OUT_OF_WORKSPACE, OUT_DEAD),
+      ];
+      const got = filterSessionsToWindow(
+        sessions,
+        [folder(IN_WORKSPACE)],
+        /* showAll */ false,
+      );
+      const ids = got.map((s) => s.sessionId).sort();
+      expect(ids).toEqual([IN_ALIVE, IN_DEAD].sort());
+      // Sanity: the DEAD in-window session is preserved (downstream renders
+      // its `dead` badge); the DEAD out-of-window session was the original
+      // bleed shape — confirm it's GONE.
+      expect(got.some((s) => s.sessionId === OUT_DEAD)).toBe(false);
+    });
+
+    it("opt-out (showAll=true): every session passes regardless of liveness or window", () => {
+      const sessions: SessionRecord[] = [
+        session(IN_WORKSPACE, IN_ALIVE),
+        deadSession(IN_WORKSPACE, IN_DEAD),
+        session(OUT_OF_WORKSPACE, OUT_ALIVE),
+        deadSession(OUT_OF_WORKSPACE, OUT_DEAD),
+      ];
+      const got = filterSessionsToWindow(
+        sessions,
+        [folder(IN_WORKSPACE)],
+        /* showAll */ true,
+      );
+      expect(got).toHaveLength(4);
+    });
+  });
 });
 
 describe("filterSessionsToWindow — AC2 path normalization", () => {
