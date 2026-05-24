@@ -20,6 +20,20 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-25 — Repeated sponsor bloat call-outs across sessions; staged main-thread bloat discipline rule
+
+**Symptom:** Across multiple ClaudeTeam M3 Wave 1 sessions, sponsor called out main-thread bloat ("still seeing a lot of clutter (bloat) in the main chat") AND pasted back ~50K chars of orchestrator conversation transcript as receipts. Concrete bloat sources visible in the transcript: 5-dropdown rebase mechanics, 60-200 line dispatch briefs verbatim in Agent tool dropdowns, predictive "next event" trailers after every tick, `grep -n -A 35` outputs printing 35-line backlog sections inline, redundant `gh pr view` state-checks, redundant `git log --oneline -3` after every commit, TodoWrite re-prints on every Stop-hook reminder.
+
+**Cause:** Project shipped M3-08 ("main-thread merge-narration tightening") which covers one surface (merge-decision posts). Orchestrator regressed on other surfaces — dispatch briefs, rebase mechanics, predictive narration, diagnostic check rituals. Acknowledged in chat each time but no persistence mechanism → next session regressed again.
+
+**Recovery:** Sponsor's "draft it" reply explicitly authorized staging a global-rule version that covers the broader discipline. Staged at `team/log/proposed-global-rule-main-thread-bloat-discipline-2026-05-25.md` with 10 specific patterns: chain Bash mechanics into 1 call, short briefs (10-30 lines max) with ACs in ticket body, no predictive trailers, no pre-tool one-liners for self-evident actions, no redundant MCP/file reads in-session, no diagnostic check rituals when context answers, no Read-before-Edit when old_string is unique, TodoWrite only on material status change, prefer Read+offset over grep-A-N, no commit-message + log-tail combos.
+
+**Prevention:** Apply staged rule to `~/.claude/CLAUDE.md`. Until applied: orchestrator follows the patterns by self-discipline this session; the staged file is the durable artifact future orchestrators inherit even without the global rule.
+
+**Code/process pointer:** Staged-diff doc `team/log/proposed-global-rule-main-thread-bloat-discipline-2026-05-25.md`; sponsor's catch was repeated "still seeing a lot of clutter" + paste of 50K-char transcript receipts.
+
+---
+
 ## 2026-05-25 — Session restart with in-flight Agents — lucky-no-loss outcome exposed cross-session continuity gap
 
 **Symptom:** Mid-flight background Agent dispatches (Felix + Maya on `86c9ydug9` M3-10) died when the session ended unexpectedly between turns. SessionStart hook re-armed auto-status on the next session. Worktree audit showed both Felix and Maya at `b198403` (the orch commit just BEFORE M3-10 dispatch) — no branches pushed = no code lost. Re-dispatch was cheap. Sponsor asked **"can this be prevented or helped in some way?"** — exposing that resume worked through patient re-derivation (worktrees + ClickUp + git log), not a documented checklist. Lucky outcome masked a real fragility.
