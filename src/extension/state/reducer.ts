@@ -22,6 +22,8 @@ import type {
   AgentTile,
   AgentTree,
   BackgroundAgent,
+  CollapsedPersonaGroup,
+  RosterTileEntry,
   SessionRecord,
   SessionTree,
   SubagentActivity,
@@ -69,6 +71,28 @@ export interface SessionAgentData {
 }
 
 /**
+ * Optional behavior knobs passed through `buildAgentTree`.
+ *
+ * Kept as a single options object so we can add future toggles without
+ * pushing more positional parameters down the call chain. All fields are
+ * optional with documented defaults — callers that don't care omit the
+ * object entirely.
+ */
+export interface BuildAgentTreeOptions {
+  /**
+   * M3-10 AC5: when `true` (default), N>1 rostered tiles that share the
+   * same matched-roster persona are collapsed into a single
+   * `CollapsedPersonaGroup` wrapper. When `false`, every tile is emitted
+   * bare (no wrapper) — output is identical to pre-M3-10 behavior.
+   *
+   * Bound to the VS Code config `claudeteam.collapsePersonaTiles`. Read
+   * fresh by the watcher every tick (M3-03 pattern) so toggling the
+   * setting applies on the next tick without a watcher restart.
+   */
+  collapsePersonaTiles?: boolean;
+}
+
+/**
  * Build the full AgentTree from snapshot inputs.
  *
  * Pure function — no side effects. Every output is derived solely from args.
@@ -80,6 +104,7 @@ export interface SessionAgentData {
  * @param roster     Merged roster from the roster loader.
  * @param nowMs      Current epoch ms — injected for testability. Defaults to
  *                   Date.now() when not supplied (production CLI).
+ * @param options    Behavior knobs (see {@link BuildAgentTreeOptions}).
  */
 export function buildAgentTree(
   sessions: SessionRecord[],
@@ -88,7 +113,12 @@ export function buildAgentTree(
   finishedIds: FinishedSet,
   roster: Team[],
   nowMs: number = Date.now(),
+  options: BuildAgentTreeOptions = {},
 ): AgentTree {
+  // Default: grouping ON. Matches VS Code config default (true) and gives
+  // back-compat callers (CLI driver, older tests with no options arg) the
+  // M3-10 collapse behavior by default.
+  const collapsePersonaTiles = options.collapsePersonaTiles !== false;
   const agentDataBySession = new Map<string, SessionAgentData>(
     agentData.map((d) => [d.sessionId, d]),
   );
@@ -198,6 +228,20 @@ export function buildAgentTree(
       return ai - bi;
     });
 
+    // M3-10: persona-tile collapse. Per-team, group N>1 same-memberId tiles
+    // into a `CollapsedPersonaGroup` wrapper. N=1 tiles are emitted bare
+    // (unchanged shape). When `collapsePersonaTiles=false`, the wrapper step
+    // is skipped entirely and the output is identical to pre-M3-10 (every
+    // entry is a bare AgentTile). See `CollapsedPersonaGroup` /
+    // `RosterTileEntry` in shared/types.ts.
+    const rosterTilesWithGroups: Map<string, RosterTileEntry[]> = new Map();
+    for (const [teamId, tiles] of rosterTiles) {
+      rosterTilesWithGroups.set(
+        teamId,
+        collapsePersonaTiles ? groupTilesByPersona(tiles) : (tiles as RosterTileEntry[]),
+      );
+    }
+
     return {
       shortId: session.sessionId.slice(0, 8),
       sessionId: session.sessionId,
@@ -207,7 +251,7 @@ export function buildAgentTree(
       isAlive: session.isAlive,
       cwd: session.cwd,
       title,
-      rosterTiles,
+      rosterTiles: rosterTilesWithGroups,
       teamOrder,
       background,
     };
@@ -309,6 +353,70 @@ export function resolveModelOnParseError(
     return activity.model;
   }
   return "model:unknown";
+}
+
+/**
+ * M3-10 AC1: collapse N>1 same-persona tiles into a `CollapsedPersonaGroup`
+ * wrapper.
+ *
+ * Walks `tiles` in their existing order (already sorted by roster member
+ * declaration order — see `rosterTiles.sort` above), groups consecutive
+ * (and non-consecutive) entries with the same `memberId`, and emits:
+ *   - bare `AgentTile`                       when count for that memberId is 1
+ *   - `CollapsedPersonaGroup { instances }`  when count for that memberId is >= 2
+ *
+ * Order semantics:
+ *   - Within a group, `instances` preserves the original input order
+ *     (insertion order — typically agentId order from the disk read).
+ *   - Across groups, position is determined by the FIRST occurrence of
+ *     each memberId in the input. This keeps the roster-declaration-
+ *     order sort stable: Felix-group appears before Maya-group iff
+ *     Felix's first tile came before Maya's first tile in the input.
+ *
+ * Pure function. Does NOT mutate the input array or its tiles.
+ *
+ * Exported for direct unit-test coverage (AC6).
+ */
+export function groupTilesByPersona(
+  tiles: AgentTile[],
+): RosterTileEntry[] {
+  // First pass: bucket by memberId; record first-occurrence index for
+  // stable cross-group ordering.
+  const buckets = new Map<string, AgentTile[]>();
+  const firstSeenOrder: string[] = [];
+  for (const tile of tiles) {
+    let bucket = buckets.get(tile.memberId);
+    if (bucket === undefined) {
+      bucket = [];
+      buckets.set(tile.memberId, bucket);
+      firstSeenOrder.push(tile.memberId);
+    }
+    bucket.push(tile);
+  }
+
+  // Second pass: emit bare AgentTile for singletons, CollapsedPersonaGroup
+  // for N>=2. The canonical wrapper carries only `kind`, `personaName`,
+  // `count`, `instances` — `memberId`/`teamId`/`role` are recoverable from
+  // `instances[0]` if the renderer needs them.
+  const out: RosterTileEntry[] = [];
+  for (const memberId of firstSeenOrder) {
+    const bucket = buckets.get(memberId)!;
+    if (bucket.length === 1) {
+      out.push(bucket[0]!);
+      continue;
+    }
+    const first = bucket[0]!;
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: first.display,
+      count: bucket.length,
+      // Snapshot the array (do not alias the bucket — defense-in-depth
+      // against downstream mutators).
+      instances: bucket.slice(),
+    };
+    out.push(group);
+  }
+  return out;
 }
 
 /**

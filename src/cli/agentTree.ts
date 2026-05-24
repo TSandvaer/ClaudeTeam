@@ -37,6 +37,7 @@ import {
   type SessionAgentData,
 } from "../extension/state/reducer.js";
 import type { AgentTree, SessionTree, AgentTile, BackgroundAgent, Team } from "../shared/types.js";
+import { isCollapsedPersonaGroup } from "../shared/types.js";
 
 // =============================================================================
 // CLI argument parsing
@@ -366,8 +367,18 @@ function printSession(session: SessionTree, teamNameForId: Map<string, string>):
 
   // Print team cards.
   for (const teamId of session.teamOrder) {
-    const tiles = session.rosterTiles.get(teamId) ?? [];
-    if (tiles.length === 0) continue;
+    const entries = session.rosterTiles.get(teamId) ?? [];
+    if (entries.length === 0) continue;
+
+    // M3-10: flatten any CollapsedPersonaGroup wrappers back to per-spawn
+    // AgentTile rows for the CLI. The CLI is a per-spawn inspection tool; the
+    // dashboard (webview) is where the persona-name collapse is visually
+    // useful. CLI also invokes buildAgentTree with `{ collapsePersonaTiles:
+    // false }` below, so wrappers are not produced in practice — this flatten
+    // is defense in depth for the type contract.
+    const tiles: AgentTile[] = entries.flatMap((e) =>
+      isCollapsedPersonaGroup(e) ? e.instances : [e],
+    );
 
     const teamName = teamNameForId.get(teamId) ?? teamId;
     const bgCount = session.background.length;
@@ -419,7 +430,19 @@ async function main(): Promise<void> {
   }
 
   // Build tree.
-  const tree = buildAgentTree(sessions, agentData, activities, finishedIds, rosterResult.roster);
+  // M3-10: CLI keeps per-spawn rows (one line per dispatch). The dashboard
+  // is the surface where persona collapse is useful — `collapsePersonaTiles:
+  // false` here disables wrapping so the CLI's row count stays predictable
+  // (and matches `formatTileLine` semantics).
+  const tree = buildAgentTree(
+    sessions,
+    agentData,
+    activities,
+    finishedIds,
+    rosterResult.roster,
+    Date.now(),
+    { collapsePersonaTiles: false },
+  );
 
   // Print.
   printTree(tree, rosterResult.roster);

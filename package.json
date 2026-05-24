@@ -87,6 +87,11 @@
           "type": "boolean",
           "default": false,
           "description": "Show Claude Code sessions from all workspaces, not just the current VS Code window. Default: false (only sessions whose cwd matches an open workspace folder are shown)."
+        },
+        "claudeteam.collapsePersonaTiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "When the same rostered persona (e.g. Felix) has been dispatched multiple times in a session, collapse the N tiles into one 'Felix ×N' header with an expandable list. Default: true. Set false to render every dispatch as its own tile (pre-M3-10 behavior)."
         }
       }
     }

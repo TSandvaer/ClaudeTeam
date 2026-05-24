@@ -58,7 +58,34 @@ import {
   type FinishedSet,
   type SessionAgentData,
 } from "../../src/extension/state/reducer.js";
-import { MetaParseError } from "../../src/shared/types.js";
+import { MetaParseError, isCollapsedPersonaGroup } from "../../src/shared/types.js";
+import type {
+  AgentTile,
+  RosterTileEntry,
+} from "../../src/shared/types.js";
+
+/**
+ * M3-10 helper: find a tile by memberId within a `RosterTileEntry[]`. None of
+ * these integration scenarios intentionally produce N>1 same-persona tiles,
+ * so the reducer should always emit bare `AgentTile`s under
+ * `collapsePersonaTiles: true` (the default). The `CollapsedPersonaGroup`
+ * branch is defensive — narrows to `instances[]` and matches per-instance
+ * `memberId` (the canonical wrapper itself does not carry `memberId`).
+ */
+function findTile(
+  entries: readonly RosterTileEntry[],
+  memberId: string,
+): AgentTile | undefined {
+  for (const entry of entries) {
+    if (isCollapsedPersonaGroup(entry)) {
+      const match = entry.instances.find((t) => t.memberId === memberId);
+      if (match) return match;
+      continue;
+    }
+    if (entry.memberId === memberId) return entry;
+  }
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Shared constants
@@ -386,7 +413,7 @@ describe("AC2.3: subagent spawns (new meta.json + .jsonl → reducer adds it)", 
     // Felix's tile must appear under claudeteam-alpha.
     expect(s.teamOrder).toContain("claudeteam-alpha");
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(alphaTiles.some((t) => t.memberId === "felix")).toBe(true);
+    expect(findTile(alphaTiles, "felix")).toBeDefined();
 
     // Negative path: background list does NOT contain a felix entry.
     expect(s.background.some((b) => b.agentType === "felix")).toBe(false);
@@ -425,7 +452,7 @@ describe("AC2.4: subagent finishes (parent transcript gets tool_result → reduc
 
     const s = tree.sessions[0]!;
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    const felixTile = alphaTiles.find((t) => t.memberId === "felix");
+    const felixTile = findTile(alphaTiles, "felix");
     expect(felixTile).toBeDefined();
     // Must NOT be finished — the parent hasn't recorded the tool_result yet.
     expect(felixTile!.state).not.toBe("finished");
@@ -441,7 +468,7 @@ describe("AC2.4: subagent finishes (parent transcript gets tool_result → reduc
 
     const s = tree.sessions[0]!;
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    const felixTile = alphaTiles.find((t) => t.memberId === "felix");
+    const felixTile = findTile(alphaTiles, "felix");
     expect(felixTile).toBeDefined();
     expect(felixTile!.state).toBe("finished");
     expect(felixTile!.activity).toBe("finished");
@@ -469,7 +496,7 @@ describe("AC2.4: subagent finishes (parent transcript gets tool_result → reduc
     const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
     const s = tree.sessions[0]!;
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    const felixTile = alphaTiles.find((t) => t.memberId === "felix");
+    const felixTile = findTile(alphaTiles, "felix");
     expect(felixTile!.state).not.toBe("finished");
   });
 });
@@ -533,12 +560,12 @@ describe("AC2.5: two sessions sharing the same cwd → both materialize separate
 
     // SESSION_A has felix rostered; SESSION_C has a background agent.
     const aAlpha = sA.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(aAlpha.some((t) => t.memberId === "felix")).toBe(true);
+    expect(findTile(aAlpha, "felix")).toBeDefined();
     expect(sC.background.some((b) => b.agentType === "general-purpose")).toBe(true);
 
     // Negative path: SESSION_C must NOT contain a felix rostered tile.
     const cAlpha = sC.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(cAlpha.some((t) => t.memberId === "felix")).toBe(false);
+    expect(findTile(cAlpha, "felix")).toBeUndefined();
   });
 });
 
@@ -632,7 +659,7 @@ describe("AC2.6: schema drift — all three meta.json variants parse and match c
     // Must be rostered under claudeteam-alpha as felix.
     expect(s.teamOrder).toContain("claudeteam-alpha");
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(alphaTiles.some((t) => t.memberId === "felix")).toBe(true);
+    expect(findTile(alphaTiles, "felix")).toBeDefined();
 
     // Negative path: must NOT be in background (old-schema-only matcher would fail here
     // if it treated v2.1.145-persona as a different code path from v2.1.119).
@@ -667,7 +694,7 @@ describe("AC2.6: schema drift — all three meta.json variants parse and match c
 
     // Session B: felix rostered.
     const bAlpha = sB.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(bAlpha.some((t) => t.memberId === "felix")).toBe(true);
+    expect(findTile(bAlpha, "felix")).toBeDefined();
     expect(sB.background).toHaveLength(0);
   });
 });
@@ -716,7 +743,7 @@ describe("AC2.7: race — subagent JSONL + meta.json exist but parent has no too
 
     // Tile must be present — the agent is not orphaned.
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    const felixTile = alphaTiles.find((t) => t.memberId === "felix");
+    const felixTile = findTile(alphaTiles, "felix");
     expect(felixTile).toBeDefined();
 
     // State must be "running" or "idle" — NOT "error" and NOT "finished".
@@ -748,7 +775,7 @@ describe("AC2.7: race — subagent JSONL + meta.json exist but parent has no too
     const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
     const s = tree.sessions[0]!;
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    const felixTile = alphaTiles.find((t) => t.memberId === "felix");
+    const felixTile = findTile(alphaTiles, "felix");
     expect(felixTile).toBeDefined();
     // Session is dead (DEAD_PID_1 should not exist on any real machine),
     // so the reducer maps this to "error" per inferState() — acceptable.
@@ -791,7 +818,7 @@ describe("edge cases: malformed JSONL + empty roster", () => {
     const s = tree.sessions[0]!;
     // Tile still present despite malformed JSONL (meta parsed fine).
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(alphaTiles.some((t) => t.memberId === "felix")).toBe(true);
+    expect(findTile(alphaTiles, "felix")).toBeDefined();
   });
 
   it("empty roster → all agents go to background, no team cards", async () => {
@@ -860,7 +887,7 @@ describe("full round-trip: real fixtures → AgentTree", () => {
     // Rostered: felix under claudeteam-alpha.
     expect(s.teamOrder).toContain("claudeteam-alpha");
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
-    const felixTile = alphaTiles.find((t) => t.memberId === "felix");
+    const felixTile = findTile(alphaTiles, "felix");
     expect(felixTile).toBeDefined();
     expect(felixTile!.display).toBe("Felix");
     expect(felixTile!.role).toBe("Extension Host Dev");
