@@ -16,7 +16,7 @@
  */
 
 import type {
-  AgentTile,
+  RosterTileEntry,
   SessionTree,
   StateDelta,
   Team,
@@ -28,14 +28,18 @@ import type {
 
 /**
  * JSON-safe variant of `SessionTree` — `rosterTiles` is flattened from
- * `Map<string, AgentTile[]>` to a plain object keyed by teamId. Maps do not
- * round-trip through `JSON.stringify` (they serialize to `{}`), and VS Code's
- * `webview.postMessage` uses JSON internally. See
+ * `Map<string, RosterTileEntry[]>` to a plain object keyed by teamId. Maps do
+ * not round-trip through `JSON.stringify` (they serialize to `{}`), and VS
+ * Code's `webview.postMessage` uses JSON internally. See
  * `.claude/docs/vscode-extension-conventions.md` "JSON-serialization constraint".
+ *
+ * Each value is `RosterTileEntry[]` — entries are either bare `AgentTile`
+ * objects (N=1 back-compat) or `CollapsedPersonaGroup` wrappers (M3-10 N>1).
+ * Both are plain JSON-safe objects; no further flattening needed.
  */
 export interface SerializedSessionTree
   extends Omit<SessionTree, "rosterTiles"> {
-  rosterTiles: Record<string, AgentTile[]>;
+  rosterTiles: Record<string, RosterTileEntry[]>;
 }
 
 /**

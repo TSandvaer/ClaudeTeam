@@ -71,8 +71,12 @@ describe("hydrateState — wire shape → in-memory shape", () => {
     const rt = out.sessions[0]!.rosterTiles;
     expect(rt).toBeInstanceOf(Map);
     expect(rt.get("claudeteam-alpha")).toHaveLength(2);
-    expect(rt.get("claudeteam-alpha")?.[0]?.memberId).toBe("felix");
-    expect(rt.get("claudeteam-alpha")?.[1]?.memberId).toBe("maya");
+    // The hydrator's value type is `RosterTileEntry[]` (M3-10 widened
+    // union — bare `AgentTile` or `CollapsedPersonaGroup`). This test
+    // wires bare AgentTiles; narrow via cast to access `memberId`.
+    const entries = rt.get("claudeteam-alpha")!;
+    expect((entries[0] as AgentTile).memberId).toBe("felix");
+    expect((entries[1] as AgentTile).memberId).toBe("maya");
   });
 
   it("preserves multi-team groupings as separate Map entries", () => {

@@ -41,13 +41,24 @@ const HOUR_MS = 60 * 60_000;
 /**
  * Format an elapsed-ms value as a compact freshness string.
  *
+ * Rollover NIT fix (M3-10, ClickUp 86c9ydz4k): elapsed values in the half-
+ * second window just below the minute boundary used to round up to `"60s"`
+ * — visually colliding with the next bucket's `"1m"`. `Math.round(59_999 /
+ * 1000)` is 60, but the activity string `"60s"` reads as "one minute" to the
+ * sponsor and breaks the seconds-bucket contract. Clamp the displayed
+ * seconds at 59 so the last sub-minute tick reads `"59s"` and the next tick
+ * (>= 60_000 ms) crosses cleanly to `"1m"`. Equivalent fix would be
+ * `Math.floor` on seconds, but `Math.min(59, Math.round(...))` preserves the
+ * existing half-up behavior for values < 59.5s (so 500ms still rounds to
+ * 1s) — only the 59.500 → 59.999 window is affected.
+ *
  * @param elapsedMs Elapsed time in milliseconds. Negative values clamp to 0.
  * @returns         "Xs" / "Xm" / "Xh" — see thresholds in module doc.
  */
 export function formatFreshness(elapsedMs: number): string {
   const ms = Math.max(0, elapsedMs);
   if (ms < MINUTE_MS) {
-    return `${Math.round(ms / 1000)}s`;
+    return `${Math.min(59, Math.round(ms / 1000))}s`;
   }
   if (ms < HOUR_MS) {
     return `${Math.floor(ms / MINUTE_MS)}m`;

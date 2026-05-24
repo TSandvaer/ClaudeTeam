@@ -247,6 +247,72 @@ body {
 }
 
 /* ===========================================================================
+ * Collapsed-persona wrapper (M3-10) — header tile + lazy instances list.
+ *
+ * Theme variables only. The header gets the same hover/focus treatment as
+ * an agent tile so the affordance is consistent. Indentation for the
+ * instances container matches the tile-row indent (state-dot width + gap)
+ * so expanded instances visually sit under the persona name.
+ * --------------------------------------------------------------------------- */
+
+.collapsed-persona {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+}
+
+.collapsed-persona-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-state-dot-gap);
+  width: 100%;
+  padding: var(--ct-space-s);
+  background-color: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--vscode-foreground, #cccccc);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  outline: 0 solid transparent;
+}
+
+.collapsed-persona-header:hover,
+.collapsed-persona-header:focus-visible {
+  background-color: var(
+    --vscode-list-hoverBackground,
+    rgba(255, 255, 255, 0.07)
+  );
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+}
+
+.collapsed-persona-chevron {
+  display: inline-block;
+  width: var(--ct-state-dot-size);
+  flex-shrink: 0;
+  color: var(--vscode-descriptionForeground, #858585);
+  font-size: smaller;
+}
+
+.collapsed-persona-name {
+  font-weight: 600;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.collapsed-persona-instances {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  /* Indent matches the tile-row content indent (state-dot + gap) so each
+   * instance tile lines up visually beneath the persona name. */
+  padding-left: calc(var(--ct-state-dot-size) + var(--ct-state-dot-gap));
+}
+
+.collapsed-persona-instances[hidden] {
+  display: none;
+}
+
+/* ===========================================================================
  * Background chip (spec §7)
  * =========================================================================== */
 
