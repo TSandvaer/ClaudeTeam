@@ -43,6 +43,7 @@ import {
   type WebviewMessageHandlers,
 } from "./view/provider.js";
 import { startWatcher, type WatcherHandle } from "./watcher/watcherLoop.js";
+import { startRosterWatcher } from "./roster/rosterWatcher.js";
 import { postState } from "./messageBus.js";
 import { cwdToSlug } from "../shared/slug.js";
 
@@ -58,6 +59,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // replaced on every rebind so the subscription stack stays bounded
   // (M2-06 absorbed-NIT #1 — see AC7(e) verification).
   let watcherHandle: WatcherHandle | null = null;
+  /**
+   * Roster YAML watcher (M3-01). Disposed-and-replaced on every webview
+   * resolve in lockstep with `watcherHandle`. The cleanup wrapper below
+   * tears it down on `deactivate()`.
+   */
+  let rosterWatcherDisposable: vscode.Disposable | null = null;
 
   /** Track which roster path the most recent tick used (for `ui:open-roster`). */
   let resolvedRosterPath: string | null = null;
@@ -70,6 +77,8 @@ export function activate(context: vscode.ExtensionContext): void {
     dispose: () => {
       watcherHandle?.dispose();
       watcherHandle = null;
+      rosterWatcherDisposable?.dispose();
+      rosterWatcherDisposable = null;
     },
   });
 
@@ -78,10 +87,16 @@ export function activate(context: vscode.ExtensionContext): void {
     // again after `Reload Window`, and a stale watcher would keep ticking
     // against a disposed webview (postMessage throws → caught in messageBus).
     watcherHandle?.dispose();
+    rosterWatcherDisposable?.dispose();
+    rosterWatcherDisposable = null;
 
     const config = vscode.workspace.getConfiguration("claudeteam");
     const pollIntervalMs = config.get<number>("pollIntervalMs") ?? 2000;
     const rosterPathOverride = config.get<string>("rosterPath") ?? "";
+    // M3-01 AC8: feature-flagged polling fallback for FS-watcher unreliability.
+    // Default 0 = OFF; positive values enable a setInterval-driven mtime check.
+    const rosterPollIntervalMs =
+      config.get<number>("rosterPollIntervalMs") ?? 0;
 
     const claudeHome = join(homedir(), ".claude");
     const globalRosterPath =
@@ -112,6 +127,30 @@ export function activate(context: vscode.ExtensionContext): void {
       },
       logger: {
         warn: (msg) => console.warn(`[claudeteam.watcher] ${msg}`),
+      },
+    });
+
+    // M3-01: live YAML hot-reload. On any change to the global or per-project
+    // roster file, debounce 250ms, then trigger a watcher tick. The tick
+    // re-runs loadRoster (already inside runTick) and reposts state to the
+    // webview — so the user's YAML edit lands in the dashboard within
+    // ~debounce + 1 tick (typically <500ms). The watcher itself never
+    // throws — parse/validation failures surface through the matcher's
+    // input as the previous valid roster (loadRoster already swallows
+    // errors and reports them in `errors`); M3-04 renders the chip.
+    rosterWatcherDisposable = startRosterWatcher({
+      globalPath: globalRosterPath,
+      projectPath: projectRosterPath,
+      pollIntervalMs: rosterPollIntervalMs,
+      onRosterChange: () => {
+        // The tick re-reads disk; we discard the RosterLoadResult here
+        // and let runTick own the canonical reload. Keeps a single source
+        // of truth for "what roster is in effect right now".
+        watcherHandle?.triggerTick();
+      },
+      logger: {
+        warn: (msg) => console.warn(`[claudeteam.rosterWatcher] ${msg}`),
+        info: (msg) => console.info(`[claudeteam.rosterWatcher] ${msg}`),
       },
     });
 
