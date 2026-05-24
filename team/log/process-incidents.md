@@ -20,6 +20,23 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-24/25 — Orchestrator stuck on Bash background CI poll (zero-output completion didn't surface)
+
+**Symptom:** Orchestrator dispatched a `Bash` task with `run_in_background: true` running an `until <CI green>; do sleep 10; done` polling loop, then emitted "Waiting on PR #45 CI" and ended turn. The bash task completed successfully (CI was green ~2 min after the poll started), but the completion `<task-notification>` was never rendered to the orchestrator's main thread. Orchestrator was effectively stuck until sponsor reached out ~10 min later asking "are you stuck right now?" — well inside the 15-min auto-status cron cadence gap.
+
+**Cause:**
+- (a) `Bash run_in_background: true` with an `until` loop is the Monitor-tool-documented pattern for "tell me when X is ready" single-notification cases. So the orchestrator followed the documented pattern.
+- (b) BUT: when the bash task exits with **zero stdout output** (the until-loop's `sleep 10` consumes the polling output and the final `gh pr view` runs as a separate statement that DID produce JSON output, yet `cat` of the task output file showed `(Bash completed with no output)`), the harness's completion-notification mechanism appears to not reliably surface a `<task-notification>`. Cannot prove from available logs whether the notification was emitted-but-dropped or never emitted.
+- (c) Auto-status cron `c0bc4c77` (`7,22,37,52 * * * *`) was alive but its NEXT firing was 12-15 min away from the orchestrator's "Waiting" message. Cron would have caught the mergeable PR within the cron interval — but sponsor noticed first, exposing that the cron cadence is too coarse for fast-completing time-critical events.
+
+**Recovery:** Orchestrator (on sponsor prompt) immediately ran `gh pr view 45 --json mergeable,statusCheckRollup` — confirmed PR #45 was MERGEABLE + CI green since ~23:42Z. Merged PR #45, flipped `86c9ybtut → complete` via MCP, dispatched Felix + Maya on M3-10 to keep the team moving. Read the bash task output file directly (`cat /c/Users/.../tasks/bbi9wve60.output`) to confirm the bash had in fact completed.
+
+**Prevention:** Stage-diff-then-apply pattern (memory `[[classifier-blocks-self-mod-of-orch-autonomy]]`) for a new user-global rule **"Orchestrator wake-signal discipline"**. Full text + apply instructions in `team/log/proposed-global-rule-wake-discipline-2026-05-25.md`. Short version: when waiting on a time-critical event, ALWAYS pair `Bash run_in_background` with `ScheduleWakeup` (60-270s for in-cache CI polls) — never rely on bash background as the sole wake signal. Cron is the backstop, not the primary.
+
+**Code/process pointer:** PR #45 (`2e7c66c`); task ID `bbi9wve60`; staged-diff doc `team/log/proposed-global-rule-wake-discipline-2026-05-25.md`; sponsor's catch was "are you stuck right now?" prompt.
+
+---
+
 ## 2026-05-24 — Parallel-orchestrator race (two Claude Code sessions on same project)
 
 **Symptom:** During M3 Wave 0, a second Claude Code session was orchestrating ClaudeTeam in parallel — its cron tick + away-mode loop ran independently of the primary session. Symptoms observed: (a) PR #35 showed MERGED at a commit SHA the primary session didn't push; (b) `team/log/clickup-pending.md` had entries appearing "from nowhere" between the primary's last read and current state; (c) NEW-TICKET-REQUEST blocks were resolved by the parallel session while the primary was mid-rebase. Sponsor noticed the divergent activity and told the parallel thread to save + step down.
