@@ -367,3 +367,31 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** Conflict 3-way trees from `git merge-tree --write-tree`: base `b8d46c6`, ours (main) `b7aa4ec`, theirs (PR #35) `7511c3e`. Resolution-tick target output: keep main's switchover comment line + append Felix's `ENTRY-2026-05-24T11:58:00Z` line below it.
+
+## 2026-05-24 1236 UTC — Admin-merge PR #35 (Felix M3-01 roster watcher) — Maya APPROVE_WITH_NITS, gates clear
+
+**Decided:** `gh pr merge 35 --admin --squash --delete-branch`. Merged at `a74cb94`. Foundational gates: (a) CI green on head `6c19b63` (2× SUCCESS runs 26361382640 + 26361383601 via `gh run view` per CLAUDE.md hard rule 9), (b) Maya APPROVE_WITH_NITS verdict at PR #35 comment `4528643161`, (c) manifest gate ✅ (`vsce package --no-yarn` packs cleanly with new `claudeteam.rosterPollIntervalMs` key), (d) Maya's worktree detached at `c:\Trunk\PRIVATE\ClaudeTeam-maya-wt` (unblocks `--delete-branch`). Log-only-conflict was independently resolved on origin between the 1232 UTC diagnosis tick and the verdict tick (head moved `14a1988 → 6c19b63` — rebase preserved both main's switchover comment AND Felix's `ENTRY-2026-05-24T11:58:00Z` line; no orch intervention needed for the rebase).
+
+**Foundation:** Rule 6.6 #1 — routine-PR-merge with CI green + peer-reviewer APPROVE'd, code-PR class (not infra/billing/strategic). All four general gates hold: reversible (`gh pr` provides revert), foundation-citable (this rule + Maya's APPROVE comment), not on never-list, logged BEFORE execution.
+
+**Alternative:** Surface verdict to sponsor for explicit merge approval. Rejected — Maya is the designated peer reviewer per `[[project_team_roster]]` Felix↔Maya pairing; her APPROVE_WITH_NITS clears the gate; sponsor reviews via decisions-log audit trail on return per project convention.
+
+**Reversibility:** `git revert a74cb94` + force-push (ONLY if sponsor objects) ≤5 min. Branch `felix/m3-01-roster-watcher` is deleted on origin per `--delete-branch`; if revert is needed, re-create from `a74cb94^2` (parent2 of the squash merge — wait, squash has no parent2; re-create from `6c19b63` via local refs if still cached, else fetch). Realistically, this is an additive code PR — any issue surfaces as a forward-fix.
+
+**Status:** pending review.
+
+**Pointers:** Merge SHA `a74cb94`; PR #35 https://github.com/TSandvaer/ClaudeTeam/pull/35; Maya verdict comment https://github.com/TSandvaer/ClaudeTeam/pull/35#issuecomment-4528643161; CI run 26361383601; ClickUp `86c9yaq1e` flip to `complete` pending Nora dispatch (this tick).
+
+## 2026-05-24 1240 UTC — Auto-dispatch Nora for M3-01 ClickUp closure + NITs follow-up ticket creation
+
+**Decided:** Spawn Nora as `subagent_type=nora` with `run_in_background: true` and `name: "nora-m3-01-closeout"`. Scope: (1) flip ClickUp `86c9yaq1e` (M3-01) `in review → complete` via `mcp__clickup__clickup_update_task` — merge SHA `a74cb94`, peer-review comment URL `https://github.com/TSandvaer/ClaudeTeam/pull/35#issuecomment-4528643161`. (2) Create new ClickUp ticket `chore(roster): M3-01 NITs follow-up` in list `901523520912` with status `to do`, owner Felix, peer reviewer Maya — body lists NIT #1 (`package.json` `rosterPollIntervalMs` description says "e.g. 5000" but in-code clamp is 250ms — fix description OR raise clamp) and NIT #2 (PR-body wording "atomic-replace" overclaims — body-only, no code fix needed, just note in dispatch brief for future PR-body discipline). NIT #3 explicitly absorbs into M3-02 per Maya's recommendation (registerDirWatcher race acceptable for V1; M3-02 `claudeteam.openRoster` will auto-create dir + file, eliminating the race) — Nora updates `team/nora-pl/milestone-3-backlog.md § M3-02` to absorb the NIT #3 scope explicitly. (3) Append clickup-pending ENTRY for the new NITs ticket's `to do` state (`ENTRY-<ISO-TS>: <new-ticket-id> -> to do (M3-01 NITs follow-up)`). ≤200 word final report.
+
+**Foundation:** Rule 6.6 #4 (NITs-ticket-creation from APPROVE_WITH_NITS when scope is mechanical) + rule 6.6 #6 (NITs-absorption-into-downstream-ticket when files overlap AND downstream is scheduled). NIT #1 + #2 scope is mechanically derivable from Maya's PR comment text. NIT #3 absorbs into M3-02 (scheduled in M3 Wave 0 next, `claudeteam.openRoster` directory-auto-create will eliminate the race). `[[feedback_clickup_update_task_permission_rule]]` — Nora has MCP tools.
+
+**Alternative:** Have orchestrator append clickup-pending entry + skip ticket creation entirely. Rejected — rule 6.6 #4 is sponsor-pre-cleared for mechanical NITs, and Nora's ticket creation closes the audit loop. Background-only dispatch per global rule.
+
+**Reversibility:** `TaskStop nora-m3-01-closeout` ≤1 min; ticket archive ≤1 min; ClickUp status flip is one-tool-call to revert.
+
+**Status:** pending review.
+
+**Pointers:** Agent name="nora-m3-01-closeout"; new ticket title `chore(roster): M3-01 NITs follow-up`; existing M3-02 in `team/nora-pl/milestone-3-backlog.md` gets NIT #3 absorption note.

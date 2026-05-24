@@ -76,4 +76,5 @@ ENTRY 028: 86c9y9v7r -> in review
 ENTRY 029: 86c9y9yzu -> in review (PR #30 opened — fix(scaffold): dist/extension CJS shim for Node 22+ require())
 # --- Switchover 2026-05-24 (M3-05): entries above use legacy sequential ENTRY-NNN; entries below use timestamp-based ENTRY-<ISO-8601-UTC>. ---
 ENTRY-2026-05-24T11:58:00Z: 86c9yaq1e -> in review (M3-01 PR opened — feat(roster): live YAML watch + hot-reload)
+ENTRY-2026-05-24T12:36:00Z: 86c9yaq1e -> complete (PR #35 merged at a74cb94 — Maya APPROVE_WITH_NITS, 3 NITs non-blocking, NIT #3 absorbs into M3-02 per Maya's recommendation)
 ```
