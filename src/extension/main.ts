@@ -123,6 +123,18 @@ export function activate(context: vscode.ExtensionContext): void {
       globalRosterPath,
       projectRosterPath,
       pollIntervalMs,
+      // M3-03: read both inputs fresh every tick so config / workspace
+      // changes apply on the NEXT tick without restarting the watcher
+      // (AC5). Defaults: showAll=false (filter ON); workspaceFolders may
+      // be undefined when no folder is open (don't-strand passthrough).
+      getWorkspaceFolders: () =>
+        vscode.workspace.workspaceFolders?.map((f) => ({
+          fsPath: f.uri.fsPath,
+        })),
+      getShowAllSessionsGlobally: () =>
+        vscode.workspace
+          .getConfiguration("claudeteam")
+          .get<boolean>("showAllSessionsGlobally") ?? false,
       onStateChange: (state) => {
         void postState(webview, state);
       },
@@ -130,6 +142,28 @@ export function activate(context: vscode.ExtensionContext): void {
         warn: (msg) => console.warn(`[claudeteam.watcher] ${msg}`),
       },
     });
+
+    // M3-03 AC5: react to the showAllSessionsGlobally toggle (and any other
+    // claudeteam.* setting change) without requiring Reload Window. The next
+    // tick will read the fresh value via getShowAllSessionsGlobally and
+    // re-filter; triggerTick() bypasses the regular interval to make the
+    // effect feel instant.
+    const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
+      (e) => {
+        if (e.affectsConfiguration("claudeteam.showAllSessionsGlobally")) {
+          watcherHandle?.triggerTick();
+        }
+      },
+    );
+
+    // Tie the configChangeDisposable lifetime to the watcherHandle: rebinding
+    // the watcher on the next resolveWebviewView would otherwise leak this
+    // listener. We attach it to the same dispose chain.
+    const composedDispose = watcherHandle.dispose.bind(watcherHandle);
+    watcherHandle.dispose = () => {
+      configChangeDisposable.dispose();
+      composedDispose();
+    };
 
     // M3-01: live YAML hot-reload. On any change to the global or per-project
     // roster file, debounce 250ms, then trigger a watcher tick. The tick

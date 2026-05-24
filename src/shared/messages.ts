@@ -47,9 +47,19 @@ export interface SerializedSessionTree
  * payload via `as unknown as DashboardState` because the wire shape differed
  * from the in-memory shape. Introducing `SerializedDashboardState` removes the
  * cast — the message type now matches the actual JSON payload.
+ *
+ * `filterApplied` (M3-03): mirrors `AgentTree.filterApplied` — boolean (no
+ * Map/Set/Date — JSON-safe as-is per the wire-shape constraint documented in
+ * `.claude/docs/vscode-extension-conventions.md` "JSON-serialization
+ * constraint"). Defaults to false on the wire when omitted by the host.
  */
 export interface SerializedDashboardState {
   sessions: SerializedSessionTree[];
+  /**
+   * Window-scoped filter applied this tick (see AgentTree.filterApplied).
+   * Optional for back-compat — webview MUST treat `undefined` as `false`.
+   */
+  filterApplied?: boolean;
 }
 
 /**

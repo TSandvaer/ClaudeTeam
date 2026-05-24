@@ -66,6 +66,11 @@ vi.mock("vscode", () => {
         onDidDelete: () => ({ dispose: () => undefined }),
         dispose: () => undefined,
       }),
+      // M3-03: main.ts wires onDidChangeConfiguration to re-tick the watcher
+      // when claudeteam.showAllSessionsGlobally flips. Inert stub here — the
+      // leak test doesn't exercise config-change behavior, but the symbol
+      // must be present so the activation handler doesn't throw.
+      onDidChangeConfiguration: () => ({ dispose: () => undefined }),
     },
     commands: {
       registerCommand: () => ({ dispose: () => undefined }),

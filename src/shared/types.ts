@@ -337,10 +337,25 @@ export interface SessionTree {
 /**
  * The full agent tree produced by `buildAgentTree`. Pure data — no filesystem
  * access inside the reducer; callers supply the inputs.
+ *
+ * `filterApplied` (M3-03): true when the window-scoped session filter ran AND
+ * removed at least one session from the unfiltered set. The webview consumes
+ * this to distinguish "filtered to empty for this workspace" from "globally
+ * empty" — the former gets a per-workspace empty-state message and a hint
+ * about the `claudeteam.showAllSessionsGlobally` setting; the latter gets the
+ * generic empty-state. Optional for back-compat with consumers (CLI driver,
+ * older tests) that don't supply or read it; absent → treated as false.
  */
 export interface AgentTree {
   /** One entry per SessionRecord, in the order supplied. */
   sessions: SessionTree[];
+  /**
+   * True when `filterSessionsToWindow` removed ≥1 session this tick.
+   * False / absent when no filter ran (showAll on, or no workspace folder
+   * open) OR the filter ran but didn't reduce the count.
+   * See `src/extension/watcher/sessionFilter.ts` § isFilterApplied.
+   */
+  filterApplied?: boolean;
 }
 
 /**

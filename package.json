@@ -82,6 +82,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show a count of unrostered (background) agents in the dashboard."
+        },
+        "claudeteam.showAllSessionsGlobally": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show Claude Code sessions from all workspaces, not just the current VS Code window. Default: false (only sessions whose cwd matches an open workspace folder are shown)."
         }
       }
     }

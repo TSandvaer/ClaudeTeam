@@ -40,6 +40,11 @@ import * as vscode from "vscode";
 import { listSessions } from "./sessionRegistry.js";
 import { readActivity } from "./subagentTailer.js";
 import { parseMetaFromString } from "./metaJsonLoader.js";
+import {
+  filterSessionsToWindow,
+  isFilterApplied,
+  type WindowFolder,
+} from "./sessionFilter.js";
 import { loadRoster } from "../roster/loader.js";
 import { buildAgentTree } from "../state/reducer.js";
 import type {
@@ -95,6 +100,22 @@ export interface WatcherOptions {
     onDidChange(handler: () => void): vscode.Disposable;
     onDidDelete(handler: () => void): vscode.Disposable;
   };
+
+  /**
+   * Optional resolver for the current VS Code window's workspace folders
+   * (M3-03). Read fresh every tick so workspace add/remove events are
+   * picked up without restarting the watcher. When omitted or returning
+   * undefined/empty, the window-filter falls through to passthrough
+   * behavior (don't strand the user).
+   */
+  getWorkspaceFolders?: () => readonly WindowFolder[] | undefined;
+
+  /**
+   * Optional resolver for the `claudeteam.showAllSessionsGlobally` setting
+   * (M3-03 AC4/AC5). Read fresh every tick so config changes apply on the
+   * next tick without restart. When omitted, treated as `false` (filter ON).
+   */
+  getShowAllSessionsGlobally?: () => boolean;
 
   /** Optional logger; defaults to a no-op so silent in production. */
   logger?: { warn: (msg: string) => void };
@@ -160,6 +181,11 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         claudeHome: opts.claudeHome,
         globalRosterPath: opts.globalRosterPath,
         projectRosterPath: opts.projectRosterPath,
+        // M3-03: read both resolvers fresh every tick so the user's
+        // config toggle / workspace-folder changes apply on the next
+        // emission without restarting the watcher.
+        workspaceFolders: opts.getWorkspaceFolders?.(),
+        showAllSessionsGlobally: opts.getShowAllSessionsGlobally?.() ?? false,
         logger,
       });
       // Always update lastState — even on hash-skip — so host lookups against
@@ -229,6 +255,17 @@ export interface RunTickOptions {
   claudeHome: string;
   globalRosterPath?: string;
   projectRosterPath?: string;
+  /**
+   * Current VS Code window's workspace folders (M3-03). When omitted /
+   * empty, the window-filter falls through to passthrough behavior.
+   */
+  workspaceFolders?: readonly WindowFolder[] | undefined;
+  /**
+   * Value of `claudeteam.showAllSessionsGlobally` (M3-03). Defaults to
+   * `false` (filter ON). When `true`, the filter is a passthrough — all
+   * sessions on the machine are visible.
+   */
+  showAllSessionsGlobally?: boolean;
   logger?: { warn: (msg: string) => void };
 }
 
@@ -241,9 +278,27 @@ export interface RunTickOptions {
  */
 export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
   const logger = opts.logger ?? { warn: () => {} };
-  const sessions = listSessions(opts.claudeHome, {
+  const rawSessions = listSessions(opts.claudeHome, {
     warn: (m) => logger.warn(m),
   });
+
+  // M3-03 AC3: window-scoped session filtering runs BEFORE roster matching
+  // (matcher's input set is scoped to the current window). Pure filter — see
+  // sessionFilter.ts for the don't-strand-the-user semantics when no folder
+  // is open or showAll is true.
+  const showAll = opts.showAllSessionsGlobally === true;
+  const sessions = filterSessionsToWindow(
+    rawSessions,
+    opts.workspaceFolders,
+    showAll,
+  );
+  const filterApplied = isFilterApplied(
+    rawSessions.length,
+    sessions.length,
+    opts.workspaceFolders,
+    showAll,
+  );
+
   const projectsDir = join(opts.claudeHome, "projects");
 
   const agentData: SessionAgentData[] = [];
@@ -307,13 +362,17 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     logger.warn(`watcherLoop: roster error: ${e}`);
   }
 
-  return buildAgentTree(
+  const tree = buildAgentTree(
     sessions,
     agentData,
     activities,
     finishedIds,
     rosterResult.roster,
   );
+  // M3-03 AC7: stamp the window-filter flag on the produced tree. Reducer
+  // is workspace-agnostic — it doesn't know about the filter, just the
+  // input set — so the watcher layer owns the flag.
+  return { ...tree, filterApplied };
 }
 
 // =============================================================================
@@ -342,7 +401,11 @@ export function hashState(state: DashboardState): string {
     rosterTiles: Object.fromEntries(s.rosterTiles),
     background: s.background,
   }));
-  return JSON.stringify(sessions);
+  // M3-03: include filterApplied in the hash so toggling the global setting
+  // (or opening/closing a workspace folder) re-emits state even when the
+  // visible session set is unchanged. Webview empty-state messaging depends
+  // on this flag, so a state change must propagate.
+  return JSON.stringify({ sessions, filterApplied: state.filterApplied === true });
 }
 
 /** Read the `ai-title` record from a parent JSONL. Null on miss/error. */

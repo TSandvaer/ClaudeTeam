@@ -79,6 +79,8 @@ ENTRY-2026-05-24T11:58:00Z: 86c9yaq1e -> in review (M3-01 PR opened — feat(ros
 ENTRY-2026-05-24T12:36:00Z: 86c9yaq1e -> complete (PR #35 merged at a74cb94 — Maya APPROVE_WITH_NITS, 3 NITs non-blocking, NIT #3 absorbs into M3-02 per Maya's recommendation)
 ENTRY-2026-05-24T13:30:01Z: 86c9yb0yg -> to do (M3-01 NITs follow-up — ticket created; see NEW-TICKET-REQUEST body block below for audit trail)
 ENTRY-2026-05-24T14:53:00Z: NEW-TICKET-REQUEST -> in review (M3-02 PR opened — feat(roster): claudeteam.openRoster command + auto-create starter YAML; orchestrator to create in list 901523520912 and substitute the resulting task ID; see M3-02 body block below)
+ENTRY-2026-05-24T15:30:00Z: <M3-03-TASK-ID> -> in progress (M3-03 dispatch picked up — feat(host): window-scoped session filtering; sub-agent MCP gap — orchestrator to substitute task ID created at dispatch time per the M3-03 dispatch brief)
+ENTRY-2026-05-24T15:30:01Z: <M3-03-TASK-ID> -> in review (M3-03 PR opened — feat(host): window-scoped session filtering; orchestrator to substitute task ID and the PR URL when posting flip)
 ```
 
 ## NEW-TICKET-REQUEST — M3-02 (orchestrator to create)
