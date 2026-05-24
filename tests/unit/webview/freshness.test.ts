@@ -47,10 +47,33 @@ describe("formatFreshness", () => {
     expect(formatFreshness(1_500)).toBe("2s");
   });
 
-  it("renders the last second before the minute rollover as \"Xs\"", () => {
-    // 59.999s is still seconds; 60.000s flips to "1m".
-    expect(formatFreshness(59_999)).toBe("60s"); // rounds to 60s, still under 60_000 ms threshold
+  it("renders the last second before the minute rollover as \"59s\" (no \"60s\")", () => {
+    // M3-10 / 86c9ydz4k rollover NIT fix: 59.999s is the last sub-minute
+    // tick. Pre-fix `Math.round(59_999 / 1000)` returned 60, surfacing the
+    // misleading string "60s" — visually colliding with the next bucket's
+    // "1m". The fix clamps the seconds bucket at 59 so the rollover is
+    // unambiguous: ...58s, 59s, 1m, 1m, 1m...
+    expect(formatFreshness(59_999)).toBe("59s");
     expect(formatFreshness(60_000)).toBe("1m");
+  });
+
+  it("clamps every value in the [59500ms, 59999ms] half-up window to \"59s\"", () => {
+    // Defends the rollover NIT fix at every input in the half-up rounding
+    // window where `Math.round` would otherwise have produced 60. Any of
+    // these values rendering "60s" is a regression.
+    expect(formatFreshness(59_500)).toBe("59s");
+    expect(formatFreshness(59_750)).toBe("59s");
+    expect(formatFreshness(59_900)).toBe("59s");
+    expect(formatFreshness(59_999)).toBe("59s");
+  });
+
+  it("preserves half-up rounding for values below the clamp window", () => {
+    // Regression check that the clamp didn't accidentally floor every
+    // sub-minute value. 500ms should still round to 1s (half-up), not 0s.
+    expect(formatFreshness(500)).toBe("1s");
+    expect(formatFreshness(58_500)).toBe("59s");
+    // 58_499 rounds to 58 — unaffected by the clamp.
+    expect(formatFreshness(58_499)).toBe("58s");
   });
 
   it("floors minutes (no rounding up)", () => {

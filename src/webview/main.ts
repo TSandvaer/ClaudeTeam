@@ -30,9 +30,9 @@
 
 import { FIXTURE_EMPTY_STATE, FIXTURE_STATE } from "../shared/fixtures.js";
 import type {
-  AgentTile,
-  AgentTree,
-  SessionTree,
+  RosterTileEntry,
+  WebviewAgentTree,
+  WebviewSessionTree,
 } from "../shared/types.js";
 import type {
   SerializedDashboardState,
@@ -91,19 +91,25 @@ function acquireApi(): WebviewApi {
 
 /**
  * Rehydrate a `SerializedDashboardState` (the JSON-safe wire shape) into the
- * in-memory `AgentTree` shape the renderer expects.
+ * in-memory `WebviewAgentTree` shape the renderer expects.
  *
  * The only field that differs is `sessions[].rosterTiles`:
- *   - on the wire: `Record<string, AgentTile[]>` (plain object).
- *   - in memory:   `Map<string, AgentTile[]>` (renderer uses `.get`).
+ *   - on the wire: `Record<string, RosterTileEntry[]>` (plain object; entries
+ *     are either bare `AgentTile`s or `CollapsedPersonaGroup` wrappers).
+ *   - in memory:   `Map<string, RosterTileEntry[]>` (renderer uses `.get`).
  *
  * All other fields pass through verbatim. Pure function — exported for unit
  * test coverage.
+ *
+ * Note (M3-10): the host-side `SessionTree.rosterTiles` is still typed as
+ * `Map<string, AgentTile[]>` (bare tiles only) — Felix's parallel M3-10 PR
+ * widens the host side. Until that lands, the wrapper objects originate only
+ * in Felix's reducer output and arrive verbatim through the wire.
  */
-export function hydrateState(wire: SerializedDashboardState): AgentTree {
+export function hydrateState(wire: SerializedDashboardState): WebviewAgentTree {
   return {
     sessions: wire.sessions.map(
-      (s: SerializedSessionTree): SessionTree => ({
+      (s: SerializedSessionTree): WebviewSessionTree => ({
         shortId: s.shortId,
         sessionId: s.sessionId,
         pid: s.pid,
@@ -112,7 +118,9 @@ export function hydrateState(wire: SerializedDashboardState): AgentTree {
         isAlive: s.isAlive,
         cwd: s.cwd,
         title: s.title,
-        rosterTiles: new Map<string, AgentTile[]>(Object.entries(s.rosterTiles)),
+        rosterTiles: new Map<string, RosterTileEntry[]>(
+          Object.entries(s.rosterTiles),
+        ),
         teamOrder: s.teamOrder,
         background: s.background,
       }),
@@ -154,7 +162,11 @@ function boot(): void {
   // start with FIXTURE_STATE so Maya can iterate on layout. See file
   // header for the M3-03/86c9ybrk0 bleed regression this prevents.
   const isVsCodeMode = typeof acquireVsCodeApi === "function";
-  let currentState: AgentTree = isVsCodeMode
+  // `AgentTree` is structurally assignable to `WebviewAgentTree` because
+  // `AgentTile[]` widens to `RosterTileEntry[]` (RosterTileEntry =
+  // AgentTile | CollapsedPersonaGroup). The fixtures own pre-M3-10 bare-tile
+  // shapes; the post-M3-10 wrappers only arrive from the host wire.
+  let currentState: WebviewAgentTree = isVsCodeMode
     ? FIXTURE_EMPTY_STATE
     : FIXTURE_STATE;
   /**

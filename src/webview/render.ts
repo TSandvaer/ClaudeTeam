@@ -38,7 +38,11 @@
  *         team/nora-pl/milestone-3-backlog.md §M3-04 AC1-5
  */
 
-import type { AgentTree, StateDelta } from "../shared/types.js";
+import type {
+  AgentTree,
+  StateDelta,
+  WebviewAgentTree,
+} from "../shared/types.js";
 import type { WebviewMessage } from "../shared/messages.js";
 import { renderSessionBlock } from "./components/sessionBlock.js";
 import { renderEmptyState } from "./components/emptyState.js";
@@ -47,6 +51,7 @@ import {
   type ErrorChipLevel,
 } from "./components/errorChip.js";
 import { renderRosterErrorChip } from "./components/rosterErrorChip.js";
+import { isCollapsedPersonaGroup } from "./components/collapsedPersonaTile.js";
 import type { FinishedTracker } from "./finishedTracker.js";
 
 /** Persistent error state stored on the dashboard. */
@@ -107,7 +112,18 @@ export interface RenderContext {
  * function can be augmented with per-tile DOM patching; for now wholesale
  * replacement keeps the render layer simple and correct.
  */
-export function renderFull(ctx: RenderContext, state: AgentTree): void {
+/**
+ * The renderer accepts either the pre-M3-10 narrow `AgentTree` shape (bare
+ * `AgentTile[]` per team — produced by the host reducer before Felix's M3-10
+ * widening lands) or the post-hydration `WebviewAgentTree` shape (per-entry
+ * `RosterTileEntry[]` permitting `CollapsedPersonaGroup` wrappers). The
+ * narrowing helper (`isCollapsedPersonaGroup`) routes per entry; both inputs
+ * are valid at the type boundary because `AgentTile[]` is assignable to
+ * `RosterTileEntry[]`.
+ */
+export type RenderableState = AgentTree | WebviewAgentTree;
+
+export function renderFull(ctx: RenderContext, state: RenderableState): void {
   const {
     mount,
     postMessage,
@@ -122,14 +138,34 @@ export function renderFull(ctx: RenderContext, state: AgentTree): void {
   // in `finished` state (or no longer present at all) sheds its tracker
   // entry. Without pruning, a long-running dashboard slowly leaks entries
   // for every agent that ever finished. See finishedTracker.ts §lifecycle.
+  //
+  // M3-10: rosterTiles values are now `(AgentTile | CollapsedPersonaGroup)[]`.
+  // We descend into CollapsedPersonaGroup.instances so finished tiles inside
+  // a collapsed wrapper still keep their tracker entries (otherwise expanding
+  // a wrapper would re-anchor every finished instance to "now").
   if (finishedTracker) {
     const currentFinishedKeys = new Set<`${string}:${string}`>();
     for (const session of state.sessions) {
       if (!session.isAlive) continue;
-      for (const tiles of session.rosterTiles.values()) {
-        for (const tile of tiles) {
-          if (tile.state === "finished") {
-            currentFinishedKeys.add(`${session.sessionId}:${tile.agentId}`);
+      for (const entries of session.rosterTiles.values()) {
+        for (const entry of entries) {
+          // Wrapper case — walk instances so finished tiles inside a
+          // collapsed wrapper still keep their tracker entries (otherwise
+          // expanding a wrapper would re-anchor every finished instance
+          // to "now").
+          if (isCollapsedPersonaGroup(entry)) {
+            for (const inst of entry.instances) {
+              if (inst.state === "finished") {
+                currentFinishedKeys.add(
+                  `${session.sessionId}:${inst.agentId}`,
+                );
+              }
+            }
+            continue;
+          }
+          // Bare AgentTile case — unchanged from pre-M3-10.
+          if (entry.state === "finished") {
+            currentFinishedKeys.add(`${session.sessionId}:${entry.agentId}`);
           }
         }
       }

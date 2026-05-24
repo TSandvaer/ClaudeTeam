@@ -25,14 +25,21 @@
  * Source: team/iris-ux/m2-dashboard-tile-spec.md §4
  */
 
-import type { SessionTree } from "../../shared/types.js";
+import type { SessionTree, WebviewSessionTree } from "../../shared/types.js";
 import { renderTeamCard, teamFromId } from "./teamCard.js";
 import { renderBackgroundChip } from "./backgroundChip.js";
 import type { PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 
 export interface SessionBlockProps {
-  session: SessionTree;
+  /**
+   * Either the pre-M3-10 host shape (`SessionTree`, bare `AgentTile[]` per
+   * team) or the post-hydration webview shape (`WebviewSessionTree`,
+   * `RosterTileEntry[]` per team — permits `CollapsedPersonaGroup` wrappers).
+   * `renderTeamCard` already accepts the wider entry-array type, so both
+   * shapes flow through unchanged.
+   */
+  session: SessionTree | WebviewSessionTree;
   postMessage: PostMessageFn;
   /**
    * Optional webview-local first-seen tracker for finished-tile freshness

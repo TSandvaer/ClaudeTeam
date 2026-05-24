@@ -86,7 +86,10 @@ describe("serializeState — Map → Record conversion", () => {
     expect(out).not.toBeInstanceOf(Map);
     expect(typeof out).toBe("object");
     expect(Object.keys(out)).toEqual(["claudeteam-alpha"]);
-    expect(out["claudeteam-alpha"]?.[0]?.memberId).toBe("felix");
+    // The wire-shape value is `RosterTileEntry[]` (M3-10 widened union);
+    // this test only exercises bare-AgentTile inputs, so narrow via cast
+    // to access `memberId` cleanly without runtime branching.
+    expect((out["claudeteam-alpha"]?.[0] as AgentTile | undefined)?.memberId).toBe("felix");
   });
 
   it("preserves multi-team tile groupings", () => {

@@ -298,7 +298,55 @@ export interface BackgroundAgent {
 }
 
 /**
+ * Wrapper that collapses N>1 rostered tiles sharing the same matched-roster
+ * persona name into a single header tile with an expand/collapse affordance
+ * (M3-10). The host-side reducer emits a `CollapsedPersonaGroup` in the
+ * `rosterTiles[teamId]` slot when the configured collapse rule fires; when the
+ * count is 1, the slot stays as a bare `AgentTile` (no wrapper — full back-
+ * compat).
+ *
+ * Discriminator: `kind: "collapsed-persona"`. AgentTile has no `kind` field —
+ * the absence is the discriminator on the unwrapped side. Renderer routes via
+ * a `"kind" in entry` check.
+ *
+ * The wrapper does NOT change the per-instance AgentTile shape. The webview
+ * reuses `renderAgentTile` to render each entry in `instances` when expanded.
+ *
+ * Source: ClickUp 86c9ydug9 (M3-10 persona-tile-collapse)
+ */
+export interface CollapsedPersonaGroup {
+  /** Discriminator — present only on the wrapper. */
+  kind: "collapsed-persona";
+  /**
+   * Matched-roster persona display name (e.g. "Felix"). Rendered in the
+   * header as `<personaName> ×<count>`.
+   */
+  personaName: string;
+  /** Number of grouped instances; equals `instances.length`. */
+  count: number;
+  /**
+   * The per-dispatch tiles being grouped. Renderer reuses `renderAgentTile`
+   * for each entry when the wrapper is expanded.
+   */
+  instances: AgentTile[];
+}
+
+/**
+ * Entry in a team's tile list: either a bare AgentTile (the existing
+ * pre-M3-10 shape, used when N=1 and back-compat with all older host code)
+ * or a CollapsedPersonaGroup wrapper (M3-10, when N>1).
+ */
+export type RosterTileEntry = AgentTile | CollapsedPersonaGroup;
+
+/**
  * One session's slice of the agent tree — one entry per live SessionRecord.
+ *
+ * `rosterTiles` is typed as `Map<string, AgentTile[]>` here — the **host-side
+ * in-memory** shape produced by `buildAgentTree`. The M3-10 wrapper
+ * (`CollapsedPersonaGroup`) is introduced at the host→webview boundary in
+ * Felix's parallel reducer change; until that lands, host-side consumers see
+ * bare AgentTiles only. The webview side widens to `RosterTileEntry[]` via
+ * `WebviewSessionTree` post-hydration (see below).
  */
 export interface SessionTree {
   /** First 8 chars of sessionId UUID (used in CLI header). */
@@ -332,6 +380,21 @@ export interface SessionTree {
   teamOrder: string[];
   /** Background (unrostered) agents for this session. */
   background: BackgroundAgent[];
+}
+
+/**
+ * Post-hydration session shape used by the webview (M3-10). Widens
+ * `rosterTiles` to `Map<string, RosterTileEntry[]>` so the renderer can route
+ * per entry between bare AgentTile and CollapsedPersonaGroup wrapper. The
+ * extension-host side keeps `SessionTree` (bare AgentTiles only) until
+ * Felix's host PR (parallel work on the same ticket) emits the wrapper.
+ *
+ * Hydrator (`src/webview/main.ts` → `hydrateState`) consumes the wire shape
+ * (`SerializedSessionTree`, which already permits wrappers) and produces this
+ * webview-side widened shape directly.
+ */
+export interface WebviewSessionTree extends Omit<SessionTree, "rosterTiles"> {
+  rosterTiles: Map<string, RosterTileEntry[]>;
 }
 
 /**
@@ -396,6 +459,23 @@ export interface AgentTree {
  * continue to use `AgentTree`. There is no schema difference.
  */
 export type DashboardState = AgentTree;
+
+/**
+ * Post-hydration agent-tree shape used by the webview (M3-10). Mirrors
+ * `AgentTree` except `sessions[].rosterTiles` is widened to
+ * `RosterTileEntry[]` to permit `CollapsedPersonaGroup` wrappers alongside
+ * bare `AgentTile`s.
+ *
+ * The host-side reducer continues to produce the narrower `AgentTree`
+ * (bare AgentTiles only) until Felix's parallel M3-10 host-side PR lands;
+ * `hydrateState` widens at the boundary. Once Felix's PR merges, the
+ * cleanest convergence is to unify `AgentTree.sessions[].rosterTiles` value
+ * type to `RosterTileEntry[]` and drop `WebviewAgentTree` /
+ * `WebviewSessionTree` entirely.
+ */
+export interface WebviewAgentTree extends Omit<AgentTree, "sessions"> {
+  sessions: WebviewSessionTree[];
+}
 
 // =============================================================================
 // State delta — host → webview partial update.
