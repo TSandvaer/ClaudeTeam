@@ -2,11 +2,11 @@
  * Layer-3 test entry point (M2-08).
  *
  * Spawns a real VS Code instance via `@vscode/test-electron`, loading the
- * compiled extension from `dist/extension/main.js` and the compiled test
+ * compiled extension from `dist/extension/main.cjs` and the compiled test
  * suite from `out/vscode-integration/tests/vscode-integration/suite/index.js`.
  *
  * Pre-requisites (enforced by the `pretest:vscode` npm script):
- *   1. `npm run build` has produced `dist/extension/main.js` and the webview
+ *   1. `npm run build` has produced `dist/extension/main.cjs` and the webview
  *      bundle in `dist/webview/`.
  *   2. `tsc -p tsconfig.vscode-integration.json` has compiled the test sources
  *      to `out/vscode-integration/`.

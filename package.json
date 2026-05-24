@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "private": true,
-  "main": "dist/extension/main.js",
+  "main": "dist/extension/main.cjs",
   "engines": {
     "vscode": "^1.85.0",
     "node": ">=20"
@@ -89,8 +89,7 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:vscode": "npm run build && npm run shim:cjs-dist && npm run compile:vscode-integration && node out/vscode-integration/tests/vscode-integration/runTest.js",
-    "shim:cjs-dist": "node -e \"require('fs').writeFileSync('dist/extension/package.json', JSON.stringify({type:'commonjs'}, null, 2))\"",
+    "test:vscode": "npm run build && npm run compile:vscode-integration && node out/vscode-integration/tests/vscode-integration/runTest.js",
     "compile:vscode-integration": "tsc -p tsconfig.vscode-integration.json && node -e \"require('fs').writeFileSync('out/vscode-integration/package.json', JSON.stringify({type:'commonjs'}, null, 2))\"",
     "test:watch": "vitest"
   },

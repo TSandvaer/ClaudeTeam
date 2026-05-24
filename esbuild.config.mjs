@@ -4,8 +4,18 @@
  * Three bundles:
  *
  *   1. Extension host  (CJS, external vscode)
- *      src/extension/main.ts → dist/extension/main.js
+ *      src/extension/main.ts → dist/extension/main.cjs
  *      - CommonJS required: VS Code still loads extension entry points as CJS.
+ *      - `.cjs` extension is load-bearing: root package.json declares
+ *        `"type": "module"`, so Node's package-scope resolution would
+ *        otherwise treat `dist/extension/main.js` as ESM under Node 22+ and
+ *        reject the host's `require()` call with `ERR_REQUIRE_ESM`. Naming
+ *        the output `.cjs` makes the format unambiguous to Node regardless
+ *        of parent package scope — no sibling `dist/extension/package.json`
+ *        marker needed. See ticket 86c9y9yzu and
+ *        team/sage-qa/m2-08-layer3-run-notes.md §"Bug #1" for the original
+ *        symptom + root-cause analysis. The package.json `main` field must
+ *        match (`dist/extension/main.cjs`).
  *      - `vscode` is always external — the host runtime provides it.
  *      - js-yaml and zod are bundled (runtime deps, not devDeps).
  *
@@ -49,7 +59,7 @@ const commonOptions = {
 const extensionHostTarget = {
   ...commonOptions,
   entryPoints: ["src/extension/main.ts"],
-  outfile: "dist/extension/main.js",
+  outfile: "dist/extension/main.cjs",
   platform: "node",
   target: "es2022",
   format: "cjs",
@@ -127,7 +137,7 @@ if (isWatch) {
   ]);
 
   console.log("[esbuild.config] Build complete:");
-  console.log("  dist/extension/main.js     (extension host, CJS)");
+  console.log("  dist/extension/main.cjs    (extension host, CJS)");
   console.log("  dist/webview/main.js       (webview JS, IIFE)");
   console.log("  dist/webview/dashboard.css (webview CSS)");
   console.log("  dist/cli/agentTree.js      (CLI, ESM)");
