@@ -90,6 +90,14 @@ This creates a throwaway local-only branch that does NOT bind the reviewer's wor
 
 Whichever pattern the reviewer uses, **end with `git switch --detach HEAD`** — defense-in-depth.
 
+### Main-thread narration discipline
+
+The main conversation window is the orchestrator's working surface — every line written there is paid for in context. After an auto-merge, the orchestrator posts **one line** to the main thread: `PR #N auto-merged — decision logged`. That's it. The detailed `Decided / Foundation / Alternative / Reversibility / Status` block lives in [`.claude/decisions-while-away.md`](../decisions-while-away.md) — it is the audit record. Do NOT duplicate audit content in the main conversation; the sponsor reads the log on return, not the chat backscroll.
+
+Same discipline applies upstream to dispatch-brief authoring: briefs are terse, point at backlog sections and contract docs by path, and do not re-state spec content the agent will read directly. M2 already followed this for dispatch; the merge-decision post is the remaining surface.
+
+**Motivation (M2-close retro).** The retro flagged "10-20 lines per auto-merge × 10+ per milestone" as a context-bloat surface that compounds across the session. At one orchestrator-narrated milestone close, the narration alone consumed more main-thread bytes than any single dispatch brief — pure overhead, because the structured log was already written. One-line acknowledgment + log pointer eliminates the duplication.
+
 ## ClickUp as hard gate
 
 Every dispatch / PR-open / merge pairs with a ClickUp status flip in the same tool round. Status names (case-sensitive): `to do` → `in progress` → `in review` → `complete`.
