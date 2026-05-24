@@ -83,6 +83,8 @@ Every PR that affects UX (which is most of them) requires a Self-Test Report com
 
 If the Self-Test Report is missing, Sage REQUESTs CHANGES with "Self-Test Report required" as the reason. No exceptions.
 
+**PR-claim discipline (M3-01 NIT #2):** every "verified by test X" claim in the PR body or Self-Test Report must match the test's actual fixture shape, not the underlying mechanism. If the AC3 coalescing test rewrites the same file 3× via `bumpMtime` (rapid same-path mutations), don't claim it verifies vim-style `delete + create` atomic-replace — the mechanism (debounce resets) is the same, but the fixture shape isn't. Prefer "mechanism verified by <test>" over "<scenario> verified by <test>" when extrapolating.
+
 ### Placeholder-PR screenshot exception
 
 If the PR's webview is a **placeholder slated for replacement in a downstream ticket** (i.e., a scaffold/stub that the next milestone PR overwrites end-to-end), the manual-reload screenshot binds at the **downstream** PR — not retroactively to the placeholder PR. The placeholder PR's Self-Test Report still includes AC walkthroughs and failure-mode probes, but the screenshot row can cite "screenshot binds at <downstream-ticket-id>" with a one-line justification.
