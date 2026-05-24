@@ -96,6 +96,21 @@ This exception does NOT apply when:
 - The downstream PR has not yet been scoped — speculation about future replacement is not a basis for skipping the screenshot.
 - The placeholder PR changes user-visible chrome (icons, view titles, command palette entries) — those bind at the PR that introduces them, regardless of downstream UI work.
 
+#### Install-path validation discipline
+
+The placeholder exception releases the **screenshot** ACs at the first shipping PR; it does NOT release the **install path**. Even when the visible UI defers to a downstream PR, the `.vsix` install + activation on the project's target Node version (currently Node 22+) is load-bearing pre-merge for the FIRST shipping PR. A sponsor (or a GUI-capable agent if one exists in the loop) manually performs:
+
+1. `vsce package --no-yarn`
+2. `code --install-extension <vsix>`
+3. Opens the Activity Bar entry for the extension
+4. Confirms zero `ERR_REQUIRE_ESM` / activation errors in the Output channel within 5 seconds
+
+Failure here blocks merge. The install path is the load-bearing test.
+
+**Originating evidence (M2-01 → M2-08, PR #29).** The Node 22+ `ERR_REQUIRE_ESM` activation failure was latent from M2-01's `.vsix` and only surfaced at M2-08's Layer-3 tests three tickets later, because the placeholder exception masked the install-validation gap — screenshots had deferred, and the install path was implicitly deferred with them. By the time Layer-3 caught it, two more milestones had been authored against a `.vsix` that could not activate on the host machine. The discipline above is the rule that would have caught it at M2-01's PR-#22 review.
+
+**Interaction with the sub-agent GUI gap.** When both the PR author and the designated reviewer are sub-agents, install-path validation is the ONE pre-merge gate that requires a GUI-capable executor (sponsor or a future GUI-capable agent). The data-plane smoke reframe (next section) covers webview-smoke at sub-agent author/reviewer pairs, but install activation cannot be smoke-tested from a headless harness — `code --install-extension` + Activity Bar open requires a real VS Code session. **Surface the install-validation requirement at dispatch time, not at merge time:** the dispatch brief should name who is performing the install (sponsor or a specific GUI-capable agent) so the merge gate isn't discovered to be unfulfillable after CI goes green.
+
 ### Sub-agent GUI gap — webview-smoke workaround
 
 Sub-agents (Felix, Maya, and any other persona) run in a headless harness with no GUI session. They cannot drive `Developer: Reload Window`, take screenshots, or interact with VS Code's Activity Bar. This makes CLAUDE.md hard rule #3 ("Maya or the PR author posts a Self-Test Report confirming a manual webview reload worked end-to-end") structurally unachievable pre-merge for any webview-touching PR.
