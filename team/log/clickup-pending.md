@@ -73,5 +73,5 @@ ENTRY 025: 86c9y7u4p -> complete
 ENTRY 026: 86c9y9q6h -> in review
 ENTRY 027: 86c9y9q6h -> complete
 ENTRY 028: 86c9y9v7r -> in review
+ENTRY 029: 86c9y9yzu -> in review (PR #30 opened — fix(scaffold): dist/extension CJS shim for Node 22+ require())
 ```
-

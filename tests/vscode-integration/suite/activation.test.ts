@@ -46,7 +46,7 @@ suite("M2-08 AC2 — Activation lifecycle", () => {
     const ext = vscode.extensions.getExtension(EXTENSION_ID);
     assert.ok(
       ext,
-      `Extension ${EXTENSION_ID} not found — check package.json publisher.name + dist/extension/main.js exists`,
+      `Extension ${EXTENSION_ID} not found — check package.json publisher.name + dist/extension/main.cjs exists`,
     );
   });
 
