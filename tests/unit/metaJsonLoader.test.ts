@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   __ENGINE_TYPES_FOR_TEST,
   detectSchemaVersion,
+  formatMetaParseError,
   parseMeta,
   parseMetaFromString,
 } from "../../src/extension/watcher/metaJsonLoader";
@@ -313,5 +314,82 @@ describe("engine-type allowlist", () => {
       "Plan",
       "general-purpose",
     ]);
+  });
+});
+
+// =============================================================================
+// NIT #2 (M3-04 follow-up) — human-readable error format
+// =============================================================================
+//
+// Source: sponsor screenshot 2026-05-24 showed `(missing-agentType)` —
+// hybrid kebab-camelCase, hard to read in a dashboard. The chosen convention
+// (documented in formatMetaParseError JSDoc) is full-sentence phrasing
+// prefixed with `meta.json parse failed: `. These tests pin every reason →
+// phrase mapping so a future parser change can't silently regress the format.
+
+describe("formatMetaParseError — consistent human-readable format (NIT #2)", () => {
+  it("formats 'not-object' as 'not a JSON object'", () => {
+    const err = new MetaParseError("raw msg", "not-object", null);
+    expect(formatMetaParseError(err)).toBe(
+      "meta.json parse failed: not a JSON object",
+    );
+  });
+
+  it("formats 'missing-agentType' as \"missing field 'agentType'\"", () => {
+    const err = new MetaParseError("raw msg", "missing-agentType", {});
+    expect(formatMetaParseError(err)).toBe(
+      "meta.json parse failed: missing field 'agentType'",
+    );
+  });
+
+  it("formats 'missing-description' as \"missing field 'description'\"", () => {
+    const err = new MetaParseError("raw msg", "missing-description", {});
+    expect(formatMetaParseError(err)).toBe(
+      "meta.json parse failed: missing field 'description'",
+    );
+  });
+
+  it("formats 'invalid-field-type' as 'invalid field type'", () => {
+    const err = new MetaParseError("raw msg", "invalid-field-type", {});
+    expect(formatMetaParseError(err)).toBe(
+      "meta.json parse failed: invalid field type",
+    );
+  });
+
+  it("every formatted string starts with the canonical prefix", () => {
+    // Convention pin: future parser additions must follow the same prefix so
+    // dashboard readers can scan for `meta.json parse failed:` as a reliable
+    // anchor.
+    const reasons: MetaParseError["reason"][] = [
+      "not-object",
+      "missing-agentType",
+      "missing-description",
+      "invalid-field-type",
+    ];
+    for (const r of reasons) {
+      const err = new MetaParseError("ignored", r, null);
+      expect(formatMetaParseError(err)).toMatch(/^meta\.json parse failed: /);
+    }
+  });
+
+  it("never leaks the raw hybrid-case reason enum literal", () => {
+    // Regression guard: pre-NIT-#2 surfaces showed `(missing-agentType)`
+    // (the reason enum verbatim). The format helper MUST NOT contain the
+    // hyphen-camelCase enum tokens.
+    const reasons: MetaParseError["reason"][] = [
+      "not-object",
+      "missing-agentType",
+      "missing-description",
+      "invalid-field-type",
+    ];
+    for (const r of reasons) {
+      const err = new MetaParseError("ignored", r, null);
+      const formatted = formatMetaParseError(err);
+      // Hybrid-case tokens like `missing-agentType` mix kebab + camelCase.
+      // Ban them from formatted output.
+      expect(formatted).not.toMatch(/missing-agentType/);
+      expect(formatted).not.toMatch(/missing-description/);
+      expect(formatted).not.toMatch(/invalid-field-type/);
+    }
   });
 });

@@ -112,11 +112,18 @@ export function buildAgentTree(
       if (meta === null) {
         // No meta to match against — can't determine team. Put in background
         // with a synthetic agentType to surface the error.
+        //
+        // NIT #1 (M3-04 follow-up): when the JSONL is readable (activity
+        // present + activity.model resolved), surface the JSONL-derived model
+        // even though meta.json is unparseable. Falls back to a clearer
+        // placeholder than bare `?` when no JSONL model is available, so a
+        // dashboard reader can distinguish "model unknown because meta.json is
+        // invalid" from "model unresolved because no assistant message yet".
         background.push({
           agentType: "(parse error)",
           description: parseError ?? "meta.json parse failed",
           state: "error",
-          model: "model:?",
+          model: resolveModelOnParseError(activity),
         });
         continue;
       }
@@ -277,6 +284,31 @@ function inferState(
 function resolveModel(activity: SubagentActivity | undefined): string {
   if (!activity || activity.model === null) return "model:?";
   return activity.model;
+}
+
+/**
+ * Resolve the display model for an agent whose meta.json failed to parse.
+ *
+ * The JSONL is read independently of meta.json (the watcher tails every
+ * `agent-*.jsonl` regardless of meta validity), so `activity.model` is often
+ * populated even when meta is null. Prefer that real value over the bare
+ * `model:?` sentinel — the sponsor's screenshot showed `model:?` on a Sage
+ * tile where the JSONL was readable, which was actionable information lost.
+ *
+ * Distinct placeholder when no model is available: `model:unknown` is
+ * unambiguous about the cause (meta.json invalid, not "no assistant message
+ * yet") and pairs with the parse-error description that's already in the
+ * tile. See NIT #1 in M3-04 follow-up dispatch.
+ *
+ * Exported for direct test coverage (AC1 of NIT #1).
+ */
+export function resolveModelOnParseError(
+  activity: SubagentActivity | undefined,
+): string {
+  if (activity && typeof activity.model === "string" && activity.model.length > 0) {
+    return activity.model;
+  }
+  return "model:unknown";
 }
 
 /**

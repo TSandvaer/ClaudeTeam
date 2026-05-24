@@ -78,8 +78,14 @@ const FIXTURE_TILES: AgentTile[] = [
     teamId: TEAM_CLAUDETEAM_ALPHA,
     display: "Sage",
     role: "QA / Tester",
-    activity: "error: meta.json parse failed (missing-agentType)",
-    model: "model:?",
+    // Activity surface for a parse-error rostered tile (browser-dev only —
+    // production routes parse-failed metas to background per reducer.ts).
+    // Format matches `formatMetaParseError` output verbatim (NIT #2 in M3-04
+    // follow-up); model surfaces the NIT-#1 fallback placeholder so dev mode
+    // shows the same string production would when the JSONL has no resolved
+    // model alongside an invalid meta.json.
+    activity: "error: meta.json parse failed: missing field 'agentType'",
+    model: "model:unknown",
     state: "error",
     agentId: "e94fd5fa2c5b934a4",
     toolUseId: null,

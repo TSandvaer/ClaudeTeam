@@ -39,7 +39,8 @@ import * as vscode from "vscode";
 
 import { listSessions } from "./sessionRegistry.js";
 import { readActivity } from "./subagentTailer.js";
-import { parseMetaFromString } from "./metaJsonLoader.js";
+import { formatMetaParseError, parseMetaFromString } from "./metaJsonLoader.js";
+import { MetaParseError } from "../../shared/types.js";
 import {
   filterSessionsToWindow,
   isFilterApplied,
@@ -521,11 +522,17 @@ function collectAgentMetas(subagentsDir: string): AgentMetaEntry[] {
       const meta = parseMetaFromString(raw);
       entries.push({ agentId, meta });
     } catch (err) {
-      entries.push({
-        agentId,
-        meta: null,
-        parseError: (err as Error).message,
-      });
+      // NIT #2 (M3-04 follow-up): route MetaParseError through the human
+      // formatter so dashboards show `meta.json parse failed: missing field
+      // 'agentType'` instead of the raw `err.message` (terse) or hybrid-case
+      // reason enum (e.g. `missing-agentType`). Non-MetaParseError throws
+      // (shouldn't happen — parseMetaFromString wraps JSON.parse) still fall
+      // through to `err.message` so unexpected errors aren't masked.
+      const parseError =
+        err instanceof MetaParseError
+          ? formatMetaParseError(err)
+          : (err as Error).message;
+      entries.push({ agentId, meta: null, parseError });
     }
   }
   return entries;

@@ -46,7 +46,10 @@ import {
 
 import { listSessions } from "../../src/extension/watcher/sessionRegistry.js";
 import { readActivity } from "../../src/extension/watcher/subagentTailer.js";
-import { parseMetaFromString } from "../../src/extension/watcher/metaJsonLoader.js";
+import {
+  formatMetaParseError,
+  parseMetaFromString,
+} from "../../src/extension/watcher/metaJsonLoader.js";
 import { loadRoster } from "../../src/extension/roster/loader.js";
 import {
   buildAgentTree,
@@ -55,6 +58,7 @@ import {
   type FinishedSet,
   type SessionAgentData,
 } from "../../src/extension/state/reducer.js";
+import { MetaParseError } from "../../src/shared/types.js";
 
 // ---------------------------------------------------------------------------
 // Shared constants
@@ -112,7 +116,13 @@ function collectAgentMetas(subagentsDir: string): AgentMetaEntry[] {
       const meta = parseMetaFromString(raw);
       entries.push({ agentId, meta });
     } catch (err) {
-      entries.push({ agentId, meta: null, parseError: (err as Error).message });
+      // Mirror NIT #2 format (M3-04 follow-up) so the integration test's
+      // local helper stays aligned with the production watcher + CLI driver.
+      const parseError =
+        err instanceof MetaParseError
+          ? formatMetaParseError(err)
+          : (err as Error).message;
+      entries.push({ agentId, meta: null, parseError });
     }
   }
   return entries;
