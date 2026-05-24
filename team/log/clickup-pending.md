@@ -94,6 +94,7 @@ ENTRY-2026-05-24T20:08:00Z: 86c9ydufh -> in review (M3-09 PR opened — Sage Lay
 ENTRY-2026-05-24T20:23:00Z: 86c9ydufh -> complete (PR #44 merged at e9d2457 — Felix APPROVE, 281 unit + 68 integration + 23 Layer-3 green) [created retrospectively at `complete` status via MCP 2026-05-24T22:30Z, so these flips are historical-only audit]
 ENTRY-2026-05-24T22:30:00Z: 86c9ybrk0 -> complete (FLUSHED — was queued at 19:34Z while MCP down; flushed via MCP at session resume)
 ENTRY-2026-05-24T22:30:01Z: 86c9ybtut -> in progress (M3-04 NITs dispatch — Felix host NIT #1+#2 + Maya webview NIT #3, parallel split per sponsor)
+ENTRY-2026-05-24T23:35:00Z: 86c9ybtut -> in review (Maya webview NIT #3 PR opened — finished-status freshness suffix)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)

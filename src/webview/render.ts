@@ -47,6 +47,7 @@ import {
   type ErrorChipLevel,
 } from "./components/errorChip.js";
 import { renderRosterErrorChip } from "./components/rosterErrorChip.js";
+import type { FinishedTracker } from "./finishedTracker.js";
 
 /** Persistent error state stored on the dashboard. */
 export interface DashboardErrorState {
@@ -80,6 +81,21 @@ export interface RenderContext {
    * first-error short-circuits.
    */
   onRosterErrorDismiss?: (key: string) => void;
+  /**
+   * M3-04 NIT #3: webview-local first-seen tracker for finished-tile
+   * freshness suffixes. Owned by the boot closure in `main.ts`; threaded
+   * through every renderFull so it survives across re-renders. Optional —
+   * when absent (e.g. component tests, fixture mode without state churn)
+   * finished tiles render the bare `finished` string.
+   *
+   * Source: ClickUp 86c9ybtut
+   */
+  finishedTracker?: FinishedTracker;
+  /**
+   * Current wall-clock ms — defaults to `Date.now()` downstream. Test
+   * injection point for deterministic freshness-suffix assertions.
+   */
+  nowMs?: number;
 }
 
 /**
@@ -98,7 +114,28 @@ export function renderFull(ctx: RenderContext, state: AgentTree): void {
     error,
     rosterErrorDismissedKey,
     onRosterErrorDismiss,
+    finishedTracker,
+    nowMs,
   } = ctx;
+
+  // Prune the finished-tracker BEFORE the render pass — any tile no longer
+  // in `finished` state (or no longer present at all) sheds its tracker
+  // entry. Without pruning, a long-running dashboard slowly leaks entries
+  // for every agent that ever finished. See finishedTracker.ts §lifecycle.
+  if (finishedTracker) {
+    const currentFinishedKeys = new Set<`${string}:${string}`>();
+    for (const session of state.sessions) {
+      if (!session.isAlive) continue;
+      for (const tiles of session.rosterTiles.values()) {
+        for (const tile of tiles) {
+          if (tile.state === "finished") {
+            currentFinishedKeys.add(`${session.sessionId}:${tile.agentId}`);
+          }
+        }
+      }
+    }
+    finishedTracker.prune(currentFinishedKeys);
+  }
 
   // Wholesale replace — clears any prior render.
   mount.replaceChildren();
@@ -151,6 +188,9 @@ export function renderFull(ctx: RenderContext, state: AgentTree): void {
       return;
     }
     // All-dead case — still render the dead session blocks (header only).
+    // Dead sessions render no tiles per sessionBlock.ts §dead treatment, so
+    // the tracker is not threaded into this branch — there are no tiles to
+    // observe.
     for (const session of state.sessions) {
       mount.appendChild(renderSessionBlock({ session, postMessage }));
     }
@@ -160,7 +200,14 @@ export function renderFull(ctx: RenderContext, state: AgentTree): void {
   }
 
   for (const session of state.sessions) {
-    mount.appendChild(renderSessionBlock({ session, postMessage }));
+    mount.appendChild(
+      renderSessionBlock({
+        session,
+        postMessage,
+        ...(finishedTracker ? { finishedTracker } : {}),
+        ...(nowMs !== undefined ? { nowMs } : {}),
+      }),
+    );
   }
 }
 

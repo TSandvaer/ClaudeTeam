@@ -45,6 +45,7 @@ import {
   type DashboardErrorState,
   type RenderContext,
 } from "./render.js";
+import { createFinishedTracker } from "./finishedTracker.js";
 
 // =============================================================================
 // VS Code API shim
@@ -165,6 +166,14 @@ function boot(): void {
    * `roster:loaded` (the user explicitly recovered).
    */
   let rosterErrorDismissedKey: string | null = null;
+  /**
+   * M3-04 NIT #3: webview-local first-seen tracker for finished-tile
+   * freshness suffixes. Single instance per webview boot — persists across
+   * re-renders so the displayed "finished Xs" anchors to the first tick we
+   * observed the completion, not to the current render. See
+   * `src/webview/finishedTracker.ts` for the lifecycle + accuracy notes.
+   */
+  const finishedTracker = createFinishedTracker();
 
   // Browser dev mode → render FIXTURE_STATE immediately. VS Code mode →
   // render the empty state until the first `state:full` arrives from the
@@ -180,6 +189,7 @@ function boot(): void {
       // the NEXT render with the same first-error stays empty.
       rosterErrorDismissedKey = key;
     },
+    finishedTracker,
   });
 
   renderFull(buildCtx(), currentState);

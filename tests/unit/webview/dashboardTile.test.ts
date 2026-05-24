@@ -20,7 +20,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTile } from "../../../src/shared/types.js";
+import type { AgentTile, AgentTree } from "../../../src/shared/types.js";
 import type { WebviewMessage } from "../../../src/shared/messages.js";
 import { renderAgentTile } from "../../../src/webview/components/agentTile.js";
 import { renderBackgroundChip } from "../../../src/webview/components/backgroundChip.js";
@@ -577,5 +577,255 @@ describe("renderFull", () => {
       const mask = chip!.compareDocumentPosition(block);
       expect(mask & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Agent tile — finished-status freshness suffix (M3-04 NIT #3, ClickUp 86c9ybtut)
+//
+// The host emits tile.activity === "finished" for finished tiles (no
+// timestamp). The webview observes the first tick a tile is seen in
+// `finished` state and renders "finished Xs / Xm / Xh" parallel to the
+// `idle Xs` convention. Tests verify both the direct renderAgentTile API
+// (with explicit finishedAtMs + nowMs injection) and the integration path
+// from render.ts → sessionBlock → teamCard → agentTile via the tracker.
+// ---------------------------------------------------------------------------
+
+describe("renderAgentTile — finished freshness suffix", () => {
+  it("appends Xs suffix when finishedAtMs is supplied (5s ago)", () => {
+    const tile = makeTile({ state: "finished", activity: "finished" });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      finishedAtMs: 1_000_000,
+      nowMs: 1_005_000, // 5 seconds later
+    });
+    expect(el.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 5s",
+    );
+  });
+
+  it("appends Xm suffix at minute scale (2m ago)", () => {
+    const tile = makeTile({ state: "finished", activity: "finished" });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      finishedAtMs: 1_000_000,
+      nowMs: 1_000_000 + 2 * 60_000,
+    });
+    expect(el.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 2m",
+    );
+  });
+
+  it("appends Xh suffix at hour scale (4h ago)", () => {
+    const tile = makeTile({ state: "finished", activity: "finished" });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      finishedAtMs: 1_000_000,
+      nowMs: 1_000_000 + 4 * 60 * 60_000,
+    });
+    expect(el.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 4h",
+    );
+  });
+
+  it("renders bare activity text when finishedAtMs is omitted (back-compat)", () => {
+    // Pre-NIT#3 callers and component tests without the tracker should see
+    // the unchanged "finished" string — no NaN, no "undefined", no suffix.
+    const tile = makeTile({ state: "finished", activity: "finished" });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    expect(el.querySelector(".agent-activity")?.textContent).toBe("finished");
+  });
+
+  it("does NOT append a freshness suffix to non-finished states", () => {
+    // finishedAtMs is only meaningful for finished tiles. An idle/running/
+    // error tile must render its activity verbatim even if finishedAtMs is
+    // accidentally supplied (defensive: the renderer guards on tile.state).
+    const tile = makeTile({ state: "idle", activity: "idle 14s" });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      finishedAtMs: 1_000_000,
+      nowMs: 1_005_000,
+    });
+    expect(el.querySelector(".agent-activity")?.textContent).toBe("idle 14s");
+  });
+});
+
+describe("renderFull — finished freshness via finishedTracker (integration)", () => {
+  // Build a minimal AgentTree with one finished tile so we can verify the
+  // end-to-end thread render → sessionBlock → teamCard → agentTile picks up
+  // the freshness suffix from the tracker.
+  function makeStateWithFinishedTile(): AgentTree {
+    return {
+      sessions: [
+        {
+          shortId: "sess0001",
+          sessionId: "sess-FINISHED",
+          pid: 1234,
+          entrypoint: "claude-vscode",
+          version: "2.1.145",
+          isAlive: true,
+          cwd: "c:\\test",
+          title: "Test session",
+          rosterTiles: new Map([
+            [
+              "claudeteam-alpha",
+              [
+                makeTile({
+                  state: "finished",
+                  activity: "finished",
+                  agentId: "agent-FINISHED",
+                }),
+              ],
+            ],
+          ]),
+          teamOrder: ["claudeteam-alpha"],
+          background: [],
+        },
+      ],
+    };
+  }
+
+  it("renders \"finished Xs\" via the tracker on first render", async () => {
+    const { createFinishedTracker } = await import(
+      "../../../src/webview/finishedTracker.js"
+    );
+    const tracker = createFinishedTracker();
+    const mount = document.createElement("div");
+    const t0 = 5_000_000;
+    renderFull(
+      {
+        mount,
+        postMessage: vi.fn(),
+        finishedTracker: tracker,
+        nowMs: t0,
+      },
+      makeStateWithFinishedTile(),
+    );
+    // First render — tracker records t0; elapsed = 0 → "0s".
+    expect(mount.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 0s",
+    );
+    expect(tracker.size()).toBe(1);
+  });
+
+  it("anchors the elapsed value to the FIRST observation across re-renders", async () => {
+    const { createFinishedTracker } = await import(
+      "../../../src/webview/finishedTracker.js"
+    );
+    const tracker = createFinishedTracker();
+    const mount = document.createElement("div");
+    const t0 = 5_000_000;
+    const state = makeStateWithFinishedTile();
+    // First render at t0 — observe.
+    renderFull(
+      { mount, postMessage: vi.fn(), finishedTracker: tracker, nowMs: t0 },
+      state,
+    );
+    // Second render 30 seconds later — same tile, same agentId; suffix
+    // should now be "30s", not "0s". Tracker did NOT re-anchor.
+    renderFull(
+      {
+        mount,
+        postMessage: vi.fn(),
+        finishedTracker: tracker,
+        nowMs: t0 + 30_000,
+      },
+      state,
+    );
+    expect(mount.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 30s",
+    );
+    // Tracker stayed at 1 entry — no leak from re-rendering the same tile.
+    expect(tracker.size()).toBe(1);
+  });
+
+  it("prunes tracker entries when the tile transitions out of finished state", async () => {
+    const { createFinishedTracker } = await import(
+      "../../../src/webview/finishedTracker.js"
+    );
+    const tracker = createFinishedTracker();
+    const mount = document.createElement("div");
+    const t0 = 5_000_000;
+    // First render: finished tile present.
+    renderFull(
+      { mount, postMessage: vi.fn(), finishedTracker: tracker, nowMs: t0 },
+      makeStateWithFinishedTile(),
+    );
+    expect(tracker.size()).toBe(1);
+
+    // Second render: same tile is now running. Prune should drop the entry.
+    const runningState = makeStateWithFinishedTile();
+    runningState.sessions[0]!.rosterTiles.set("claudeteam-alpha", [
+      makeTile({
+        state: "running",
+        activity: "tool:Edit foo.ts",
+        agentId: "agent-FINISHED",
+      }),
+    ]);
+    renderFull(
+      {
+        mount,
+        postMessage: vi.fn(),
+        finishedTracker: tracker,
+        nowMs: t0 + 1_000,
+      },
+      runningState,
+    );
+    expect(tracker.size()).toBe(0);
+    // Activity now reflects the running state — no stale "finished" suffix.
+    expect(mount.querySelector(".agent-activity")?.textContent).toBe(
+      "tool:Edit foo.ts",
+    );
+  });
+
+  it("prunes entries for tiles that vanish entirely between renders", async () => {
+    const { createFinishedTracker } = await import(
+      "../../../src/webview/finishedTracker.js"
+    );
+    const tracker = createFinishedTracker();
+    const mount = document.createElement("div");
+    const t0 = 5_000_000;
+    renderFull(
+      { mount, postMessage: vi.fn(), finishedTracker: tracker, nowMs: t0 },
+      makeStateWithFinishedTile(),
+    );
+    expect(tracker.size()).toBe(1);
+
+    // Empty state — the session disappeared (e.g. claude exited).
+    renderFull(
+      {
+        mount,
+        postMessage: vi.fn(),
+        finishedTracker: tracker,
+        nowMs: t0 + 5_000,
+      },
+      { sessions: [] },
+    );
+    expect(tracker.size()).toBe(0);
+  });
+
+  it("renders bare \"finished\" when no tracker is provided (back-compat)", () => {
+    // Component tests that don't wire a tracker should see the unchanged
+    // "finished" string. Confirms RenderContext.finishedTracker is optional.
+    const mount = document.createElement("div");
+    renderFull(
+      { mount, postMessage: vi.fn() },
+      makeStateWithFinishedTile(),
+    );
+    expect(mount.querySelector(".agent-activity")?.textContent).toBe(
+      "finished",
+    );
   });
 });

@@ -17,6 +17,7 @@
 
 import type { AgentTile, Team } from "../../shared/types.js";
 import { renderAgentTile, type PostMessageFn } from "./agentTile.js";
+import type { FinishedTracker } from "../finishedTracker.js";
 
 export interface TeamCardProps {
   /** Team metadata (id + display name from the loaded roster). */
@@ -27,10 +28,19 @@ export interface TeamCardProps {
   sessionId: string;
   /** Webview → host postMessage fn passed down to tiles. */
   postMessage: PostMessageFn;
+  /**
+   * Optional webview-local first-seen tracker for finished-tile freshness
+   * (M3-04 NIT #3). When provided, finished tiles render
+   * `finished Xs / Xm / Xh`; when omitted, finished tiles render the bare
+   * `finished` string (back-compat with pre-NIT#3 callers and tests).
+   */
+  finishedTracker?: FinishedTracker;
+  /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
+  nowMs?: number;
 }
 
 export function renderTeamCard(props: TeamCardProps): HTMLElement {
-  const { team, tiles, sessionId, postMessage } = props;
+  const { team, tiles, sessionId, postMessage, finishedTracker, nowMs } = props;
 
   const card = document.createElement("section");
   card.className = "team-card";
@@ -51,8 +61,24 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
 
   card.appendChild(header);
 
+  const now = nowMs ?? Date.now();
   for (const tile of tiles) {
-    card.appendChild(renderAgentTile({ tile, sessionId, postMessage }));
+    // For finished tiles, observe (or fetch) the first-seen ms so the suffix
+    // anchors to the first tick we saw this completion — not the current
+    // render. See finishedTracker.ts for accuracy semantics.
+    const finishedAtMs =
+      tile.state === "finished" && finishedTracker
+        ? finishedTracker.observe(sessionId, tile.agentId, now)
+        : undefined;
+    card.appendChild(
+      renderAgentTile({
+        tile,
+        sessionId,
+        postMessage,
+        ...(finishedAtMs !== undefined ? { finishedAtMs } : {}),
+        nowMs: now,
+      }),
+    );
   }
 
   return card;
