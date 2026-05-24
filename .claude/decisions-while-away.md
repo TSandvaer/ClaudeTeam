@@ -431,3 +431,17 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** Agent agentId `ad8926be40e8de9f2`; backlog § M3-06; PR target `chore(test-discipline): require executor mapping in test-plan dispatch template (M3-06)`; reviewer orchestrator-direct.
+
+## 2026-05-24 1255 UTC — Admin-merge PR #36 (Nora M3-06 test-plan executor mapping) — orch-direct review APPROVE
+
+**Decided:** `gh pr merge 36 --admin --squash --delete-branch`. Merged at `cd3553c`. Foundational gates: (a) CI green on head `8b3bfc2` (run 26361672617 SUCCESS via `gh run view` per CLAUDE.md hard rule 9; redundant duplicate run 26361684863 still IN_PROGRESS but non-blocking for docs-only PR), (b) orchestrator-direct APPROVE comment posted (PR #36 comment 4528706523) — Nora-authored docs-only PR with orchestrator as designated reviewer per backlog § M3-06 owner spec, (c) 18 lines added in `team/nora-pl/dispatch-contracts/test-plan-authoring.md` (new file; ≤25-line AC3 cap satisfied; all 3 ACs verified in approve comment).
+
+**Foundation:** Rule 6.6 #1 — routine-PR-merge with CI green + peer-reviewer APPROVE'd. Orch-direct chore class (PR title prefix `chore(test-discipline)`, no ClickUp ticket per project convention) explicitly cleared by sponsor-pre-confirmed orch-direct dispatch class precedent (M1+M2 retros, PR #34, PR #33). Reviewer = orchestrator is the convention for this class.
+
+**Alternative:** Wait for the redundant duplicate CI run to complete. Rejected — first SUCCESS on the head SHA is authoritative per CLAUDE.md rule 9; the duplicate is a webhook artifact, not a fresh build.
+
+**Reversibility:** `git revert cd3553c` ≤2 min — single-file docs-only addition, no code consumers.
+
+**Status:** pending review.
+
+**Pointers:** Merge SHA `cd3553c`; PR #36 https://github.com/TSandvaer/ClaudeTeam/pull/36; APPROVE comment https://github.com/TSandvaer/ClaudeTeam/pull/36#issuecomment-4528706523; new artifact `team/nora-pl/dispatch-contracts/test-plan-authoring.md` is now the canonical test-plan authoring contract for future Sage / orchestrator dispatches.
