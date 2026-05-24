@@ -96,6 +96,14 @@ ENTRY-2026-05-24T19:34:57Z: 86c9ybrk0 -> complete (PR #41 merged at 0fbf028 — 
 
 Resolved 2026-05-24. NIT #1 (package.json description/clamp mismatch) + NIT #2 (PR-body wording process note) tracked in `86c9yb0yg`. NIT #3 absorbed into M3-02 per backlog edit.
 
+## NEW-TICKET-REQUEST — M3-09 Sage Layer-3 expansion (PENDING — orch authorized 2026-05-24T19:52Z, dispatched same tick)
+
+**Status:** queued — orchestrator's ClickUp MCP did not connect this session, so ticket creation deferred to next session with live MCP. Sage has been dispatched IN PARALLEL — she'll author the body inline with her PR and append her own ENTRY when the PR opens. Orch substitutes the placeholder `M3-09` ID for the real ClickUp ID post-creation.
+
+**Foundation:** M3 backlog `team/nora-pl/milestone-3-backlog.md` § M3-09 explicit `ClickUp: yes (create at dispatch)`. Sage's M3-09 dispatch this tick triggers the queue.
+
+**Body to file** (per backlog M3-09 lines 498-543): name=`test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip (M3-09)`, list_id=`901523520912`, status=`to do`, markdown_description=Sage's PR body (Layer-3 test suite expansion — see backlog spec for ACs).
+
 ## NEW-TICKET-REQUEST — M3-10 persona-tile-collapse (PENDING — sponsor authorized 2026-05-24T17:40Z)
 
 **Status:** queued — orchestrator's ClickUp MCP did not connect this session, so ticket creation deferred to next session with live MCP, or sponsor can file manually.
