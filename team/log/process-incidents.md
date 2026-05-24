@@ -20,6 +20,20 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-25 — Parallel-agent type-vocabulary divergence on M3-10 produced non-mergeable PR rebase
+
+**Symptom:** ClaudeTeam M3-10 (`86c9ydug9`) — Felix + Maya dispatched in parallel on different surfaces (host reducer / webview render). Each agent independently picked their own type names for the shared M3-10 wrapper concept: Felix used `PersonaGroup` / `TileOrGroup` / `isPersonaGroup` / `kind: "group"`; Maya used `CollapsedPersonaGroup` / `RosterTileEntry` / `isCollapsedPersonaGroup` / `kind: "collapsed-persona"`. Cross-review missed the divergence (Felix APPROVE_WITH_NITS on PR #47 flagged 2 unrelated NITs; Maya APPROVE on PR #48 clean). PR #47 merged first (Maya canonical landed on main). PR #48 then failed `gh pr merge` with conflicts across `src/shared/messages.ts`, `src/webview/components/sessionBlock.ts`, `src/webview/main.ts`, `src/webview/render.ts`. Conflicts non-resolvable via `--ours`/`--theirs` because Felix's reducer (his net-new code) referenced types that don't exist on main.
+
+**Cause:** Dispatch brief specified the SHAPE (`{personaName: string, count: number, instances: AgentTile[]}`) + DIRECTIONALITY (Felix exports → Maya imports) but NOT the actual IDENTIFIER NAMES (type name, union alias, guard function, discriminator value, file path). Shape-contract felt sufficient because both agents are "smart enough" to match names — but smart-enough isn't repeatable across sessions/orchestrators. Cross-review pairing didn't check inter-PR vocabulary alignment because neither persona's brief told them to.
+
+**Recovery:** Felix re-dispatched for a reconciliation rebase: rebase onto origin/main, `git checkout --ours` for 4 webview/messages conflicts (take Maya's canonical), sed-rename Felix's reducer + tests to use Maya's vocabulary (`PersonaGroup` → `CollapsedPersonaGroup`, etc.), drop Felix's redundant type defs from `src/shared/types.ts`, force-push, wait for CI. ~5-10 min added to drain.
+
+**Prevention:** Stage-diff-then-apply for a new user-global rule **"Parallel-agent shared-concept vocabulary discipline"** at `team/log/proposed-global-rule-parallel-agent-vocabulary-discipline-2026-05-25.md`. Two patterns: (Pattern A — default) sequence the dispatches so the type-author merges first + consumer reads canonical vocabulary from main; (Pattern B) parallel with explicit "Vocabulary contract" block in both briefs naming the 5 identifiers. Cross-review must explicitly check vocabulary alignment between parallel PRs sharing a concept; divergence = REQUEST_CHANGES not APPROVE_WITH_NITS.
+
+**Code/process pointer:** Staged-diff doc `team/log/proposed-global-rule-parallel-agent-vocabulary-discipline-2026-05-25.md`; companion `.claude/agents/dispatch-template.md` addition (project-scoped) included in same staged doc; original M3-10 dispatch briefs visible in this session's conversation scrollback as the trigger artifact.
+
+---
+
 ## 2026-05-25 — Repeated sponsor bloat call-outs across sessions; staged main-thread bloat discipline rule
 
 **Symptom:** Across multiple ClaudeTeam M3 Wave 1 sessions, sponsor called out main-thread bloat ("still seeing a lot of clutter (bloat) in the main chat") AND pasted back ~50K chars of orchestrator conversation transcript as receipts. Concrete bloat sources visible in the transcript: 5-dropdown rebase mechanics, 60-200 line dispatch briefs verbatim in Agent tool dropdowns, predictive "next event" trailers after every tick, `grep -n -A 35` outputs printing 35-line backlog sections inline, redundant `gh pr view` state-checks, redundant `git log --oneline -3` after every commit, TodoWrite re-prints on every Stop-hook reminder.
