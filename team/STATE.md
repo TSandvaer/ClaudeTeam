@@ -16,9 +16,9 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 - **`origin/main` tip:** `0fbf028` (PR #41 merge — Felix + Maya M3-03 DEAD-bleed fix). Three PRs merged this tick: #41 (`0fbf028`), #42 (`0a5bc5e` — M3-07 Nora install-path validation), #43 (`236c3f8` — M3-08 Nora main-thread narration). Auto-merge audit logged at `.claude/decisions-while-away.md` 1934 UTC.
 - **M3 Wave 0 SHIPPED end-to-end** (prior session — 6 PRs merged to main): M3-01 hot-reload (PR #35, `a74cb94`), M3-02 openRoster command (PR #37, `d0225aa`), M3-03 window-scoped session filtering (PR #38, `1bc422c`), M3-04 webview chip + filtered-empty + open-roster button (PR #39, `b22de25`), M3-01-NITs cleanup (PR #40, `9c0572c`), plus M3-06 dispatch-template update (PR #36, `cd3553c`). Sponsor's M3 scope-correction directive ("show only sessions from this VS Code window") addressed via M3-03 default-on window-scoping with `claudeteam.showAllSessionsGlobally` opt-out.
-- **Test counts:** 268 unit (+2 pre-existing skips) + 68 integration green on main as of PR #41 merge (added 4 bootBleed jsdom tests + 2 AC3 sessionFilter tests from PR #41).
-- **Open PRs:** PR #44 — `test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip (M3-09)` (HEAD `2e7f2be`, CI green, mergeable=MERGEABLE). 281 unit + 68 integration + 23 Layer-3 (new) — all green. NIT gaps (1)-(3) from PR #39 absorbed as 13 unit tests. tsconfig.vscode-integration.json extended to include src/** for Layer-3 imports. Production code untouched. Awaiting Felix review.
-- **In-flight agents:** **Felix** on PR #44 peer review (agentId `a7e42c678744ce73b`, dispatched 2026-05-24T20:08Z background). Sage done (PR #44 author, worktree detached). Maya, Nora, Iris, Bram idle.
+- **Test counts:** 281 unit (+2 pre-existing skips) + 68 integration + 23 Layer-3 green on main as of PR #44 merge (M3-09 added 3 new Layer-3 suites + 13 NIT-gap unit tests).
+- **Open PRs:** none. PR #44 (M3-09) merged at `e9d2457` this tick; Felix APPROVE.
+- **In-flight agents:** none. Felix, Sage, Maya, Nora, Iris, Bram all idle.
 - **Held for sponsor return:** **`86c9ybtut` (M3-04 NITs: model fallback / error format / finished timestamp)** dispatch held — ticket body isn't in repo, only ClickUp which orch MCP can't read this session. Need sponsor to either (a) paste ticket body or (b) confirm Felix+Maya can interpret NIT descriptions from PR #39 review comments + codebase context. Sponsor's "split per surface" preference recorded; once context unblocks, dispatch is Felix host (NIT #1+#2) + Maya webview (NIT #3) in parallel.
 - **Auto-decide this tick (logged at `.claude/decisions-while-away.md` 2026-05-24 1801 UTC):** Path 1 absorb webview-scope into `86c9ybrk0` + redispatch Felix on same PR, vs Path 2 (close as misdiagnosed + new ticket for Maya). Foundation: Felix's audit + Path Y economy precedent. Reversibility ≤1 PR.
 - **Queued for sponsor (non-blocking):**
@@ -40,10 +40,9 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 - **Orch-direct Wave 1 (no ClickUp):** M3-07 (PR #42 merged `0a5bc5e`), M3-08 (PR #43 merged `236c3f8`) — DONE.
 
 **Wave 1 remaining (per Nora's backlog):**
-- **`86c9ybtut`** — M3-04 NITs (Felix host NIT #1+#2 + Maya webview NIT #3 split per sponsor's preference, 2 PRs).
-- **M3-09** — Sage Layer-3 expansion absorbing Sage's PR-#39 coverage-gap NITs.
-- **M3-10** — persona-tile-collapse (post ticket-creation, Felix reducer + Maya webview).
-- **DONE this session:** `86c9ybrk0`, M3-07, M3-08.
+- **`86c9ybtut`** — M3-04 NITs (Felix host NIT #1+#2 + Maya webview NIT #3 split per sponsor's preference, 2 PRs) — HELD pending sponsor's ticket-body context (model fallback / error format / finished timestamp specifics not in repo).
+- **M3-10** — persona-tile-collapse (post ticket-creation; ticket creation queued in clickup-pending.md awaiting MCP).
+- **DONE this session:** `86c9ybrk0` (PR #41), M3-07 (PR #42), M3-08 (PR #43), M3-09 (PR #44 — incl. PR-#39 NIT-gap absorption).
 
 **This-session structural delta (newest at top):**
 

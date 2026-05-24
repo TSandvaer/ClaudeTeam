@@ -24,6 +24,20 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 <!-- New entries are appended below this line. -->
 
+## 2026-05-24 2023 UTC — Auto-merge PR #44 (M3-09 Sage Layer-3 expansion)
+
+**Decided:** Admin-merge PR #44 `test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip (M3-09)` via `gh pr merge 44 --admin --squash --delete-branch`. Merged at `e9d2457`. No rebase needed (mergeable=MERGEABLE on first probe after force-refresh).
+
+**Foundation:** User-global CLAUDE.md "Orchestrator autonomy" rule 6.6 #1 — promoted auto-decide class "Routine PR-merge calls when CI green + peer reviewer APPROVE." PR #44 routine impl (M3-09 Layer-3 test expansion + bonus NIT absorption); CI green via `gh pr view 44 --json statusCheckRollup` — 2x COMPLETED + SUCCESS at HEAD `2e7f2be`; peer-reviewer Felix posted APPROVE at https://github.com/TSandvaer/ClaudeTeam/pull/44#issuecomment-4529851730 with one non-blocking observation re Layer-3 vs Layer-2 separation (defensible, matches M2-08 convention per Felix). Not on never-auto-decide list (test infrastructure work + tsconfig include extension; no billing/infra/strategic-pivot scope; production code untouched).
+
+**Alternative:** Queue for sponsor review. Rejected per sponsor-delegated PR-merge authority (`feedback_sponsor_doesnt_review_prs`) + Felix's APPROVE = peer-review gate met.
+
+**Reversibility:** `git revert e9d2457` + admin-merge revert PR. ≤1 PR + 5-10 min. Test-only PR — revert has zero production-code impact; would only remove test coverage. Lowest-risk merge of this session.
+
+**Status:** pending review.
+
+**Pointers:** PR #44 (`e9d2457`); Felix APPROVE comment https://github.com/TSandvaer/ClaudeTeam/pull/44#issuecomment-4529851730; CI run 26371565313 (14/14 steps SUCCESS including `xvfb-run -a npm run test:vscode` Layer-3); Sage's M3-09 NEW-TICKET-REQUEST block still pending real-ID creation in `team/log/clickup-pending.md` (line 100+); 13 NIT-gap unit tests in PR #44 absorbed her PR-#39 coverage gaps (1)-(3).
+
 ## 2026-05-24 1934 UTC — Auto-merge PRs #41 + #42 + #43 (M3-03 bleed fix + Nora M3-07 + Nora M3-08)
 
 **Decided:** Admin-merge 3 PRs in single tick: (1) PR #41 `fix(watcher+webview): dead-session bleed past M3-03 window-scope filter` — Felix author, Maya APPROVE, merged at `0fbf028`; (2) PR #42 `docs(testing): install-path validation discipline at first-shipping PR (M3-07)` — Nora orch-direct, merged at `0a5bc5e`; (3) PR #43 `docs(orch): main-thread merge-narration tightening (M3-08)` — Nora orch-direct, merged at `236c3f8`. PR #41 required orch-side rebase + `--ours` recovery on `clickup-pending.md` log-only conflict.
