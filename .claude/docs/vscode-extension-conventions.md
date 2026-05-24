@@ -90,8 +90,9 @@ Refine the shapes as needed; the rule is: **add a new message type rather than o
 ## Build & package
 
 - **Bundler:** `esbuild` for both host and webview. Speed matters during dev (reload-test loop).
+- **Host bundle MUST emit as CJS with `.cjs` extension** — output `dist/extension/main.cjs` (not `.js`). VS Code's extension host runs Node 22+, which raises `ERR_REQUIRE_ESM` if it sees `.js` under any ESM-ambiguous resolution (this project's `package.json` has no `"type"` field; Node 22+ treats sibling `.js` files as ESM when called through `require()`). The `.cjs` extension is the canonical disambiguation. Verify after every build: `node -e "require('./dist/extension/main.cjs')"` exits 0. **`package.json` `main` field must match** the actual extension (`dist/extension/main.cjs`). Webview bundle stays `.js` (IIFE format — runs in browser context, no require() involved). Resolved by `4a41634` (`86c9y9yzu`); source-of-truth comment block lives in `esbuild.config.mjs` next to the host outfile config.
 - **Watch mode:** `npm run watch` rebuilds both bundles on file change.
-- **Packaging:** `vsce package` produces a `.vsix`. Manifest-touching PRs must include the `vsce package` output in the Self-Test Report (catches malformed `contributes` early).
+- **Packaging:** `vsce package` produces a `.vsix`. Manifest-touching PRs must include the `vsce package` output in the Self-Test Report (catches malformed `contributes` early). After `vsce package`, optionally re-extract the `.vsix` and verify `node -e "require('./extension/dist/extension/main.cjs')"` exits 0 on Node 22+ — catches packaging-time regressions in the bundle-format chain.
 - **Pre-commit:** typecheck + lint + unit tests. No `--no-verify`.
 
 ## Testing
