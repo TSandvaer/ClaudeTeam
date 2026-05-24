@@ -7,8 +7,13 @@
  *      undefined we're running in a plain browser (dev mode) and fall back
  *      to a console-log mock so click handlers + fixture rendering still
  *      work — spec §9 + AC8 "static-fixture mode."
- *   3. Initial render — `FIXTURE_STATE` in dev mode; an empty state until the
- *      first `state:full` lands in VS Code mode.
+ *   3. Initial render — `FIXTURE_STATE` in browser dev mode (so Maya can
+ *      iterate on tile layout without a host); `FIXTURE_EMPTY_STATE` in
+ *      VS Code mode so the dashboard shows no tiles until the first host
+ *      `state:full` lands. Shipping `FIXTURE_STATE` as the placeholder in
+ *      VS Code mode caused the M3-03/86c9ybrk0 "DEAD-session bleed" — the
+ *      fixture's hardcoded cross-workspace DEAD session was visible for
+ *      hundreds of ms before the first host tick replaced it.
  *   4. Wire `initMessageReceiver` to handle host → webview messages. New
  *      states fully replace the current DOM (AC7 discipline note).
  *
@@ -23,7 +28,7 @@
  *         team/nora-pl/milestone-2-backlog.md §M2-05 AC1, AC2, AC8
  */
 
-import { FIXTURE_STATE } from "../shared/fixtures.js";
+import { FIXTURE_EMPTY_STATE, FIXTURE_STATE } from "../shared/fixtures.js";
 import type {
   AgentTile,
   AgentTree,
@@ -143,7 +148,14 @@ function boot(): void {
 
   const api = acquireApi();
   let currentError: DashboardErrorState | null = null;
-  let currentState: AgentTree = FIXTURE_STATE;
+  // VS Code mode → start with an empty state so the dashboard renders no
+  // tiles until the first host `state:full` arrives. Browser dev mode →
+  // start with FIXTURE_STATE so Maya can iterate on layout. See file
+  // header for the M3-03/86c9ybrk0 bleed regression this prevents.
+  const isVsCodeMode = typeof acquireVsCodeApi === "function";
+  let currentState: AgentTree = isVsCodeMode
+    ? FIXTURE_EMPTY_STATE
+    : FIXTURE_STATE;
   /**
    * M3-04 AC1: most-recently-dismissed roster-error first-message. Tracked
    * here (boot-level closure) so it persists across re-renders WITHOUT
@@ -154,9 +166,9 @@ function boot(): void {
    */
   let rosterErrorDismissedKey: string | null = null;
 
-  // Browser dev mode → render fixture immediately. VS Code mode → render the
-  // fixture too as an "until first message arrives" placeholder. The first
-  // `state:full` from the host replaces it.
+  // Browser dev mode → render FIXTURE_STATE immediately. VS Code mode →
+  // render the empty state until the first `state:full` arrives from the
+  // host. Either way the first state:full fully replaces the DOM.
   const buildCtx = (): RenderContext => ({
     mount,
     postMessage: api.postMessage,
