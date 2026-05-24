@@ -136,12 +136,12 @@ const MALFORMED_ROSTER = `teams:
 // ---------------------------------------------------------------------------
 
 // TEST_POLL_MS is the value we PASS to startRosterWatcher; the watcher
-// internally clamps to ROSTER_POLL_MIN_MS (1000ms in production). The clamp
-// is load-bearing — we don't want users setting pathologically tight polls —
-// so the test honors it and waits accordingly rather than driving the poll
-// loop faster than production permits. AC9's 2s budget exists precisely to
-// cover this case (one poll cycle ≤1000ms + debounce 250ms + headroom).
-const TEST_POLL_MS = 1000;
+// internally clamps to ROSTER_POLL_MIN_MS (250ms — matches the debounce
+// window). Using 250ms here exercises the tightest production-permissible
+// poll cadence; the AC9 budget (2s) gives plenty of headroom for slow CI
+// runners (worst case: 250ms poll + 250ms debounce + filesystem mtime
+// granularity).
+const TEST_POLL_MS = 250;
 const RELOAD_BUDGET_MS = 2000; // AC9: must fire within 2 seconds.
 
 async function sleep(ms: number): Promise<void> {
@@ -162,15 +162,27 @@ async function waitFor(
 }
 
 /**
- * Bump the mtime of a file by 1 second into the future. Some filesystems
- * (notably ext4 + Windows NTFS in some configurations) have low-resolution
- * mtimes; rewriting the same content within the same tick may produce an
- * identical mtime, which the polling fallback would miss. Bumping the
- * mtime explicitly ensures the test does not flake on slow-clock systems.
+ * Bump the mtime of a file to a monotonically-increasing future timestamp.
+ *
+ * Some filesystems (ext4 + Windows NTFS in some configurations) have
+ * mtimes that are less precise than `Date.now()`, so rewriting the same
+ * content within the same OS tick can produce identical mtimes which the
+ * polling fallback would miss. We use a module-scoped counter to guarantee
+ * each call yields a strictly-larger mtime than the previous one, which
+ * eliminates the FS-precision-induced flake — verified on Ubuntu CI where
+ * 3 rapid `Date.now()` calls were collapsing to the same second.
  */
+let mtimeCounterSec = 0;
 function bumpMtime(path: string): void {
-  const now = Date.now() / 1000;
-  utimesSync(path, now + 1, now + 1);
+  // Start ~5 minutes in the future on first call, then add 1 second per
+  // call. Future-dating avoids colliding with the file's actual creation
+  // time during the test's prior writeFileSync calls.
+  if (mtimeCounterSec === 0) {
+    mtimeCounterSec = Math.floor(Date.now() / 1000) + 300;
+  } else {
+    mtimeCounterSec += 1;
+  }
+  utimesSync(path, mtimeCounterSec, mtimeCounterSec);
 }
 
 interface Harness {

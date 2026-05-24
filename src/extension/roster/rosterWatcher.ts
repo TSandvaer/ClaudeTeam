@@ -89,8 +89,16 @@ export const ROSTER_DEBOUNCE_MS = 250;
  */
 export const ROSTER_POLL_FALLBACK_MS = 5000;
 
-/** Minimum legal poll cadence — clamped to avoid pathologically tight loops. */
-const ROSTER_POLL_MIN_MS = 1000;
+/**
+ * Minimum legal poll cadence — clamped to avoid pathologically tight loops.
+ * Set to match the debounce window: any tighter than this and the polling
+ * loop fires within a single debounce reset cycle, which is wasted CPU
+ * (the next poll will see the same mtime + reset the same debounce). A
+ * `fs.statSync` call every 250ms is well within acceptable overhead for
+ * the fallback path (this is the FALLBACK; the primary path is VS Code's
+ * FileSystemWatcher which has no polling at all).
+ */
+const ROSTER_POLL_MIN_MS = 250;
 
 /**
  * Inputs for {@link startRosterWatcher}. Split into a plain options object
