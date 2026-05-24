@@ -395,3 +395,39 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** Agent name="nora-m3-01-closeout"; new ticket title `chore(roster): M3-01 NITs follow-up`; existing M3-02 in `team/nora-pl/milestone-3-backlog.md` gets NIT #3 absorption note.
+
+## 2026-05-24 1252 UTC — Nora closeout completed; orch-side ClickUp ticket-creation queued (sub-agent + orch MCP gap)
+
+**Outcome of 1240 dispatch:** Nora returned. AC1 (M3-01 flip) was a no-op — already recorded in clickup-pending.md ENTRY-2026-05-24T12:36:00Z by orch at merge time. AC2 (NITs ticket create) was **structurally blocked** by sub-agent MCP gap — Nora has `mcp__clickup__clickup_create_task` listed in persona but not surfaced at runtime. AC3 (M3-02 absorption note) DONE at `6b5a3de` (direct-pushed to main). Nora queued the full NEW-TICKET-REQUEST block in `team/log/clickup-pending.md` lines 83+ — orchestrator must flush on next session with MCP-loaded ClickUp tools.
+
+**Orch-side gap this session:** `ToolSearch select:mcp__clickup__clickup_update_task` returned "No matching deferred tools found" — MCP server not connected to this orchestrator session. NITs ticket creation thus DEFERRED to sponsor's next active session OR to a future tick where MCP loads. Per `[[feedback_clickup_update_task_permission_rule]]` this should be allowlisted; the symptom here is that the MCP server itself isn't connected, not just permission denial.
+
+**Status:** pending review — orchestrator queued action visible at `team/log/clickup-pending.md` lines 83+ NEW-TICKET-REQUEST block.
+
+## 2026-05-24 1252 UTC — Auto-dispatch Felix on M3-02 (openRoster + NIT #3 absorption) BACKGROUND
+
+**Decided:** Spawn Felix as `subagent_type=felix` with `run_in_background: true` on M3-02 (`feat(roster): claudeteam.openRoster command + auto-create starter YAML`). Branch `felix/m3-02-open-roster`. ClickUp ticket creation deferred (same MCP gap) — Felix appends a NEW-TICKET-REQUEST block to `clickup-pending.md` per Nora's M3-01-closeout precedent. AC1-8 from backlog § M3-02. Absorbs NIT #3 from M3-01 PR #35 review per rule 6.6 #6 — PR body MUST cite "Closes NIT #3 from M3-01 peer-review (PR #35 comment 4528643161)".
+
+**Foundation:** Backlog § M3-02 is dispatch-ready (Nora-authored, sponsor pre-confirmed M3 scope). M3-01 just shipped (`a74cb94`); M3-02 pairs naturally to complete the "edit roster, see changes" UX. Rule 6.6 #6 covers the NIT #3 absorption into this downstream PR. `[[sponsor-trusts-tactical-defaults]]` for routine wave-2 dispatch.
+
+**Alternative:** Dispatch Felix on M3-03 (window-scoped session filtering) first instead — would unblock Maya's M3-04 sooner. Rejected — M3-02 closes the M3-01 NIT loop (rule 6.6 #6 alignment) and pairs with M3-01's just-shipped hot-reload to deliver a complete user-facing feature. M3-03 ships next round.
+
+**Reversibility:** TaskStop the agent + delete branch ≤5 min.
+
+**Status:** pending review.
+
+**Pointers:** Agent agentId `a70a509db51158efb`; backlog § M3-02; PR target `feat(roster): claudeteam.openRoster command + auto-create starter YAML`; reviewer Maya.
+
+## 2026-05-24 1252 UTC — Auto-dispatch Nora on M3-06 (test-plan executor mapping) BACKGROUND
+
+**Decided:** Spawn Nora as `subagent_type=nora` with `run_in_background: true` on M3-06 (`chore(test-discipline): test-plan executor mapping requirement`). Orch-direct chore class — no ClickUp ticket per project convention. Branch `nora/m3-06-executor-mapping`. AC1-3 from backlog § M3-06. PR diff ≤25 lines.
+
+**Foundation:** Backlog § M3-06 is dispatch-ready (Nora-authored). M2-close retro § Anti-pattern explicitly motivates this discipline gap. Orch-direct chore class per sponsor-confirmed convention (M3-05 + retro PR + backlog PR precedent). `[[sponsor-trusts-tactical-defaults]]` for routine chore dispatch.
+
+**Alternative:** Defer to a session where Nora's MCP tools are loaded for unified backlog-management work. Rejected — M3-06 is doc-only, no ClickUp interaction needed; running in parallel with Felix M3-02 maxes capacity.
+
+**Reversibility:** TaskStop the agent + delete branch ≤5 min.
+
+**Status:** pending review.
+
+**Pointers:** Agent agentId `ad8926be40e8de9f2`; backlog § M3-06; PR target `chore(test-discipline): require executor mapping in test-plan dispatch template (M3-06)`; reviewer orchestrator-direct.

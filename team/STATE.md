@@ -10,7 +10,7 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-24 1236 UTC (PR #35 Felix M3-01 MERGED at `a74cb94` — Maya APPROVE_WITH_NITS, 3 NITs non-blocking; NITs follow-up ticket pending Nora dispatch)
+## Current state — 2026-05-24 1252 UTC (M3 Wave 2 in motion: Felix on M3-02 + Nora on M3-06 dispatched; M3-01 NITs ticket creation queued for sponsor-MCP session; Maya idle pending M3-03)
 
 **This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
 
@@ -20,8 +20,9 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 - **M2 fully closed (unchanged):** all 12 PRs merged + P0 CJS shim + retro PR #31. Production .vsix activates on Node 22+. M2-06 AC7(b-d) sponsor-confirmed **PASS** this session via in-person install → reload → render → drill-in verification (audit comment posted on `86c9y9q6h`).
 - **Rule 6.6 additions APPLIED to `~/.claude/CLAUDE.md` (2026-05-24):** all 3 sponsor-authorized auto-decide classes from M2-close retro (NITs-ticket-creation, log-only-conflict recovery, NITs-absorption-into-downstream) landed via explicit sponsor re-authorization this session. Classifier-blocked-last-session edit is now resolved. Audit trail: staged diff at `team/log/proposed-rule-6.6-additions-2026-05-24.md` (now applied — orch can move to `team/log/applied/` or leave as audit per sponsor's later call).
 - **Test counts:** unchanged from M2 close — **215 unit + 49 integration + 14 Layer-3 = 278 tests green** on main. CI green on every push. M3 Wave 0 implementation will add coverage.
-- **Open PRs:** none. PR #35 (Felix M3-01) merged at `a74cb94` (1236 UTC) — Maya APPROVE_WITH_NITS verdict, CI green on `6c19b63`, manifest gate ✅. Rebase + conflict resolution had already been applied to origin (resolved correctly: switchover comment + new ENTRY-timestamp both preserved). Branch deleted via `--delete-branch`.
-- **In-flight agents:** **Nora** — to be dispatched this tick (background) to flip ClickUp `86c9yaq1e` → complete + create NITs follow-up ticket per rule 6.6 #4 (NITs #1 + #2 only; NIT #3 absorbs into M3-02 per Maya's explicit recommendation and rule 6.6 #6). Maya returned APPROVE_WITH_NITS verdict + detached her worktree. Felix idle.
+- **Open PRs:** none (last merged: PR #35 Felix M3-01 at `a74cb94`; PRs from this tick's dispatches not yet opened — Felix + Nora are mid-implementation).
+- **In-flight agents:** **Felix** on M3-02 (`feat(roster): claudeteam.openRoster command + auto-create starter YAML`, absorbs NIT #3 from M3-01), agentId `a70a509db51158efb`, branch `felix/m3-02-open-roster`. **Nora** on M3-06 (`chore(test-discipline): test-plan executor mapping requirement`, orch-direct chore), agentId `ad8926be40e8de9f2`, branch `nora/m3-06-executor-mapping`. Maya idle (M3-04 depends on M3-03 state shape — M3-03 not yet dispatched). Bram + Iris + Sage idle.
+- **Queued for sponsor:** **M3-01 NITs follow-up ticket creation** — sub-agent + orchestrator both lack `mcp__clickup__*` MCP tools this session. Full NEW-TICKET-REQUEST body queued at `team/log/clickup-pending.md` lines 83+ (title `chore(roster): M3-01 NITs follow-up`, NIT #1 + NIT #2 actionable scope, NIT #3 absorbed into M3-02). Orchestrator flushes when MCP server loads.
 - **Sponsor-pending (not blocking):** none. M2-06 AC7(b-d) verdict was confirmed PASS this session. 2 polish findings (noisy roster-warning log spam; dev-mode webview CSP source-map block) rolled into M3 backlog per sponsor's "(b) into M3 backlog" decision — captured as M3 backlog items #8 and #9 in `team/nora-pl/milestone-3-backlog.md`.
 - **`86c9y7y9z` standing call (unchanged):** sponsor's standing decision — leave at `to do` with comment-only audit trail. No action; do NOT auto-decide to close.
 - **Convention confirmed this session:** retros + `chore(orch)` work go orch-direct without ClickUp tickets (M1+M2 precedent). Applies to backlog files too (PR #33 was orch-direct).
