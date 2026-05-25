@@ -315,4 +315,56 @@ Create with: `list_id=901523520912`, `status=to do` (then immediately flip to `i
 
 ```
 ENTRY-2026-05-25T08:15:00Z: <placeholder-never-fabricate-ticket> -> in review (PR opened — never-fabricate rule propagation; substitute placeholder with assigned ClickUp ID after orch creates)
+ENTRY-2026-05-25T09:00:00Z: 86c9ygcmj -> in progress (M4-06 dispatch — Nora retro authoring at branch `nora/86c9ygcmj-m4-close-retro`)
+ENTRY-2026-05-25T09:00:01Z: 86c9ygcmj -> in review (M4-06 PR opened — V1 close retro + cross-arc retrospective)
 ```
+
+## NEW-TICKET-REQUEST — In-extension-host heap snapshot probe (M4-04 follow-up; Felix-recommended, Maya-endorsed NIT-class)
+
+**Status:** queued — Nora sub-agent runtime lacks `mcp__clickup__clickup_create_task` (documented sub-agent MCP gap per `.claude/docs/orchestration-overview.md § ClickUp as hard gate`). Orchestrator creates the ticket post-M4-06 merge.
+
+**Foundation:** M4-04 PR #59 body § "Decisions" + Maya peer-review verdict APPROVE explicitly recommends an in-extension-host heap probe to confirm/refute the +4.6 MB / 10 min tsx-harness delta. Maya endorsed as NIT-class (not blocking M4-04 merge). Promoted auto-decide class rule 6.6 #5 (NITs-ticket-creation from APPROVE comment when scope is mechanical) applies.
+
+**Body to file** (when orchestrator creates):
+
+```
+**Ticket:** `chore(ext): in-extension-host heap snapshot probe (M4-04 follow-up)`
+**Owner:** Felix
+**Peer reviewer:** Maya
+**Size:** S (≤ 1 day; measurement + doc only, no production code changes expected)
+**Priority:** P3 (NIT-class — M4-04 shipped with "Plausibly clean — follow-up needed" verdict; this confirms or refutes)
+**Source:** M4-04 PR #59 body § Decisions + § Memory posture + Maya peer-review verdict (APPROVE)
+**Source PR / SHA:** PR #59 merged at `d9b1b49`; methodology doc `team/felix-dev/m4-04-cadence-measurement.md` § Memory posture
+
+**Scope:**
+
+Replicate the M4-04 memory probe under VS Code extension-host runtime (not tsx). Methodology:
+
+1. Install the production `.vsix` in a fresh VS Code window with `~/.claude/` populated (3+ live sessions ideal).
+2. Open `Developer: Open Process Explorer`; identify the extension-host process.
+3. Capture a heap snapshot at t=0; let the watcher run for 60 min under realistic load; capture a heap snapshot at t=60min.
+4. Compare the two snapshots; identify any monotonic growth attributable to the watcher/reducer/webview code path.
+5. Compare against the tsx-harness +4.6 MB / 10 min slope: confirm (production has similar slope = real leak) or refute (production is flat = tsx-runtime artifact).
+
+**Acceptance criteria:**
+- AC1: Heap-snapshot probe ran for ≥60 min under realistic multi-session load.
+- AC2: Two snapshots captured + diffed via Chrome DevTools (or VS Code's Process Explorer equivalent).
+- AC3: Verdict documented in `team/felix-dev/m4-04-heap-probe.md` (new) OR appended to existing `m4-04-cadence-measurement.md` § Memory posture.
+- AC4: If a real leak is confirmed, follow-up implementation ticket filed with file:line scoping.
+- AC5: If refuted, methodology doc updated to mark "memory posture: clean" with the run evidence.
+
+**Out of scope:**
+- Implementing any leak fix (this ticket is measurement-only; fix lands as a separate follow-up if AC4 fires).
+- Changing the tsx harness (M4-04's harness stays as-is; this is a separate runtime).
+- Long-duration probes beyond ~60 min unless evidence motivates.
+
+**Done-when test:** verdict documented; if leak confirmed, fix ticket exists; if refuted, methodology doc marks the posture clean.
+
+**Webview-smoke / extension-manifest gate:** NO — measurement-only.
+
+**Files in play:**
+- Owned: `team/felix-dev/m4-04-heap-probe.md` (new) OR extension of `team/felix-dev/m4-04-cadence-measurement.md` § Memory posture.
+- Read-only: production `.vsix`, `~/.claude/` live data, M4-04 methodology doc.
+```
+
+Create with: `list_id=901523520912`, `status=to do`, `name="chore(ext): in-extension-host heap snapshot probe (M4-04 follow-up)"`, `markdown_description=` the body above.
