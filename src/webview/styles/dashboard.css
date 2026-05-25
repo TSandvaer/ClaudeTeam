@@ -1,35 +1,64 @@
 /*
  * dashboard.css — ClaudeTeam webview styles.
  *
- * Theme-variable discipline (CLAUDE.md hard rule + spec §10):
- *   - All colors except the four semantic state hex values come from
- *     `--vscode-*` variables. Fallback values are the VS Code defaults from
- *     the spec §10.1 table — they only fire when a theme has not defined the
- *     variable (unusual).
- *   - The four semantic state hex values are hardcoded per spec §10.2.
- *     Their meaning (green=active, amber=paused, grey=done, red=broken) must
- *     remain stable across theme switches.
+ * Token discipline (M4-01 §1 + CLAUDE.md hard rule):
+ *   - Reusable values (≥2 use sites) flow through --ct-* tokens declared
+ *     in :root below. Theme-mapped colors resolve via `var(--vscode-NAME,
+ *     FALLBACK)` so a missing theme variable still renders a default.
+ *   - One-shot --vscode-* references (inputValidation-*, button-*,
+ *     disabledForeground, textBlockQuote-background, editor-font-family)
+ *     stay inline at their single use site — promoting them would add
+ *     indirection without reuse value (M4-01 §1.2.2).
+ *   - The four semantic state hex values are tokenized as
+ *     --ct-color-state-{running,idle,finished,error} but remain HARDCODED
+ *     hex (not theme-mapped). Their meaning (green=active, amber=paused,
+ *     grey=done, red=broken) must remain stable across theme switches
+ *     (CLAUDE.md hard rule, carry-over from M2 §10.2).
  *
  * Layout discipline:
  *   - No fixed pixel widths beyond design tokens (--ct-state-dot-size etc.).
  *   - Activity text wraps; never truncated (spec divergence D1).
- *   - Hover/focus uses --vscode-list-hoverBackground + --vscode-focusBorder.
+ *   - Hover/focus uses --ct-color-bg-hover + --ct-color-focus.
  *
- * Source: team/iris-ux/m2-dashboard-tile-spec.md §10 design tokens
+ * Source: team/iris-ux/m4-polish-spec.md §1 (styling tokens, M4-02 refactor)
+ *         team/iris-ux/m2-dashboard-tile-spec.md §10 (baseline design tokens)
  *         .claude/docs/vscode-extension-conventions.md "Webview rules"
  */
 
 /* ===========================================================================
- * Design tokens — ClaudeTeam-namespaced variables (spec §10.3)
+ * Design tokens — ClaudeTeam-namespaced variables (M4-01 §1.3)
  * =========================================================================== */
 
 :root {
+  /* Spacing scale (carry-over from M2) */
   --ct-space-xs: 4px;
   --ct-space-s: 8px;
   --ct-space-m: 12px;
   --ct-space-l: 16px;
+
+  /* Component dimensions (carry-over from M2) */
   --ct-state-dot-size: 10px;
   --ct-state-dot-gap: 8px;
+
+  /* Radii + durations (new — M4-01 §1.2.6) */
+  --ct-radius-tile: 4px;
+  --ct-radius-chip: 2px;
+  --ct-duration-state-transition: 200ms;
+
+  /* Theme-mapped colors — promoted from M2 §10.1 table (≥2 use sites; M4-01 §1.2.1) */
+  --ct-color-fg: var(--vscode-foreground, #cccccc);
+  --ct-color-fg-muted: var(--vscode-descriptionForeground, #858585);
+  --ct-color-bg-editor: var(--vscode-editor-background, #1e1e1e);
+  --ct-color-bg-sidebar: var(--vscode-sideBar-background, var(--ct-color-bg-editor));
+  --ct-color-bg-hover: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.07));
+  --ct-color-border: var(--vscode-panel-border, #444444);
+  --ct-color-focus: var(--vscode-focusBorder, #007fd4);
+
+  /* Semantic state colors (hardcoded — must NOT theme; carry-over from M2 §10.2) */
+  --ct-color-state-running: #4caf50;
+  --ct-color-state-idle: #ffa726;
+  --ct-color-state-finished: #78909c;
+  --ct-color-state-error: #ef5350;
 }
 
 /* ===========================================================================
@@ -43,8 +72,8 @@ body {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
   font-weight: var(--vscode-font-weight);
-  color: var(--vscode-foreground, #cccccc);
-  background-color: var(--vscode-editor-background, #1e1e1e);
+  color: var(--ct-color-fg);
+  background-color: var(--ct-color-bg-editor);
 }
 
 #root {
@@ -59,7 +88,7 @@ body {
  * =========================================================================== */
 
 .empty-state {
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   padding: var(--ct-space-l);
   text-align: left;
 }
@@ -73,12 +102,9 @@ body {
   flex-direction: column;
   gap: var(--ct-space-m);
   padding: var(--ct-space-l);
-  background-color: var(
-    --vscode-sideBar-background,
-    var(--vscode-editor-background, #1e1e1e)
-  );
-  border: 1px solid var(--vscode-panel-border, #444444);
-  border-radius: 4px;
+  background-color: var(--ct-color-bg-sidebar);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-tile);
 }
 
 .session-block--dead {
@@ -91,7 +117,7 @@ body {
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--ct-space-s);
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--ct-color-fg);
 }
 
 .session-id {
@@ -102,7 +128,7 @@ body {
 .session-pid,
 .session-cwd,
 .session-title {
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   font-size: smaller;
 }
 
@@ -120,7 +146,7 @@ body {
   margin-left: auto;
   padding: 0 var(--ct-space-s);
   border: 1px solid var(--vscode-disabledForeground, rgba(204, 204, 204, 0.5));
-  border-radius: 2px;
+  border-radius: var(--ct-radius-chip);
   text-transform: uppercase;
   font-size: smaller;
 }
@@ -141,8 +167,8 @@ body {
   align-items: baseline;
   gap: var(--ct-space-s);
   padding-bottom: var(--ct-space-xs);
-  border-bottom: 1px solid var(--vscode-panel-border, #444444);
-  color: var(--vscode-descriptionForeground, #858585);
+  border-bottom: 1px solid var(--ct-color-border);
+  color: var(--ct-color-fg-muted);
 }
 
 .team-name {
@@ -163,7 +189,7 @@ body {
   flex-direction: column;
   gap: var(--ct-space-xs);
   padding: var(--ct-space-s);
-  border-radius: 4px;
+  border-radius: var(--ct-radius-tile);
   background-color: transparent;
   cursor: pointer;
   outline: 0 solid transparent;
@@ -172,11 +198,8 @@ body {
 
 .agent-tile:hover,
 .agent-tile:focus-visible {
-  background-color: var(
-    --vscode-list-hoverBackground,
-    rgba(255, 255, 255, 0.07)
-  );
-  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  background-color: var(--ct-color-bg-hover);
+  outline: 1px solid var(--ct-color-focus);
 }
 
 .tile-row {
@@ -194,16 +217,16 @@ body {
 
 .agent-display {
   font-weight: 600;
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--ct-color-fg);
 }
 
 .agent-role {
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   font-size: smaller;
 }
 
 .agent-activity {
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--ct-color-fg);
   font-family: var(--vscode-editor-font-family, monospace);
   /* Spec D1: wrap, never truncate. */
   word-break: break-word;
@@ -212,7 +235,7 @@ body {
 }
 
 .agent-model {
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: smaller;
 }
@@ -227,23 +250,23 @@ body {
   width: var(--ct-state-dot-size);
   height: var(--ct-state-dot-size);
   border-radius: 50%;
-  background-color: var(--vscode-descriptionForeground, #858585);
+  background-color: var(--ct-color-fg-muted);
 }
 
 .state-dot[data-state="running"] {
-  background-color: #4caf50;
+  background-color: var(--ct-color-state-running);
 }
 
 .state-dot[data-state="idle"] {
-  background-color: #ffa726;
+  background-color: var(--ct-color-state-idle);
 }
 
 .state-dot[data-state="finished"] {
-  background-color: #78909c;
+  background-color: var(--ct-color-state-finished);
 }
 
 .state-dot[data-state="error"] {
-  background-color: #ef5350;
+  background-color: var(--ct-color-state-error);
 }
 
 /* ===========================================================================
@@ -269,8 +292,8 @@ body {
   padding: var(--ct-space-s);
   background-color: transparent;
   border: 0;
-  border-radius: 4px;
-  color: var(--vscode-foreground, #cccccc);
+  border-radius: var(--ct-radius-tile);
+  color: var(--ct-color-fg);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -279,24 +302,21 @@ body {
 
 .collapsed-persona-header:hover,
 .collapsed-persona-header:focus-visible {
-  background-color: var(
-    --vscode-list-hoverBackground,
-    rgba(255, 255, 255, 0.07)
-  );
-  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  background-color: var(--ct-color-bg-hover);
+  outline: 1px solid var(--ct-color-focus);
 }
 
 .collapsed-persona-chevron {
   display: inline-block;
   width: var(--ct-state-dot-size);
   flex-shrink: 0;
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   font-size: smaller;
 }
 
 .collapsed-persona-name {
   font-weight: 600;
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--ct-color-fg);
 }
 
 .collapsed-persona-instances {
@@ -321,8 +341,8 @@ body {
   flex-direction: column;
   gap: var(--ct-space-s);
   padding: var(--ct-space-m);
-  border: 1px dashed var(--vscode-panel-border, #444444);
-  border-radius: 4px;
+  border: 1px dashed var(--ct-color-border);
+  border-radius: var(--ct-radius-tile);
 }
 
 .chip-header {
@@ -333,7 +353,7 @@ body {
   padding: var(--ct-space-xs) var(--ct-space-s);
   background-color: transparent;
   border: 0;
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -341,12 +361,9 @@ body {
 
 .chip-header:hover,
 .chip-header:focus-visible {
-  background-color: var(
-    --vscode-list-hoverBackground,
-    rgba(255, 255, 255, 0.07)
-  );
-  outline: 1px solid var(--vscode-focusBorder, #007fd4);
-  border-radius: 2px;
+  background-color: var(--ct-color-bg-hover);
+  outline: 1px solid var(--ct-color-focus);
+  border-radius: var(--ct-radius-chip);
 }
 
 .chip-count {
@@ -380,25 +397,25 @@ body {
 }
 
 .bg-agent-type {
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--ct-color-fg);
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: smaller;
 }
 
 .bg-agent-description {
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   font-style: italic;
   overflow-wrap: anywhere;
 }
 
 .bg-agent-state {
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   font-size: smaller;
   text-transform: lowercase;
 }
 
 .bg-agent-model {
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: smaller;
 }
@@ -413,7 +430,7 @@ body {
   gap: var(--ct-space-s);
   padding: var(--ct-space-m);
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--ct-radius-tile);
 }
 
 .error-chip--error {
@@ -471,7 +488,7 @@ body {
   background-color: var(--vscode-button-background, #0e639c);
   color: var(--vscode-button-foreground, #ffffff);
   border: 0;
-  border-radius: 2px;
+  border-radius: var(--ct-radius-chip);
   cursor: pointer;
   font: inherit;
 }
@@ -479,7 +496,7 @@ body {
 .error-chip-action:hover,
 .error-chip-action:focus-visible {
   background-color: var(--vscode-button-hoverBackground, #1177bb);
-  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  outline: 1px solid var(--ct-color-focus);
 }
 
 .error-chip-dismiss {
@@ -503,16 +520,13 @@ body {
 .roster-error-chip-body {
   cursor: pointer;
   outline: 0 solid transparent;
-  border-radius: 2px;
+  border-radius: var(--ct-radius-chip);
 }
 
 .roster-error-chip-body:hover,
 .roster-error-chip-body:focus-visible {
-  background-color: var(
-    --vscode-list-hoverBackground,
-    rgba(255, 255, 255, 0.07)
-  );
-  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+  background-color: var(--ct-color-bg-hover);
+  outline: 1px solid var(--ct-color-focus);
 }
 
 /* Details panel — all errors when expanded. Indented under the summary line. */
@@ -547,13 +561,13 @@ body {
 
 .empty-state-headline {
   margin: 0;
-  color: var(--vscode-foreground, #cccccc);
+  color: var(--ct-color-fg);
   font-weight: 600;
 }
 
 .empty-state-guidance {
   margin: 0;
-  color: var(--vscode-descriptionForeground, #858585);
+  color: var(--ct-color-fg-muted);
 }
 
 .empty-state-code {
@@ -564,7 +578,7 @@ body {
     rgba(255, 255, 255, 0.04)
   );
   padding: 1px var(--ct-space-xs);
-  border-radius: 2px;
+  border-radius: var(--ct-radius-chip);
   /* Long setting names should wrap rather than overflow the sidebar. */
   overflow-wrap: anywhere;
 }
