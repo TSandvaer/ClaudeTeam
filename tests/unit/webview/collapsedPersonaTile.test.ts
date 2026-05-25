@@ -240,6 +240,51 @@ describe("renderCollapsedPersonaTile — AC2 collapsed render", () => {
     expect(instances.children[0]).toBe(firstTile);
   });
 
+  it("renders header text from `instances.length`, NOT from `group.count` (defensive)", () => {
+    // PR #47 NIT (ClickUp 86c9yee3g): the wrapper carries two redundant
+    // fields, `group.count` and `group.instances.length`, with a host-side
+    // invariant that they're equal. The webview defends against an
+    // invariant violation by reading the array length — the header tile
+    // and the expanded list then can never disagree visually (a host bug
+    // surfaces as one wrong `count` field on the wire, not as a mismatch
+    // between two render sites).
+    const tampered: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      // Deliberately wrong: host claims 99 but only 3 instances are present.
+      count: 99,
+      instances: [
+        makeTile({ agentId: "felix-0", display: "Felix" }),
+        makeTile({ agentId: "felix-1", display: "Felix" }),
+        makeTile({ agentId: "felix-2", display: "Felix" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group: tampered,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    // Header shows the array length, not the wire-supplied `count`.
+    expect(el.querySelector(".collapsed-persona-name")?.textContent).toBe(
+      "Felix ×3",
+    );
+    const header = el.querySelector<HTMLButtonElement>(
+      ".collapsed-persona-header",
+    );
+    expect(header?.getAttribute("aria-label")).toBe(
+      "Felix grouped — 3 instances, collapsed",
+    );
+    // Expanding renders 3 tiles, not 99 — the lazy populate walks the array.
+    header!.click();
+    expect(
+      el.querySelectorAll(".collapsed-persona-instances .agent-tile").length,
+    ).toBe(3);
+    // Aria-label also reflects the array length after the expand toggle.
+    expect(header?.getAttribute("aria-label")).toBe(
+      "Felix grouped — 3 instances, expanded",
+    );
+  });
+
   it("per-instance tile click dispatches ui:open-transcript with the instance's agentId", () => {
     // Drill-in must still work after expansion — the wrapper is purely
     // visual, the underlying agentTile drill-in contract is unchanged.

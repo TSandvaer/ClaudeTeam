@@ -6,17 +6,22 @@
  *
  * DOM shape:
  *
- *   <section class="collapsed-persona" data-persona-name data-expanded
- *            data-team-id?>
+ *   <section class="collapsed-persona" data-persona-name data-expanded>
  *     <button class="collapsed-persona-header" type="button"
  *             aria-expanded="false">
  *       <span class="collapsed-persona-chevron">▶</span>
- *       <span class="collapsed-persona-name">{personaName} ×{count}</span>
+ *       <span class="collapsed-persona-name">{personaName} ×{N}</span>
  *     </button>
  *     <div class="collapsed-persona-instances" hidden>
  *       {one renderAgentTile per instance}
  *     </div>
  *   </section>
+ *
+ * Where `{N}` is `group.instances.length` (see "Defensive count read"
+ * below). The wrapper does NOT carry `data-team-id` — the teamId is known
+ * at the `teamCard.ts` call-site but isn't currently needed inside the
+ * wrapper's DOM; if a future feature needs it, thread it through
+ * `CollapsedPersonaTileProps` and set `section.dataset.teamId` here.
  *
  * Interaction (AC2):
  *   - Collapsed by default — `data-expanded="false"`, instances `hidden`.
@@ -24,6 +29,17 @@
  *     visible. Per-tile click handlers continue to fire drill-in messages
  *     unchanged (back-compat with the existing renderAgentTile contract).
  *   - Click again → collapse.
+ *
+ * Defensive count read:
+ *   The header text and aria-label render `group.instances.length`, NOT
+ *   `group.count`. The host-side reducer's invariant is
+ *   `group.count === group.instances.length`, but reading from the array
+ *   length means a host-side invariant violation surfaces as a wrong
+ *   `count` field on the wire (one place) rather than a header that
+ *   disagrees with the expanded list (two places, harder to diagnose).
+ *   The `count` field stays in the type for the wire format and for
+ *   host-side consumers that haven't been refactored yet; removing it is
+ *   tracked separately as a post-Felix/Maya unification follow-up.
  *
  * Why a section (not an article): one CollapsedPersonaGroup is not a single
  * tile but a grouping of tiles. `article` is reserved for the per-instance
@@ -73,13 +89,20 @@ export function renderCollapsedPersonaTile(
 
   // Header — a real <button> so the keyboard / screen-reader semantics are
   // free (Enter + Space activation, focus ring, role=button).
+  // Defensive: read count from the array (see file header JSDoc "Defensive
+  // count read"). `group.count` is documented to equal `group.instances.length`
+  // but reading from the array means a host invariant violation surfaces as a
+  // wrong `count` field on the wire, not as a header that disagrees with the
+  // expanded list.
+  const instanceCount = group.instances.length;
+
   const header = document.createElement("button");
   header.type = "button";
   header.className = "collapsed-persona-header";
   header.setAttribute("aria-expanded", "false");
   header.setAttribute(
     "aria-label",
-    `${group.personaName} grouped — ${group.count} instances, collapsed`,
+    `${group.personaName} grouped — ${instanceCount} instances, collapsed`,
   );
 
   const chevron = document.createElement("span");
@@ -90,7 +113,7 @@ export function renderCollapsedPersonaTile(
 
   const nameSpan = document.createElement("span");
   nameSpan.className = "collapsed-persona-name";
-  nameSpan.textContent = `${group.personaName} ×${group.count}`;
+  nameSpan.textContent = `${group.personaName} ×${instanceCount}`;
   header.appendChild(nameSpan);
 
   section.appendChild(header);
@@ -131,7 +154,7 @@ export function renderCollapsedPersonaTile(
     header.setAttribute("aria-expanded", String(expanded));
     header.setAttribute(
       "aria-label",
-      `${group.personaName} grouped — ${group.count} instances, ${
+      `${group.personaName} grouped — ${instanceCount} instances, ${
         expanded ? "expanded" : "collapsed"
       }`,
     );
