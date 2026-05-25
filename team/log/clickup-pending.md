@@ -270,3 +270,46 @@ ENTRY-2026-05-25T00:46:00Z: 86c9yee3g -> complete (PR #50 admin-merged at SHA 41
 ```
 
 Create with: `list_id=901523520912`, `status=to do`, `name="test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip (M3-09)"`, `markdown_description=` the body above. After creation, substitute the placeholder `M3-09` in the ENTRY line above with the assigned ClickUp ID.
+
+## NEW-TICKET-REQUEST — never-fabricate rule propagation (PENDING)
+
+**Status:** queued — Felix's sub-agent runtime lacks `mcp__clickup__clickup_create_task` (documented sub-agent MCP gap per `.claude/docs/orchestration-overview.md § ClickUp as hard gate`). Orchestrator creates the ticket, then flushes `to do → in progress → in review` to mirror this PR's lifecycle.
+
+**Foundation:** dispatch brief 2026-05-25 `chore(orch): propagate "Never fabricate" rule to sub-agents via project CLAUDE.md + dispatch-template`. Source: user-global `~/.claude/CLAUDE.md` "Never fabricate, never guess, never extrapolate" rule + memory `[[never-fabricate-propagation-and-handling]]` Part 1.
+
+**Body to file** (when orchestrator creates):
+
+```
+**Ticket:** `chore(orch): propagate never-fabricate rule to sub-agents + dispatch-template`
+**Owner:** Felix
+**Peer reviewer:** Maya
+**Size:** XS (docs-only)
+**Priority:** P1
+**Source:** user-global `~/.claude/CLAUDE.md` "Never fabricate, never guess, never extrapolate" rule + memory `[[never-fabricate-propagation-and-handling]]` Part 1. Sub-agents do not inherit user-global CLAUDE.md; rule must land in project-level surfaces.
+
+**Scope:**
+- Add rule 10 "Never fabricate, never guess, never extrapolate" under project `CLAUDE.md` § Hard rules (≤30 lines).
+- Add `## Anti-fabrication contract` section to `.claude/agents/dispatch-template.md` enumerating sourcing commands (gh / git / grep / mcp__clickup).
+- Add inheritance pointer at bottom of pre-dispatch checklist so orchestrators don't paste fabrication language inline.
+
+**Acceptance criteria:**
+- AC1: `CLAUDE.md` Hard rules contains rule 10 titled "Never fabricate, never guess, never extrapolate" (≤30 lines, observed 11 lines body).
+- AC2: `.claude/agents/dispatch-template.md` contains `## Anti-fabrication contract` section with sourcing commands.
+- AC3: PR body cites user-global `~/.claude/CLAUDE.md` rule (by name) + memory `[[never-fabricate-propagation-and-handling]]` Part 1.
+- AC4: `npm run typecheck` green (sanity check; docs-only edits).
+- AC5: ClickUp ticket created in list `901523520912`, flipped `to do → in progress → in review`.
+
+**Out of scope:**
+- Editing user-global `~/.claude/CLAUDE.md`.
+- Per-persona agent files (`.claude/agents/{nora,maya,...}.md`).
+- New tests.
+- `.claude/docs/orchestration-overview.md` edits.
+
+**Done-when test:** `grep -n "Never fabricate" CLAUDE.md` returns the rule 10 line; `grep -n "Anti-fabrication contract" .claude/agents/dispatch-template.md` returns the section header.
+```
+
+Create with: `list_id=901523520912`, `status=to do` (then immediately flip to `in progress` to reflect Felix accepted dispatch, then `in review` once PR opens), `name="chore(orch): propagate never-fabricate rule to sub-agents + dispatch-template"`, `markdown_description=` the body above.
+
+```
+ENTRY-2026-05-25T08:15:00Z: <placeholder-never-fabricate-ticket> -> in review (PR opened — never-fabricate rule propagation; substitute placeholder with assigned ClickUp ID after orch creates)
+```

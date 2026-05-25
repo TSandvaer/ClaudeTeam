@@ -106,6 +106,24 @@ git switch --detach HEAD
 
 Include this verbatim as the final action of every dispatch brief, alongside the final-report contract (§5). Do NOT duplicate it inside other blocks — the peer-review routing block (Optional blocks below) references this global Final step rather than repeating the command.
 
+## Anti-fabrication contract
+
+Every dispatched agent inherits project `CLAUDE.md` rule 10 "Never fabricate, never guess, never extrapolate" — this section enumerates concrete sourcing commands so agents don't have to look them up. Orchestrators do NOT need to paste this inline into briefs; agents read it as part of the dispatch-template preload.
+
+**Concrete values that must be fetched, not invented:**
+
+- **PR URLs:** `gh pr view <num> --json url -q .url`, or capture the URL printed by `gh pr create` at creation.
+- **Ticket IDs / state / body:** `mcp__clickup__clickup_get_task` (orch-side only — sub-agents lack the MCP tool; route via `team/log/clickup-pending.md` NEW-TICKET-REQUEST per `.claude/docs/orchestration-overview.md § ClickUp as hard gate`).
+- **SHAs:** `git log -1 --format=%H` for HEAD, `git rev-parse <ref>` for any other ref, `git log --oneline <range>` for a list.
+- **File:line refs:** `grep -n <pattern> <file>` on the LIVE file in your worktree — never extrapolate line numbers from memory or sibling files.
+- **CI run IDs / status:** `gh run list --limit 1 --json databaseId,status,conclusion` or `gh pr view <num> --json statusCheckRollup`.
+- **Workflow run URLs:** `gh run view <run-id> --json url -q .url`.
+- **Comment URLs:** capture from `gh pr comment` output, or `gh api repos/<owner>/<repo>/pulls/<num>/comments` for existing ones.
+
+**STOP-and-verify signal phrases.** If you find yourself writing "should be at...", "probably...", "lives in...", "is the same as..." in a PR body / Self-Test Report / ticket comment without a concrete check behind it — STOP. Fetch the value, or label the claim `Hypothesis:` / `Predicted:` / `Speculative — no source yet`.
+
+**Observed-symptom discipline.** Every concrete value in a PR body, Self-Test Report, ticket comment, or `process-incidents.md` entry must be quoted from a real source in the same paragraph (tool output you just ran, file you just read, user-provided text). Phrasings like "Dashboard shows X" / "Output was Y" / "Concrete instance: <value>" read as observed reality — if invented, they create false evidence that a future sub-agent dispatched against the ticket cannot distinguish from a real repro path.
+
 ## Optional blocks (context-dependent)
 
 ### Self-Test Report (for UX-visible PRs)
@@ -179,3 +197,5 @@ Before sending a brief:
 - [ ] Non-obvious findings postamble present.
 - [ ] If background dispatch: ScheduleWakeup tripwire scheduled.
 - [ ] If UX-visible: Self-Test Report block present.
+
+(All briefs inherit the **Anti-fabrication contract** section above + project `CLAUDE.md` rule 10 — orchestrators do NOT need to paste fabrication-discipline language inline. Sub-agents read both as part of the dispatch-template + CLAUDE.md preload.)
