@@ -184,6 +184,18 @@ The orchestrator admin-merges with `gh pr merge --admin --squash --delete-branch
 
 Fixtures are **anonymized real captures**, not synthesized. When the schema changes, capture fresh fixtures from the new Claude Code version rather than editing existing ones.
 
+## Performance probes
+
+For memory / leak / throughput investigations, the runtime under measurement matters: `tsx` (used by ad-hoc scripts like `scripts/measure-cadence.ts`) is NOT the production VS Code extension-host runtime, and retention / heap behavior diverges. Measurements done via `npx tsx <script>` can show patterns that are plausibly artifacts of the tsx runtime (transient harness arrays, module cache, transformer overhead) rather than the bundled `dist/extension/main.cjs` behavior.
+
+**Probe discipline:**
+
+- Frame measurement-class verdicts honestly: "plausibly clean — follow-up needed" is the right shape when probing in a non-target runtime. Avoid "no leak detected" claims based on tsx-only data — that's stronger than the evidence supports.
+- For definitive verdicts on production memory posture, probe inside the VS Code extension-host process (Run Extension debug target OR installed `.vsix` in a fresh window) and capture heap via Task Manager / Activity Monitor / Process Explorer.
+- The tsx-harness probe is still useful as a fast first signal — it can rule OUT obvious leaks (a +50 MB/min growth would be visible everywhere). But it cannot rule IN "no leak" definitively.
+
+Codified after M4-04 PR #59 (`d9b1b49`) — Felix's `+4.6 MB / 10 min` tsx-harness delta correctly framed as "plausibly clean — follow-up needed"; extension-host validation deferred to ticket `86c9yjy4w`.
+
 ## What we don't test
 
 - Claude Code itself. It's an external dependency; we trust its output and probe behavior via Bram when behavior is ambiguous.
