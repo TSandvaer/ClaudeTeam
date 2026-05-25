@@ -5,6 +5,7 @@
 # Source — not needed at runtime; bundles are in dist/
 src/
 tests/
+scripts/
 
 # Dev tooling
 .github/

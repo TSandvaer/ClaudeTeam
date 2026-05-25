@@ -101,6 +101,7 @@ ENTRY-2026-05-25T06:39:22Z: 86c9yfj6n -> in review (PR #52 opened — chore(disp
 ENTRY-2026-05-25T07:00:00Z: 86c9ygcgv -> in progress (M4-01 dispatch — Iris three-part design spec start)
 ENTRY-2026-05-25T07:03:36Z: 86c9ygcgv -> in review (PR #54 opened — M4-01 polish spec: tokens + status-state visuals + drill-in affordance)
 ENTRY-2026-05-25T07:51:16Z: 86c9ygckv -> in review (M4-05 PR opened — status-state visuals + transitions per M4-01 §2)
+ENTRY-2026-05-25T10:25:00Z: 86c9ygck9 -> in progress (M4-04 recovery dispatch — Felix resumed prior scaffold; running foreground measurement)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)

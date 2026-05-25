@@ -70,7 +70,7 @@
           "type": "number",
           "default": 2000,
           "minimum": 500,
-          "description": "How often (in milliseconds) to poll ~/.claude/ for agent state updates."
+          "description": "How often (in milliseconds) to poll ~/.claude/ for agent state updates. Default 2000ms tuned in M4-04 — see team/felix-dev/m4-04-cadence-measurement.md for methodology and raw numbers. Lowering below 2000ms is wasteful (Claude Code JSONL files flush in 2–56s bursts per data-sources.md §3 — sub-2s polling sees no new data). Raising to 3000ms+ saves negligible CPU and adds visible activity-line lag."
         },
         "claudeteam.rosterPollIntervalMs": {
           "type": "number",
