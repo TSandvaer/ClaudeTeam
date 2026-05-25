@@ -46,6 +46,7 @@ import {
   type RenderContext,
 } from "./render.js";
 import { createFinishedTracker } from "./finishedTracker.js";
+import { createPrevStateTracker } from "./prevStateTracker.js";
 
 // =============================================================================
 // VS Code API shim
@@ -186,6 +187,14 @@ function boot(): void {
    * `src/webview/finishedTracker.ts` for the lifecycle + accuracy notes.
    */
   const finishedTracker = createFinishedTracker();
+  /**
+   * M4-05 §2.5: webview-local last-rendered-state tracker for status-state
+   * transition detection. Single instance per webview boot — survives
+   * across re-renders so the transition flash fires only when the host
+   * actually changes a tile's state, not on every re-render. Mirrors
+   * finishedTracker's lifecycle.
+   */
+  const prevStateTracker = createPrevStateTracker();
 
   // Browser dev mode → render FIXTURE_STATE immediately. VS Code mode →
   // render the empty state until the first `state:full` arrives from the
@@ -202,6 +211,7 @@ function boot(): void {
       rosterErrorDismissedKey = key;
     },
     finishedTracker,
+    prevStateTracker,
   });
 
   renderFull(buildCtx(), currentState);

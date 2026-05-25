@@ -53,6 +53,7 @@ import {
 import { renderRosterErrorChip } from "./components/rosterErrorChip.js";
 import { isCollapsedPersonaGroup } from "./components/collapsedPersonaTile.js";
 import type { FinishedTracker } from "./finishedTracker.js";
+import type { PrevStateTracker } from "./prevStateTracker.js";
 
 /** Persistent error state stored on the dashboard. */
 export interface DashboardErrorState {
@@ -101,6 +102,23 @@ export interface RenderContext {
    * injection point for deterministic freshness-suffix assertions.
    */
   nowMs?: number;
+  /**
+   * Webview-local last-rendered-state tracker (M4-05 §2.5). Threaded down
+   * to every `renderAgentTile` so it can compare the new state against the
+   * last-rendered state and apply `data-transition="to-<state>"` when they
+   * differ. Owned by the boot closure in `main.ts`; survives across
+   * re-renders so the transition flash only fires on actual host-side
+   * state changes, not on every re-render of the same state.
+   *
+   * Optional — when omitted (e.g. component tests, fixture mode without
+   * state churn) tiles render without transition tracking; this is the
+   * back-compat path because `renderAgentTile`'s `prevState` prop is
+   * optional and the renderer skips the `data-transition` attribute when
+   * absent.
+   *
+   * Source: team/iris-ux/m4-polish-spec.md §2.5
+   */
+  prevStateTracker?: PrevStateTracker;
 }
 
 /**
@@ -132,45 +150,57 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     onRosterErrorDismiss,
     finishedTracker,
     nowMs,
+    prevStateTracker,
   } = ctx;
 
-  // Prune the finished-tracker BEFORE the render pass — any tile no longer
-  // in `finished` state (or no longer present at all) sheds its tracker
-  // entry. Without pruning, a long-running dashboard slowly leaks entries
-  // for every agent that ever finished. See finishedTracker.ts §lifecycle.
+  // Prune the finished- and prev-state-trackers BEFORE the render pass — any
+  // tile no longer present (or, for finishedTracker, no longer in `finished`
+  // state) sheds its tracker entry. Without pruning, a long-running
+  // dashboard slowly leaks entries for every agent that ever existed. See
+  // finishedTracker.ts §lifecycle and prevStateTracker.ts §lifecycle.
   //
   // M3-10: rosterTiles values are now `(AgentTile | CollapsedPersonaGroup)[]`.
-  // We descend into CollapsedPersonaGroup.instances so finished tiles inside
-  // a collapsed wrapper still keep their tracker entries (otherwise expanding
-  // a wrapper would re-anchor every finished instance to "now").
-  if (finishedTracker) {
+  // We descend into CollapsedPersonaGroup.instances so tiles inside a
+  // collapsed wrapper still keep their tracker entries (otherwise expanding
+  // a wrapper would re-anchor every finished instance to "now", and prevState
+  // would flash a spurious transition the first time the wrapper expands).
+  //
+  // Single pass — both trackers prune off the same walk to keep the per-tick
+  // cost down.
+  if (finishedTracker || prevStateTracker) {
     const currentFinishedKeys = new Set<`${string}:${string}`>();
+    const currentAllKeys = new Set<`${string}:${string}`>();
     for (const session of state.sessions) {
       if (!session.isAlive) continue;
       for (const entries of session.rosterTiles.values()) {
         for (const entry of entries) {
-          // Wrapper case — walk instances so finished tiles inside a
-          // collapsed wrapper still keep their tracker entries (otherwise
-          // expanding a wrapper would re-anchor every finished instance
-          // to "now").
+          // Wrapper case — walk instances so tiles inside a collapsed
+          // wrapper still keep their tracker entries.
           if (isCollapsedPersonaGroup(entry)) {
             for (const inst of entry.instances) {
+              const key: `${string}:${string}` = `${session.sessionId}:${inst.agentId}`;
+              currentAllKeys.add(key);
               if (inst.state === "finished") {
-                currentFinishedKeys.add(
-                  `${session.sessionId}:${inst.agentId}`,
-                );
+                currentFinishedKeys.add(key);
               }
             }
             continue;
           }
           // Bare AgentTile case — unchanged from pre-M3-10.
+          const key: `${string}:${string}` = `${session.sessionId}:${entry.agentId}`;
+          currentAllKeys.add(key);
           if (entry.state === "finished") {
-            currentFinishedKeys.add(`${session.sessionId}:${entry.agentId}`);
+            currentFinishedKeys.add(key);
           }
         }
       }
     }
-    finishedTracker.prune(currentFinishedKeys);
+    if (finishedTracker) {
+      finishedTracker.prune(currentFinishedKeys);
+    }
+    if (prevStateTracker) {
+      prevStateTracker.prune(currentAllKeys);
+    }
   }
 
   // Wholesale replace — clears any prior render.
@@ -241,6 +271,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         session,
         postMessage,
         ...(finishedTracker ? { finishedTracker } : {}),
+        ...(prevStateTracker ? { prevStateTracker } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
       }),
     );

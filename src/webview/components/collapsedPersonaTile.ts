@@ -59,6 +59,7 @@ import type {
 } from "../../shared/types.js";
 import { renderAgentTile, type PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
+import type { PrevStateTracker } from "../prevStateTracker.js";
 
 export interface CollapsedPersonaTileProps {
   group: CollapsedPersonaGroup;
@@ -73,6 +74,15 @@ export interface CollapsedPersonaTileProps {
    * tracker exactly as it does in the bare-tile path.
    */
   finishedTracker?: FinishedTracker;
+  /**
+   * Optional webview-local last-rendered-state tracker (M4-05 §2.5).
+   * Threaded through to per-instance tiles. Mirrors `finishedTracker` —
+   * when the wrapper is collapsed the tracker is NOT consulted (the
+   * instances aren't in the DOM yet); on first expand each instance reads
+   * its previous state (undefined → no transition flash on first display)
+   * and records the current state.
+   */
+  prevStateTracker?: PrevStateTracker;
   /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
   nowMs?: number;
 }
@@ -80,7 +90,14 @@ export interface CollapsedPersonaTileProps {
 export function renderCollapsedPersonaTile(
   props: CollapsedPersonaTileProps,
 ): HTMLElement {
-  const { group, sessionId, postMessage, finishedTracker, nowMs } = props;
+  const {
+    group,
+    sessionId,
+    postMessage,
+    finishedTracker,
+    prevStateTracker,
+    nowMs,
+  } = props;
 
   const section = document.createElement("section");
   section.className = "collapsed-persona";
@@ -136,15 +153,24 @@ export function renderCollapsedPersonaTile(
         tile.state === "finished" && finishedTracker
           ? finishedTracker.observe(sessionId, tile.agentId, now)
           : undefined;
+      // M4-05 §2.5 — read previous state BEFORE rendering, record AFTER.
+      // First time the wrapper expands for this instance, previous is
+      // undefined → renderer skips the transition flash (correct: first
+      // appearance is not a transition).
+      const prevState = prevStateTracker?.previous(sessionId, tile.agentId);
       instancesDiv.appendChild(
         renderAgentTile({
           tile,
           sessionId,
           postMessage,
           ...(finishedAtMs !== undefined ? { finishedAtMs } : {}),
+          ...(prevState !== undefined ? { prevState } : {}),
           nowMs: now,
         }),
       );
+      if (prevStateTracker) {
+        prevStateTracker.record(sessionId, tile.agentId, tile.state);
+      }
     }
     populated = true;
   };

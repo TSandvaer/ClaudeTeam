@@ -20,13 +20,18 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTile, AgentTree } from "../../../src/shared/types.js";
+import type {
+  AgentState,
+  AgentTile,
+  AgentTree,
+} from "../../../src/shared/types.js";
 import type { WebviewMessage } from "../../../src/shared/messages.js";
 import { renderAgentTile } from "../../../src/webview/components/agentTile.js";
 import { renderBackgroundChip } from "../../../src/webview/components/backgroundChip.js";
 import { renderEmptyState } from "../../../src/webview/components/emptyState.js";
 import { renderErrorChip } from "../../../src/webview/components/errorChip.js";
 import { renderFull } from "../../../src/webview/render.js";
+import { createPrevStateTracker } from "../../../src/webview/prevStateTracker.js";
 import {
   FIXTURE_EMPTY_STATE,
   FIXTURE_STATE,
@@ -827,5 +832,394 @@ describe("renderFull — finished freshness via finishedTracker (integration)", 
     expect(mount.querySelector(".agent-activity")?.textContent).toBe(
       "finished",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Agent tile — M4-05 state visuals + state-transition attribute
+// (per team/iris-ux/m4-polish-spec.md §2 / M4-05 backlog AC1, AC2, AC4, AC6)
+// ---------------------------------------------------------------------------
+
+describe("renderAgentTile — M4-05 state-transition data attribute (AC2, AC6)", () => {
+  function makeTransitionTile(state: AgentState): AgentTile {
+    return {
+      memberId: "felix",
+      teamId: "claudeteam-alpha",
+      display: "Felix",
+      role: "Extension Host Dev",
+      activity: state === "finished" ? "finished" : `tool:Edit foo.ts`,
+      model: "claude-opus-4-7",
+      state,
+      agentId: "agent-T",
+      toolUseId: "toolu_T",
+    };
+  }
+
+  it("first render (prevState undefined) does NOT set data-transition", () => {
+    // M4-01 §2.5 rule 3 — first appearance is not a transition.
+    const el = renderAgentTile({
+      tile: makeTransitionTile("running"),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    expect(el.dataset.transition).toBeUndefined();
+  });
+
+  it("same-state re-render does NOT set data-transition", () => {
+    // Re-render with identical state should not flash a transition; the
+    // tile only telegraphs change at the boundary, not on every render
+    // tick.
+    const el = renderAgentTile({
+      tile: makeTransitionTile("idle"),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      prevState: "idle",
+    });
+    expect(el.dataset.transition).toBeUndefined();
+  });
+
+  it("running → error sets data-transition=\"to-error\" (one-shot flash)", () => {
+    // The only M4-01 transition that demands a flash. Renderer applies the
+    // attribute synchronously so CSS can fire ct-error-flash; the
+    // setTimeout clears it after the animation window.
+    const schedule = vi.fn();
+    const el = renderAgentTile({
+      tile: makeTransitionTile("error"),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      prevState: "running",
+      scheduleClearTransition: schedule,
+    });
+    expect(el.dataset.transition).toBe("to-error");
+    // Scheduler was called once with the 400ms clear window.
+    expect(schedule).toHaveBeenCalledTimes(1);
+    expect(schedule.mock.calls[0]![1]).toBe(400);
+  });
+
+  it("running → finished sets data-transition=\"to-finished\"", () => {
+    const el = renderAgentTile({
+      tile: makeTransitionTile("finished"),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      prevState: "running",
+    });
+    expect(el.dataset.transition).toBe("to-finished");
+  });
+
+  it("idle → running sets data-transition=\"to-running\"", () => {
+    const el = renderAgentTile({
+      tile: makeTransitionTile("running"),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      prevState: "idle",
+    });
+    expect(el.dataset.transition).toBe("to-running");
+  });
+
+  it("error → idle sets data-transition=\"to-idle\" (recovery)", () => {
+    const el = renderAgentTile({
+      tile: makeTransitionTile("idle"),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      prevState: "error",
+    });
+    expect(el.dataset.transition).toBe("to-idle");
+  });
+
+  it("scheduled clear callback resets the transition attribute when invoked", () => {
+    // Simulates the setTimeout firing 400ms later. Capture the callback
+    // and invoke it manually so the test stays synchronous.
+    let capturedCb: (() => void) | null = null;
+    const schedule = (cb: () => void, _ms: number): void => {
+      capturedCb = cb;
+    };
+    const el = renderAgentTile({
+      tile: makeTransitionTile("error"),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      prevState: "running",
+      scheduleClearTransition: schedule,
+    });
+    expect(el.dataset.transition).toBe("to-error");
+    // Invoke the scheduled callback — simulates 400ms elapsed.
+    expect(capturedCb).not.toBeNull();
+    capturedCb!();
+    expect(el.dataset.transition).toBe("");
+  });
+
+  it("scheduled clear does NOT clobber a fresher transition that overwrote the attribute", () => {
+    // If a rapid second transition (error → running within 400ms) has
+    // already overwritten data-transition to "to-running", the FIRST
+    // setTimeout firing must leave it alone. Defensive: the clear-callback
+    // guards on the SAME target value.
+    let capturedCb: (() => void) | null = null;
+    const schedule = (cb: () => void): void => {
+      capturedCb = cb;
+    };
+    const el = renderAgentTile({
+      tile: makeTransitionTile("error"),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      prevState: "running",
+      scheduleClearTransition: schedule,
+    });
+    expect(el.dataset.transition).toBe("to-error");
+    // Simulate a fresh transition landing before the timeout fires.
+    el.dataset.transition = "to-running";
+    capturedCb!();
+    // The fresher transition's attribute survives.
+    expect(el.dataset.transition).toBe("to-running");
+  });
+});
+
+describe("renderAgentTile — M4-05 aria-label state reflection (AC4)", () => {
+  // M4-01 §2.6 — aria-label must update per state so screen-reader users
+  // perceive state changes. Already covered above for `error`; add the
+  // remaining states for full coverage.
+  const cases: Array<{ state: AgentState; label: string }> = [
+    { state: "running", label: "Felix — Extension Host Dev — Running" },
+    { state: "idle", label: "Felix — Extension Host Dev — Idle" },
+    { state: "finished", label: "Felix — Extension Host Dev — Finished" },
+    { state: "error", label: "Felix — Extension Host Dev — Error" },
+  ];
+  for (const { state, label } of cases) {
+    it(`aria-label for state="${state}" reads "${label}"`, () => {
+      const el = renderAgentTile({
+        tile: {
+          memberId: "felix",
+          teamId: "claudeteam-alpha",
+          display: "Felix",
+          role: "Extension Host Dev",
+          activity: "x",
+          model: "claude-opus-4-7",
+          state,
+          agentId: "agent-A",
+          toolUseId: "toolu_A",
+        },
+        sessionId: "s",
+        postMessage: vi.fn(),
+      });
+      expect(el.getAttribute("aria-label")).toBe(label);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// renderFull — M4-05 prevStateTracker integration
+// (state transitions fire via the tracker thread, not in isolation)
+// ---------------------------------------------------------------------------
+
+describe("renderFull — prevStateTracker integration (M4-05 §2.5)", () => {
+  function makeStateAt(state: AgentState): AgentTree {
+    return {
+      sessions: [
+        {
+          shortId: "sessA001",
+          sessionId: "sess-A",
+          pid: 1234,
+          entrypoint: "claude-vscode",
+          version: "2.1.145",
+          isAlive: true,
+          cwd: "c:\\test",
+          title: "Test session",
+          rosterTiles: new Map([
+            [
+              "claudeteam-alpha",
+              [
+                {
+                  memberId: "felix",
+                  teamId: "claudeteam-alpha",
+                  display: "Felix",
+                  role: "Extension Host Dev",
+                  activity: state === "finished" ? "finished" : "x",
+                  model: "claude-opus-4-7",
+                  state,
+                  agentId: "agent-X",
+                  toolUseId: "toolu_X",
+                } satisfies AgentTile,
+              ],
+            ],
+          ]),
+          teamOrder: ["claudeteam-alpha"],
+          background: [],
+        },
+      ],
+    };
+  }
+
+  it("first render of a tile does NOT set data-transition (tracker empty)", () => {
+    const tracker = createPrevStateTracker();
+    const mount = document.createElement("div");
+    renderFull(
+      { mount, postMessage: vi.fn(), prevStateTracker: tracker },
+      makeStateAt("running"),
+    );
+    const tile = mount.querySelector<HTMLElement>(".agent-tile");
+    expect(tile).not.toBeNull();
+    expect(tile!.dataset.transition).toBeUndefined();
+    // Tracker captured the rendered state.
+    expect(tracker.size()).toBe(1);
+  });
+
+  it("second render with a CHANGED state fires data-transition", () => {
+    const tracker = createPrevStateTracker();
+    const mount = document.createElement("div");
+    // First render — running.
+    renderFull(
+      { mount, postMessage: vi.fn(), prevStateTracker: tracker },
+      makeStateAt("running"),
+    );
+    // Second render — same tile, now finished.
+    renderFull(
+      { mount, postMessage: vi.fn(), prevStateTracker: tracker },
+      makeStateAt("finished"),
+    );
+    const tile = mount.querySelector<HTMLElement>(".agent-tile");
+    expect(tile!.dataset.transition).toBe("to-finished");
+  });
+
+  it("second render with the SAME state does NOT fire data-transition", () => {
+    const tracker = createPrevStateTracker();
+    const mount = document.createElement("div");
+    renderFull(
+      { mount, postMessage: vi.fn(), prevStateTracker: tracker },
+      makeStateAt("idle"),
+    );
+    renderFull(
+      { mount, postMessage: vi.fn(), prevStateTracker: tracker },
+      makeStateAt("idle"),
+    );
+    const tile = mount.querySelector<HTMLElement>(".agent-tile");
+    expect(tile!.dataset.transition).toBeUndefined();
+  });
+
+  it("tracker prunes entries when a tile vanishes between renders", () => {
+    const tracker = createPrevStateTracker();
+    const mount = document.createElement("div");
+    renderFull(
+      { mount, postMessage: vi.fn(), prevStateTracker: tracker },
+      makeStateAt("running"),
+    );
+    expect(tracker.size()).toBe(1);
+    // Tile gone — empty state next render.
+    renderFull(
+      { mount, postMessage: vi.fn(), prevStateTracker: tracker },
+      { sessions: [] },
+    );
+    expect(tracker.size()).toBe(0);
+  });
+
+  it("rendering without a tracker is back-compat (no data-transition ever)", () => {
+    // Component tests that don't wire the tracker should never see the
+    // transition attribute — renderer skips it when prevState is undefined.
+    const mount = document.createElement("div");
+    renderFull(
+      { mount, postMessage: vi.fn() },
+      makeStateAt("running"),
+    );
+    renderFull(
+      { mount, postMessage: vi.fn() },
+      makeStateAt("error"),
+    );
+    const tile = mount.querySelector<HTMLElement>(".agent-tile");
+    expect(tile!.dataset.transition).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// prevStateTracker — unit-level (parallels finishedTracker.test coverage)
+// ---------------------------------------------------------------------------
+
+describe("prevStateTracker", () => {
+  it("previous() returns undefined for unseen keys", () => {
+    const t = createPrevStateTracker();
+    expect(t.previous("sess", "agent")).toBeUndefined();
+  });
+
+  it("previous() returns the LAST recorded state for a key", () => {
+    const t = createPrevStateTracker();
+    t.record("sess", "agent", "running");
+    expect(t.previous("sess", "agent")).toBe("running");
+    t.record("sess", "agent", "idle");
+    expect(t.previous("sess", "agent")).toBe("idle");
+  });
+
+  it("prune() removes keys not in the current set", () => {
+    const t = createPrevStateTracker();
+    t.record("sess", "agent-A", "running");
+    t.record("sess", "agent-B", "idle");
+    expect(t.size()).toBe(2);
+    t.prune(new Set(["sess:agent-A" as const]));
+    expect(t.size()).toBe(1);
+    expect(t.previous("sess", "agent-A")).toBe("running");
+    expect(t.previous("sess", "agent-B")).toBeUndefined();
+  });
+
+  it("prune() with an empty set clears every entry", () => {
+    const t = createPrevStateTracker();
+    t.record("sess", "agent-A", "running");
+    t.record("sess", "agent-B", "idle");
+    t.prune(new Set());
+    expect(t.size()).toBe(0);
+  });
+
+  it("isolates state per (sessionId, agentId) pair", () => {
+    // Two sessions can spawn agents with the same id — they must not
+    // collide in the tracker.
+    const t = createPrevStateTracker();
+    t.record("sess-1", "shared-id", "running");
+    t.record("sess-2", "shared-id", "error");
+    expect(t.previous("sess-1", "shared-id")).toBe("running");
+    expect(t.previous("sess-2", "shared-id")).toBe("error");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reduced-motion — M4-05 AC3
+//
+// jsdom does NOT honor `@media (prefers-reduced-motion: reduce)` natively;
+// production CSS handles it via media query (asserted manually in the
+// Self-Test Report's reduced-motion probe). What we CAN unit-test:
+// (a) `matchMedia('(prefers-reduced-motion: reduce)')` is queryable
+//     (the production renderer doesn't branch on it — CSS does — so the
+//     test verifies the API surface stays available for any future
+//     JS-driven motion overrides);
+// (b) reduced-motion does NOT remove the `data-transition` attribute —
+//     color/opacity END STATES still apply per M4-01 §2.6, only the
+//     keyframe motion is elided in CSS.
+// ---------------------------------------------------------------------------
+
+describe("M4-05 reduced-motion — JS-side invariants", () => {
+  it("data-transition attribute still flips under reduced-motion preference", () => {
+    // The renderer is preference-agnostic; CSS handles the motion elision.
+    // If a future regression introduced a `if (reducedMotion) skip()` in
+    // the renderer, this test would catch it (the attribute would no
+    // longer flip, breaking color/opacity end-state delivery).
+    const mockMatchMedia = vi
+      .fn()
+      .mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia;
+    const origMatchMedia = window.matchMedia;
+    window.matchMedia = mockMatchMedia;
+    try {
+      const el = renderAgentTile({
+        tile: {
+          memberId: "felix",
+          teamId: "claudeteam-alpha",
+          display: "Felix",
+          role: "Extension Host Dev",
+          activity: "x",
+          model: "claude-opus-4-7",
+          state: "error",
+          agentId: "agent-RM",
+          toolUseId: "toolu_RM",
+        },
+        sessionId: "sess-RM",
+        postMessage: vi.fn(),
+        prevState: "running",
+      });
+      expect(el.dataset.transition).toBe("to-error");
+    } finally {
+      window.matchMedia = origMatchMedia;
+    }
   });
 });

@@ -255,6 +255,9 @@ body {
 
 .state-dot[data-state="running"] {
   background-color: var(--ct-color-state-running);
+  /* Subtle 1.8s breathing pulse — M4-01 §2.2. Reserved for `running` only;
+   * idle/finished/error use steady-state visuals (fade / check / static). */
+  animation: ct-pulse 1.8s ease-in-out infinite;
 }
 
 .state-dot[data-state="idle"] {
@@ -263,10 +266,131 @@ body {
 
 .state-dot[data-state="finished"] {
   background-color: var(--ct-color-state-finished);
+  /* Anchor for the ::after check-mark pseudo-element. */
+  position: relative;
 }
 
 .state-dot[data-state="error"] {
   background-color: var(--ct-color-state-error);
+}
+
+/* ---------------------------------------------------------------------------
+ * Finished-state inner check mark (M4-01 §2.4).
+ *
+ * Pure CSS — two perpendicular borders rotated to form a check. No SVG, no
+ * Unicode glyph (Unicode `✓` rendering varies across system fonts in the
+ * webview). Stroke color is `--ct-color-bg-editor` so the check contrasts
+ * against the dot fill regardless of theme.
+ *
+ * The opacity transition lets the check fade IN when a tile enters
+ * `finished` and fade OUT when a tile leaves it. The fade-out path is
+ * driven by `data-transition` (set by the tile renderer when prevState ===
+ * "finished" and the new state differs).
+ * --------------------------------------------------------------------------- */
+
+.state-dot[data-state="finished"]::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 1px;
+  width: 3px;
+  height: 6px;
+  border-right: 1.5px solid var(--ct-color-bg-editor);
+  border-bottom: 1.5px solid var(--ct-color-bg-editor);
+  transform: rotate(45deg);
+  opacity: 1;
+  transition: opacity var(--ct-duration-state-transition) ease-out;
+}
+
+/* ---------------------------------------------------------------------------
+ * Idle-state fade — M4-01 §2.2.
+ *
+ * Rows 2-4 (role / activity / model) drop to opacity 0.78 to signal "alive
+ * but not progressing"; row 1 (state dot + display name) stays full opacity
+ * so the sponsor can still identify which tile is which while scanning.
+ *
+ * The transition keys to `--ct-duration-state-transition` so reduced-motion
+ * override can elide it from a single source.
+ * --------------------------------------------------------------------------- */
+
+.agent-tile[data-state="idle"] .tile-row--role,
+.agent-tile[data-state="idle"] .tile-row--activity,
+.agent-tile[data-state="idle"] .tile-row--model {
+  opacity: 0.78;
+}
+
+.tile-row--role,
+.tile-row--activity,
+.tile-row--model {
+  transition: opacity var(--ct-duration-state-transition) ease-out;
+}
+
+/* ---------------------------------------------------------------------------
+ * State-transition flash — M4-01 §2.3.
+ *
+ * Only the `→ error` cell warrants a one-shot flash per the transition
+ * matrix — error is the one transition that demands attention. Other
+ * transitions (running↔idle, ↔finished) rely on the steady-state visual
+ * shift alone (dot color, opacity, check fade).
+ *
+ * The renderer adds `data-transition="to-error"` for 400ms when a tile
+ * transitions to error; this selector fires the keyframe.
+ * --------------------------------------------------------------------------- */
+
+.agent-tile[data-transition="to-error"] {
+  /* Outline anchors the flash; the keyframe drives the fade. */
+  animation: ct-error-flash 400ms ease-out;
+}
+
+/* ---------------------------------------------------------------------------
+ * Keyframes — M4-01 §2.3.
+ *
+ * Two keyframes total; the system stays small by design.
+ *
+ *   ct-pulse        — subtle breathing for the running dot (continuous).
+ *   ct-error-flash  — one-shot tile-outline fade on `→ error` transition.
+ *
+ * Animation durations / easing live at the selector usage above, not in the
+ * keyframe itself, so consumers can override timing per-state if needed.
+ * --------------------------------------------------------------------------- */
+
+@keyframes ct-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+@keyframes ct-error-flash {
+  0% {
+    outline: 1px solid var(--ct-color-state-error);
+    outline-offset: 0;
+  }
+  100% {
+    outline: 1px solid transparent;
+    outline-offset: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Reduced-motion override — M4-01 §2.6 / AC4.
+ *
+ * `prefers-reduced-motion: reduce` elides pulse, flash, and opacity/check
+ * fade. Steady-state colors and the idle fade END STATE still apply — the
+ * sponsor still sees state, just without motion. AC4 requirement.
+ * --------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .state-dot[data-state="running"] {
+    animation: none;
+  }
+  .agent-tile[data-transition] {
+    animation: none;
+  }
+  .state-dot[data-state="finished"]::after,
+  .tile-row--role,
+  .tile-row--activity,
+  .tile-row--model {
+    transition: none;
+  }
 }
 
 /* ===========================================================================
