@@ -97,6 +97,7 @@ ENTRY-2026-05-24T22:30:01Z: 86c9ybtut -> in progress (M3-04 NITs dispatch — Fe
 ENTRY-2026-05-24T23:35:00Z: 86c9ybtut -> in review (Maya webview NIT #3 PR opened — finished-status freshness suffix)
 ENTRY-2026-05-24T23:35:01Z: 86c9ybtut -> in review (PR #45 opened — Felix host NITs #1+#2: parse-error model fallback + human-readable error format)
 ENTRY-2026-05-25T00:58:00Z: 86c9ydug9 -> in review (PR #47 opened — Maya webview render + Self-Test + 86c9ydz4k NIT absorbed)
+ENTRY-2026-05-25T06:39:22Z: 86c9yfj6n -> in review (PR #52 opened — chore(dispatch-template): codify "git switch --detach HEAD" as mandatory final step)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
