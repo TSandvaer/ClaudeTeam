@@ -1,0 +1,47 @@
+teams:
+  - id: claudeteam-alpha
+    name: "ClaudeTeam Alpha"
+    description: "Production extension build team"
+    members:
+      - id: felix
+        display: "Felix"
+        role: "Extension Host Dev"
+        color: "#5d8aa8"
+        match:
+          - name_prefix: "felix-"
+          - agentType_equals: "felix"
+      - id: maya
+        display: "Maya"
+        role: "Webview UI Dev"
+        color: "#9caf88"
+        match:
+          - name_prefix: "maya-"
+          - agentType_equals: "maya"
+      - id: sage
+        display: "Sage"
+        role: "QA / Tester"
+        color: "#c4a35a"
+        match:
+          - name_prefix: "sage-"
+          - agentType_equals: "sage"
+      - id: iris
+        display: "Iris"
+        role: "UX Designer"
+        color: "#b5928e"
+        match:
+          - name_prefix: "iris-"
+          - agentType_equals: "iris"
+      - id: nora
+        display: "Nora"
+        role: "Project Lead"
+        color: "#8aaa8a"
+        match:
+          - name_prefix: "nora-"
+          - agentType_equals: "nora"
+      - id: bram
+        display: "Bram"
+        role: "Internals Consultant"
+        color: "#9c8ac4"
+        match:
+          - name_prefix: "bram-"
+          - agentType_equals: "bram"

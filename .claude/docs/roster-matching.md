@@ -62,6 +62,16 @@ V1 supports two locations (project overrides global):
 
 The matcher loads both, merges (project takes precedence per `id` collision), and rebuilds the match table whenever either file changes (file-watcher both paths).
 
+### Recommended default: per-project
+
+Prefer per-project (`<project-root>/.claude/teams.yaml`) for any roster whose persona names might collide with sibling projects' personas. Global (`~/.claudeteam/teams.yaml`) is the right fit only when the persona genuinely should match across ALL workspaces regardless of cwd — rare in practice.
+
+**Why:** matchers are project-blind by design (first-match-wins, no fuzzy/scoped rules — see "What the matcher does NOT do" below). A global rule like `agentType_equals: "devon"` matches every Devon-named agent anywhere on disk — including Devons in sibling projects that happen to share the name. Validated during V1 dogfood 2026-05-25: a global `embergrave-randomgame` team with a `devon` member surfaced MARIAN-TUTOR's Devon dispatches under the Embergrave team card (Devon exists in both rosters). Per-project rosters are cwd-scoped, so the collision cannot occur — MARIAN-TUTOR's session does not load Embergrave's roster even though both projects ship a Devon persona. See ClickUp `86c9yteju` § Observation 4 for full context.
+
+**Operational pattern:** keep `~/.claudeteam/teams.yaml` empty (`teams: []` + a comment explaining the policy); drop a `.claude/teams.yaml` into each project root. Sponsor edits the per-project YAML as they would any other project artifact, and the cwd-scoping prevents false-attribution by construction.
+
+**Open follow-up:** package.json's `claudeteam.rosterPath` description currently reads "uses the default global location (~/.claudeteam/teams.yaml) with per-project fallback" — that ordering primes users toward the failure mode. Triage open under ticket `86c9yteju` for Bram/Felix to flip the framing (or add a `cwd_prefix` match rule to make global rosters project-scopable without migrating).
+
 ## Why this shape
 
 - **Stable ids** (`team.id`, `member.id`) decouple display from identity, so renaming Felix → Frank doesn't break a UI session.
