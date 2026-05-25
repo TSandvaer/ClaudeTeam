@@ -102,12 +102,21 @@ Felix's dispatch on M1-09 will start with `git -C <felix-wt> fetch origin && git
 
 ### Nora (Project Lead)
 
-- Last updated: 2026-05-24 (M2-close retro authored)
-- Status: idle (M2-close retro shipped)
-- Working on: nothing in flight
-- Blocked on: nothing — M3 backlog authoring is the next likely dispatch
+- Last updated: 2026-05-25 (M4 backlog authored)
+- Status: in review (M4 backlog PR open)
+- Working on: nothing in flight after PR open
+- Blocked on: nothing — M4-01 Iris dispatch is the next likely orch action (per sponsor's "Iris first, then parallel dev wave" sequencing)
 
 **Run log of substantive coordination-doc PRs (newest at top):**
+
+#### 2026-05-25 — M4 backlog authored
+
+- Backlog: `team/nora-pl/milestone-4-backlog.md` (6 tickets — M4-01 Iris spec / M4-02 Maya tokens / M4-03 Felix+Maya drill-in polish / M4-04 Felix cadence / M4-05 Maya status states / M4-06 Nora M4+V1-close retro)
+- All six get ClickUp tickets (zero orch-direct chore class this milestone per sponsor scope)
+- Wave plan: Iris solo Wave 0 → 4-agent (or 3-if-Maya-sequenced) Wave 1 → Nora retro Wave 2
+- Out-of-M4 follow-ups documented at top: 4 outstanding NITs/sponsor-held tickets reassessed at M4-06, plus dispatch-template vocab block + STATE.md schema rollout + decisions-log batch from M3 retro
+- Marketplace publication confirmed DEFERRED post-V1 per sponsor 2026-05-25; gets its own milestone
+- Branch: `nora/m4-backlog`
 
 #### 2026-05-24 — M2-close retro authored
 
