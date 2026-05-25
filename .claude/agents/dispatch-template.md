@@ -40,6 +40,22 @@ Before any other work: read CLAUDE.md and every .claude/docs/*.md file IN PARALL
 **Conflict rule:** if you discover OOS scope is load-bearing, STOP and file a follow-up ticket — do not expand mid-PR.
 ```
 
+### 3a. Vocabulary contract (mandatory for parallel dispatches sharing a NEW concept)
+
+When dispatching multiple agents in parallel where two or more will reference a NEW type / event shape / wire-format field / guard function, include the following block in BOTH briefs verbatim so both agents read identical identifier names:
+
+```
+**Vocabulary contract (both reviewers + authors read same paragraph):**
+
+- **Type name:** `<ExactName>` (defined in `<exact-file-path>`)
+- **Union alias:** `<ExactName>` = `<A> | <B>`
+- **Type guard:** `<exactName>` returning `entry is <Type>`
+- **Discriminator value(s):** `'<exact-string>'`
+- **Webview/host variant suffix (if any):** `Webview<X>` vs `<X>`
+```
+
+The default for any NEW type introduction is **Pattern A — Sequence**: dispatch the type-author first, merge their PR, then dispatch the consumer(s) against the merged vocabulary. Pattern B (parallel with this contract) is acceptable when the orchestrator has high confidence about the names upfront and wants the parallelism. See user-global CLAUDE.md "Parallel-agent shared-concept vocabulary discipline" for the cross-review check + REQUEST_CHANGES escalation.
+
 ### 4. ClickUp lifecycle (paired flips)
 
 ```
@@ -141,6 +157,7 @@ Before sending a brief:
 - [ ] Worktree path matches the assigned role.
 - [ ] Branch name follows `<role>/<id>-<slug>` format.
 - [ ] Scoped contract block present (for non-trivial tickets).
+- [ ] If parallel dispatch shares a NEW type/event/guard: Vocabulary contract block (§ 3a) present in BOTH briefs verbatim, OR Pattern A sequencing chosen (type-author first → consumer next).
 - [ ] ClickUp lifecycle block present.
 - [ ] Final-report contract block present.
 - [ ] Doc-preload preamble present.

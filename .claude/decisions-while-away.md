@@ -24,6 +24,20 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 <!-- New entries are appended below this line. -->
 
+## 2026-05-25 — Applied 4 staged global orchestrator-discipline rules to ~/.claude/CLAUDE.md; moved staged docs to team/log/applied/
+
+**Decided:** Sponsor authorized "apply rules" on session resume. Inserted 4 new top-level sections into `C:\Users\538252\.claude\CLAUDE.md` in this order (after "Sub-agent dispatch (background-only)" and before "maintain-docs invocation policy"): (1) Orchestrator wake-signal discipline, (2) Cross-session orchestrator continuity discipline, (3) Orchestrator main-thread bloat discipline, (4) Parallel-agent shared-concept vocabulary discipline. Also added § 3a "Vocabulary contract" block + pre-dispatch checklist line to `.claude/agents/dispatch-template.md` (project-scoped companion). Moved the 4 staged docs from `team/log/proposed-global-rule-*-2026-05-25.md` to `team/log/applied/` as audit trail.
+
+**Foundation:** Sponsor's literal "apply rules" reply on resume (immediate-prior message; classifier-safe per `[[classifier-blocks-self-mod-of-orch-autonomy]]` workaround #b — re-authorize next session with explicit "apply the rule additions from `<staged path>`"). Each rule was authored under the staged-diff pattern during M3 Wave 1 in response to a real incident — see `team/log/applied/*` for the full incident write-ups + "How to apply" instructions that drove this insertion.
+
+**Alternative:** Surface a per-rule confirmation for each of the 4 ("apply rule 1? rule 2? ...") before inserting. Rejected — sponsor's "apply rules" was a single-shot authorization for all 4 pending rules (the only 4 in flight, all named in the resume status + memory `[[four-staged-global-rules-pending]]`).
+
+**Reversibility:** Each section can be cut from `~/.claude/CLAUDE.md` via Edit with the section's `## <heading>` as anchor. The dispatch-template additions revertable the same way. The 4 moved docs revertable via `git mv team/log/applied/proposed-global-rule-*-2026-05-25.md team/log/`. Cost: <5 min if sponsor wants any specific rule reverted. Whole-rollback: revert the apply-rules commit.
+
+**Status:** pending review.
+
+**Pointers:** Applied docs at `team/log/applied/proposed-global-rule-{wake-discipline,cross-session-continuity,main-thread-bloat-discipline,parallel-agent-vocabulary-discipline}-2026-05-25.md`. Companion dispatch-template diff in `.claude/agents/dispatch-template.md` § 3a + pre-dispatch checklist. Updated memory entry `[[classifier-blocks-self-mod-of-orch-autonomy]]` to note 5 known staged-diff-then-apply cases (was 1 → now 1 + 4 new). Deleted obsolete memory entry `[[four-staged-global-rules-pending]]` (now zero pending).
+
 ## 2026-05-25 — M3-10 close (PR #47 + #48 merged); 86c9ydug9 + 86c9ydz4k → complete; vocabulary-divergence incident → 4th staged global rule
 
 **Decided:** Admin-merge PR #47 (Maya M3-10 webview + 86c9ydz4k NIT absorbed) at `be3b70b` and PR #48 (Felix M3-10 host) at `7a0a6e7`. Flipped tickets `86c9ydug9 → complete` and `86c9ydz4k → complete` via MCP. Filed NIT-class follow-up `86c9yee3g` (2 cosmetic NITs from Felix's APPROVE_WITH_NITS review on PR #47).
