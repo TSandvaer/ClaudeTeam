@@ -10,53 +10,47 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-25 (M3 Wave 1 FULLY CLOSED — PR #47 + #48 merged, M3-10 + NIT done; 4 staged global rules pending sponsor application; ready for save + M3 retro)
+## Current state — 2026-05-25 (M4 OPEN — Nora authoring backlog + Felix on detach-codification in parallel)
 
-**This header is the live "what's going on right now" entry. Per-role sections further down are append-only history. Read this header first on resume.**
+**Resume next-action:** If this session dies right now, next orchestrator should: (a) check **Nora's agent `a81f32acd9eb40daa`** via `TaskOutput` — dispatched ~2026-05-25T06:30Z on M4 backlog at `team/nora-pl/milestone-4-backlog.md` (branch `nora/m4-backlog` in `ClaudeTeam-nora-wt`), expected-by ~2026-05-25T06:45Z; (b) check **Felix's agent `a33fd3a08c266a7c4`** via `TaskOutput` — dispatched same tick on ticket `86c9yfj6n` (dispatch-template detach codification, branch `felix/86c9yfj6n-detach-codification` in `ClaudeTeam-felix-wt`), expected-by ~2026-05-25T06:45Z; (c) after Nora backlog PR opens, orchestrator reviews + merges + creates ClickUp tickets M4-01..M4-06 via `mcp__clickup__create_task`; (d) after M4-01 ticket exists, dispatch Iris for design specs (Iris LEADS per sponsor's AskUserQuestion answer); (e) after Felix dispatch-template PR opens + Maya APPROVE + admin-merge, orch updates user-scope memory `[[reviewer-detach-after-pr-checkout]]` "Process gap (open)" line → CLOSED with PR SHA cite. Auto-status AWAY cron `4,19,34,49 * * * *` (job `1c16d790`) armed.
 
-- **`origin/main` tip:** `0fbf028` (PR #41 merge — Felix + Maya M3-03 DEAD-bleed fix). Three PRs merged this tick: #41 (`0fbf028`), #42 (`0a5bc5e` — M3-07 Nora install-path validation), #43 (`236c3f8` — M3-08 Nora main-thread narration). Auto-merge audit logged at `.claude/decisions-while-away.md` 1934 UTC.
-- **M3 Wave 0 SHIPPED end-to-end** (prior session — 6 PRs merged to main): M3-01 hot-reload (PR #35, `a74cb94`), M3-02 openRoster command (PR #37, `d0225aa`), M3-03 window-scoped session filtering (PR #38, `1bc422c`), M3-04 webview chip + filtered-empty + open-roster button (PR #39, `b22de25`), M3-01-NITs cleanup (PR #40, `9c0572c`), plus M3-06 dispatch-template update (PR #36, `cd3553c`). Sponsor's M3 scope-correction directive ("show only sessions from this VS Code window") addressed via M3-03 default-on window-scoping with `claudeteam.showAllSessionsGlobally` opt-out.
-- **Test counts:** 281 unit (+2 pre-existing skips) + 68 integration + 23 Layer-3 green on main as of PR #44 merge (M3-09 added 3 new Layer-3 suites + 13 NIT-gap unit tests).
-- **Open PRs:** none. M3-10 PRs both merged: PR #47 (Maya webview + NIT absorbed) at `be3b70b`; PR #48 (Felix host) at `7a0a6e7`. PR #48 required reconciliation rebase (vocab divergence) + Layer-3 compile fix.
-- **In-flight agents:** none.
-- **All M3 tickets COMPLETE:** `86c9ydug9` (M3-10) + `86c9ydz4k` (formatFreshness NIT) flipped via MCP this round. M3 Wave 1 fully closed.
-- **NIT follow-up filed:** `86c9yee3g` (PR #47 collapsedPersonaTile cosmetic NITs — JSDoc drift + count/instances redundancy). Maya-owned, Felix-reviewer, P3, XS.
-- **4 staged global rules awaiting sponsor application** (commits `c4bc59b`, `b6cd975`, `8cc02b0`, `c37dae9`): wake-discipline, cross-session continuity, main-thread bloat, parallel-agent shared-concept vocabulary. All at `team/log/proposed-global-rule-*-2026-05-25.md` with "How to apply" sections written for direct paste into `~/.claude/CLAUDE.md`.
-- **Auto-decide this tick (logged at `.claude/decisions-while-away.md` 2026-05-24 1801 UTC):** Path 1 absorb webview-scope into `86c9ybrk0` + redispatch Felix on same PR, vs Path 2 (close as misdiagnosed + new ticket for Maya). Foundation: Felix's audit + Path Y economy precedent. Reversibility ≤1 PR.
-- **Queued for sponsor (non-blocking):**
-  - **M3-10 ticket creation** — sponsor authorized `File M3-10 ticket now (P3)` at session resume; heuristic chosen = `group by roster persona-name, show 'Felix ×3' with expandable list`. Orchestrator's ClickUp MCP did not connect this session, so NEW-TICKET-REQUEST block added to `team/log/clickup-pending.md` for next session with live MCP. Sponsor can also file manually using the body block already drafted there.
-  - **M3-04 NITs (`86c9ybtut`) split-preference** noted for Wave 1 dispatch: Felix host (NIT #1 model:? fallback + NIT #2 error format), Maya webview (NIT #3 finished timestamp). Sponsor's explicit "Split per surface" answer overrides "bundle" recommendation.
-  - **M3 close + retro timing:** deferred until all Wave 1 work (NITs + chores M3-07/08/09) ships, per sponsor's explicit answer.
-- **Sponsor-held tickets (no action):** `86c9y7y9z` (M2-04 NITs) — standing "leave at to do" call, do NOT auto-close.
-- **Auto-status:** AWAY re-engaged 2026-05-24T17:45Z, this-session cron `dfc3430f` (`7,22,37,52 * * * *`). State file `enabled=true, mode=away, interval=15m, last_tick=2026-05-24T17:45:00Z`.
-- **Working tree:** clean of code modifications. 4 untracked Maya scratch files at `team/maya-dev/pr-*.md` (sub-agent review-body drafts from prior PRs; NOT coord state — leave untracked or sponsor moves to `.scratch/` at later call).
-- **New documented failure mode this session:** parallel-orchestrator race condition (two Claude Code sessions on same project). Documented in `.claude/docs/orchestration-overview.md` § Common failure modes + full entry in `team/log/process-incidents.md`. Prevention: only ONE Claude Code session should orchestrate a given project at a time; kill the other's auto-status via `/auto-status off` first.
-- **CLAUDE.md global rule #8 added** (prior session, sponsor-authorized): tickets/bugs/postmortems must cite sources for concrete values; speculative claims labeled `Hypothesis:` / `Likely:` / `Predicted:`. Triggered by ticket `86c9ybrk0` fabrication incident (now corrected via audit-trail comment).
+**Sponsor's M4 scope decisions (settled via AskUserQuestion 2026-05-25T06:25Z):**
+- All four V1-PLAN M4 areas: styling, drill-in, status states, refresh-cadence tuning.
+- Marketplace publication DEFERRED post-V1.
+- Iris LEADS — design specs before any dev dispatch (for styling + status-states; M4-03 drill-in + M4-04 cadence don't need Iris).
+- `86c9yfj6n` dispatch-template detach codification ships alongside M4 (in flight now).
+
+- **`origin/main` tip:** `37d2c98` (PR #51 squash-merge — Nora retro test-count fix `86c9yfj5e`). Verify: `git rev-parse origin/main`.
+- **M3 fully shipped** — Wave 0 + Wave 1 + retro (PR #49) + all in-scope NITs (PR #50) + retro test-count fix (PR #51). Tests on main: **353 passing unit (+3 known skips, 356 total) + 68 integration + 23 Layer-3 = 444 passing** (M3 net delta +166 passing per Nora's verified count).
+- **6 global orchestrator-discipline rules now active in `~/.claude/CLAUDE.md`** (was 5; +1 added this round): wake-signal, background-agent staleness verification, **sub-agent worktree-concurrency** (NEW), cross-session continuity, main-thread bloat, parallel-agent shared-concept vocabulary. Audit trail at [team/log/applied/](team/log/applied/).
+- **In-flight agents:**
+  - **Nora `a81f32acd9eb40daa`** — M4 backlog authoring at `team/nora-pl/milestone-4-backlog.md`. Dispatched ~2026-05-25T06:30Z, expected-by ~2026-05-25T06:45Z. Worktree `c:\Trunk\PRIVATE\ClaudeTeam-nora-wt` on branch `nora/m4-backlog`. 6 tickets: M4-01 (Iris specs) through M4-06 (V1 close retro). Reviewer: orchestrator. Per staleness-verification rule: on cron tick / "Status" trigger, run `TaskOutput a81f32acd9eb40daa` + `git -C C:/Trunk/PRIVATE/ClaudeTeam-nora-wt log --oneline -5 origin/nora/m4-backlog` + `gh pr list --author "@me" --state open` BEFORE reporting.
+  - **Felix `a33fd3a08c266a7c4`** — `86c9yfj6n` dispatch-template detach codification. XS-S doc-only. Dispatched ~2026-05-25T06:30Z, expected-by ~2026-05-25T06:45Z. Worktree `c:\Trunk\PRIVATE\ClaudeTeam-felix-wt` on branch `felix/86c9yfj6n-detach-codification`. Reviewer: Maya. Per staleness-verification rule: same ritual as Nora but `TaskOutput a33fd3a08c266a7c4`.
+- **Queued (post-Nora-backlog-merge):** Orchestrator creates M4-01 through M4-06 ClickUp tickets via `mcp__clickup__create_task` (Nora drafts bodies in backlog, orch files via MCP per project pattern). Then dispatches Iris for M4-01 design specs first; M4-03 + M4-04 (drill-in + cadence) can dispatch in parallel since they're independent of Iris specs.
+- **Open PRs:** none.
+- **ClickUp board state:** ALL M3 + carryover tickets at `complete`:
+  - `86c9yee3g` (PR #47 NITs) → complete (PR #50 merged).
+  - `86c9y7y9z` (M2-04 NITs) → complete as **phantom** (M2-06 PR #28 absorbed both NITs; comment posted with file:line evidence).
+  - `86c9yfj5e` (PR #49 retro typo) → complete (PR #51 merged).
+- **Sponsor-pending now:** **M4 opening** — scope/sequence/tickets, plus optional dispatch authorization for `86c9yfj6n`.
+- **Completed this session (newest first, abbreviated for older items):**
+  - Auto-merge PR #51 — Nora retro test-count fix → main tip `37d2c98`. Decision-log entry `2026-05-25 0543 UTC`.
+  - Phantom-close `86c9y7y9z` — Felix evidence (NIT #1 + #2 already on main since PR #28 `b8ada36`). Decision-log entry `2026-05-25 0540 UTC`.
+  - Persisted **Sub-agent worktree-concurrency discipline** rule to `~/.claude/CLAUDE.md` (sponsor-direct). Decision-log entry `2026-05-25 0535 UTC`. Audit at `team/log/applied/applied-rule-worktree-concurrency-2026-05-25.md`.
+  - Worktree-collision **near-miss recovery** (TaskStop'd duplicate Felix dispatch before Step 0). Triggered the new rule above.
+  - Felix `ae0cfdc95d506d8af` — peer-review PR #51 → APPROVE (took 1.5 min).
+  - Felix `a8cccc4405f9c1b84` — M2-04 NITs investigation → **NO-OP phantom** (both NITs already on main).
+  - Nora `a0c2ffc8d18ab1000` — PR #49 retro typo fix → PR #51 opened (took 1.1 min).
+  - ClickUp MCP reconnected mid-session, enabling: flip 86c9yee3g, create 86c9yfj5e + 86c9yfj6n, phantom-close 86c9y7y9z, flip 86c9yfj5e through workflow → complete.
+  - Auto-merges PR #49 + PR #50 (Nora retro + Maya PR #47 NITs) — decision-log entries `0030 UTC` + `0045 UTC`. Peer-reviews Felix `ab48057bad3b13bf9` + `a8ea637ff05d77632` + `a8ea637ff05d77632` (retro APPROVE_WITH_NITS, PR #50 APPROVE). Authoring dispatches Nora `a404fd831f7036701` (retro) + Maya `a596cce4ec0eb3fdc` (PR #47 NITs).
+- **NIT outstanding:** `86c9yee3g` (queued for Maya post-retro); `86c9y7y9z` (M2-04 NITs, sponsor-held — do NOT auto-close).
+- **Auto-status:** sponsor invoked `/auto-status away` this turn — state file should reflect `enabled=true, mode=away` after skill execution.
+- **Working tree (main):** clean of code. 5 untracked Maya scratch files at `team/maya-dev/pr-*-review*.md` — NOT coord state, leave or sponsor moves to `.scratch/` later.
 
 **ClickUp board state:**
-- **Complete (M3 Wave 0):** `86c9yaq1e` (M3-01), `86c9yb473` (M3-02), `86c9yb59k` (M3-03), `86c9ybdxe` (M3-04), `86c9yb0yg` (M3-01-NITs).
-- **Complete (M3 Wave 1 this session):** `86c9ybrk0` (M3-03 DEAD-bleed fix, PR #41 merged `0fbf028`) — orch-side `-> complete` flip queued via clickup-pending.md (MCP unavailable).
-- **In progress:** none.
-- **To do (open follow-ups):** `86c9ybtut` (M3-04 NITs split, P3); `86c9y7y9z` (M2-04 NITs, sponsor-held).
-- **To do (pending creation):** M3-10 persona-tile-collapse (P3, sponsor-authorized, NEW-TICKET-REQUEST queued).
-- **Orch-direct Wave 1 (no ClickUp):** M3-07 (PR #42 merged `0a5bc5e`), M3-08 (PR #43 merged `236c3f8`) — DONE.
-
-**Wave 1 remaining (per Nora's backlog):**
-- **`86c9ybtut`** — M3-04 NITs (Felix host NIT #1+#2 + Maya webview NIT #3 split per sponsor's preference, 2 PRs) — HELD pending sponsor's ticket-body context (model fallback / error format / finished timestamp specifics not in repo).
-- **M3-10** — persona-tile-collapse (post ticket-creation; ticket creation queued in clickup-pending.md awaiting MCP).
-- **DONE this session:** `86c9ybrk0` (PR #41), M3-07 (PR #42), M3-08 (PR #43), M3-09 (PR #44 — incl. PR-#39 NIT-gap absorption).
-
-**This-session structural delta (newest at top):**
-
-| Commit | Subject |
-|---|---|
-| `f6af8c5` | chore(orch): parallel-orch-race failure mode + M3-10 NEW-TICKET-REQUEST + 86c9ybrk0 dispatch flip (this tick) |
-| `9c0572c` | chore(m3-01-nits): clamp-vs-description alignment + PR-claim discipline note (#40) |
-| `b22de25` | feat(webview): roster-error chip + filtered-empty state + open-roster button (M3-04) (#39) |
-| `8887c4b` | chore(orch): clickup-pending.md cleanup — substitute M3-02/03 placeholders + remove fulfilled NEW-TICKET-REQUEST blocks |
-| `1bc422c` | feat(host): window-scoped session filtering (M3-03) (#38) |
-| `d0225aa` | feat(roster): claudeteam.openRoster command + auto-create starter YAML (#37) |
-| `d702826` | chore(orch): STATE — M3-01 NITs ticket 86c9yb0yg created, queue cleared |
+- **Complete:** all M3-01 through M3-10 main tickets + Wave 0 NIT follow-ups + `86c9ydz4k` (formatFreshness NIT, absorbed into PR #47).
+- **To do (active):** `86c9yee3g` (Maya, queued post-retro).
+- **To do (sponsor-held):** `86c9y7y9z` (M2-04 NITs, do NOT auto-close).
 
 **M2 fully closed (unchanged):** all 12 PRs merged + P0 CJS shim + retro PR #31. Production .vsix activates on Node 22+.
 

@@ -34,7 +34,7 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 
 **Reversibility:** Each section can be cut from `~/.claude/CLAUDE.md` via Edit with the section's `## <heading>` as anchor. The dispatch-template additions revertable the same way. The 4 moved docs revertable via `git mv team/log/applied/proposed-global-rule-*-2026-05-25.md team/log/`. Cost: <5 min if sponsor wants any specific rule reverted. Whole-rollback: revert the apply-rules commit.
 
-**Status:** pending review.
+**Status:** accepted by sponsor 2026-05-25.
 
 **Pointers:** Applied docs at `team/log/applied/proposed-global-rule-{wake-discipline,cross-session-continuity,main-thread-bloat-discipline,parallel-agent-vocabulary-discipline}-2026-05-25.md`. Companion dispatch-template diff in `.claude/agents/dispatch-template.md` § 3a + pre-dispatch checklist. Updated memory entry `[[classifier-blocks-self-mod-of-orch-autonomy]]` to note 5 known staged-diff-then-apply cases (was 1 → now 1 + 4 new). Deleted obsolete memory entry `[[four-staged-global-rules-pending]]` (now zero pending).
 
@@ -547,3 +547,80 @@ Each entry uses an `## YYYY-MM-DD HHMM UTC — <one-line headline>` heading and 
 **Status:** pending review.
 
 **Pointers:** Merge SHA `cd3553c`; PR #36 https://github.com/TSandvaer/ClaudeTeam/pull/36; APPROVE comment https://github.com/TSandvaer/ClaudeTeam/pull/36#issuecomment-4528706523; new artifact `team/nora-pl/dispatch-contracts/test-plan-authoring.md` is now the canonical test-plan authoring contract for future Sage / orchestrator dispatches.
+
+## 2026-05-25 0030 UTC — Auto-merge PR #49 (Nora M3-close retro) + queue NITs follow-up via clickup-pending.md
+
+**Decided:** Admin-merged PR #49 (retro doc-only) via `gh pr merge 49 --admin --squash --delete-branch`. Felix's single NIT (retro line 9 test-count off-by-one: claimed 354 unit, actual 353 passing + 3 skipped per CI run `26376835294` on tip `9fb6444`; total 444 not 445) queued via `team/log/clickup-pending.md` NEW-TICKET-REQUEST block — orchestrator lacks `clickup_create_task` MCP tool, queue-then-Nora-files pattern matches prior session's convention.
+
+**Foundation:** Two of rule 6.6's promoted classes compose:
+- *Routine-PR-merge with CI green + orch-docs + peer reviewer attached* — PR #49 is orch-docs (retro), CI 2x green (typecheck + lint + unit SUCCESS), Felix peer-reviewer APPROVE_WITH_NITS (functional APPROVE; NIT is not "needs discussion" or scope-expanding), not on never-list (no infra/billing/strategic-pivot).
+- *NITs-ticket-creation from APPROVE_WITH_NITS comments when scope is mechanical* — Felix's NIT is a numbered list with file:line ref (`.claude/retros/retro-2026-05-25-m3-close.md` line 9), pure number-swap (444 vs 445), no design judgment.
+
+**Alternative:** Surface to sponsor for explicit merge approval + standalone ticket-filing call. Rejected — both classes pre-cleared in 6.6 with prior session 10/10 reversal-free precedent for orch-docs PRs with peer-reviewer APPROVE_WITH_NITS.
+
+**Reversibility:** `git revert <merge SHA>` ≤2 min — single-file docs addition (retro), no code consumers.
+
+**Status:** accepted by sponsor 2026-05-25.
+
+**Pointers:** PR #49 https://github.com/TSandvaer/ClaudeTeam/pull/49; Felix APPROVE_WITH_NITS comment https://github.com/TSandvaer/ClaudeTeam/pull/49#issuecomment-4530651689; CI run https://github.com/TSandvaer/ClaudeTeam/actions/runs/26376835294. NIT ticket queue entry in `team/log/clickup-pending.md` (same tick).
+
+## 2026-05-25 0045 UTC — Auto-merge PR #50 (Maya 86c9yee3g PR #47 NITs) + queue ENTRY 86c9yee3g→complete
+
+**Decided:** Admin-merged PR #50 via `gh pr merge 50 --admin --squash --delete-branch`. Felix peer-review verdict APPROVE (no NITs — scope clean 2-file webview-only, NIT 1+2 fixes internally consistent, defensive test locks the invariant, vocabulary post-PR-#48 reconciliation aligned, webview-smoke Self-Test Report cited with sub-agent GUI gap reframe). Ticket `86c9yee3g → complete` queued via `team/log/clickup-pending.md` ENTRY pattern (orchestrator MCP unavailable this session).
+
+**Foundation:** Rule 6.6 #1 — routine-PR-merge with CI green + cleanup class (PR #47 NITs follow-up) + peer-reviewer APPROVE attached. Webview-smoke gate (CLAUDE.md hard rule #3) explicitly verified by Felix during review. Not on never-list. Same auto-decide class as PR #49 merge earlier this session (`2026-05-25 0030 UTC` entry); 0 reversals so far.
+
+**Alternative:** Surface for sponsor approval. Rejected — identical precedent / class as the prior auto-merge this session, no new foundation signal.
+
+**Reversibility:** `git revert <merge SHA>` ≤2 min — 2-file webview-side change, no host-side coupling, defensive test trivially removable.
+
+**Status:** accepted by sponsor 2026-05-25.
+
+**Pointers:** PR #50 https://github.com/TSandvaer/ClaudeTeam/pull/50; Felix APPROVE comment https://github.com/TSandvaer/ClaudeTeam/pull/50#issuecomment-4530707451; merge SHA captured in same-tick STATE.md update.
+
+## 2026-05-25 0535 UTC — Persisted "Sub-agent worktree-concurrency discipline" rule to ~/.claude/CLAUDE.md (sponsor-direct)
+
+**Decided:** Sponsor's explicit "make sure to persist in global orchestration rules 'orchestrator should not dispatch two tasks to same persona's worktree concurrently'" directive (mid-session). Inserted new top-level section `## Sub-agent worktree-concurrency discipline` into `C:\Users\538252\.claude\CLAUDE.md` between `## Sub-agent dispatch (background-only)` and `## Orchestrator wake-signal discipline` (sequentially adjacent — both deal with sub-agent dispatch hygiene). Sixth global orchestrator-discipline rule active. Audit-trail doc at `team/log/applied/applied-rule-worktree-concurrency-2026-05-25.md`.
+
+**Foundation:** Sponsor-direct directive (immediate-prior authorization, classifier-safe per `[[classifier-blocks-self-mod-of-orch-autonomy]]` path b — same pattern as the 5 prior rules applied this milestone). Triggering incident: same-session worktree-collision near-miss (Felix dispatched twice on `ClaudeTeam-felix-wt`, second `TaskStop`'d before damage; would have shifted branch under Felix-M2-04 in-flight work).
+
+**Alternative:** Stage as proposed-global-rule and re-authorize next session. Rejected — sponsor's directive was explicit and immediate-prior to application, matching documented path (b) for classifier-safe direct application.
+
+**Reversibility:** Edit the section out of `~/.claude/CLAUDE.md` via section-heading anchor; ≤2 min. Audit-trail doc + this decision-log entry preserve git-versioned backup.
+
+**Status:** pending review.
+
+**Pointers:** Rule text in `~/.claude/CLAUDE.md` § "Sub-agent worktree-concurrency discipline"; audit-trail `team/log/applied/applied-rule-worktree-concurrency-2026-05-25.md`; triggering near-miss documented in audit-trail § "Triggering incident". Open question for sponsor (in audit-trail's "Open question" section): should this discipline ALSO be enforced by an orchestrator-side pre-dispatch hook scanning `TaskList`, or is the discipline-in-the-rule sufficient?
+
+## 2026-05-25 0540 UTC — Phantom close `86c9y7y9z` (M2-04 NITs already absorbed in M2-06 PR #28)
+
+**Decided:** Flipped ticket `86c9y7y9z` (`chore(watcher): M2-04 NITs follow-up`) directly `to do → complete` via MCP, with a detailed comment posted citing the absorbing PR #28 (`b8ada36`) and file:line evidence Felix verified during dispatch `a8cccc4405f9c1b84`. No PR created — the work is already on main since M2-06.
+
+**Foundation:** Felix's investigation report (background dispatch returned NO-OP with concrete evidence verified on `origin/main` SHA `4115ae6`):
+- **NIT #1 (subscription leak):** fixed at `src/extension/main.ts:85-92` with explicit "absorbed-NIT #1" file-header comment (lines 21-28); integration test `tests/integration/subscriptionLeak.test.ts` asserts no `subscriptions` growth across 3 `resolveWebviewView` cycles — PASSES.
+- **NIT #2 (`as unknown as DashboardState` cast):** eliminated via typed `StateFullMessage.payload: SerializedDashboardState` in `src/shared/messages.ts:93-96`; zero `as unknown as DashboardState` occurrences in `src/` (verified by grep); 8 messageBus tests + 12 hydrateState tests PASS.
+- **Full suite:** 355 passed / 2 skipped / 0 failed.
+
+Sponsor authorized dispatching this ticket; result is "work already done" rather than "work performed". Closing as phantom is hygiene, not a scope shift.
+
+**Alternative:** Leave at `to do` and surface for sponsor to mark stale manually. Rejected — Felix's evidence is concrete + verifiable; phantom-ticket close is a routine hygiene call; sponsor sees on next walk-through anyway via decisions log.
+
+**Reversibility:** flip ticket back to `to do` if any audit gap found; ≤30 sec MCP call.
+
+**Status:** pending review.
+
+**Pointers:** Ticket https://app.clickup.com/t/86c9y7y9z (now `complete`); phantom-close comment posted to ticket; absorbing PR #28 https://github.com/TSandvaer/ClaudeTeam/pull/28 (merged SHA `b8ada36`). **Process observation:** this ticket sat at `to do` for ~3 milestones because the M2-06 work that absorbed it didn't trigger a closure flip — worth retro consideration if other M2-era phantoms exist.
+
+## 2026-05-25 0543 UTC — Auto-merge PR #51 (Nora retro test-count fix for `86c9yfj5e`) + flip ticket → complete
+
+**Decided:** Admin-merged PR #51 via `gh pr merge 51 --admin --squash --delete-branch`. Felix APPROVE (single-line retro typo fix matches CI run `26376835294`; M3 net delta +166 passing verified). Ticket `86c9yfj5e → complete` via MCP same round. New main tip `37d2c98`.
+
+**Foundation:** Rule 6.6 #1 — routine PR-merge with CI green + orch-docs class (retro doc) + peer-reviewer APPROVE. Same auto-decide class as PR #49 + PR #50 merges this session (0030 UTC + 0045 UTC entries), now 4-for-4 reversal-free in this milestone.
+
+**Alternative:** Surface for sponsor approval. Rejected — established class precedent + sponsor's explicit "when all done then M4 opening" directive implies these merges close the gate, not gate it.
+
+**Reversibility:** `git revert 37d2c98` ≤2 min — single-file 1-line doc change.
+
+**Status:** pending review.
+
+**Pointers:** PR #51 https://github.com/TSandvaer/ClaudeTeam/pull/51; Felix APPROVE comment https://github.com/TSandvaer/ClaudeTeam/pull/51#issuecomment-4531852006; merge SHA `37d2c98`; CI run `26385112640` (PR #51 itself, separate from `26376835294` which was the M3-retro head SHA cited in the fix).

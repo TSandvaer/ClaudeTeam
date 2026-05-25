@@ -220,4 +220,51 @@ npm test && npm run test:integration && npm run test:vscode
 - Read-only references: `.claude/docs/testing-strategy.md`, M2-08 PR #29 (existing suite structure), M3-01 / M3-03 / M3-04 merged code.
 ```
 
+## Status-flip queue — appended 2026-05-25 (orchestrator MCP unavailable this session)
+
+```
+ENTRY-2026-05-25T00:42:00Z: 86c9yee3g -> in review (PR #50 opened by Maya; PR https://github.com/TSandvaer/ClaudeTeam/pull/50; Felix peer-review dispatched same tick)
+ENTRY-2026-05-25T00:46:00Z: 86c9yee3g -> complete (PR #50 admin-merged at SHA 4115ae6; Felix APPROVE comment https://github.com/TSandvaer/ClaudeTeam/pull/50#issuecomment-4530707451; decision-log entry .claude/decisions-while-away.md 2026-05-25 0045 UTC)
+```
+
+## NEW-TICKET-REQUEST — PR #49 M3-close retro test-count NIT (FULFILLED — ticket `86c9yfj5e` created 2026-05-25T05:32Z via MCP after ClickUp reconnect; Nora authored PR #51 same round, ticket flipped `to do → in progress → in review`)
+
+**Status:** queued — orchestrator MCP toolset lacks `clickup_create_task`; route to next sponsor-touch (sponsor files manually) OR dispatch Nora with the create_task tool to file. Sponsor decision on next dispatch round.
+
+**Foundation:** Felix's PR #49 peer-review comment https://github.com/TSandvaer/ClaudeTeam/pull/49#issuecomment-4530651689 (APPROVE_WITH_NITS) — 1 NIT enumerated with file:line ref, mechanical scope. Promoted auto-decide class "NITs-ticket-creation from APPROVE_WITH_NITS comments when scope is mechanical" triggered + decision-log entry `2026-05-25 0030 UTC`. PR #49 already merged (`gh pr merge 49 --admin --squash --delete-branch`); main tip `196f224`.
+
+**Body to file** (when sponsor/Nora has MCP):
+
+```
+**Ticket:** `chore(retro): PR #49 NIT follow-up — M3-close retro test-count off-by-one`
+**Owner:** Nora (retro author) OR Maya (XS doc-touchup, can bundle if dispatched on similar XS work)
+**Peer reviewer:** Felix (already reviewed PR #49 with the NIT)
+**Size:** XS (single-line doc edit)
+**Priority:** P3
+**Source:** Felix peer-review on PR #49 https://github.com/TSandvaer/ClaudeTeam/pull/49#issuecomment-4530651689
+**Source PR / SHA:** PR #49 merged at main tip `196f224`; retro doc `.claude/retros/retro-2026-05-25-m3-close.md` line 9.
+
+**Scope:**
+- Retro line 9 claims `354 unit + 68 integration + 23 Layer-3 = 445`.
+- CI run `26376835294` (parent commit `9fb6444`, ran 2026-05-25T00:17:41Z) reports `353 passed + 3 skipped (356)` unit, not 354 passed.
+- True passing total is 444, not 445.
+
+**Acceptance criteria:**
+- AC1: Retro line 9 updated to either `353 passed unit (+3 known skips)` or `353 passing unit (356 total) + 68 integration + 23 Layer-3 = 444 passing`.
+- AC2: CI run ID cited inline for verifiability.
+- AC3: No other retro content changes (no scope creep).
+
+**Out of scope:**
+- Re-running CI to validate counts (already validated by Felix in review).
+- Editing milestone narrative — the off-by-one is cosmetic, milestone story unchanged.
+
+**Done-when test:** retro line 9 matches CI run `26376835294` unit-pass count. No new CI required (doc-only).
+
+**Webview-smoke / extension-manifest gate:** NO — doc-only.
+
+**Files in play:**
+- Owned: `.claude/retros/retro-2026-05-25-m3-close.md` (line 9 only)
+- Read-only: CI run `26376835294` (already validated by Felix).
+```
+
 Create with: `list_id=901523520912`, `status=to do`, `name="test(m3): Layer-3 expansion — YAML hot-reload + window-filter + roster-error chip (M3-09)"`, `markdown_description=` the body above. After creation, substitute the placeholder `M3-09` in the ENTRY line above with the assigned ClickUp ID.
