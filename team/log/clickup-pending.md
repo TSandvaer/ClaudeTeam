@@ -317,6 +317,8 @@ Create with: `list_id=901523520912`, `status=to do` (then immediately flip to `i
 ENTRY-2026-05-25T08:15:00Z: <placeholder-never-fabricate-ticket> -> in review (PR opened — never-fabricate rule propagation; substitute placeholder with assigned ClickUp ID after orch creates)
 ENTRY-2026-05-25T09:00:00Z: 86c9ygcmj -> in progress (M4-06 dispatch — Nora retro authoring at branch `nora/86c9ygcmj-m4-close-retro`)
 ENTRY-2026-05-25T09:00:01Z: 86c9ygcmj -> in review (M4-06 PR opened — V1 close retro + cross-arc retrospective)
+ENTRY-2026-05-25T11:15:00Z: 86c9yjy4w -> in progress (M4-04 follow-up dispatch — Felix authoring extension-host heap-probe procedure addendum)
+ENTRY-2026-05-25T11:30:00Z: 86c9yjy4w -> in review (PR opened — extension-host heap-probe procedure addendum; procedure-only Path C, no production code change)
 ```
 
 ## NEW-TICKET-REQUEST — In-extension-host heap snapshot probe (M4-04 follow-up; Felix-recommended, Maya-endorsed NIT-class)
