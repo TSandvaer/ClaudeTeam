@@ -257,3 +257,179 @@ Rationale:
 - `team/felix-dev/m4-04-cadence-measurement.md` — this doc
 - `.scratch/m4-04-tick-log-300s.txt` — Run 1 raw stdout (not committed)
 - `.scratch/m4-04-memory-probe-600s.txt` — Run 2 raw stdout (not committed)
+
+---
+
+## Extension-host probe addendum (procedure)
+
+**Ticket:** ClickUp `86c9yjy4w` — `chore(perf): in-extension-host heap snapshot probe — M4-04 follow-up`
+**Authored:** 2026-05-25 by Felix
+**Status:** procedure-only (no production code change); sponsor performs measurement on a single Windows laptop session.
+
+### Why this addendum exists
+
+The Run 1 / Run 2 measurements above are taken via `npx tsx scripts/measure-cadence.ts`. Per `.claude/docs/testing-strategy.md § Performance probes` (codified after M4-04 PR #59), `tsx` is NOT the production VS Code extension-host runtime — retention and heap behavior can diverge. The Run 2 verdict was framed honestly as **"Plausibly clean — follow-up needed"**: the +4.6 MB / 10 min slope is plausibly explained by the harness's own retained arrays (`durations[]`, `hashes[]`) + tsx source-map / esbuild-transform caches that do NOT exist in the bundled `dist/extension/main.cjs` runtime — but the tsx measurement cannot rule that in definitively.
+
+This addendum gives the sponsor a clean, repeatable procedure to confirm or refute the slope inside the actual VS Code extension-host process, where the answer is load-bearing.
+
+### Probe path choice — manual only (no instrumentation)
+
+This addendum documents a **fully manual** procedure. No setting, command, or instrumentation is added to the extension. Rationale:
+
+1. The probe is a **one-shot diagnostic**, not a recurring measurement — building a `claudeteam.debug.heapProbe` setting + write-to-file plumbing pays its complexity cost only if the probe runs repeatedly, which it does not.
+2. Windows + VS Code already expose every value the procedure needs out of the box (Process Explorer for PID, Task Manager / `Get-Process` for working-set heap). The sponsor's path is shorter via OS tools than via a new extension feature.
+3. M4-04 follow-up is **P3 NIT-class** per ticket `86c9yjy4w`. The cost-of-change discipline (project CLAUDE.md hard rules + Iris's M4-01 polish-class cadence) doesn't justify a production code change here unless the instrumentation is genuinely cheap AND eliminates a sponsor pain point — neither holds.
+
+If the manual probe ever needs to become recurring (e.g., heap regression test in CI), the right move is a separate ticket scoped to a dedicated harness, not a debug setting bolted onto the user-facing extension.
+
+### Procedure (sponsor-facing)
+
+The full probe is a single laptop session of ~15 minutes wall time. Before starting, confirm:
+
+- VS Code is closed (or you can comfortably reload all windows).
+- At least one Claude Code session is live in this VS Code window (`~/.claude/sessions/*.json` non-empty AND the corresponding `claude.exe` PID is alive in Task Manager). For a realistic load, aim for **3+ live sessions** with active subagent dispatches — matches the Run 1 / Run 2 baseline.
+- You have ~15 minutes where you will NOT close VS Code, switch windows in a way that suspends background work, or hibernate the laptop.
+
+#### Step 1 — Build and install the `.vsix`
+
+From the project root (`c:\Trunk\PRIVATE\ClaudeTeam` or your own checkout):
+
+```powershell
+npm run build
+npx vsce package --no-yarn
+code --install-extension claudeteam-0.0.1.vsix
+```
+
+`vsce package` prints the `.vsix` path; capture the actual filename (the version suffix may differ from `0.0.1` if `package.json` has bumped). `code --install-extension` confirms installation with a `claudeteam@<version> installed` line in the terminal.
+
+**Verify activation:** open VS Code, click the ClaudeTeam icon in the Activity Bar. The dashboard should render within ~2 seconds with no errors in the Output channel (`View → Output → ClaudeTeam`). If you see an activation error, STOP — the heap probe verdict will be meaningless against a broken host.
+
+#### Step 2 — Identify the extension-host PID
+
+VS Code runs the extension code in its own process (the "extension host"), separate from the main Code window process. Two ways to identify the PID:
+
+**Option A — VS Code Process Explorer (preferred):**
+
+1. `Help → Open Process Explorer`. (Or `Ctrl+Shift+P → Developer: Open Process Explorer`.)
+2. In the process tree, find the row labeled `extensionHost` (sometimes `extensionHost [<workspace-name>]`).
+3. The PID column shows the OS PID. Record it.
+
+**Option B — PowerShell fallback:**
+
+If Process Explorer doesn't render or you want a scripted capture:
+
+```powershell
+Get-Process Code | Where-Object { $_.MainWindowTitle -eq "" } | Select-Object Id, ProcessName, WorkingSet64, PrivateMemorySize64
+```
+
+This lists every `Code` process without a main window — the extension host is one of them. Cross-reference with Process Explorer's PID to identify the right row. (The headless `Code` rows include the extension host plus a few helpers; the extension host is typically the one with the largest WorkingSet64.)
+
+Record:
+
+- **Extension-host PID:** (e.g., `12345`)
+- **VS Code version:** `code --version` (first line is the version, second is the commit SHA).
+- **Extension version:** from `code --list-extensions --show-versions` filtered to the `claudeteam` row (e.g., `claudeteam.claudeteam@0.0.1`).
+
+#### Step 3 — Capture heap at t=0
+
+Immediately after confirming the dashboard is rendering live data (you should see at least one rostered tile or background-agent counter populated), capture:
+
+```powershell
+Get-Process -Id <pid> | Select-Object Id, WorkingSet64, PrivateMemorySize64, Handles, @{Name="Threads";Expression={$_.Threads.Count}}, @{Name="WS_MB";Expression={[math]::Round($_.WorkingSet64 / 1MB, 2)}}, @{Name="Private_MB";Expression={[math]::Round($_.PrivateMemorySize64 / 1MB, 2)}}
+```
+
+Substitute `<pid>` with the extension-host PID from Step 2.
+
+Record:
+
+- **t=0 timestamp:** ISO-8601 (e.g., `2026-05-25T14:30:00Z`).
+- **WorkingSet64 (bytes + MB):** OS-reported physical memory currently in use.
+- **PrivateMemorySize64 (bytes + MB):** committed private bytes — closest to "heap size" from Windows' viewpoint.
+- **Handles, Threads:** sanity check; should be stable across t=0 and t=10min if no resource leak.
+
+**Why both WorkingSet64 and PrivateMemorySize64:** WorkingSet can shrink under OS memory pressure (pages get evicted) without reflecting real heap behavior. PrivateMemorySize64 is the more reliable "what is the process holding" number. Capture both; if they diverge by >50%, note it (likely the OS evicted pages — re-run when memory isn't under pressure).
+
+**Task Manager alternative:** open Task Manager → Details tab → right-click headers → Select Columns → enable "Memory (private working set)" + "Memory (commit size)". The values match `WorkingSet64` and `PrivateMemorySize64` respectively. Use whichever is faster for you to capture; record the same values either way.
+
+#### Step 4 — Let the watcher run for 10 minutes under realistic load
+
+The dashboard must remain visible (or at least the extension active) for the full window. Don't close VS Code. Routine work in other windows is fine — what matters is that the watcher loop is firing and the extension host is doing real work.
+
+To make the load realistic, ideally:
+
+- Have ≥1 orchestrator session that dispatches sub-agents during the window (so the JSONL tailers run hot).
+- Don't artificially throttle: typing in VS Code, editing files, switching tabs are all fine and reflect real usage.
+
+If you can't manufacture orchestration activity, an idle-but-with-live-sessions window still measures the steady-state baseline (which is what we most want to bound — the 100% hash-skip rate from Run 1/Run 2 says the steady-state cost is what dominates a long session).
+
+#### Step 5 — Capture heap at t=10min
+
+Run the same `Get-Process` command from Step 3 against the **same PID**:
+
+```powershell
+Get-Process -Id <pid> | Select-Object Id, WorkingSet64, PrivateMemorySize64, Handles, @{Name="Threads";Expression={$_.Threads.Count}}, @{Name="WS_MB";Expression={[math]::Round($_.WorkingSet64 / 1MB, 2)}}, @{Name="Private_MB";Expression={[math]::Round($_.PrivateMemorySize64 / 1MB, 2)}}
+```
+
+Record:
+
+- **t=10min timestamp:** ISO-8601.
+- **WorkingSet64 / WS_MB:** end-of-window values.
+- **PrivateMemorySize64 / Private_MB:** end-of-window values.
+- **Handles / Threads:** end-of-window values (for stability check).
+
+#### Step 6 — Compute deltas and verdict
+
+For each of WorkingSet64 and PrivateMemorySize64:
+
+```
+delta_MB = (value_at_t10 - value_at_t0) / 1024 / 1024
+```
+
+Verdict mapping (per AC4 of ticket `86c9yjy4w`):
+
+| Delta (over 10 min, steady-state) | Verdict | Action |
+|---|---|---|
+| **≤ +0.5 MB** | **No leak.** Production behavior is flat under steady-state load; tsx-runtime artifact hypothesis confirmed. | Update `team/felix-dev/m4-04-cadence-measurement.md § Memory posture` from "Plausibly clean — follow-up needed" to "Clean — verified in extension-host" with the run evidence. Close `86c9yjy4w`. |
+| **> +0.5 MB AND ≤ +2 MB** | **Inconclusive.** Slope is small but non-zero. Could be benign OldGen growth that stabilizes, or a slow leak. | Re-run for 30+ minutes to see if slope flattens. If flattens → "No leak (stabilizes)". If continues linearly → escalate to next row. |
+| **> +2 MB** | **Follow-up needed.** Production slope ≥ 0.2 MB/min, extrapolating to ~12 MB/hr / ~290 MB/day. Real leak suspected. | File a separate `chore(perf): heap-leak investigation` ticket with the delta evidence; orchestrator triages. Do NOT close `86c9yjy4w` until the investigation ticket exists. |
+
+PrivateMemorySize64 is the primary verdict driver; WorkingSet64 is corroborating (if WS shrank but Private grew, trust Private). If they disagree dramatically (e.g., Private grew +5 MB but WS stayed flat), note the discrepancy — could indicate Windows evicting pages under pressure rather than a real leak.
+
+#### Step 7 — Record results
+
+Append the captured numbers as a new subsection of this doc (`### Extension-host probe — Run N (YYYY-MM-DD)`) with the following table:
+
+```markdown
+| Metric | t=0 | t=10min | Delta (bytes) | Delta (MB) |
+|---|---|---|---|---|
+| WorkingSet64 | <n> | <n> | <n> | <n> |
+| PrivateMemorySize64 | <n> | <n> | <n> | <n> |
+| Handles | <n> | <n> | <n> | — |
+| Threads | <n> | <n> | <n> | — |
+
+**Context:**
+- Extension-host PID: <n>
+- VS Code version: <version> (commit <sha>)
+- ClaudeTeam extension version: <version>
+- Live Claude Code sessions during window: <n>
+- Active subagents during window (approx): <n>
+- Window duration: <n> seconds (target 600)
+
+**Verdict:** <No leak | Inconclusive | Follow-up needed>
+**Rationale:** <one paragraph citing the delta>
+```
+
+The verdict drives the next action per Step 6's mapping table.
+
+### What this procedure does NOT cover (deferred / out-of-scope)
+
+- **Cross-platform probe.** This procedure is Windows-only. macOS would substitute Activity Monitor + `ps -o rss,vsz <pid>`; Linux substitutes `top -p <pid>` or `cat /proc/<pid>/status`. Sponsor is on Windows per project context (`C:\Users\538252\.claude\`), so single-platform is sufficient for this ticket.
+- **Heap snapshot diffing via Chrome DevTools.** A more precise probe would attach `--inspect-brk-extensions` to the extension host, take `Heap snapshot` snapshots in Chrome DevTools, and diff retained objects. That's the "what's leaking" probe; this procedure is the "is anything leaking" probe. If Step 6 returns "Follow-up needed," the heap-snapshot-diff probe is the recommended next step in that follow-up ticket.
+- **Long-duration probes (1+ hr).** 10 minutes matches Run 2's window so the slopes are directly comparable. Longer windows are useful only if Step 6 returns "Inconclusive" — the 30-min re-run is the prescribed escalation, not part of the baseline procedure.
+- **Production instrumentation.** No `claudeteam.debug.heapProbe` setting, command, or telemetry is added. See "Probe path choice" above.
+
+### Cross-references
+
+- M4-04 PR #59 — methodology source; this addendum is the follow-up.
+- `.claude/docs/testing-strategy.md § Performance probes` — codified tsx-vs-production caveat (origin of this ticket).
+- `.claude/docs/architecture-overview.md § Steady-state baseline` — establishes 100% hash-skip as the production baseline; the probe's "steady-state" condition assumes this is in effect.
