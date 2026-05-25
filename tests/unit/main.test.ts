@@ -99,6 +99,31 @@ describe("handleOpenTranscript — AC3", () => {
     expect(arg.fsPath).toBe(jsonlPath);
   });
 
+  // M4-03 AC6 / M4-01 §3.6 — preview-flag invariant. Drill-in opens the
+  // JSONL as a PREVIEW tab so consecutive clicks REPLACE the tab rather
+  // than accumulating tabs. Reversibility: one-line revert if dogfooding
+  // finds the preview replacement annoying.
+  it("opens the JSONL as a preview tab (M4-03 AC6 / M4-01 §3.6)", () => {
+    const sessionId = "aaaabbbb-0000-0000-0000-0000000m4036";
+    const agentId = "agent00000000pvw1";
+    const cwd = "c:\\Trunk\\PRIVATE\\ClaudeTeam";
+    const slug = "c--Trunk-PRIVATE-ClaudeTeam";
+    const subagentsDir = join(tempRoot, "projects", slug, sessionId, "subagents");
+    mkdirSync(subagentsDir, { recursive: true });
+    writeFileSync(join(subagentsDir, `agent-${agentId}.jsonl`), "{}\n");
+
+    handleOpenTranscript(sessionId, agentId, tempRoot, () => ({
+      sessions: [{ sessionId, cwd }],
+    }));
+
+    expect(showTextDocument).toHaveBeenCalledTimes(1);
+    const options = showTextDocument.mock.calls[0]![1] as
+      | { preview?: boolean }
+      | undefined;
+    expect(options).toBeDefined();
+    expect(options?.preview).toBe(true);
+  });
+
   it("shows error (no throw) when sessionId not in current state", () => {
     handleOpenTranscript("missing-session", "agentX", tempRoot, () => ({
       sessions: [],
