@@ -70,10 +70,52 @@ export interface AgentTileProps {
   finishedAtMs?: number;
   /** Current wall-clock ms — defaults to Date.now(). Test injection point. */
   nowMs?: number;
+  /**
+   * Last-rendered state for this tile (per the webview-local
+   * `prevStateTracker`). When defined AND different from `tile.state`, the
+   * renderer applies a `data-transition="to-<newState>"` attribute for the
+   * `--ct-duration-state-transition` window (cleared via setTimeout at
+   * 400ms — covers the longest M4-01 §2.3 transition animation, the
+   * `→ error` one-shot flash).
+   *
+   * `undefined` means "first render of this tile this webview boot" — per
+   * M4-01 §2.5 rule 3, first appearance is NOT a transition; we skip the
+   * `data-transition` attribute and let the steady-state visual (color
+   * dot, pulse on running, fade on idle, check on finished) speak for
+   * itself.
+   *
+   * Source: team/iris-ux/m4-polish-spec.md §2.5 + §2.3 transition matrix
+   */
+  prevState?: AgentState;
+  /**
+   * Schedule a one-shot callback for clearing the transition attribute.
+   * Defaults to `setTimeout` in production; tests inject a synchronous
+   * scheduler (or vitest fake timers) to assert the cleared-state path.
+   * Returning an opaque handle keeps the renderer pure of test concerns.
+   */
+  scheduleClearTransition?: (cb: () => void, ms: number) => void;
 }
 
+/**
+ * Duration the `data-transition` attribute stays on the article (ms). Sized
+ * to cover the longest M4-01 §2.3 animation — the `→ error` one-shot flash
+ * at 400ms. Graceful transitions complete sooner (200ms — the
+ * `--ct-duration-state-transition` token) but clearing at the longer
+ * envelope means a single timeout covers every transition target without
+ * per-state branching.
+ */
+const TRANSITION_CLEAR_MS = 400;
+
 export function renderAgentTile(props: AgentTileProps): HTMLElement {
-  const { tile, sessionId, postMessage, finishedAtMs, nowMs } = props;
+  const {
+    tile,
+    sessionId,
+    postMessage,
+    finishedAtMs,
+    nowMs,
+    prevState,
+    scheduleClearTransition,
+  } = props;
 
   // Compose the activity text — for finished tiles with a tracked first-seen
   // timestamp, suffix with " Xs / Xm / Xh" for freshness visibility (NIT #3).
@@ -96,6 +138,41 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     "aria-label",
     `${tile.display} — ${tile.role} — ${STATE_LABEL[tile.state]}`,
   );
+
+  // State-transition attribute (M4-01 §2.5).
+  //
+  // When the prevStateTracker reports a previously-seen state for this tile
+  // and it differs from the current state, set `data-transition="to-<state>"`
+  // for the animation window. The CSS in dashboard.css selects on this
+  // attribute to fire the `→ error` flash + opacity transitions; clearing
+  // the attribute at TRANSITION_CLEAR_MS leaves the tile in its steady-state
+  // visual.
+  //
+  // First-render case (prevState === undefined): skip the attribute — per
+  // M4-01 §2.5 rule 3, first appearance is NOT a transition.
+  //
+  // Reduced-motion handling: the CSS `@media (prefers-reduced-motion: reduce)`
+  // block elides the animation but the attribute still flips briefly. That's
+  // intentional — color/opacity end-states still apply via the same selector,
+  // just without the keyframe motion. See dashboard.css.
+  if (prevState !== undefined && prevState !== tile.state) {
+    article.dataset.transition = `to-${tile.state}`;
+    const schedule =
+      scheduleClearTransition ??
+      ((cb: () => void, ms: number) => {
+        setTimeout(cb, ms);
+      });
+    schedule(() => {
+      // Clear ONLY if still pointing at the same transition target — a
+      // rapid second transition (running → error → running within 400ms,
+      // rare but possible if the host emits back-to-back state updates)
+      // would have already overwritten `data-transition` to the newer
+      // target; clobbering it here would shorten the second animation.
+      if (article.dataset.transition === `to-${tile.state}`) {
+        article.dataset.transition = "";
+      }
+    }, TRANSITION_CLEAR_MS);
+  }
 
   // Row 1 — state dot + display name (primary row).
   const primaryRow = document.createElement("div");

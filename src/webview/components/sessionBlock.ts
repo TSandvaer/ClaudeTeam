@@ -30,6 +30,7 @@ import { renderTeamCard, teamFromId } from "./teamCard.js";
 import { renderBackgroundChip } from "./backgroundChip.js";
 import type { PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
+import type { PrevStateTracker } from "../prevStateTracker.js";
 
 export interface SessionBlockProps {
   /**
@@ -46,12 +47,19 @@ export interface SessionBlockProps {
    * (M3-04 NIT #3). Threaded down to teamCard → agentTile.
    */
   finishedTracker?: FinishedTracker;
+  /**
+   * Optional webview-local last-rendered-state tracker (M4-05 §2.5).
+   * Threaded down to teamCard → agentTile so per-tile state transitions
+   * can fire the `data-transition="to-<state>"` attribute / animation.
+   */
+  prevStateTracker?: PrevStateTracker;
   /** Current wall-clock ms — defaults to Date.now() downstream. */
   nowMs?: number;
 }
 
 export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
-  const { session, postMessage, finishedTracker, nowMs } = props;
+  const { session, postMessage, finishedTracker, prevStateTracker, nowMs } =
+    props;
 
   const block = document.createElement("section");
   block.className = "session-block";
@@ -102,6 +110,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
         sessionId: session.sessionId,
         postMessage,
         ...(finishedTracker ? { finishedTracker } : {}),
+        ...(prevStateTracker ? { prevStateTracker } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
       }),
     );

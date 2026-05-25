@@ -22,6 +22,7 @@ import {
   isCollapsedPersonaGroup,
 } from "./collapsedPersonaTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
+import type { PrevStateTracker } from "../prevStateTracker.js";
 
 export interface TeamCardProps {
   /** Team metadata (id + display name from the loaded roster). */
@@ -53,12 +54,28 @@ export interface TeamCardProps {
    * first expansion.
    */
   finishedTracker?: FinishedTracker;
+  /**
+   * Optional webview-local last-rendered-state tracker (M4-05 §2.5).
+   * Threaded through to each `renderAgentTile` so state transitions can fire
+   * the M4-01 §2.3 transition animations. Same pattern as `finishedTracker`:
+   * collapsed-persona wrappers thread it through but only consult it once
+   * the wrapper expands (instances aren't in the DOM until then).
+   */
+  prevStateTracker?: PrevStateTracker;
   /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
   nowMs?: number;
 }
 
 export function renderTeamCard(props: TeamCardProps): HTMLElement {
-  const { team, tiles, sessionId, postMessage, finishedTracker, nowMs } = props;
+  const {
+    team,
+    tiles,
+    sessionId,
+    postMessage,
+    finishedTracker,
+    prevStateTracker,
+    nowMs,
+  } = props;
 
   const card = document.createElement("section");
   card.className = "team-card";
@@ -86,22 +103,25 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
   for (const entry of tiles) {
     if (isCollapsedPersonaGroup(entry)) {
       // M3-10 AC2 — collapsed-persona wrapper renders a header tile + lazy
-      // instances container. Tracker / nowMs forwarded so when the user
+      // instances container. Both trackers forwarded so when the user
       // expands the wrapper, finished instances pick up the freshness suffix
-      // exactly as bare tiles do.
+      // AND state transitions trigger their visual treatment exactly as
+      // bare tiles do.
       card.appendChild(
         renderCollapsedPersonaTile({
           group: entry,
           sessionId,
           postMessage,
           ...(finishedTracker ? { finishedTracker } : {}),
+          ...(prevStateTracker ? { prevStateTracker } : {}),
           ...(nowMs !== undefined ? { nowMs } : {}),
         }),
       );
       continue;
     }
 
-    // Bare AgentTile — pre-M3-10 / N=1 back-compat path (AC3). Unchanged.
+    // Bare AgentTile — pre-M3-10 / N=1 back-compat path (AC3).
+    //
     // For finished tiles, observe (or fetch) the first-seen ms so the suffix
     // anchors to the first tick we saw this completion — not the current
     // render. See finishedTracker.ts for accuracy semantics.
@@ -109,15 +129,25 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
       entry.state === "finished" && finishedTracker
         ? finishedTracker.observe(sessionId, entry.agentId, now)
         : undefined;
+    // M4-05 §2.5 — read the previous-rendered state BEFORE recording the
+    // new one so the renderer sees the prior tick's value; record AFTER
+    // appending so the next tick's `previous(...)` returns the value we
+    // just rendered. First render on this key returns undefined → renderer
+    // skips the transition attribute.
+    const prevState = prevStateTracker?.previous(sessionId, entry.agentId);
     card.appendChild(
       renderAgentTile({
         tile: entry,
         sessionId,
         postMessage,
         ...(finishedAtMs !== undefined ? { finishedAtMs } : {}),
+        ...(prevState !== undefined ? { prevState } : {}),
         nowMs: now,
       }),
     );
+    if (prevStateTracker) {
+      prevStateTracker.record(sessionId, entry.agentId, entry.state);
+    }
   }
 
   return card;

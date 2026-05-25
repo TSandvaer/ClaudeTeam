@@ -100,6 +100,7 @@ ENTRY-2026-05-25T00:58:00Z: 86c9ydug9 -> in review (PR #47 opened — Maya webvi
 ENTRY-2026-05-25T06:39:22Z: 86c9yfj6n -> in review (PR #52 opened — chore(dispatch-template): codify "git switch --detach HEAD" as mandatory final step)
 ENTRY-2026-05-25T07:00:00Z: 86c9ygcgv -> in progress (M4-01 dispatch — Iris three-part design spec start)
 ENTRY-2026-05-25T07:03:36Z: 86c9ygcgv -> in review (PR #54 opened — M4-01 polish spec: tokens + status-state visuals + drill-in affordance)
+ENTRY-2026-05-25T07:51:16Z: 86c9ygckv -> in review (M4-05 PR opened — status-state visuals + transitions per M4-01 §2)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
