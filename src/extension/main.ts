@@ -329,9 +329,17 @@ export function handleOpenTranscript(
     );
     return;
   }
-  // Open the file in the active editor group. The preview/preserve flags
-  // are defaults — the user gets a normal editor tab.
-  void vscode.window.showTextDocument(vscode.Uri.file(jsonlPath));
+  // M4-03 AC6 / M4-01 §3.6: open as PREVIEW tab (italicized title, replaced
+  // on next drill-in) — matches VS Code's native Explorer single-click
+  // behavior. The drill-in interaction is exploratory; without preview mode,
+  // browsing N agents accumulates N JSONL tabs the sponsor has to manually
+  // close. Preview is promotable (double-click title or edit the file → it
+  // becomes a regular tab) so zero capability is lost. Reversibility: one-
+  // line revert if dogfooding finds the preview replacement annoying when
+  // switching between two agents repeatedly.
+  void vscode.window.showTextDocument(vscode.Uri.file(jsonlPath), {
+    preview: true,
+  });
 }
 
 // `handleOpenRoster` (M2-06) was removed in M3-02 in favor of the

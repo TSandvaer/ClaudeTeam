@@ -138,6 +138,12 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     "aria-label",
     `${tile.display} — ${tile.role} — ${STATE_LABEL[tile.state]}`,
   );
+  // M4-03 AC3: drill-in affordance tooltip. Wording locked in M4-01 §3.3
+  // ("Open agent transcript") — concrete destination ("agent transcript")
+  // beats vague phrasings ("View activity log") and avoids leaking the
+  // JSONL implementation detail ("Click to open JSONL"). Length kept
+  // short — OS tooltip delays (~500-1000ms) make long tooltips feel laggy.
+  article.setAttribute("title", "Open agent transcript");
 
   // State-transition attribute (M4-01 §2.5).
   //

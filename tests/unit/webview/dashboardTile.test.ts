@@ -120,6 +120,16 @@ describe("renderAgentTile — state coverage", () => {
       "Felix — Extension Host Dev — Error",
     );
   });
+
+  // M4-03 AC3 — drill-in affordance tooltip. Wording locked in M4-01 §3.3.
+  it("sets title=\"Open agent transcript\" for drill-in affordance (M4-03 AC3)", () => {
+    const el = renderAgentTile({
+      tile: makeTile(),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    expect(el.getAttribute("title")).toBe("Open agent transcript");
+  });
 });
 
 // ---------------------------------------------------------------------------
