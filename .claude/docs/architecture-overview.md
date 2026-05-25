@@ -46,6 +46,8 @@ ClaudeTeam is a **VS Code extension** that gives an accurate, real-time overview
 
 V1 starts with file-watcher only. Hooks are M5+ work.
 
+**Steady-state baseline: 100% hash-skip.** Under realistic load (M4-04 measurement: 10-min window, 3 live Claude Code sessions, 52 agents), the file-watcher poll observes a **100% hash-skip rate** — every poll tick computes hashes that match the previous tick and short-circuits before the reducer/render path. The architecture amortizes poll cost to ~zero because JSONL flushes are bursty (per [data-sources.md](data-sources.md)) and the FS-watcher catches inter-poll changes. Future cadence-tuning work should treat 100% as the *expected* steady-state baseline, not an anomaly: the poll interval is not the lever for steady-state performance work; the architecture already did the amortization. Evidence: M4-04 PR #59 (`d9b1b49`) measurement doc at `team/felix-dev/m4-04-cadence-measurement.md`.
+
 ## Process boundaries
 
 - **Extension host** owns the filesystem: file-watcher, JSONL parsing, roster matching, state reduction.
