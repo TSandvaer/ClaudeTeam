@@ -94,6 +94,18 @@ Anything beyond this goes in the PR body, ticket comments, or your workspace fol
 At the end of your work, list any non-obvious findings (gotchas, surprising constraints, validated patterns, "I almost did X but here's why Y is right") in your PR body. These are the input to maintain-docs — the more concretely you surface them, the more useful future Claude sessions become.
 ```
 
+### 7. Final step (every dispatch) — worktree detach
+
+After posting the PR (author) or the review comment (reviewer), and BEFORE returning the final report, run in the worktree:
+
+```bash
+git switch --detach HEAD
+```
+
+**Rationale:** prevents `gh pr merge --delete-branch` from failing local cleanup when the orchestrator merges. A worktree still holding the branch blocks the post-merge `--delete-branch` step (documented failure mode in `orchestration-overview.md` § Common failure modes). Applies to BOTH authors and peer-reviewers — defense-in-depth even when the reviewer used the `fetch into local-only branch` pattern.
+
+Include this verbatim as the final action of every dispatch brief, alongside the final-report contract (§5). Do NOT duplicate it inside other blocks — the peer-review routing block (Optional blocks below) references this global Final step rather than repeating the command.
+
 ## Optional blocks (context-dependent)
 
 ### Self-Test Report (for UX-visible PRs)
@@ -121,6 +133,8 @@ This agent is being dispatched in the background. The orchestrator MUST pair thi
 - **Sage's test PRs** → reviewer is Felix (host-side tests) or Maya (webview tests).
 - **Bram's research PRs** → orchestrator-merge direct (research notes don't need code peer-review). If the research drives a code-change recommendation, file a separate ticket for the change.
 - **Nora's ticket/doc PRs** → orchestrator-merge direct unless they touch shared coordination docs that other roles depend on.
+
+Reviewers MUST run the global Final step (§7 above — `git switch --detach HEAD`) in their worktree after posting the review comment, before returning the final report. Do NOT re-state the command here — the global Final step is the single source of truth.
 
 ### Cross-review verdict format
 
@@ -160,6 +174,7 @@ Before sending a brief:
 - [ ] If parallel dispatch shares a NEW type/event/guard: Vocabulary contract block (§ 3a) present in BOTH briefs verbatim, OR Pattern A sequencing chosen (type-author first → consumer next).
 - [ ] ClickUp lifecycle block present.
 - [ ] Final-report contract block present.
+- [ ] Final step block (§7 — `git switch --detach HEAD`) present, for author AND any peer-reviewer dispatched against this PR.
 - [ ] Doc-preload preamble present.
 - [ ] Non-obvious findings postamble present.
 - [ ] If background dispatch: ScheduleWakeup tripwire scheduled.
