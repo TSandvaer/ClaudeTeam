@@ -46,7 +46,7 @@ import {
 import { runTick } from "../../src/extension/watcher/watcherLoop.js";
 import { cwdToSlug } from "../../src/shared/slug.js";
 import { isCollapsedPersonaGroup } from "../../src/shared/types.js";
-import type { AgentTile } from "../../src/shared/types.js";
+import type { AgentTile, RosterTileEntry } from "../../src/shared/types.js";
 
 const PID = 2_010_001;
 const SESSION_ID = "aaaabbbb-0000-0000-0000-0000000fmke01";
@@ -56,15 +56,15 @@ const AGENT_FELIX = "agentfelixfmke001";
 const TOOL_USE_ID = "toolu_01SZsHqGceAQC4Loovg6ion1";
 
 function findTile(
-  tiles: readonly (AgentTile | { instances: readonly AgentTile[] })[],
+  tiles: readonly RosterTileEntry[],
   memberId: string,
 ): AgentTile | undefined {
   for (const t of tiles) {
     if (isCollapsedPersonaGroup(t)) {
       const inner = t.instances.find((i) => i.memberId === memberId);
       if (inner) return inner;
-    } else if ((t as AgentTile).memberId === memberId) {
-      return t as AgentTile;
+    } else if (t.memberId === memberId) {
+      return t;
     }
   }
   return undefined;
