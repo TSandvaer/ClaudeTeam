@@ -382,11 +382,18 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
       `${session.sessionId}.jsonl`,
     );
 
-    const title = readSessionTitle(parentJsonlPath) ?? "(no title yet)";
-    // 86c9yxv94: returns Map<toolUseId, finishedAtMs> so the elapsed-time
-    // suffix on `"finished Xs"` can render correctly. Timestamp sourced
-    // from the tool_result record's top-level `timestamp` ISO-8601 field.
-    const finishedToolUseIds = readFinishedToolUseIds(parentJsonlPath);
+    // 86c9zfmke: single-pass parent JSONL scan. Previously two independent
+    // readFileSync passes (readSessionTitle + readFinishedToolUseIds) on
+    // the same multi-MB file. On the live ClaudeTeam orchestrator session
+    // the parent JSONL is 5.2MB and the second redundant readFileSync +
+    // line-split + JSON.parse measured 15–39ms per tick (warm cache —
+    // Bram triage `team/bram-research/86c9yteju-triage-2026-05-26.md`
+    // § Segment 3). readSessionMetadata fuses both extractions into one
+    // pass — same defensive error-swallowing behavior, same return
+    // contracts.
+    const { title: rawTitle, finishedIds: finishedToolUseIds } =
+      readSessionMetadata(parentJsonlPath);
+    const title = rawTitle ?? "(no title yet)";
 
     const agents = collectAgentMetas(subagentsDir);
 
@@ -528,34 +535,29 @@ export function hashState(state: DashboardState): string {
   });
 }
 
-/** Read the `ai-title` record from a parent JSONL. Null on miss/error. */
-function readSessionTitle(jsonlPath: string): string | null {
-  let raw: string;
-  try {
-    raw = readFileSync(jsonlPath, "utf8");
-  } catch {
-    return null;
-  }
-  for (const line of raw.split("\n")) {
-    if (line.trim().length === 0) continue;
-    try {
-      const rec = JSON.parse(line) as Record<string, unknown>;
-      if (rec["type"] === "ai-title") {
-        const title = rec["title"];
-        if (typeof title === "string" && title.length > 0) return title;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
 /**
- * Scan the parent JSONL for tool_result entries that close a subagent spawn.
- * Returns a map of `tool_use_id` → `finishedAtMs` (epoch ms parsed from the
- * record's top-level `timestamp` ISO-8601 field). Per data-sources.md §3,
- * this is the only reliable "finished" signal; the child JSONL never
+ * Single-pass parent-JSONL scan that extracts BOTH the session title
+ * (`ai-title` record) and the finished `tool_use_id` → `finishedAtMs` map
+ * in one `readFileSync` + one line iteration. Replaces the prior pair of
+ * independent passes (`readSessionTitle` + `readFinishedToolUseIds`),
+ * both of which previously re-read the entire parent JSONL.
+ *
+ * 86c9zfmke: parent JSONL is multi-MB on long-running orchestrator
+ * sessions (5.2MB measured on the live ClaudeTeam session — see
+ * `team/bram-research/86c9yteju-triage-2026-05-26.md` § Segment 3).
+ * Halving the disk read + JSON.parse work eliminates ~28–39ms of warm-cache
+ * tick I/O per live session on the dominant sub-segment.
+ *
+ * ## Title extraction (formerly `readSessionTitle`)
+ *
+ * Returns the first non-empty `title` field on a record with
+ * `type: "ai-title"`. `null` on miss, malformed, or read error.
+ *
+ * ## Finished-ids extraction (formerly `readFinishedToolUseIds`)
+ *
+ * Returns a map of `tool_use_id` → `finishedAtMs` (epoch ms parsed from
+ * the record's top-level `timestamp` ISO-8601 field). Per data-sources.md
+ * §3, this is the only reliable "finished" signal; the child JSONL never
  * carries it.
  *
  * 86c9yxv94: timestamp flows through `FinishedMap` to `buildActivity` for
@@ -580,62 +582,83 @@ function readSessionTitle(jsonlPath: string): string | null {
  * Foreground (`Agent` without `run_in_background:true`) tool_results
  * do NOT carry a `toolUseResult.isAsync` field; they're real completions
  * and remain in the finished map.
+ *
+ * ## Defensive contracts (preserved)
+ *
+ * - Read error (missing/unreadable file) → `{ title: null, finishedIds: empty }`.
+ * - JSON.parse failure on a single line → skip that line, keep going.
+ * - First valid title wins; do NOT short-circuit the scan when found —
+ *   we still need the rest of the file for the finished-ids map.
  */
-function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
-  const finished = new Map<string, number>();
+function readSessionMetadata(jsonlPath: string): {
+  title: string | null;
+  finishedIds: Map<string, number>;
+} {
+  const finishedIds = new Map<string, number>();
+  let title: string | null = null;
   let raw: string;
   try {
     raw = readFileSync(jsonlPath, "utf8");
   } catch {
-    return finished;
+    return { title: null, finishedIds };
   }
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) continue;
+    let rec: Record<string, unknown>;
     try {
-      const rec = JSON.parse(line) as Record<string, unknown>;
-      if (rec["type"] !== "user") continue;
-      // Obs 9: skip background-dispatch acknowledgments. The wrapper
-      // record carries `toolUseResult.isAsync === true` — this signals the
-      // tool_result is the spawn ack, not a completion. Skipping the
-      // entire record is correct because async-launched records carry
-      // exactly one tool_result (the ack itself).
-      const tur = rec["toolUseResult"];
-      if (
-        tur !== null &&
-        typeof tur === "object" &&
-        !Array.isArray(tur) &&
-        (tur as Record<string, unknown>)["isAsync"] === true
-      ) {
-        continue;
-      }
-      const msg = rec["message"];
-      if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
-      const content = (msg as Record<string, unknown>)["content"];
-      if (!Array.isArray(content)) continue;
-      const ts = rec["timestamp"];
-      const finishedAtMs =
-        typeof ts === "string" && Number.isFinite(Date.parse(ts))
-          ? Date.parse(ts)
-          : 0;
-      for (const item of content) {
-        if (
-          item !== null &&
-          typeof item === "object" &&
-          !Array.isArray(item) &&
-          (item as Record<string, unknown>)["type"] === "tool_result"
-        ) {
-          const tuid = (item as Record<string, unknown>)["tool_use_id"];
-          if (typeof tuid === "string" && !finished.has(tuid)) {
-            // First occurrence wins — that's the actual finish time.
-            finished.set(tuid, finishedAtMs);
-          }
-        }
-      }
+      rec = JSON.parse(line) as Record<string, unknown>;
     } catch {
       continue;
     }
+    const recType = rec["type"];
+
+    // Title branch — `type: "ai-title"`. Keep scanning the rest of the
+    // file even after a title is found because finished-ids may still
+    // appear in later records.
+    if (recType === "ai-title" && title === null) {
+      const t = rec["title"];
+      if (typeof t === "string" && t.length > 0) title = t;
+      continue;
+    }
+
+    // Finished-ids branch — `type: "user"` with a `tool_result` content
+    // entry. Discriminator (Obs 9): skip records whose top-level
+    // `toolUseResult.isAsync === true` (background-dispatch ack).
+    if (recType !== "user") continue;
+    const tur = rec["toolUseResult"];
+    if (
+      tur !== null &&
+      typeof tur === "object" &&
+      !Array.isArray(tur) &&
+      (tur as Record<string, unknown>)["isAsync"] === true
+    ) {
+      continue;
+    }
+    const msg = rec["message"];
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
+    const content = (msg as Record<string, unknown>)["content"];
+    if (!Array.isArray(content)) continue;
+    const ts = rec["timestamp"];
+    const finishedAtMs =
+      typeof ts === "string" && Number.isFinite(Date.parse(ts))
+        ? Date.parse(ts)
+        : 0;
+    for (const item of content) {
+      if (
+        item !== null &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        (item as Record<string, unknown>)["type"] === "tool_result"
+      ) {
+        const tuid = (item as Record<string, unknown>)["tool_use_id"];
+        if (typeof tuid === "string" && !finishedIds.has(tuid)) {
+          // First occurrence wins — that's the actual finish time.
+          finishedIds.set(tuid, finishedAtMs);
+        }
+      }
+    }
   }
-  return finished;
+  return { title, finishedIds };
 }
 
 /**
