@@ -258,6 +258,20 @@ function boot(): void {
       renderFull(buildCtx(), currentState);
     },
   });
+
+  // 86c9z171k Obs 3 follow-up: pull host state once the message receiver is
+  // wired. PR #66's host-side push-based replay fires synchronously inside
+  // `_onResolved` BEFORE the webview's `window.addEventListener("message", ...)`
+  // is registered (the IIFE has not yet executed in the renderer process). VS
+  // Code does NOT buffer postMessage calls — the replayed `state:full` is
+  // silently dropped. By sending `ui:refresh` AFTER `initMessageReceiver`
+  // returns (listener now wired), the host's `onRefresh` handler calls
+  // `watcherHandle?.triggerTick()` which immediately re-emits `state:full` —
+  // and that one lands. Idempotent on first-open: `triggerTick` is a hash-
+  // skip-aware tick, no-ops if the state hash matches what was just emitted.
+  // Source: team/bram-research/86c9yteju-triage-2026-05-26.md § Observation 3
+  //         (Pattern A — pull-based: webview sends ui:refresh on boot).
+  api.postMessage({ type: "ui:refresh" });
 }
 
 // DOM is available immediately because <script> is at end of body. No need

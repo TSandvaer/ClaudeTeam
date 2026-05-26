@@ -107,6 +107,7 @@ ENTRY-2026-05-26T00:30:00Z: 86c9yteju -> in progress (Felix dispatched on doc-ca
 ENTRY-2026-05-26T00:45:00Z: 86c9yteju -> in review (PR #65 opened — 4 doc additions + rosterPath description flip; Self-Test Report posted; vsce package clean; 386 unit + 68 integration green)
 ENTRY-2026-05-26T01:00:00Z: 86c9ytyq7 -> in review (M5 hide-finished spec PR opened — Iris design spec; Shape 1 + header-chip hybrid; parallel-ready vocabulary contract for Felix M5-EH + Maya M5-WV)
 ENTRY-2026-05-26T08:50:00Z: 86c9yxv6d -> in review (PR #66 opened — fix(host): replay last-known state to remounted webview; eliminates pane-reopen empty-state flash; 386 unit + 71 integration green; Self-Test Report posted)
+ENTRY-2026-05-26T10:58:00Z: 86c9z171k -> in review (PR opened — fix(webview): boot-time ui:refresh to pull host state after message listener is wired; one-line dispatch in boot() + bootRefresh.test.ts; 456 unit + 2 skipped green; lint + typecheck clean)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
