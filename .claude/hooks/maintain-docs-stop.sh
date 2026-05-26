@@ -1,23 +1,31 @@
 #!/usr/bin/env bash
 # Stop hook that triggers the maintain-docs skill — but ONLY when the turn
-# actually did something doc-worthy.
+# actually did something doc-worthy. See ticket `86c9z1wrh`.
 #
-# Heuristic: scan the transcript since the most recent real user message, and
-# block-with-reason only if the assistant invoked one of:
-#   - Edit         (file edit)
-#   - Write        (file write)
-#   - NotebookEdit (notebook edit)
-#   - Agent        (subagent dispatch — its work may produce doc-worthy output)
+# Transcript mechanism: Stop hooks receive a JSON envelope on stdin containing
+# `transcript_path` (absolute path to the session JSONL). We tail that file from
+# the most-recent real user message forward and classify each tool_use we see.
 #
-# Pure Q&A / status-pulse / read-only turns exit 0 silently — no "blocking
-# error" banner, no skill invocation. This mirrors the skill's own Step 1
-# early-exit filter one level earlier so the UI does not surface a banner for
-# turns the skill would early-exit on anyway.
+# Doc-worthy signals (invoke the skill):
+#   - Edit / Write / NotebookEdit against a CODE/TEST/DOC path
+#   - Agent dispatch (sub-agent work may surface findings the parent thread
+#     wouldn't otherwise see)
+#
+# Tick-class signals (exit silently — would early-exit the skill anyway, and
+# the Stop banner is the bloat we are removing):
+#   - Edits whose every file_path matches the orchestration-coordination set
+#     below (STATE.md, clickup-pending.md, decisions-while-away.md, etc.)
+#     AND no Agent dispatch occurred this turn
 #
 # Re-entry after maintain-docs itself runs is gated by stop_hook_active=true.
 #
-# JSON / transcript parsing uses grep / sed only — Git Bash on Windows lacks
-# jq and we want zero external dependencies.
+# JSON / transcript parsing uses grep / sed only — Git Bash on Windows lacks jq
+# and we want zero external dependencies.
+#
+# Cross-ref: `.claude/docs/orchestration-overview.md` § Main-thread narration
+# discipline and `.claude/skills/maintain-docs/SKILL.md` § Step 1 early-exit
+# filter (the in-skill filter is the safety net; this hook is the cheaper
+# first cut so the Stop banner does not flash on every tick turn).
 
 set -eu
 
@@ -55,13 +63,56 @@ if [[ -z "${last_user_line:-}" ]]; then
   last_user_line=1
 fi
 
-# Scan everything from that boundary forward for any tool_use of interest.
-# If we find one, the turn was doc-worthy — invoke maintain-docs.
-if tail -n "+${last_user_line}" "$transcript_path" \
-    | grep -Eq '"type":"tool_use","id":"[^"]+","name":"(Edit|Write|NotebookEdit|Agent)"'; then
+# Slice the transcript from the boundary forward — one buffer, multi-grep.
+turn_slice=$(tail -n "+${last_user_line}" "$transcript_path")
+
+# Agent dispatches always count as doc-worthy — sub-agent work may produce
+# findings that should land in .claude/docs/.
+if printf '%s' "$turn_slice" \
+    | grep -Eq '"type":"tool_use","id":"[^"]+","name":"Agent"'; then
   printf '%s' "$block_response"
   exit 0
 fi
 
-# No file-modifying / agent-spawning tool calls this turn — skip silently.
+# Collect every Edit/Write/NotebookEdit tool_use's file_path. If there are
+# none, the turn had no doc-worthy file writes — exit silently.
+edit_paths=$(printf '%s' "$turn_slice" \
+  | grep -oE '"type":"tool_use","id":"[^"]+","name":"(Edit|Write|NotebookEdit)","input":\{[^}]*"file_path":"[^"]+"' \
+  | grep -oE '"file_path":"[^"]+"' \
+  | sed -E 's/"file_path":"([^"]+)"/\1/')
+
+if [[ -z "${edit_paths:-}" ]]; then
+  # No file-modifying / agent-spawning tool calls this turn — skip silently.
+  exit 0
+fi
+
+# Tick-class file-path patterns. If EVERY edit path in the turn matches one of
+# these, the turn was pure orchestration coordination — exit silently. Any
+# single path that does NOT match (code, tests, docs, or unknown surface) flips
+# the turn to doc-worthy and invokes the skill.
+#
+# Patterns are matched against the JSON-encoded path string (backslashes appear
+# as `\\` on Windows transcripts) — both `team/STATE.md` and
+# `team\\STATE.md` variants must match. We normalise by replacing `\\` with `/`
+# before the regex check.
+tick_pattern='(^|/)(team/STATE\.md|team/DECISIONS\.md|team/log/clickup-pending\.md|team/log/process-incidents\.md|\.claude/decisions-while-away\.md|\.claude/away-queue\.md|\.claude/auto-status\.state|team/(felix-dev|maya-dev|sage-qa|bram-research|iris-ux|nora-tickets|dogfood)/.*)$'
+
+all_tick=1
+while IFS= read -r path; do
+  [[ -z "$path" ]] && continue
+  normalized=${path//\\\\/\/}
+  normalized=${normalized//\\/\/}
+  if ! printf '%s' "$normalized" | grep -Eq "$tick_pattern"; then
+    all_tick=0
+    break
+  fi
+done <<< "$edit_paths"
+
+if [[ "$all_tick" -eq 1 ]]; then
+  # Pure orch-coord turn — would early-exit the skill, suppress the banner.
+  exit 0
+fi
+
+# At least one code / test / doc edit — invoke the skill.
+printf '%s' "$block_response"
 exit 0

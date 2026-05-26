@@ -100,6 +100,8 @@ Same discipline applies upstream to dispatch-brief authoring: briefs are terse, 
 
 **Motivation (M2-close retro).** The retro flagged "10-20 lines per auto-merge × 10+ per milestone" as a context-bloat surface that compounds across the session. At one orchestrator-narrated milestone close, the narration alone consumed more main-thread bytes than any single dispatch brief — pure overhead, because the structured log was already written. One-line acknowledgment + log pointer eliminates the duplication.
 
+**Stop-hook narration is a sibling surface.** The `maintain-docs` Stop hook (`.claude/hooks/maintain-docs-stop.sh`) fires after every turn. Without filtering, every tick-class turn (status pulse, merge-flip pair, dispatch announcement) would inject a `block`-response banner instructing the model to invoke `maintain-docs`, costing main-thread context for turns the skill would early-exit anyway. The hook classifies tool_use file_paths and exits silently when the turn touched only orchestration coordination docs (`team/STATE.md`, `team/log/clickup-pending.md`, `team/log/process-incidents.md`, `.claude/decisions-while-away.md`, `.claude/away-queue.md`, `.claude/auto-status.state`, `team/<role>/` scratch notes) AND no Agent dispatch fired. Code/test/doc edits and Agent dispatches always invoke the skill. Pattern set + test harness: `.claude/hooks/maintain-docs-stop.sh` + `.claude/hooks/test-maintain-docs-hook.sh` (ticket `86c9z1wrh`).
+
 ## ClickUp as hard gate
 
 Every dispatch / PR-open / merge pairs with a ClickUp status flip in the same tool round. Status names (case-sensitive): `to do` → `in progress` → `in review` → `complete`.
