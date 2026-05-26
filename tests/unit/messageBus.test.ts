@@ -132,6 +132,39 @@ describe("serializeState — Map → Record conversion", () => {
     expect(serialized.sessions).toEqual([]);
   });
 
+  it("threads hiddenFinishedCount through to the wire (M5)", () => {
+    const tiles = new Map<string, AgentTile[]>([
+      ["claudeteam-alpha", [makeTile("felix")]],
+    ]);
+    const state: AgentTree = {
+      sessions: [makeSession("sid-m5", tiles)],
+      hiddenFinishedCount: 3,
+    };
+
+    const serialized = serializeState(state);
+    expect(serialized.hiddenFinishedCount).toBe(3);
+  });
+
+  it("defaults hiddenFinishedCount to 0 when absent on the tree (M5)", () => {
+    const serialized = serializeState({ sessions: [] });
+    expect(serialized.hiddenFinishedCount).toBe(0);
+  });
+
+  it("threads config.hideFinishedAgents through to the wire (M5)", () => {
+    const state: AgentTree = {
+      sessions: [],
+      config: { hideFinishedAgents: true },
+    };
+
+    const serialized = serializeState(state);
+    expect(serialized.config?.hideFinishedAgents).toBe(true);
+  });
+
+  it("defaults config.hideFinishedAgents to false when absent (M5)", () => {
+    const serialized = serializeState({ sessions: [] });
+    expect(serialized.config?.hideFinishedAgents).toBe(false);
+  });
+
   it("serialized state round-trips through JSON.stringify without losing tiles", () => {
     // This is the failure mode `serializeState` exists to prevent.
     // Without the Map → Record conversion, JSON.stringify(map) emits "{}" and

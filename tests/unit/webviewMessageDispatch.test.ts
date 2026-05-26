@@ -194,4 +194,68 @@ describe("ClaudeTeamViewProvider._dispatchWebviewMessage — typed dispatch", ()
     expect(firstHandler).not.toHaveBeenCalled();
     expect(secondHandler).toHaveBeenCalledTimes(1);
   });
+
+  // M5: ui:set-config dispatch
+  it("routes ui:set-config with valid payload to onSetConfig", () => {
+    const provider = makeProvider();
+    const onSetConfig = vi.fn();
+    const onRefresh = vi.fn();
+    provider.setMessageHandlers({ onSetConfig, onRefresh });
+
+    const msg = {
+      type: "ui:set-config" as const,
+      payload: { key: "hideFinishedAgents" as const, value: true },
+    };
+    provider._dispatchWebviewMessage(msg);
+
+    expect(onSetConfig).toHaveBeenCalledTimes(1);
+    expect(onSetConfig).toHaveBeenCalledWith(msg);
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M5 — ui:set-config type-guard coverage
+// ---------------------------------------------------------------------------
+
+describe("isWebviewMessage — ui:set-config (M5)", () => {
+  it("accepts ui:set-config with valid hideFinishedAgents payload (true)", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:set-config",
+        payload: { key: "hideFinishedAgents", value: true },
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts ui:set-config with valid hideFinishedAgents payload (false)", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:set-config",
+        payload: { key: "hideFinishedAgents", value: false },
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects ui:set-config with no payload", () => {
+    expect(isWebviewMessage({ type: "ui:set-config" })).toBe(false);
+  });
+
+  it("rejects ui:set-config with unknown key", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:set-config",
+        payload: { key: "hideIdleAgents", value: true },
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects ui:set-config with non-boolean value", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:set-config",
+        payload: { key: "hideFinishedAgents", value: "true" },
+      }),
+    ).toBe(false);
+  });
 });

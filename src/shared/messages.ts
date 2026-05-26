@@ -79,6 +79,31 @@ export interface SerializedDashboardState {
    * back-compat — webview MUST treat `undefined` as empty array.
    */
   rosterWarnings?: string[];
+  /**
+   * Count of rostered agent tiles suppressed this tick because their state
+   * was "finished" AND `claudeteam.hideFinishedAgents === true` (M5). Used by
+   * the webview header chip to render "N finished hidden — show" / "hide".
+   *
+   * Optional + defaults to 0 — back-compat with pre-M5 consumers and with the
+   * filter-off case (no count to render). Webview MUST treat `undefined` as 0.
+   * See `m5-hide-finished-spec.md` §3.5 Field A + §7.1.
+   */
+  hiddenFinishedCount?: number;
+  /**
+   * Mirror of `claudeteam.*` config scalars relevant to the webview's
+   * rendering (M5). Lets the chip boot with its toggle reflecting the truth
+   * stored in VS Code Settings (no roundtrip required for initial render).
+   *
+   * Optional — back-compat with pre-M5 consumers. Webview MUST treat the
+   * entire `config` block AND individual fields as possibly undefined and
+   * default to `false`. See `m5-hide-finished-spec.md` §3.5 Field B + §7.1.
+   *
+   * Future filter / display toggles add NEW keys under this block rather than
+   * polluting the top-level wire shape (per spec §3.5 rationale).
+   */
+  config?: {
+    hideFinishedAgents?: boolean;
+  };
 }
 
 /**
@@ -152,8 +177,30 @@ export type RefreshMessage = {
   type: "ui:refresh";
 };
 
+/**
+ * User toggled a config-backed dashboard setting (chip / command path).
+ *
+ * Generic-by-design (M5 §4.5): the `{ key, value }` shape admits future
+ * setting toggles (e.g. post-V1 `hideIdleAgents`) without proliferating
+ * message types. The host handler validates `key` against the literal-union
+ * and routes to `vscode.workspace.getConfiguration("claudeteam").update(
+ * key, value, vscode.ConfigurationTarget.Global)` (sponsor confirmed Global
+ * per spec §8 Q3).
+ *
+ * Extending the `key` union is the post-V1 follow-up surface (spec §8 Q1,
+ * ClickUp 86c9yyw7a) — adds new literal members, not new messages.
+ */
+export type SetConfigMessage = {
+  type: "ui:set-config";
+  payload: {
+    key: "hideFinishedAgents";
+    value: boolean;
+  };
+};
+
 /** Union of all webview → host messages. */
 export type WebviewMessage =
   | OpenTranscriptMessage
   | OpenRosterMessage
-  | RefreshMessage;
+  | RefreshMessage
+  | SetConfigMessage;

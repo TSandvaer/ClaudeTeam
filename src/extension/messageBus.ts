@@ -64,6 +64,14 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
     // webview always sees real arrays (no `undefined` branch in the renderer).
     rosterErrors: state.rosterErrors ?? [],
     rosterWarnings: state.rosterWarnings ?? [],
+    // M5: hide-finished filter wire surface. The watcher stamps these fields
+    // onto the in-memory tree (see `applyHideFinishedFilter` + watcherLoop
+    // integration); `serializeState` passes them through. Default 0 / explicit
+    // false so the webview always sees real values (no `undefined` branch).
+    hiddenFinishedCount: state.hiddenFinishedCount ?? 0,
+    config: {
+      hideFinishedAgents: state.config?.hideFinishedAgents === true,
+    },
   };
 }
 

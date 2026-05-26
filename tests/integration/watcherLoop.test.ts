@@ -468,3 +468,112 @@ describe("M2-04 AC1/AC3: runTick + hashState pure helpers", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// M5 — runTick threads hide-finished filter through to the emitted state.
+// ---------------------------------------------------------------------------
+
+describe("M5: runTick applies hideFinishedAgents filter", () => {
+  const TOOL_USE_ID = "toolu_01SZsHqGceAQC4Loovg6ion1";
+  let root: string;
+  let cleanup: () => void;
+  let rosterPath: string;
+
+  beforeEach(() => {
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    // Pre-populate a session with a finished felix agent.
+    writeSessionFile(root, {
+      pid: DEAD_PID,
+      sessionId: SESSION_A,
+      cwd: CWD_A,
+    });
+    writeParentJsonl(root, CWD_A, SESSION_A, { title: "m5-filter-test" });
+    writeMetaJson(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "meta-new-schema-persona.json",
+    );
+    writeSubagentJsonl(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "subagent-running.jsonl",
+    );
+    appendFinishedToolResult(root, CWD_A, SESSION_A, TOOL_USE_ID);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("filter off (default): finished tile remains; hiddenFinishedCount=0", async () => {
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+    });
+
+    // Filter defaults OFF — tile present, count 0, config mirror false.
+    const entries = state.sessions[0]?.rosterTiles.get("claudeteam-alpha");
+    expect(entries).toBeDefined();
+    expect(entries!.length).toBeGreaterThan(0);
+    expect(state.hiddenFinishedCount).toBe(0);
+    expect(state.config?.hideFinishedAgents).toBe(false);
+  });
+
+  it("filter on: finished tile suppressed; hiddenFinishedCount=1; config mirrored", async () => {
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      hideFinishedAgents: true,
+    });
+
+    // Filter ON — finished felix tile dropped → empty team → team key removed.
+    expect(state.sessions[0]?.rosterTiles.get("claudeteam-alpha")).toBeUndefined();
+    expect(state.hiddenFinishedCount).toBe(1);
+    expect(state.config?.hideFinishedAgents).toBe(true);
+  });
+
+  it("filter on with running agent: tile stays; hiddenFinishedCount=0", async () => {
+    // Reset — write a fresh non-finished agent (no tool_result).
+    cleanup();
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    writeSessionFile(root, {
+      pid: DEAD_PID,
+      sessionId: SESSION_A,
+      cwd: CWD_A,
+    });
+    writeParentJsonl(root, CWD_A, SESSION_A, { title: "m5-filter-running" });
+    writeMetaJson(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "meta-new-schema-persona.json",
+    );
+    writeSubagentJsonl(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "subagent-running.jsonl",
+    );
+
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      hideFinishedAgents: true,
+    });
+
+    // Filter ON but agent is not finished → tile stays, count 0.
+    const entries = state.sessions[0]?.rosterTiles.get("claudeteam-alpha");
+    expect(entries).toBeDefined();
+    expect(entries!.length).toBeGreaterThan(0);
+    expect(state.hiddenFinishedCount).toBe(0);
+    expect(state.config?.hideFinishedAgents).toBe(true);
+  });
+});

@@ -155,6 +155,13 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.workspace
           .getConfiguration("claudeteam")
           .get<boolean>("collapsePersonaTiles") ?? true,
+      // M5: same read-fresh-every-tick pattern for the hide-finished toggle.
+      // Default false (filter OFF) matches the package.json schema default
+      // — first-install experience shows everything; the chip is the opt-in.
+      getHideFinishedAgents: () =>
+        vscode.workspace
+          .getConfiguration("claudeteam")
+          .get<boolean>("hideFinishedAgents") ?? false,
       onStateChange: (state) => {
         void postState(webview, state);
       },
@@ -188,6 +195,14 @@ export function activate(context: vscode.ExtensionContext): void {
         // M3-10 AC5: same instant-effect pattern for collapsePersonaTiles —
         // toggling the setting re-renders within one tick without Reload Window.
         if (e.affectsConfiguration("claudeteam.collapsePersonaTiles")) {
+          watcherHandle?.triggerTick();
+        }
+        // M5: same instant-effect pattern for hideFinishedAgents — toggling
+        // the setting (via Settings UI, command palette, or the dashboard
+        // header chip) re-renders within one tick. The chip's optimistic UI
+        // flips immediately on click; this listener confirms authoritatively
+        // on the next host tick.
+        if (e.affectsConfiguration("claudeteam.hideFinishedAgents")) {
           watcherHandle?.triggerTick();
         }
       },
@@ -250,6 +265,12 @@ export function activate(context: vscode.ExtensionContext): void {
       onRefresh: () => {
         watcherHandle?.triggerTick();
       },
+      // M5: chip / command toggled a config-backed setting. Write to VS Code
+      // settings at Global scope (sponsor confirmed per spec §8 Q3); the
+      // existing onDidChangeConfiguration listener above fires the tick.
+      onSetConfig: (msg) => {
+        void handleSetConfig(msg.payload.key, msg.payload.value);
+      },
     };
     provider.setMessageHandlers(handlers);
   });
@@ -285,7 +306,40 @@ export function activate(context: vscode.ExtensionContext): void {
         );
       },
     ),
+
+    // M5: toggle `claudeteam.hideFinishedAgents` from the command palette or a
+    // user-bound keybinding. Reads current value, flips, writes back at Global
+    // scope (sponsor confirmed per spec §8 Q3). The onDidChangeConfiguration
+    // listener above fires the tick — chip + dashboard re-render together.
+    vscode.commands.registerCommand("claudeteam.toggleHideFinished", () => {
+      const current =
+        vscode.workspace
+          .getConfiguration("claudeteam")
+          .get<boolean>("hideFinishedAgents") ?? false;
+      void handleSetConfig("hideFinishedAgents", !current);
+    }),
   );
+}
+
+/**
+ * Apply a `ui:set-config` write — used by both the webview chip handler and
+ * the `claudeteam.toggleHideFinished` command (M5). The key is validated by
+ * the provider's `isWebviewMessage` guard before reaching this function; the
+ * literal-union narrows future expansion (§8 Q1 follow-up adds
+ * `hideIdleAgents`).
+ *
+ * Exported for unit-test coverage.
+ *
+ * @param key   Config key under the `claudeteam.*` namespace.
+ * @param value New boolean value.
+ */
+export function handleSetConfig(
+  key: "hideFinishedAgents",
+  value: boolean,
+): Thenable<void> {
+  return vscode.workspace
+    .getConfiguration("claudeteam")
+    .update(key, value, vscode.ConfigurationTarget.Global);
 }
 
 /**
