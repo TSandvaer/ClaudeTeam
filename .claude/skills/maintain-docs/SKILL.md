@@ -28,7 +28,8 @@ The bar is high: most turns fail this filter. Only continue when the turn produc
 
 **Unmerged-API defer rule.** Even if the early-exit filter doesn't fire, captures that would cite a function / API / file / commit only present on an UNMERGED feature branch should DEFER until the parent PR merges. The alternative is to keep the proposal but tag it explicitly as "pending PR #N merge" so peer-reviewers know the cite cannot be verified against `main` yet.
 
-**Ticket-id cites > scratch `.md` cites.** Prefer durable cite shapes (ClickUp IDs, `PR #N`, commit SHAs, file:line against a known commit) over paths to uncommitted scratch markdown that vanish on branch switch.
+**Ticket-id cites > scratch `.md` cites.** PREFER durable `git log`-retrievable shapes — ClickUp ticket IDs, `PR #N`, commit SHAs, file:line against a known commit.
+AVOID paths to uncommitted scratch markdown — they vanish on branch switch and are not retrievable by future readers.
 
 ## Steps 2–5: Brief → proposers → consolidator → apply
 
