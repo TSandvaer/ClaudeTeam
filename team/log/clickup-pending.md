@@ -394,3 +394,4 @@ ENTRY-2026-05-26T16:30:00Z: 86c9zfbpg -> in progress (Bram accepted dispatch —
 ENTRY-2026-05-26T16:30:01Z: 86c9zfbpg -> in review (Bram PR opened — research(obs-roster-count): chip label is by-design, not a bug)
 ENTRY-2026-05-26T22:45:00Z: 86c9zfmh1 -> in review (Maya PR opened — fix(webview): preserve collapsed-group expansion state across re-renders — Obs 10)
 ```
+ENTRY-2026-05-26T23:00:00Z: 86c9zfmhp -> in progress (Maya accepted dispatch — fix(webview): humanize finished elapsed-time format (Obs 11))

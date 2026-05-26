@@ -34,7 +34,7 @@
 
 import type { AgentTile, AgentState } from "../../shared/types.js";
 import type { OpenTranscriptMessage } from "../../shared/messages.js";
-import { formatFreshness } from "../freshness.js";
+import { formatFreshness } from "../../shared/freshness.js";
 
 /** Human-readable label per state — used in aria-label and title tooltip. */
 const STATE_LABEL: Record<AgentState, string> = {
@@ -117,15 +117,38 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     scheduleClearTransition,
   } = props;
 
-  // Compose the activity text — for finished tiles with a tracked first-seen
-  // timestamp, suffix with " Xs / Xm / Xh" for freshness visibility (NIT #3).
-  // Stale tiles look identical to fresh-finished tiles without this signal —
-  // sponsor flagged the gap from the 2026-05-24 screenshot (Iris's tile
-  // showed bare "finished" alongside Maya's "idle 14s" / Bram's "idle 47s").
+  // 86c9zfmhp (Obs 11): the host is now the single authority for the
+  // humanized `finished Xs/Xm/Xh/Xd` activity string — `tile.activity`
+  // arrives pre-humanized from the reducer. The webview must NOT append a
+  // parallel second clock from the webview-local `finishedTracker`, which
+  // was the V1-dogfood bug shape that surfaced as `"finished 19289s 3s"`
+  // (host's wall-clock since-finish + webview's first-seen-since-reload).
+  //
+  // Back-compat: when the host emits a bare `"finished"` (no suffix — the
+  // `finishedAtMs` is missing from the parent JSONL parse), the tracker-
+  // sourced `finishedAtMs` prop is still consulted to add an `Xs/Xm/Xh/Xd`
+  // suffix so freshness isn't lost in the diagnostic-only no-timestamp
+  // case. The host's normal path always supplies the suffix; this branch
+  // only fires for tests / fixture scenarios without a parsed timestamp.
   const activityText =
-    tile.state === "finished" && typeof finishedAtMs === "number"
+    tile.state === "finished" &&
+    tile.activity === "finished" &&
+    typeof finishedAtMs === "number"
       ? `${tile.activity} ${formatFreshness((nowMs ?? Date.now()) - finishedAtMs)}`
       : tile.activity;
+
+  // 86c9zfmhp (Obs 11): precise-ISO tooltip on the activity row for
+  // finished tiles. The humanized activity text (`finished 5h`) is the
+  // primary skim signal; the tooltip surfaces the exact wall-clock time
+  // the agent's `tool_result` landed in the parent JSONL — useful for
+  // audit-class scenarios where the sponsor needs to correlate dispatch
+  // completion with other events. `Date.prototype.toISOString` produces
+  // a UTC-anchored string (ends in `Z`); rendering local-time would be
+  // more friendly but cross-timezone audit cases benefit from UTC anchor.
+  const activityTitle =
+    tile.state === "finished" && typeof tile.finishedAtMs === "number"
+      ? `Finished at ${new Date(tile.finishedAtMs).toISOString()}`
+      : undefined;
 
   const article = document.createElement("article");
   article.className = "agent-tile";
@@ -204,9 +227,22 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   );
 
   // Row 3 — activity (no truncation, CSS wraps).
-  article.appendChild(
-    buildRow("tile-row--activity", "agent-activity", activityText),
-  );
+  // 86c9zfmhp (Obs 11): inline the row build so we can attach the precise-
+  // ISO tooltip to the inner span when finished + timestamp is known. We
+  // intentionally attach the title to the `.agent-activity` span rather than
+  // the row wrapper so the tooltip only appears when hovering the text
+  // itself — overlapping the row's existing drill-in `title` (on the article)
+  // would be confusing.
+  const activityRow = document.createElement("div");
+  activityRow.className = "tile-row tile-row--activity";
+  const activitySpan = document.createElement("span");
+  activitySpan.className = "agent-activity";
+  activitySpan.textContent = activityText;
+  if (activityTitle !== undefined) {
+    activitySpan.setAttribute("title", activityTitle);
+  }
+  activityRow.appendChild(activitySpan);
+  article.appendChild(activityRow);
 
   // Row 4 — model.
   article.appendChild(

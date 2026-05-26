@@ -1010,11 +1010,37 @@ describe("buildAgentTree", () => {
       );
     });
 
-    it("elapsed=120s → 'finished 120s' (no minute formatting at reducer level)", () => {
-      // Reducer emits raw seconds; webview can format units if desired.
-      // Spec §1.4 stays presenter-agnostic at the reducer boundary.
+    it("elapsed=120s → 'finished 2m' (humanized at reducer per 86c9zfmhp)", () => {
+      // Pre-86c9zfmhp (Obs 11) the reducer emitted raw seconds with the
+      // intent that the webview would humanize; in practice the webview
+      // appended a parallel second clock (`finished 19289s 3s` — host's
+      // since-finish + webview's since-first-seen), so humanization moved
+      // to the reducer as the single source of truth. 120s now renders as
+      // `2m` via `formatFreshness` — Xs/Xm/Xh/Xd rollovers per the shared
+      // helper. CLI presenter inherits the readable form automatically.
       expect(buildActivity("finished", undefined, 125_000, 5_000)).toBe(
-        "finished 120s",
+        "finished 2m",
+      );
+    });
+
+    it("elapsed buckets cover Xs / Xm / Xh / Xd rollovers (86c9zfmhp Obs 11)", () => {
+      // Pin the humanization contract at the reducer boundary so a
+      // regression at the host wouldn't quietly bring back raw seconds at
+      // large N. Each row exercises one bucket of `formatFreshness`.
+      // Source: src/shared/freshness.ts thresholds.
+      expect(buildActivity("finished", undefined, 5_000, 0)).toBe("finished 5s");
+      expect(buildActivity("finished", undefined, 90_000, 0)).toBe("finished 1m");
+      expect(buildActivity("finished", undefined, 7_200_000, 0)).toBe(
+        "finished 2h",
+      );
+      // 5.4h — the literal sponsor-observed value from the V1 dogfood
+      // screenshot (`finished 19289s 3s` → now `finished 5h`).
+      expect(buildActivity("finished", undefined, 19_289_000, 0)).toBe(
+        "finished 5h",
+      );
+      // 25h → 1d (day rollover added 86c9zfmhp).
+      expect(buildActivity("finished", undefined, 25 * 60 * 60_000, 0)).toBe(
+        "finished 1d",
       );
     });
 
@@ -1084,13 +1110,20 @@ describe("buildAgentTree", () => {
       expect(tile!.activity).toBe("finished 7s");
     });
 
-    it("buildAgentTree: agentId in finishedIds with value 0 → 'finished <huge>s' (sentinel pass-through)", () => {
+    it("buildAgentTree: agentId in finishedIds with value 0 → 'finished <huge>d' (sentinel pass-through, humanized)", () => {
       // Pin the contract: `0` is NOT a sentinel inside buildActivity — the
       // gate is `!== undefined`, not `> 0`. The parser must use `undefined`
       // (i.e. omit the entry from the map) if it wants the bare "finished"
       // fallback. In practice the parser stores `0` for unparseable
-      // timestamps; the math then produces a huge elapsed value, which is
-      // an acceptable diagnostic shape for an irrecoverable case.
+      // timestamps; the math then produces a huge elapsed value.
+      //
+      // Post-86c9zfmhp (Obs 11): humanization moved to the reducer via
+      // `formatFreshness`, so the diagnostic shape is now `"finished Nd"`
+      // (days, not raw seconds). Still clearly distinguishable from the
+      // bare "finished" fallback. The tile-level `finishedAtMs` field is
+      // suppressed when the parser sentinel `0` arrives (reducer treats `0`
+      // as "missing timestamp" for tooltip purposes) — so no misleading
+      // "Finished at 1970-01-01" tooltip surfaces in the webview.
       const session = makeSession();
       const agentId = "agent_xv94_sentinel";
       const meta = makeMeta({ agentType: "felix", description: "Felix sentinel" });
@@ -1109,10 +1142,13 @@ describe("buildAgentTree", () => {
 
       const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("finished");
-      // Elapsed = NOW_MS - 0 = NOW_MS milliseconds → very large second count.
-      expect(tile!.activity).toMatch(/^finished \d+s$/);
+      // Elapsed = NOW_MS - 0 = NOW_MS milliseconds → very large day count.
+      // Humanized via formatFreshness; matches the `d` bucket.
+      expect(tile!.activity).toMatch(/^finished \d+d$/);
       // Sanity: it's clearly not the bare "finished" string.
       expect(tile!.activity).not.toBe("finished");
+      // Suppressed-timestamp contract: sentinel 0 → no tile.finishedAtMs.
+      expect(tile!.finishedAtMs).toBeUndefined();
     });
   });
 

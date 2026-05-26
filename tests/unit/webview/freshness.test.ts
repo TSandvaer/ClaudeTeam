@@ -94,9 +94,25 @@ describe("formatFreshness", () => {
     expect(formatFreshness(7_200_000)).toBe("2h");
   });
 
-  it("handles large hour values without overflow", () => {
-    // 24h sanity check.
-    expect(formatFreshness(24 * 60 * 60_000)).toBe("24h");
+  it("renders the last hour before the day rollover as \"23h\"", () => {
+    // Day rollover added 86c9zfmhp (Obs 11) — pin the boundary so a
+    // regression at `formatFreshness` wouldn't quietly drop the `Xd` bucket.
+    expect(formatFreshness(23 * 60 * 60_000 + 59 * 60_000 + 59_999)).toBe("23h");
+    expect(formatFreshness(24 * 60 * 60_000)).toBe("1d");
+  });
+
+  it("formats day-scale elapsed values as \"Xd\" (86c9zfmhp Obs 11)", () => {
+    // Long-finished agents that survive across multiple dashboard sessions
+    // — these would otherwise render as `<huge>h` and become unreadable.
+    expect(formatFreshness(24 * 60 * 60_000)).toBe("1d");
+    expect(formatFreshness(48 * 60 * 60_000)).toBe("2d");
+    expect(formatFreshness(7 * 24 * 60 * 60_000)).toBe("7d");
+  });
+
+  it("floors days (no rounding up)", () => {
+    // 47h 59m 59.999s → "1d", not "2d".
+    expect(formatFreshness(2 * 24 * 60 * 60_000 - 1)).toBe("1d");
+    expect(formatFreshness(2 * 24 * 60 * 60_000)).toBe("2d");
   });
 
   // ----- Defensive behavior --------------------------------------------------

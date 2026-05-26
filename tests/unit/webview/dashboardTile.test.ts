@@ -677,6 +677,114 @@ describe("renderAgentTile — finished freshness suffix", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Agent tile — Obs 11 (ClickUp 86c9zfmhp) humanized finished elapsed-time
+//
+// Pre-Obs-11 V1 dogfood showed `finished 19289s 3s` on the finished tile —
+// host's raw seconds since `tool_result.timestamp` (~5.4h ago, unreadable) +
+// webview's parallel `formatFreshness(now - first-seen)` from a separate
+// clock that resets on webview reload. The fix moves humanization to the
+// host (single source of truth) and the webview renders verbatim while
+// adding a precise-ISO tooltip on the `.agent-activity` span.
+// ---------------------------------------------------------------------------
+
+describe("renderAgentTile — Obs 11 humanized finished + ISO tooltip", () => {
+  it("renders host-emitted humanized activity verbatim (no double-clock)", () => {
+    // Host now emits "finished 5h" directly (humanized via formatFreshness in
+    // buildActivity). The webview must NOT append a second clock from the
+    // `finishedAtMs`/tracker path — the V1-dogfood bug shape.
+    const tile = makeTile({
+      state: "finished",
+      activity: "finished 5h",
+      finishedAtMs: 1_000_000,
+    });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      // Tracker-sourced fallback timestamp (should NOT trigger suffix when
+      // tile.activity is already humanized).
+      finishedAtMs: 999_000,
+      nowMs: 1_000_000 + 60_000,
+    });
+    // The exact V1-dogfood bug shape was "finished 19289s 3s" — two clocks
+    // appended. With the Obs 11 fix the rendered text matches host verbatim.
+    expect(el.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 5h",
+    );
+  });
+
+  it("attaches precise-ISO tooltip to the activity span when finishedAtMs is on tile", () => {
+    const tile = makeTile({
+      state: "finished",
+      activity: "finished 5h",
+      finishedAtMs: 1_700_000_000_000, // 2023-11-14T22:13:20Z (known ISO).
+    });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    const span = el.querySelector(".agent-activity");
+    expect(span?.getAttribute("title")).toBe(
+      `Finished at ${new Date(1_700_000_000_000).toISOString()}`,
+    );
+  });
+
+  it("omits the activity tooltip when finishedAtMs is absent on tile", () => {
+    // Diagnostic case — host's parser couldn't parse the timestamp; rather
+    // than rendering a misleading "Finished at 1970-01-01T00:00:00Z" tooltip
+    // we just leave the title attribute off.
+    const tile = makeTile({ state: "finished", activity: "finished" });
+    // Explicitly remove finishedAtMs (makeTile default doesn't set it but be
+    // safe in case the helper changes).
+    delete tile.finishedAtMs;
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    const span = el.querySelector(".agent-activity");
+    expect(span?.hasAttribute("title")).toBe(false);
+  });
+
+  it("omits the activity tooltip on non-finished states even when finishedAtMs is set", () => {
+    // Defensive: tooltip is gated on tile.state === "finished", not just on
+    // the presence of `tile.finishedAtMs`. A stale `finishedAtMs` on an
+    // idle/running tile must not surface a confusing tooltip.
+    const tile = makeTile({
+      state: "running",
+      activity: "tool:Bash",
+      finishedAtMs: 1_700_000_000_000,
+    });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    const span = el.querySelector(".agent-activity");
+    expect(span?.hasAttribute("title")).toBe(false);
+  });
+
+  it("back-compat: bare 'finished' from host + tracker-supplied finishedAtMs prop still appends suffix", () => {
+    // The tracker fallback fires only when the HOST emits bare "finished"
+    // (no humanized suffix already on the string). This preserves the
+    // M3-04-era behavior for fixtures / tests where the reducer didn't pass
+    // through a finishedAtMs.
+    const tile = makeTile({ state: "finished", activity: "finished" });
+    const el = renderAgentTile({
+      tile,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      finishedAtMs: 1_000_000,
+      nowMs: 1_000_000 + 5_000,
+    });
+    expect(el.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 5s",
+    );
+  });
+});
+
 describe("renderFull — finished freshness via finishedTracker (integration)", () => {
   // Build a minimal AgentTree with one finished tile so we can verify the
   // end-to-end thread render → sessionBlock → teamCard → agentTile picks up
