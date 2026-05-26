@@ -63,110 +63,107 @@ function parseArgs(argv: string[]): { claudeHome: string; rosterPath: string } {
 // =============================================================================
 
 /**
- * Read the `ai-title` record from a parent JSONL.
- * Returns null when not found or on any read error.
- */
-function readSessionTitle(jsonlPath: string): string | null {
-  let raw: string;
-  try {
-    raw = readFileSync(jsonlPath, "utf8");
-  } catch {
-    return null;
-  }
-  for (const line of raw.split("\n")) {
-    if (line.trim().length === 0) continue;
-    try {
-      const rec = JSON.parse(line) as Record<string, unknown>;
-      if (rec["type"] === "ai-title") {
-        const title = rec["title"];
-        if (typeof title === "string" && title.length > 0) return title;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
-/**
- * Scan the parent JSONL for `tool_result` entries that close a subagent spawn.
- * A tool_result closing a subagent has `tool_use_id` matching the subagent's
- * `meta.toolUseId`. We collect a map from toolUseId → finishedAtMs (epoch ms
- * parsed from the record's top-level `timestamp` ISO-8601 string).
+ * Single-pass parent-JSONL scan that extracts BOTH the session title
+ * (`ai-title` record) and the finished `tool_use_id` → `finishedAtMs` map
+ * in one `readFileSync` + one line iteration.
  *
- * Per data-sources.md §3 "JSONL closing semantics": the parent JSONL is the
- * ONLY reliable "finished" signal. The child JSONL never carries it.
+ * 86c9zfmke: dedup of the previously separate `readSessionTitle` +
+ * `readFinishedToolUseIds` passes — halves the disk read + JSON.parse
+ * work per session per tick. Mirrors `readSessionMetadata` in
+ * `src/extension/watcher/watcherLoop.ts`; both copies kept intentionally
+ * identical (host vs CLI driver) per the same convention as
+ * `collectAgentMetas`.
  *
- * Per 86c9yxv94: the timestamp flows through to `buildActivity` to render
- * the `"finished Xs"` elapsed-time suffix. When a record's timestamp is
- * missing or unparseable, the map records `0` for that toolUseId — the
- * reducer treats 0 as "no timestamp" and falls back to bare `"finished"`.
+ * ## Title (formerly `readSessionTitle`)
+ *
+ * Returns the first non-empty `title` field on a record with
+ * `type: "ai-title"`. `null` on miss, malformed, or read error.
+ *
+ * ## Finished-ids (formerly `readFinishedToolUseIds`)
+ *
+ * Returns a map of `tool_use_id` → `finishedAtMs` (epoch ms parsed from
+ * the record's top-level `timestamp` ISO-8601 field). Per data-sources.md
+ * §3 the parent JSONL is the ONLY reliable "finished" signal; the child
+ * JSONL never carries it.
+ *
+ * 86c9yxv94: timestamp flows through to `buildActivity` for the
+ * `"finished Xs"` elapsed-time suffix; `0` sentinel when unparseable
+ * (reducer falls back to bare `"finished"`).
  *
  * Obs 9 fix (86c9zc5dd): skip records whose top-level
- * `toolUseResult.isAsync === true`. Those are background-dispatch
- * acknowledgments ("Async agent launched successfully...") written by
- * Claude Code at spawn time — they would otherwise immediately classify
- * a still-running background agent as finished. See watcherLoop.ts copy
- * for full rationale + verified evidence.
+ * `toolUseResult.isAsync === true` — those are background-dispatch
+ * acknowledgments, not completion signals. See watcherLoop.ts copy for
+ * full rationale + verified evidence.
  *
- * Returns a Map of toolUseId → finishedAtMs (0 sentinel when unparseable).
+ * Defensive contracts: read error → `{ title: null, finishedIds: empty }`;
+ * single-line JSON.parse failure → skip that line.
  */
-function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
-  const finished = new Map<string, number>();
+function readSessionMetadata(jsonlPath: string): {
+  title: string | null;
+  finishedIds: Map<string, number>;
+} {
+  const finishedIds = new Map<string, number>();
+  let title: string | null = null;
   let raw: string;
   try {
     raw = readFileSync(jsonlPath, "utf8");
   } catch {
-    return finished;
+    return { title: null, finishedIds };
   }
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) continue;
+    let rec: Record<string, unknown>;
     try {
-      const rec = JSON.parse(line) as Record<string, unknown>;
-      if (rec["type"] !== "user") continue;
-      // Obs 9: skip background-dispatch acknowledgments.
-      const tur = rec["toolUseResult"];
-      if (
-        tur !== null &&
-        typeof tur === "object" &&
-        !Array.isArray(tur) &&
-        (tur as Record<string, unknown>)["isAsync"] === true
-      ) {
-        continue;
-      }
-      const msg = rec["message"];
-      if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
-      const content = (msg as Record<string, unknown>)["content"];
-      if (!Array.isArray(content)) continue;
-      // Parse the record's top-level timestamp once per line.
-      const ts = rec["timestamp"];
-      const finishedAtMs =
-        typeof ts === "string" && Number.isFinite(Date.parse(ts))
-          ? Date.parse(ts)
-          : 0;
-      for (const item of content) {
-        if (
-          item !== null &&
-          typeof item === "object" &&
-          !Array.isArray(item) &&
-          (item as Record<string, unknown>)["type"] === "tool_result"
-        ) {
-          const toolUseId = (item as Record<string, unknown>)["tool_use_id"];
-          if (typeof toolUseId === "string") {
-            // If a toolUseId appears in multiple tool_result records (rare
-            // — would require a duplicate close), keep the FIRST occurrence
-            // since that's when the subagent actually finished.
-            if (!finished.has(toolUseId)) {
-              finished.set(toolUseId, finishedAtMs);
-            }
-          }
-        }
-      }
+      rec = JSON.parse(line) as Record<string, unknown>;
     } catch {
       continue;
     }
+    const recType = rec["type"];
+
+    // Title branch.
+    if (recType === "ai-title" && title === null) {
+      const t = rec["title"];
+      if (typeof t === "string" && t.length > 0) title = t;
+      continue;
+    }
+
+    // Finished-ids branch.
+    if (recType !== "user") continue;
+    // Obs 9: skip background-dispatch acknowledgments.
+    const tur = rec["toolUseResult"];
+    if (
+      tur !== null &&
+      typeof tur === "object" &&
+      !Array.isArray(tur) &&
+      (tur as Record<string, unknown>)["isAsync"] === true
+    ) {
+      continue;
+    }
+    const msg = rec["message"];
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
+    const content = (msg as Record<string, unknown>)["content"];
+    if (!Array.isArray(content)) continue;
+    const ts = rec["timestamp"];
+    const finishedAtMs =
+      typeof ts === "string" && Number.isFinite(Date.parse(ts))
+        ? Date.parse(ts)
+        : 0;
+    for (const item of content) {
+      if (
+        item !== null &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        (item as Record<string, unknown>)["type"] === "tool_result"
+      ) {
+        const toolUseId = (item as Record<string, unknown>)["tool_use_id"];
+        if (typeof toolUseId === "string" && !finishedIds.has(toolUseId)) {
+          // First occurrence wins — that's when the subagent actually finished.
+          finishedIds.set(toolUseId, finishedAtMs);
+        }
+      }
+    }
   }
-  return finished;
+  return { title, finishedIds };
 }
 
 /**
@@ -255,11 +252,12 @@ async function collect(claudeHome: string): Promise<{
     const subagentsDir = join(sessionDir, "subagents");
     const parentJsonlPath = join(projectsDir, slug, `${session.sessionId}.jsonl`);
 
-    // Read title from parent JSONL.
-    const title = readSessionTitle(parentJsonlPath) ?? "(no title yet)";
-
-    // Read finished toolUseId → finishedAtMs map from parent JSONL.
-    const finishedToolUseIds = readFinishedToolUseIds(parentJsonlPath);
+    // 86c9zfmke: single-pass parent JSONL scan — fuses former
+    // readSessionTitle + readFinishedToolUseIds into one read + one
+    // line-iteration. See readSessionMetadata above.
+    const { title: rawTitle, finishedIds: finishedToolUseIds } =
+      readSessionMetadata(parentJsonlPath);
+    const title = rawTitle ?? "(no title yet)";
 
     // Collect agent metas (sync).
     const agents = collectAgentMetas(subagentsDir);
