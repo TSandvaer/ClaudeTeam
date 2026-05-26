@@ -237,10 +237,12 @@ States the chip can be in:
 
 | `data-hide-finished` | `hiddenFinishedCount` | Label rendered | aria-pressed | Notes |
 |---|---|---|---|---|
-| `false` | 0 | "Hide finished" | `false` | Initial / opt-in baseline. No count badge. |
+| `false` | 0 | "Hide finished" | `false` | Initial / opt-in baseline. No count badge. Click WILL hide. |
 | `false` | N>0 | (impossible by §3.2 contract — count is 0 when filter off) | — | Guarded in render — if observed, render as if N=0. |
-| `true` | 0 | "Hide finished — none yet" | `true` | Filter is on, but no finished tiles exist this tick. Visible but understated. |
-| `true` | N>0 | "Hide finished — N hidden" | `true` | The dominant ON state. Label compactly reports what the filter is doing. |
+| `true` | 0 | "Show finished — none yet" | `true` | Filter is on, but no finished tiles exist this tick. Click WILL show. |
+| `true` | N>0 | "Show finished — N hidden" | `true` | The dominant ON state. Label compactly reports what revealing would do. Click WILL show. |
+
+**Label convention (revised — Obs 8 / ticket `86c9zfmgg`, sponsor verbatim 2026-05-26 *"If i click the 'Hide finished x hidden' button, that should be named 'show finished x hidden'."*):** the label names the action the click WILL TAKE, not the current state. Original baseline (`Hide finished — N hidden` on both branches) preserved here for history: *"`true | 0 → "Hide finished — none yet"`; `true | N>0 → "Hide finished — N hidden"`"* — superseded by the Show/Hide toggle convention shipped in PR #84.
 
 **Why a single button (not separate "show" / "hide" controls):** the chip toggles. `aria-pressed` (per [W3C ARIA toggle-button pattern](https://www.w3.org/WAI/ARIA/apg/patterns/button/#toggle-button)) is the canonical accessibility surface for two-state controls — assistive tech announces "Hide finished, pressed" or "Hide finished, not pressed."
 
@@ -312,13 +314,15 @@ When the dashboard is empty (no sessions, or all sessions dead), should the head
 | Condition | Rendered label |
 |---|---|
 | filter off | `Hide finished` |
-| filter on + 0 hidden | `Hide finished — none yet` |
-| filter on + N=1 | `Hide finished — 1 hidden` |
-| filter on + N>1 | `Hide finished — N hidden` |
+| filter on + 0 hidden | `Show finished — none yet` |
+| filter on + N=1 | `Show finished — 1 hidden` |
+| filter on + N>1 | `Show finished — N hidden` |
 
 **Why include the count in the visible label (not a tooltip):** the sponsor needs to know whether the filter is doing anything WITHOUT hovering. Hover-only feedback fails when the sponsor scans the dashboard at a glance.
 
 **Why "hidden" (not "filtered" / "suppressed" / "off-screen"):** matches the verb in the config key (`hideFinishedAgents`). One vocabulary across config, command, chip, and docs.
+
+**Why the action-toggle convention (Hide ↔ Show, not Hide-only):** the label names the action the click WILL TAKE per Obs 8 / ticket `86c9zfmgg` (sponsor verbatim 2026-05-26 quoted in §4.2). Original convention (`Hide finished — N hidden` on the ON branch) preserved here for history — superseded by the Show/Hide toggle shipped in PR #84.
 
 ### 5.3 Interaction with Defect 6a (`86c9yxv94`, Felix in flight)
 
@@ -459,10 +463,12 @@ Per `~/.claude/CLAUDE.md` "Parallel-agent shared-concept vocabulary discipline" 
 |---|---|---|
 | `SetConfigMessage.type` discriminator | `"ui:set-config"` | Webview posts; host's message handler discriminates on it. |
 | `SetConfigMessage.payload.key` literal | `"hideFinishedAgents"` | The only `key` value valid for M5 (extending to `"hideIdleAgents"` etc. is a follow-up — see §8 Q1). |
-| Chip label — filter off | `"Hide finished"` | No em-dash, no count. |
-| Chip label — filter on + 0 hidden | `"Hide finished — none yet"` | Em-dash `—` (U+2014). |
-| Chip label — filter on + N=1 | `"Hide finished — 1 hidden"` | Em-dash `—` (U+2014). |
-| Chip label — filter on + N>1 | `"Hide finished — N hidden"` (N substituted) | Em-dash `—` (U+2014). |
+| Chip label — filter off | `"Hide finished"` | No em-dash, no count. Click WILL hide. |
+| Chip label — filter on + 0 hidden | `"Show finished — none yet"` | Em-dash `—` (U+2014). Click WILL show. |
+| Chip label — filter on + N=1 | `"Show finished — 1 hidden"` | Em-dash `—` (U+2014). Click WILL show. |
+| Chip label — filter on + N>1 | `"Show finished — N hidden"` (N substituted) | Em-dash `—` (U+2014). Click WILL show. |
+
+> **Label convention history (Obs 8 / ticket `86c9zfmgg`).** Original baseline pinned `"Hide finished — N hidden"` on the ON branch — the label always read "Hide finished" regardless of state, with the count appended on the ON branch. Sponsor 2026-05-26 (verbatim): *"If i click the 'Hide finished x hidden' button, that should be named 'show finished x hidden'."* PR #84 shipped the revised convention above (label names the action the click WILL TAKE).
 
 ### 7.4 Ownership boundary
 
@@ -544,7 +550,7 @@ Implementation checklist:
 - src/webview/components/headerChip.ts (NEW): export renderHeaderChip(props: HeaderChipProps): HTMLElement per §4.2.
   - Props per §7.2: { hideFinished: boolean; hiddenCount: number; postMessage: (msg: WebviewMessage) => void }.
   - DOM shape: <aside class="ct-header-chip" data-hide-finished data-hidden-count><button class="ct-header-chip-toggle" aria-pressed type="button" title>...<span class="ct-header-chip-label">...<span class="ct-header-chip-count" hidden></span></button></aside>.
-  - Label text per §5.2 / §7.3 templates (em-dash U+2014 between "Hide finished" and the count phrase).
+  - Label text per §5.2 / §7.3 templates (em-dash U+2014; label names the action the click WILL TAKE per Obs 8 — "Hide finished" when off, "Show finished — N hidden" when on).
   - Click + Enter + Space all fire ui:set-config (discriminator "ui:set-config" per §7.3) with payload { key: "hideFinishedAgents", value: !hideFinished }.
   - Optimistic UI: flip data-hide-finished + aria-pressed immediately on click; host roundtrip eventually re-renders authoritatively.
 - src/webview/render.ts:
@@ -563,7 +569,7 @@ Implementation checklist:
   - Reduced-motion: assert via fake matchMedia mock that transitions are elided OR cite manual probe in Self-Test Report.
 - Manual probe (Self-Test Report):
   - Install vsix.
-  - Open dashboard with a finished agent visible. Toggle the chip → tile vanishes, chip label updates to "Hide finished — 1 hidden".
+  - Open dashboard with a finished agent visible. Toggle the chip → tile vanishes, chip label updates to "Show finished — 1 hidden" (per Obs 8 action-toggle convention).
   - Toggle again → tile reappears, label reverts.
   - Theme-switch dark↔light — chip renders correctly in both.
   - Tab to chip → outline visible. Press Enter → toggles. Press Space → toggles.

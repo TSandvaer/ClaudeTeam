@@ -83,8 +83,10 @@ export function renderHeaderChip(props: HeaderChipProps): HTMLElement {
     ? "Show finished agents"
     : "Hide finished agents";
 
-  // Label — verbal portion. Static "Hide finished" prefix; the count phrase
-  // is the count span (separately hidable).
+  // Label — verbal portion. State-toggling text per labelTextForState (Obs 8
+  // / ticket 86c9zfmgg — describes the action the click WILL TAKE: "Hide
+  // finished" when off, "Show finished — N hidden" when on). The count span
+  // below is reserved-but-hidden; count is currently embedded in the label.
   const label = document.createElement("span");
   label.className = "ct-header-chip-label";
   label.textContent = labelTextForState(hideFinished, hiddenCount);
