@@ -393,4 +393,6 @@ ENTRY-2026-05-26T15:34:01Z: 86c9zbuqq -> in review (Bram PR opened — research(
 ENTRY-2026-05-26T16:30:00Z: 86c9zfbpg -> in progress (Bram accepted dispatch — obs-roster-count chip triage)
 ENTRY-2026-05-26T16:30:01Z: 86c9zfbpg -> in review (Bram PR opened — research(obs-roster-count): chip label is by-design, not a bug)
 ENTRY-2026-05-26T22:45:00Z: 86c9zfmh1 -> in review (Maya PR opened — fix(webview): preserve collapsed-group expansion state across re-renders — Obs 10)
+ENTRY-2026-05-26T21:09:31Z: 86c9zfrzt -> in progress (Felix accepted dispatch — Obs 8 NITs follow-up: stale comment + M5 spec resync)
+ENTRY-2026-05-26T21:11:30Z: 86c9zfrzt -> in review (Felix PR opened — chore(docs): Obs 8 NITs follow-up — stale comment + M5 spec resync)
 ```
