@@ -20,11 +20,11 @@ Design spec for a sponsor-controlled filter that suppresses `finished`-state age
 | §2 Configuration key + manifest entry | `package.json` `contributes.configuration` | Felix | M5-EH (extension host) | Yes — independent of §3 |
 | §3 Host-side filter + delta semantics | `src/extension/state/reducer.ts` or post-reducer projection + `messageBus.serializeState` | Felix | M5-EH (same as §2) | Yes |
 | §4 Header chip — toggle affordance | `src/webview/components/headerChip.ts` (NEW) + `src/webview/render.ts` mount | Maya | M5-WV (webview) | Yes — depends only on §5 wire shape |
-| §5 Hidden-count surface (in chip) | wire field `hiddenFinishedCount` on `SerializedDashboardState` + AgentTree | Felix (declares) + Maya (consumes) | M5-EH + M5-WV | Yes — vocabulary contract in §7 |
+| §5 Hidden-count surface (in chip) | wire fields `hiddenFinishedCount` + `config.hideFinishedAgents` on `SerializedDashboardState` + AgentTree | Felix (declares) + Maya (consumes) | M5-EH + M5-WV | Yes — vocabulary contract in §7 |
 | §6 Visual treatment + interaction states | `src/webview/styles/dashboard.css` (`.ct-header-chip` block) | Maya | M5-WV | Yes |
 | §7 Vocabulary contract | (cross-section index) | — | — | — |
 
-**Parallel-dispatch readiness:** Felix (M5-EH) and Maya (M5-WV) can dispatch simultaneously after sponsor sign-off because the **vocabulary contract** in §7 fixes every shared identifier name + the wire-shape addition. Felix owns the `hideFinishedAgents` setting reading + the filtering logic + the `hiddenFinishedCount` field; Maya owns the `ct-header-chip` DOM/CSS + the `claudeteam.toggleHideFinished` command + the `ui:set-config` message. The two PRs touch disjoint file sets except for `src/shared/messages.ts` (one new message type — Felix declares the type, Maya imports). Sequence the type-declaration tick first if there's any doubt, but the shape is small enough (one new union member + one new field on existing message) that parallel is the recommended path.
+**Parallel-dispatch readiness:** Felix (M5-EH) and Maya (M5-WV) can dispatch simultaneously now that sponsor has answered Q1/Q2/Q3 (see §8) because the **vocabulary contract** in §7 fixes every shared identifier name + the wire-shape addition. Felix owns the `hideFinishedAgents` setting reading + the filtering logic + the `hiddenFinishedCount` field + the new `config` block on `SerializedDashboardState` (§3.5 Field B); Maya owns the `ct-header-chip` DOM/CSS + the `claudeteam.toggleHideFinished` command + the `ui:set-config` message consumption + reading `state.config?.hideFinishedAgents` for the chip's initial state. The two PRs touch disjoint file sets except for `src/shared/messages.ts` (one new message type — Felix declares the type, Maya imports). Sequence the type-declaration tick first if there's any doubt, but the shape is small enough (one new union member + two new optional fields on `SerializedDashboardState`) that parallel is the recommended path.
 
 ---
 
@@ -146,7 +146,9 @@ Subscribe to `vscode.workspace.onDidChangeConfiguration` for `claudeteam.hideFin
 
 ### 3.5 Wire-shape addition
 
-Add ONE optional field to `SerializedDashboardState` (and its in-memory mirror `AgentTree`):
+Add TWO new fields to `SerializedDashboardState` (and its in-memory mirror `AgentTree`):
+
+**Field A — the hidden count (used by the chip label):**
 
 ```typescript
 /**
@@ -161,7 +163,41 @@ Add ONE optional field to `SerializedDashboardState` (and its in-memory mirror `
 hiddenFinishedCount?: number;
 ```
 
-JSON-safe (plain integer). No Map/Set/Date — fits the existing serialization contract.
+**Field B — the config mirror (used by the chip's initial state):**
+
+```typescript
+/**
+ * Mirror of `claudeteam.*` config scalars relevant to the webview's
+ * rendering. Lets the chip boot with its toggle reflecting the truth
+ * stored in VS Code Settings (no roundtrip required for initial render).
+ *
+ * Optional — back-compat with pre-M5 consumers. Webview MUST treat
+ * the entire `config` block AND individual fields as possibly undefined
+ * and default to `false`.
+ */
+config?: {
+  hideFinishedAgents?: boolean;
+};
+```
+
+**Why a `config` block (not a flat `hideFinishedAgents?: boolean`):** the chip pattern will likely return (`hideIdleAgents` post-Defect-6 per §8 Q1; future filter / display toggles). A nested `config` block admits new mirror fields without polluting the top-level wire shape — every new chip-controlled scalar adds one key under `config`, not one top-level field.
+
+**Felix's host-side population:** in `messageBus.serializeState(...)`, read each mirrored config key once and embed it:
+
+```typescript
+const cfg = vscode.workspace.getConfiguration("claudeteam");
+const serialized: SerializedDashboardState = {
+  ...existingFields,
+  hiddenFinishedCount,
+  config: {
+    hideFinishedAgents: cfg.get<boolean>("hideFinishedAgents", false),
+  },
+};
+```
+
+Webview reads `state.config?.hideFinishedAgents ?? false` for the chip's initial `aria-pressed` / `data-hide-finished` value. The optimistic UI flip (§4.3) takes over from there; the next `state:full` re-confirms the value authoritatively after the host applies the change via `workspace.getConfiguration().update(...)`.
+
+JSON-safe (booleans + plain integer). No Map/Set/Date — fits the existing serialization contract.
 
 ### 3.6 Delta-mode handling (post-V1, but contract is here)
 
@@ -173,7 +209,7 @@ JSON-safe (plain integer). No Map/Set/Date — fits the existing serialization c
 
 ### 4.1 Where it lives in the DOM
 
-A new component `src/webview/components/headerChip.ts` renders the chip. Mount position: **at the top of the `#root` mount, ABOVE all session blocks and the legacy/roster error chips, but BELOW the error chips** if both fire on the same tick. Mount order top-to-bottom:
+A new component `src/webview/components/headerChip.ts` renders the chip. Mount position: **ABOVE the session blocks and BELOW both error chips**. The table is authoritative; mount order top-to-bottom:
 
 1. `rosterErrorChip` (M3-04 — when `state.rosterErrors` non-empty)
 2. legacy `errorChip` (M2-05 — event-driven)
@@ -250,7 +286,7 @@ export type SetConfigMessage = {
 
 **Why a generic `ui:set-config` (not `ui:toggle-hide-finished`):** the chip pattern will likely return for future filters (`hideIdleAgents`, `hideBackgroundAgents`, etc. — sponsor's "or at least i want a toggle" hints at more to come). A generic message type with `{ key, value }` admits new settings without proliferating message types. The `key` is a string-literal union initially; extending it adds union members, not new messages.
 
-Host handles by calling `vscode.workspace.getConfiguration("claudeteam").update(key, value, vscode.ConfigurationTarget.Global)` (or `Workspace` — see §8 Q3) and lets the existing `onDidChangeConfiguration` listener re-fire the filter.
+Host handles by calling `vscode.workspace.getConfiguration("claudeteam").update(key, value, vscode.ConfigurationTarget.Global)` (sponsor confirmed `Global` per §8 Q3) and lets the existing `onDidChangeConfiguration` listener re-fire the filter.
 
 ### 4.6 Empty-state interaction
 
@@ -260,6 +296,8 @@ When the dashboard is empty (no sessions, or all sessions dead), should the head
 
 - The chip is a persistent control, like a settings checkbox at the top of a panel. Hiding it would make the toggle non-discoverable when the user opens an empty dashboard.
 - When the count is 0, the chip is visually de-emphasized (lower opacity, see §6.2) but still clickable — flipping ON in an empty dashboard pre-arms the filter for when sessions arrive.
+
+**Render-mount implementation note (Maya M5-WV):** the current `src/webview/render.ts` empty branch (around `render.ts:264`) replaces the mount with only `renderEmptyState()` — the chip would NOT survive that path as written. M5-WV must amend the empty branch to mount the array `[rosterErrorChip, errorChip, headerChip, emptyState]` (per the §4.1 order, dropping session blocks but keeping the chip stack) instead of `[emptyState]`. Both branches (with-sessions + empty) must produce the chip at position 3.
 
 ---
 
@@ -291,7 +329,8 @@ Defect 6a's scope: fix the misclassification where idle agents render as `finish
 - **Same surface, different concerns.** Defect 6a corrects the **classification** of `idle` vs `finished`. M5's filter operates on the result of that classification. The two are sequential in the data flow: classify → filter.
 - **No vocabulary collision.** Defect 6a touches `AgentTile.state` semantics + `finishedTracker.ts`; M5 touches `hideFinishedAgents` config + `hideFinishedFilter.ts`. Felix can land 6a first OR M5-EH first — either order works. If 6a lands first, M5's filter sees a more accurate `finished` distribution (fewer false positives). If M5 lands first, the filter operates on the M2 baseline classification; when 6a lands later, the filter behavior tightens automatically (some previously-hidden tiles will re-appear as their state corrects to `idle`).
 - **No spec change required to either side.** The spec for M5 does NOT need to wait for 6a. Both can dispatch in parallel.
-- **Test composition:** Sage's M5 test plan should include one regression test that pins the interaction — given a tile that 6a misclassifies as `finished` (a synthesized fixture), verify the M5 filter respects the (incorrectly-classified) state. The fix lands at 6a; M5's filter is correct by construction.
+
+**Status update (2026-05-26):** Defect 6a (`86c9yxv94`) merged 2026-05-26 at main SHA `7670e09` (PR #69 — `fix(reducer): finished elapsed-time suffix via FinishedMap`). Defect 6b (`86c9yxvah`) merged same round at `4669ae0` (PR #68 — `fix(webview): collapsed-group state-dot`). The Defect-6 family is closed; the coupling Iris cited as a reason to reject Shape 3 (auto-expire) is now resolved on main. **Shape 3 stays rejected** as a design call (per §1.2 — auto-expire is the right post-V1 path if dogfood shows the toggle is too coarse; not in V1 scope), but the original blocker is informational only. Sage's M5 test plan no longer needs the "filter respects misclassified-finished" regression — `idle` and `finished` are now reliably distinguished on main, so the M5 filter operates on accurate classifications by construction. The §8 Q1 follow-up ticket (extend filter to `idle`) is the natural next step now that Defect 6 closes.
 
 ---
 
@@ -389,48 +428,73 @@ The chip uses no semantic state color (green / amber / red) — only `--ct-color
 
 Per `~/.claude/CLAUDE.md` "Parallel-agent shared-concept vocabulary discipline" — every identifier the parallel-dispatched Felix + Maya implementations will reference is fixed here. Both PRs MUST use these names verbatim.
 
-| Identifier | Type | Declared by | Consumed by | Notes |
+### 7.1 Host + shared identifiers (Felix declares)
+
+| Identifier | Kind | Declared by | Consumed by | Notes |
 |---|---|---|---|---|
-| `claudeteam.hideFinishedAgents` | `package.json` config key (string) | Felix (M5-EH) | Felix (host read) + Maya (chip writes via `ui:set-config`) | Default `false`. |
-| `claudeteam.toggleHideFinished` | `package.json` command id | Felix (M5-EH) declares; Maya MAY add a button reference | Both | Optional but recommended. |
-| `applyHideFinishedFilter` | exported function in `src/extension/state/hideFinishedFilter.ts` | Felix (M5-EH) | Felix internal | NEW file. |
+| `claudeteam.hideFinishedAgents` | `package.json` config key | Felix (M5-EH) | Felix (host read) + Maya (chip writes via `ui:set-config`) | Default `false`. |
+| `claudeteam.toggleHideFinished` | `package.json` command id | Felix (M5-EH) | Both | Optional but recommended; Maya MAY add a button reference. |
+| `applyHideFinishedFilter` | exported function | Felix (M5-EH) | Felix internal | In `src/extension/state/hideFinishedFilter.ts` (NEW). |
 | `HideFinishedResult` | TS interface | Felix (M5-EH) | Felix internal | Shape: `{ tree: AgentTree; hiddenFinishedCount: number }`. |
-| `hiddenFinishedCount` | optional field on `AgentTree` + `SerializedDashboardState` | Felix (M5-EH) declares | Maya (M5-WV) reads | Wire shape: `number | undefined`. Webview MUST treat `undefined` as `0`. |
-| `SetConfigMessage` | TS type union member on `WebviewMessage` | Felix declares in `src/shared/messages.ts`. Maya imports the type. | Both | Payload `{ key: "hideFinishedAgents"; value: boolean }`. Discriminator `type: "ui:set-config"`. |
-| `ct-header-chip` | CSS class name on root `<aside>` | Maya (M5-WV) | Maya internal | Defines the block. |
-| `ct-header-chip-toggle` | CSS class name on inner `<button>` | Maya (M5-WV) | Maya internal | The interactive surface. |
-| `ct-header-chip-label` | CSS class name on label span | Maya (M5-WV) | Maya internal | Holds the verbal portion. |
-| `ct-header-chip-count` | CSS class name on count span | Maya (M5-WV) | Maya internal | Holds the numeric portion (hidden when 0 / filter off). |
-| `data-hide-finished` | HTML data attribute on `<aside class="ct-header-chip">` | Maya (M5-WV) | Maya internal (CSS) | Values: `"true"` / `"false"`. |
-| `data-hidden-count` | HTML data attribute on `<aside class="ct-header-chip">` | Maya (M5-WV) | Maya internal (CSS) | String form of `hiddenFinishedCount` (`"0"` / `"1"` / `"N"`). |
-| `headerChip` | TS module + export `renderHeaderChip` in `src/webview/components/headerChip.ts` | Maya (M5-WV) | Maya internal (called from `render.ts`) | NEW file. Mirror the existing `renderErrorChip` pattern. |
-| `HeaderChipProps` | TS interface in `src/webview/components/headerChip.ts` | Maya (M5-WV) | Maya internal | Shape: `{ hideFinished: boolean; hiddenCount: number; postMessage: (msg: WebviewMessage) => void }`. |
-| Label literals | Exact strings | Maya (M5-WV) | Maya internal | `"Hide finished"` / `"Hide finished — none yet"` / `"Hide finished — N hidden"` (N substituted). Em-dash `—` (U+2014). |
+| `hiddenFinishedCount` | optional field on `AgentTree` + `SerializedDashboardState` | Felix (M5-EH) | Maya (M5-WV) reads | Wire shape: `number | undefined`. Webview MUST treat `undefined` as `0`. |
+| `config` (block on `SerializedDashboardState`) | optional nested block | Felix (M5-EH) | Maya (M5-WV) reads | Shape: `{ hideFinishedAgents?: boolean }`. Webview reads `state.config?.hideFinishedAgents ?? false` for initial chip state. See §3.5 Field B. |
+| `SetConfigMessage` | TS type union member on `WebviewMessage` | Felix declares in `src/shared/messages.ts` | Maya imports | Payload shape: `{ key: "hideFinishedAgents"; value: boolean }`. See §7.3 for the discriminator value. |
+
+### 7.2 Webview-only identifiers (Maya declares)
+
+| Identifier | Kind | Declared by | Consumed by | Notes |
+|---|---|---|---|---|
+| `ct-header-chip` | CSS class on root `<aside>` | Maya (M5-WV) | Maya internal | Defines the block. |
+| `ct-header-chip-toggle` | CSS class on inner `<button>` | Maya (M5-WV) | Maya internal | The interactive surface. |
+| `ct-header-chip-label` | CSS class on label `<span>` | Maya (M5-WV) | Maya internal | Holds the verbal portion. |
+| `ct-header-chip-count` | CSS class on count `<span>` | Maya (M5-WV) | Maya internal | Holds the numeric portion (hidden when 0 / filter off). |
+| `data-hide-finished` | HTML data attribute on `<aside>` | Maya (M5-WV) | Maya internal (CSS) | Values: `"true"` / `"false"`. |
+| `data-hidden-count` | HTML data attribute on `<aside>` | Maya (M5-WV) | Maya internal (CSS) | String form of `hiddenFinishedCount` (`"0"` / `"1"` / `"N"`). |
+| `headerChip` | TS module + export `renderHeaderChip` | Maya (M5-WV) | Maya internal (called from `render.ts`) | In `src/webview/components/headerChip.ts` (NEW). Mirror the existing `renderErrorChip` pattern. |
+| `HeaderChipProps` | TS interface | Maya (M5-WV) | Maya internal | Shape: `{ hideFinished: boolean; hiddenCount: number; postMessage: (msg: WebviewMessage) => void }`. |
+
+### 7.3 Discriminator + literal values (exact strings)
+
+| Surface | Exact value | Where used |
+|---|---|---|
+| `SetConfigMessage.type` discriminator | `"ui:set-config"` | Webview posts; host's message handler discriminates on it. |
+| `SetConfigMessage.payload.key` literal | `"hideFinishedAgents"` | The only `key` value valid for M5 (extending to `"hideIdleAgents"` etc. is a follow-up — see §8 Q1). |
+| Chip label — filter off | `"Hide finished"` | No em-dash, no count. |
+| Chip label — filter on + 0 hidden | `"Hide finished — none yet"` | Em-dash `—` (U+2014). |
+| Chip label — filter on + N=1 | `"Hide finished — 1 hidden"` | Em-dash `—` (U+2014). |
+| Chip label — filter on + N>1 | `"Hide finished — N hidden"` (N substituted) | Em-dash `—` (U+2014). |
+
+### 7.4 Ownership boundary
 
 **No identifiers are owned by both sides.** Felix and Maya can dispatch in parallel. The only file touched by both is `src/shared/messages.ts` (Felix adds the type; Maya imports it from the same file). Sequence-of-merge is irrelevant — whichever lands first, the other rebases trivially on the addition.
 
 ---
 
-## 8. Open Questions for Sponsor
+## 8. Sponsor questions — ANSWERED 2026-05-26
 
-Two questions to surface during sponsor review. Both have a default answer; sponsor can override.
+All three open questions confirmed by sponsor 2026-05-26 (accept-defaults; Iris's recommendations stand). Recorded here for spec-as-source-of-truth so M5-EH / M5-WV dispatch briefs can reference final answers.
 
-**Q1 — `idle` extension follow-up?**
+**Q1 — `idle` extension follow-up?** **ANSWERED 2026-05-26: YES — follow-up ticket filed for post-base-feature scope.**
 
-The sponsor's verbatim said *"idle agents"*. This spec scopes to `finished` only because Defect 6 (idle-misclassified-as-finished) is unresolved. Once Defect 6 lands and `idle` is a reliable distinct state, should a follow-up ticket extend to `hideIdleAgents` (a SECOND scalar — see §2.1)? **Default answer: yes, file a follow-up after Defect 6 closes; this M5 ticket ships finished-only.** Sponsor confirms or pushes back.
+The sponsor's verbatim said *"idle agents"*. This M5 spec scopes to `finished` only because Defect 6 (idle-misclassified-as-finished) was unresolved at design time. Now that Defect 6a (`86c9yxv94` PR #69) + Defect 6b (`86c9yxvah` PR #68) merged 2026-05-26, `idle` is a reliable distinct state and the extension follow-up is unblocked.
 
-**Q2 — Default `false` or `true`?**
+- **Follow-up ticket:** ClickUp ID `<INSERT-CLICKUP-FOLLOWUP-ID>` — `feat(ux): extend hide-finished filter to idle agents (hideIdleAgents)` (orchestrator-filed 2026-05-26 this round; ID to be backfilled by orchestrator since sub-agent does not have ClickUp MCP access to fetch the verbatim ID). The follow-up adds a SECOND scalar `claudeteam.hideIdleAgents` per §2.1's two-scalars-not-one-enum design — it does NOT re-shape the M5 scope.
+- **This M5 ticket ships finished-only** — no scope creep.
 
-The sponsor's framing was "i want a toggle" (implies opt-in, default off). But the dogfood symptom was "the OLD finished tiles cluttered the view" — which suggests the sponsor would benefit from default ON. **Default answer: ship default `false` for V1 install safety; revisit after dogfood. If sponsor explicitly wants default ON, flip the manifest's `"default": false` to `true` and update §2.1's description text.**
+**Q2 — Default `false` or `true`?** **ANSWERED 2026-05-26: `false` — sponsor confirmed Iris recommendation.**
 
-**Q3 — Config target: Global or Workspace?**
+Ship default `false` for V1 install safety. First-install experience shows everything; no surprise empty states. The chip itself is the opt-in surface. Revisit after dogfood.
 
-When the chip writes back to `vscode.workspace.getConfiguration().update(...)`, should the target be `ConfigurationTarget.Global` (applies to all VS Code windows / workspaces) or `Workspace` (applies only when this workspace is open)?
+- `package.json` manifest: `"default": false` per §2.1.
+- §2.1 description text: as-written (no change needed).
+- Chip's initial render: filter OFF, no count badge, label `"Hide finished"`.
 
-- **Global** matches how the sponsor will use it — one preference across all projects.
-- **Workspace** matches dashboard scoping (each workspace's dashboard could have its own filter).
+**Q3 — Config target: Global or Workspace?** **ANSWERED 2026-05-26: `ConfigurationTarget.Global` — sponsor confirmed Iris recommendation.**
 
-**Default answer: Global.** The sponsor's quote is a personal preference statement, not a per-workspace concern. Easier mental model: one toggle, applies everywhere. Sponsor confirms.
+The chip writes back to `vscode.workspace.getConfiguration("claudeteam").update("hideFinishedAgents", value, vscode.ConfigurationTarget.Global)`. One toggle, applies across all VS Code windows / workspaces. Easier mental model than per-workspace scoping; matches how the sponsor will use it (a personal preference statement, not a per-workspace concern).
+
+- Felix's M5-EH `ui:set-config` handler: hardcode `ConfigurationTarget.Global` in the `update(...)` call.
+- Spec §4.5 text: as-written (the parenthetical "(or `Workspace` — see §8 Q3)" can be dropped at impl time, but is harmless until then).
 
 ---
 
@@ -444,28 +508,29 @@ Spec section: m5-hide-finished-spec.md §2, §3, §5, §7
 Branch: felix/<ticket-id>-m5-eh-hide-finished
 
 Implementation checklist:
-- package.json: add claudeteam.hideFinishedAgents (boolean, default false) per §2.1.
+- package.json: add claudeteam.hideFinishedAgents (boolean, default false — sponsor confirmed §8 Q2) per §2.1.
 - package.json: add claudeteam.toggleHideFinished command per §4.4 (Felix declares the contributes entry; the command handler in main.ts toggles the config key).
-- src/shared/types.ts: add hiddenFinishedCount?: number to AgentTree.
-- src/shared/messages.ts: add SerializedDashboardState.hiddenFinishedCount?: number; add SetConfigMessage type to WebviewMessage union.
+- src/shared/types.ts: add hiddenFinishedCount?: number AND optional config block to AgentTree (or via mirror on SerializedDashboardState — see §3.5).
+- src/shared/messages.ts: add SerializedDashboardState.hiddenFinishedCount?: number; add SerializedDashboardState.config?: { hideFinishedAgents?: boolean } (per §3.5 Field B — chip's initial-state mirror); add SetConfigMessage type to WebviewMessage union (discriminator "ui:set-config" per §7.3).
 - src/extension/state/hideFinishedFilter.ts (NEW): export applyHideFinishedFilter + HideFinishedResult per §3.2.
-- Reducer/messageBus integration: apply filter at serializeState entry; thread hiddenFinishedCount onto the wire payload.
+- Reducer/messageBus integration: apply filter at serializeState entry; thread hiddenFinishedCount AND config.hideFinishedAgents (read once per serialization from vscode.workspace.getConfiguration("claudeteam")) onto the wire payload per §3.5.
 - onDidChangeConfiguration listener for claudeteam.hideFinishedAgents → re-emit state:full (or delta) immediately.
-- Host handler for ui:set-config messages: validate key === "hideFinishedAgents", call workspace.getConfiguration("claudeteam").update(key, value, ConfigurationTarget.Global). Sponsor confirms target in spec §8 Q3 before sending.
+- Host handler for ui:set-config messages: validate key === "hideFinishedAgents", call workspace.getConfiguration("claudeteam").update(key, value, vscode.ConfigurationTarget.Global) — sponsor confirmed Global per §8 Q3.
 - Tests (vitest unit + integration):
   - applyHideFinishedFilter — off → identity; on → drops finished tiles + counts.
   - CollapsedPersonaGroup with mixed states → wrapper rebuilt with survivors; all-finished → wrapper dropped.
   - Empty team after filter → suppressed.
   - hiddenFinishedCount sums across sessions.
   - Background agents NEVER filtered.
+  - serializeState emits config.hideFinishedAgents matching workspace configuration.
 - vsce package --no-yarn output in Self-Test Report (manifest gate).
 - Cite data-plane smoke (live runTick against ~/.claude/ with a finished agent); defer interactive screenshots to sponsor.
-- PR body: cross-ref to Defect 6a (86c9yxv94) — note non-interference per §5.3.
+- PR body: cross-ref to Defect 6a (86c9yxv94, MERGED 2026-05-26 main `7670e09`) — non-interaction per §5.3 status update.
 
 Out of scope:
 - Chip rendering (Maya M5-WV).
 - Auto-expire (post-V1, see spec §1.5).
-- Extending filter to `idle` (spec §8 Q1 follow-up).
+- Extending filter to `idle` (spec §8 Q1 follow-up ticket, separate scope).
 ```
 
 ### 9.2 M5-WV (Maya) paste block
@@ -477,12 +542,15 @@ Branch: maya/<ticket-id>-m5-wv-header-chip
 
 Implementation checklist:
 - src/webview/components/headerChip.ts (NEW): export renderHeaderChip(props: HeaderChipProps): HTMLElement per §4.2.
-  - Props per §7: { hideFinished: boolean; hiddenCount: number; postMessage: (msg: WebviewMessage) => void }.
+  - Props per §7.2: { hideFinished: boolean; hiddenCount: number; postMessage: (msg: WebviewMessage) => void }.
   - DOM shape: <aside class="ct-header-chip" data-hide-finished data-hidden-count><button class="ct-header-chip-toggle" aria-pressed type="button" title>...<span class="ct-header-chip-label">...<span class="ct-header-chip-count" hidden></span></button></aside>.
-  - Label text per §5.2 templates (em-dash U+2014 between "Hide finished" and the count phrase).
-  - Click + Enter + Space all fire ui:set-config with payload { key: "hideFinishedAgents", value: !hideFinished }.
+  - Label text per §5.2 / §7.3 templates (em-dash U+2014 between "Hide finished" and the count phrase).
+  - Click + Enter + Space all fire ui:set-config (discriminator "ui:set-config" per §7.3) with payload { key: "hideFinishedAgents", value: !hideFinished }.
   - Optimistic UI: flip data-hide-finished + aria-pressed immediately on click; host roundtrip eventually re-renders authoritatively.
-- src/webview/render.ts: mount headerChip at position 3 in the top-to-bottom order (§4.1). Always render; pass hideFinished from a config-mirror (initial = false; updated on each state:full per §4.3 read path — TBD if config needs to be on the wire or polled separately, see Q below).
+- src/webview/render.ts:
+  - Mount headerChip at position 3 in the top-to-bottom order (§4.1). Always render — both with-sessions branch AND empty branch must produce the chip (per NIT 3 / §4.6 render-mount note).
+  - Read chip initial state from `state.config?.hideFinishedAgents ?? false` (§3.5 Field B — Felix populates the field; webview reads it on every state:full).
+  - Read hiddenCount from `state.hiddenFinishedCount ?? 0`.
 - src/webview/styles/dashboard.css: add the §6.1 block. Extend the existing @media (prefers-reduced-motion: reduce) block per §6.2.
 - Tests (vitest unit, jsdom):
   - Chip renders with correct label per each state in §4.2 table.
@@ -490,6 +558,8 @@ Implementation checklist:
   - Click fires ui:set-config with toggled value.
   - Keyboard Enter + Space fire the same message.
   - Count span [hidden] when filter off or count=0; visible when filter on + count>0.
+  - Empty-state branch: chip still present at position 3 above emptyState.
+  - state.config?.hideFinishedAgents undefined → chip boots OFF; true → chip boots ON.
   - Reduced-motion: assert via fake matchMedia mock that transitions are elided OR cite manual probe in Self-Test Report.
 - Manual probe (Self-Test Report):
   - Install vsix.
@@ -497,12 +567,10 @@ Implementation checklist:
   - Toggle again → tile reappears, label reverts.
   - Theme-switch dark↔light — chip renders correctly in both.
   - Tab to chip → outline visible. Press Enter → toggles. Press Space → toggles.
+  - Reload window with hideFinishedAgents=true in Settings → chip boots ON.
   - Cite data-plane smoke; defer interactive screenshots to sponsor.
 
-Open Q to Felix at dispatch time: how does the webview learn the current value of `claudeteam.hideFinishedAgents` (for chip initial state)? Two options:
-  (a) Felix adds a `config` field to SerializedDashboardState (e.g. config: { hideFinishedAgents: boolean }) — webview reads from each state:full.
-  (b) Webview infers from hiddenFinishedCount === 0 + an explicit "filter-on-but-empty" flag.
-Recommend (a) — explicit + extensible to future toggles. Adjust §3.5 wire-shape if (a) is chosen; declare the path at the M5-EH dispatch.
+Wire-shape contract (settled per §3.5 + §7.1): Felix populates `state.config.hideFinishedAgents` on every state:full. Maya consumes from there; no inference, no roundtrip required for initial render.
 
 Out of scope:
 - Host-side filtering logic (Felix M5-EH).
@@ -524,13 +592,9 @@ If they review-ready out of order, no special handling — `messages.ts` additio
 
 If Felix lands Defect 6a (`86c9yxv94`) between M5-EH and M5-WV merges, no spec change — M5-WV's chip renders against whatever `hiddenFinishedCount` the (post-6a) host provides. The filter sees post-6a classification; previously-misclassified-finished tiles will now correctly stay as `idle` and remain visible. This is the intended outcome.
 
-### 10.3 If sponsor wants default ON (Q2 override)
+### 10.3 Sponsor Q2 / Q3 — answered (no override)
 
-One-line manifest change in M5-EH (`"default": false` → `"default": true`). No other code or spec changes. Maya's chip just renders the ON state on first load.
-
-### 10.4 If sponsor wants Workspace target (Q3 override)
-
-Felix's `ConfigurationTarget.Global` → `ConfigurationTarget.Workspace` (one-line in the host handler). Spec text in §4.5 updated accordingly. No structural change.
+Sponsor confirmed Iris's recommendations 2026-05-26 (per §8): `default: false`, `ConfigurationTarget.Global`. The override paths previously documented here are not exercised — M5-EH ships the recommended values verbatim. (Reversal is still cheap if dogfood after M5 motivates: one-line manifest flip for Q2, one-line handler change for Q3 — both safe to redo as follow-ups.)
 
 ---
 
@@ -548,4 +612,4 @@ Felix's `ConfigurationTarget.Global` → `ConfigurationTarget.Workspace` (one-li
 
 ---
 
-*Spec authored M5. Two implementation tickets (M5-EH host + M5-WV webview) dispatch in parallel after sponsor sign-off. Estimated size: M5-EH = S (config + filter + tests); M5-WV = S (chip component + CSS + tests). Single-PR retro lands together at M5-RETRO.*
+*Spec authored M5. Q1/Q2/Q3 answered by sponsor 2026-05-26 (accept-defaults). Two implementation tickets (M5-EH host + M5-WV webview) dispatch in parallel — no further sponsor sign-off required for the design. Estimated size: M5-EH = S (config + filter + tests); M5-WV = S (chip component + CSS + tests). Single-PR retro lands together at M5-RETRO.*
