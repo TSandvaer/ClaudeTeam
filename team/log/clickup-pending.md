@@ -395,3 +395,4 @@ ENTRY-2026-05-26T16:30:01Z: 86c9zfbpg -> in review (Bram PR opened — research(
 ENTRY-2026-05-26T22:45:00Z: 86c9zfmh1 -> in review (Maya PR opened — fix(webview): preserve collapsed-group expansion state across re-renders — Obs 10)
 ```
 ENTRY-2026-05-26T23:00:00Z: 86c9zfmhp -> in progress (Maya accepted dispatch — fix(webview): humanize finished elapsed-time format (Obs 11))
+ENTRY-2026-05-26T23:10:00Z: 86c9zfmhp -> in review (Maya PR #88 opened — fix(webview): humanize finished elapsed-time format (Obs 11) — sponsor approval requested on format choice)
