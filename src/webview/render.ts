@@ -51,6 +51,7 @@ import {
   type ErrorChipLevel,
 } from "./components/errorChip.js";
 import { renderRosterErrorChip } from "./components/rosterErrorChip.js";
+import { renderHeaderChip } from "./components/headerChip.js";
 import { isCollapsedPersonaGroup } from "./components/collapsedPersonaTile.js";
 import type { FinishedTracker } from "./finishedTracker.js";
 import type { PrevStateTracker } from "./prevStateTracker.js";
@@ -140,6 +141,40 @@ export interface RenderContext {
  * `RosterTileEntry[]`.
  */
 export type RenderableState = AgentTree | WebviewAgentTree;
+
+/**
+ * Extract the M5 hide-finished header-chip inputs from the rendered state.
+ *
+ * The two fields (`hiddenFinishedCount`, `config.hideFinishedAgents`) are
+ * declared by Felix's M5-EH PR on `AgentTree` / `SerializedDashboardState`
+ * (spec §3.5 + §7.1 vocabulary contract). Until that PR lands on this
+ * branch, the typed `AgentTree` shape does NOT include those fields and a
+ * direct `state.hiddenFinishedCount` read would not typecheck. Read via a
+ * cast through `Record<string, unknown>` so this code compiles in either
+ * order: pre-Felix-merge (fields absent → defaults apply), post-Felix-merge
+ * (fields present → consumed). Defensive `??` falls back to spec defaults
+ * (off + 0) per spec §3.5 contract.
+ *
+ * Source: team/iris-ux/m5-hide-finished-spec.md §3.5 + §7.1
+ */
+function readHeaderChipState(state: RenderableState): {
+  hideFinished: boolean;
+  hiddenCount: number;
+} {
+  const bag = state as unknown as {
+    hiddenFinishedCount?: unknown;
+    config?: { hideFinishedAgents?: unknown };
+  };
+  const hideFinished =
+    typeof bag.config?.hideFinishedAgents === "boolean"
+      ? bag.config.hideFinishedAgents
+      : false;
+  const hiddenCount =
+    typeof bag.hiddenFinishedCount === "number" && bag.hiddenFinishedCount > 0
+      ? bag.hiddenFinishedCount
+      : 0;
+  return { hideFinished, hiddenCount };
+}
 
 export function renderFull(ctx: RenderContext, state: RenderableState): void {
   const {
@@ -239,6 +274,18 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
       }),
     );
   }
+
+  // M5 hide-finished header chip — position 3 (spec §4.1). ALWAYS rendered
+  // (with-sessions branch AND empty-state branch per spec §4.6) so the
+  // toggle is discoverable even when the dashboard is empty.
+  const { hideFinished, hiddenCount } = readHeaderChipState(state);
+  mount.appendChild(
+    renderHeaderChip({
+      hideFinished,
+      hiddenCount,
+      postMessage,
+    }),
+  );
 
   const hasLiveSession = state.sessions.some((s) => s.isAlive);
   if (state.sessions.length === 0 || !hasLiveSession) {
