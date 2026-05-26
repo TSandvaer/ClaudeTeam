@@ -234,6 +234,7 @@ npm test && npm run test:integration && npm run test:vscode
 ```
 ENTRY-2026-05-25T00:42:00Z: 86c9yee3g -> in review (PR #50 opened by Maya; PR https://github.com/TSandvaer/ClaudeTeam/pull/50; Felix peer-review dispatched same tick)
 ENTRY-2026-05-25T00:46:00Z: 86c9yee3g -> complete (PR #50 admin-merged at SHA 4115ae6; Felix APPROVE comment https://github.com/TSandvaer/ClaudeTeam/pull/50#issuecomment-4530707451; decision-log entry .claude/decisions-while-away.md 2026-05-25 0045 UTC)
+ENTRY-2026-05-26T09:45:00Z: 86c9ytyq7 -> in review (M5-EH impl PR opened by Felix; ticket was complete after spec merge — orch handles re-open/close lifecycle nuance per dispatch brief)
 ```
 
 ## NEW-TICKET-REQUEST — PR #49 M3-close retro test-count NIT (FULFILLED — ticket `86c9yfj5e` created 2026-05-25T05:32Z via MCP after ClickUp reconnect; Nora authored PR #51 same round, ticket flipped `to do → in progress → in review`)

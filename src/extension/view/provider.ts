@@ -28,6 +28,7 @@ import type {
   OpenRosterMessage,
   OpenTranscriptMessage,
   RefreshMessage,
+  SetConfigMessage,
   WebviewMessage,
 } from "../../shared/messages.js";
 
@@ -55,6 +56,12 @@ export interface WebviewMessageHandlers {
   onOpenTranscript?(msg: OpenTranscriptMessage): void;
   onOpenRoster?(msg: OpenRosterMessage): void;
   onRefresh?(msg: RefreshMessage): void;
+  /**
+   * Chip / command toggled a config-backed setting (M5 `ui:set-config`).
+   * Host writes the value via `vscode.workspace.getConfiguration("claudeteam")
+   * .update(key, value, vscode.ConfigurationTarget.Global)` per spec §8 Q3.
+   */
+  onSetConfig?(msg: SetConfigMessage): void;
   /** Called for messages that don't match a known discriminator. */
   onUnknown?(raw: unknown): void;
 }
@@ -155,6 +162,9 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
       case "ui:refresh":
         this._messageHandlers.onRefresh?.(raw);
         return;
+      case "ui:set-config":
+        this._messageHandlers.onSetConfig?.(raw);
+        return;
     }
   }
 
@@ -240,6 +250,14 @@ export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
       agentId?: unknown;
     };
     return typeof sessionId === "string" && typeof agentId === "string";
+  }
+  if (t === "ui:set-config") {
+    const p = (raw as { payload?: unknown }).payload;
+    if (typeof p !== "object" || p === null) return false;
+    const { key, value } = p as { key?: unknown; value?: unknown };
+    // M5: only `hideFinishedAgents` is currently valid (spec §7.3). Future
+    // keys (`hideIdleAgents` per §8 Q1 follow-up) extend this literal union.
+    return key === "hideFinishedAgents" && typeof value === "boolean";
   }
   return false;
 }

@@ -48,6 +48,7 @@ import {
 } from "./sessionFilter.js";
 import { loadRoster } from "../roster/loader.js";
 import { buildAgentTree } from "../state/reducer.js";
+import { applyHideFinishedFilter } from "../state/hideFinishedFilter.js";
 import type {
   ActivityMap,
   AgentMetaEntry,
@@ -126,6 +127,14 @@ export interface WatcherOptions {
    */
   getCollapsePersonaTiles?: () => boolean;
 
+  /**
+   * Optional resolver for the `claudeteam.hideFinishedAgents` setting (M5).
+   * Read fresh every tick so toggling the setting applies on the next tick
+   * without restart. When omitted, treated as `false` (filter OFF — same
+   * default as the package.json config schema).
+   */
+  getHideFinishedAgents?: () => boolean;
+
   /** Optional logger; defaults to a no-op so silent in production. */
   logger?: { warn: (msg: string) => void };
 }
@@ -199,6 +208,9 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // collapse-persona-tiles toggle. Default true (grouping ON)
         // matches package.json config default.
         collapsePersonaTiles: opts.getCollapsePersonaTiles?.() ?? true,
+        // M5: read-fresh-every-tick pattern for the hide-finished toggle.
+        // Default false (filter OFF) matches package.json config default.
+        hideFinishedAgents: opts.getHideFinishedAgents?.() ?? false,
         logger,
       });
       // Always update lastState — even on hash-skip — so host lookups against
@@ -285,6 +297,13 @@ export interface RunTickOptions {
    * (no CollapsedPersonaGroup wrappers) — same shape as pre-M3-10.
    */
   collapsePersonaTiles?: boolean;
+  /**
+   * Value of `claudeteam.hideFinishedAgents` (M5). Defaults to `false`
+   * (filter OFF — every finished tile remains visible). When `true`, the
+   * post-reducer filter suppresses finished tiles and `hiddenFinishedCount`
+   * is stamped onto the produced tree.
+   */
+  hideFinishedAgents?: boolean;
   logger?: { warn: (msg: string) => void };
 }
 
@@ -398,6 +417,18 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
       collapsePersonaTiles: opts.collapsePersonaTiles !== false,
     },
   );
+  // M5: post-reducer hide-finished projection. The filter is OFF by default
+  // (identity transform — returns the input ref + count 0); when ON, allocates
+  // a new tree with finished tiles suppressed and stamps `hiddenFinishedCount`
+  // for the chip. Reducer stays presentation-agnostic; this layer owns the
+  // filter the same way it owns filterApplied / roster errors. See
+  // `src/extension/state/hideFinishedFilter.ts` for the contract.
+  const hideFinished = opts.hideFinishedAgents === true;
+  const { tree: filteredTree, hiddenFinishedCount } = applyHideFinishedFilter(
+    tree,
+    hideFinished,
+  );
+
   // M3-03 AC7: stamp the window-filter flag on the produced tree. Reducer
   // is workspace-agnostic — it doesn't know about the filter, just the
   // input set — so the watcher layer owns the flag.
@@ -405,11 +436,18 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
   // the webview can render the error chip + warning subtype. Verbatim from
   // RosterLoadResult; reducer is roster-error-agnostic, so the watcher
   // layer owns this surfacing too (parallel to filterApplied).
+  // M5: stamp hiddenFinishedCount (post-filter count) AND the effective
+  // config block so `serializeState` can pass both through to the wire
+  // (per spec §3.5 wire-shape contract).
   return {
-    ...tree,
+    ...filteredTree,
     filterApplied,
     rosterErrors: rosterResult.errors,
     rosterWarnings: rosterResult.warnings,
+    hiddenFinishedCount,
+    config: {
+      hideFinishedAgents: hideFinished,
+    },
   };
 }
 
@@ -447,11 +485,17 @@ export function hashState(state: DashboardState): string {
   // breaks) a YAML and the visible tile set is unchanged, the chip must
   // appear/disappear within one tick. Excluding from the hash would skip
   // the emission.
+  // M5: include hiddenFinishedCount and the config mirror — when the user
+  // toggles `claudeteam.hideFinishedAgents`, the visible tile set changes
+  // (or the count chip changes from "0 hidden" to "N hidden"). Excluding
+  // these from the hash would skip the emission and the chip would lag.
   return JSON.stringify({
     sessions,
     filterApplied: state.filterApplied === true,
     rosterErrors: state.rosterErrors ?? [],
     rosterWarnings: state.rosterWarnings ?? [],
+    hiddenFinishedCount: state.hiddenFinishedCount ?? 0,
+    hideFinishedAgents: state.config?.hideFinishedAgents === true,
   });
 }
 

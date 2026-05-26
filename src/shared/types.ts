@@ -258,7 +258,12 @@ export interface AgentTile {
    * Full string here — truncation is the presenter's job (spec §5 divergence #2).
    *   running  → "tool:<toolName> <firstArg>"
    *   idle     → "idle <Ns>"
-   *   finished → "finished"
+   *   finished → "finished" (no elapsed) or "finished Xs" (with elapsed-since-
+   *              `tool_result.timestamp` suffix per 86c9yxv94 / PR #69 —
+   *              reducer's `buildActivity` emits the suffix when `FinishedMap`
+   *              carries a non-zero `finishedAtMs` for the agentId; bare
+   *              "finished" remains the fallback when timestamp is absent or
+   *              the 0 sentinel)
    *   error    → "error: <reason>"
    */
   activity: string;
@@ -470,6 +475,26 @@ export interface AgentTree {
    * render the warning chip subtype. Verbatim from the loader.
    */
   rosterWarnings?: string[];
+  /**
+   * Count of rostered agent tiles suppressed this tick because their state
+   * was "finished" AND `claudeteam.hideFinishedAgents === true` (M5). Used
+   * by the webview header chip to render "N finished hidden". Optional for
+   * back-compat with pre-M5 consumers (CLI driver, older tests); absent →
+   * treated as 0. See `src/extension/state/hideFinishedFilter.ts` for the
+   * producer.
+   */
+  hiddenFinishedCount?: number;
+  /**
+   * Mirror of `claudeteam.*` config scalars relevant to the webview's
+   * rendering (M5). The watcher reads these once per tick and stamps them
+   * onto the produced tree so `serializeState` can pass through to the wire
+   * without re-reading config. Optional for back-compat with the CLI driver
+   * and older tests; absent → webview treats each field as `false`.
+   * See `team/iris-ux/m5-hide-finished-spec.md` §3.5 Field B.
+   */
+  config?: {
+    hideFinishedAgents?: boolean;
+  };
 }
 
 /**
