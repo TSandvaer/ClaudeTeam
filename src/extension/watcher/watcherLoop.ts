@@ -51,7 +51,7 @@ import { buildAgentTree } from "../state/reducer.js";
 import type {
   ActivityMap,
   AgentMetaEntry,
-  FinishedSet,
+  FinishedMap,
   SessionAgentData,
 } from "../state/reducer.js";
 import { cwdToSlug } from "../../shared/slug.js";
@@ -322,7 +322,7 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
 
   const agentData: SessionAgentData[] = [];
   const activities: ActivityMap = new Map();
-  const finishedIds: FinishedSet = new Set();
+  const finishedIds: FinishedMap = new Map();
 
   for (const session of sessions) {
     const slug = cwdToSlug(session.cwd);
@@ -335,6 +335,9 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     );
 
     const title = readSessionTitle(parentJsonlPath) ?? "(no title yet)";
+    // 86c9yxv94: returns Map<toolUseId, finishedAtMs> so the elapsed-time
+    // suffix on `"finished Xs"` can render correctly. Timestamp sourced
+    // from the tool_result record's top-level `timestamp` ISO-8601 field.
     const finishedToolUseIds = readFinishedToolUseIds(parentJsonlPath);
 
     const agents = collectAgentMetas(subagentsDir);
@@ -342,10 +345,12 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     for (const agent of agents) {
       if (
         agent.meta?.toolUseId !== undefined &&
-        agent.meta?.toolUseId !== null &&
-        finishedToolUseIds.has(agent.meta.toolUseId)
+        agent.meta?.toolUseId !== null
       ) {
-        finishedIds.add(agent.agentId);
+        const finishedAtMs = finishedToolUseIds.get(agent.meta.toolUseId);
+        if (finishedAtMs !== undefined) {
+          finishedIds.set(agent.agentId, finishedAtMs);
+        }
       }
     }
 
@@ -475,12 +480,18 @@ function readSessionTitle(jsonlPath: string): string | null {
 
 /**
  * Scan the parent JSONL for tool_result entries that close a subagent spawn.
- * Returns the set of `tool_use_id` strings observed in closed `tool_result`
- * content entries. Per data-sources.md §3, this is the only reliable
- * "finished" signal; the child JSONL never carries it.
+ * Returns a map of `tool_use_id` → `finishedAtMs` (epoch ms parsed from the
+ * record's top-level `timestamp` ISO-8601 field). Per data-sources.md §3,
+ * this is the only reliable "finished" signal; the child JSONL never
+ * carries it.
+ *
+ * 86c9yxv94: timestamp flows through `FinishedMap` to `buildActivity` for
+ * the `"finished Xs"` elapsed-time suffix. When a record's timestamp is
+ * missing or unparseable, the value is `0` — the reducer treats 0 as
+ * "no timestamp" and falls back to bare `"finished"`.
  */
-function readFinishedToolUseIds(jsonlPath: string): Set<string> {
-  const finished = new Set<string>();
+function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
+  const finished = new Map<string, number>();
   let raw: string;
   try {
     raw = readFileSync(jsonlPath, "utf8");
@@ -496,6 +507,11 @@ function readFinishedToolUseIds(jsonlPath: string): Set<string> {
       if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
       const content = (msg as Record<string, unknown>)["content"];
       if (!Array.isArray(content)) continue;
+      const ts = rec["timestamp"];
+      const finishedAtMs =
+        typeof ts === "string" && Number.isFinite(Date.parse(ts))
+          ? Date.parse(ts)
+          : 0;
       for (const item of content) {
         if (
           item !== null &&
@@ -504,7 +520,10 @@ function readFinishedToolUseIds(jsonlPath: string): Set<string> {
           (item as Record<string, unknown>)["type"] === "tool_result"
         ) {
           const tuid = (item as Record<string, unknown>)["tool_use_id"];
-          if (typeof tuid === "string") finished.add(tuid);
+          if (typeof tuid === "string" && !finished.has(tuid)) {
+            // First occurrence wins — that's the actual finish time.
+            finished.set(tuid, finishedAtMs);
+          }
         }
       }
     } catch {

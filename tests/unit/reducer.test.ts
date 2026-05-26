@@ -20,13 +20,14 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  buildActivity,
   buildAgentTree,
   groupTilesByPersona,
   IDLE_THRESHOLD_MS,
   resolveModelOnParseError,
   type AgentMetaEntry,
   type ActivityMap,
-  type FinishedSet,
+  type FinishedMap,
   type SessionAgentData,
 } from "../../src/extension/state/reducer.js";
 import type {
@@ -164,7 +165,7 @@ const ROSTER_ALPHA: Team[] = [
 
 describe("buildAgentTree", () => {
   it("returns empty sessions list when sessions is empty", () => {
-    const tree = buildAgentTree([], [], new Map(), new Set(), [], NOW_MS);
+    const tree = buildAgentTree([], [], new Map(), new Map(), [], NOW_MS);
     expect(tree.sessions).toHaveLength(0);
   });
 
@@ -174,7 +175,7 @@ describe("buildAgentTree", () => {
       [session],
       [makeSessionData(session.sessionId, [])],
       new Map(),
-      new Set(),
+      new Map(),
       ROSTER_ALPHA,
       NOW_MS,
     );
@@ -198,7 +199,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -219,7 +220,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -242,7 +243,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -261,7 +262,10 @@ describe("buildAgentTree", () => {
       const meta = makeMeta({ agentType: "felix", description: "Felix finished" });
       const activity = makeActivity({ mtimeMs: NOW_MS - 60_000 }); // very stale
       const activities: ActivityMap = new Map([[agentId, activity]]);
-      const finished: FinishedSet = new Set([agentId]);
+      // 86c9yxv94: FinishedMap = Map<agentId, finishedAtMs>. Use a real
+      // recent timestamp so the elapsed-time suffix asserts cleanly.
+      // finishedAt = NOW_MS - 3000 → "finished 3s".
+      const finished: FinishedMap = new Map([[agentId, NOW_MS - 3_000]]);
 
       const tree = buildAgentTree(
         [session],
@@ -274,7 +278,9 @@ describe("buildAgentTree", () => {
 
       const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("finished");
-      expect(tile!.activity).toBe("finished");
+      // 86c9yxv94 AC2: elapsed-time suffix replaces the bare "finished"
+      // string when a finishedAtMs is supplied through `FinishedMap`.
+      expect(tile!.activity).toBe("finished 3s");
     });
 
     it("finished is from finishedIds (parent signal), NOT from JSONL content", () => {
@@ -292,7 +298,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(), // empty — parent transcript not scanned here
+        new Map(), // empty — parent transcript not scanned here
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -322,7 +328,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -344,7 +350,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         [], // empty roster
         NOW_MS,
       );
@@ -362,7 +368,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, null, "meta.json is not valid JSON")])],
         new Map(),
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -384,7 +390,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -425,7 +431,7 @@ describe("buildAgentTree", () => {
           makeSessionData(session2.sessionId, [makeAgentEntry(agentId2, meta2)]),
         ],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -461,7 +467,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -492,7 +498,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -519,7 +525,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -547,7 +553,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -573,7 +579,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -591,7 +597,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         new Map(), // no activity entry
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -628,7 +634,7 @@ describe("buildAgentTree", () => {
           makeAgentEntry(bgId, bgMeta),
         ])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -654,7 +660,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -677,7 +683,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -699,7 +705,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -723,7 +729,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -753,7 +759,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         [], // empty roster → all go to background
         NOW_MS,
       );
@@ -774,7 +780,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, agents.map(a => makeAgentEntry(a.id, a.meta)))],
         activities,
-        new Set(),
+        new Map(),
         [], // empty roster → all go to background
         NOW_MS,
       );
@@ -791,7 +797,7 @@ describe("buildAgentTree", () => {
       [session],
       [makeSessionData("different-session-id", [])],
       new Map(),
-      new Set(),
+      new Map(),
       ROSTER_ALPHA,
       NOW_MS,
     );
@@ -809,7 +815,7 @@ describe("buildAgentTree", () => {
       [session],
       [makeSessionData(session.sessionId, [], "ClaudeTeam M1 build session")],
       new Map(),
-      new Set(),
+      new Map(),
       [],
       NOW_MS,
     );
@@ -823,7 +829,7 @@ describe("buildAgentTree", () => {
       [session],
       [makeSessionData(session.sessionId, [])], // no title
       new Map(),
-      new Set(),
+      new Map(),
       [],
       NOW_MS,
     );
@@ -858,7 +864,7 @@ describe("buildAgentTree", () => {
           ]),
         ],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -880,7 +886,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, null, "meta.json parse failed: missing field 'agentType'")])],
         new Map(), // no activity at all
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -902,7 +908,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, null, "meta.json parse failed: not a JSON object")])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -925,7 +931,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -980,6 +986,136 @@ describe("buildAgentTree", () => {
     });
   });
 
+  // ---------------------------------------------------------------- 86c9yxv94 — buildActivity finished elapsed-time suffix
+  describe("buildActivity — finished elapsed-time suffix (86c9yxv94)", () => {
+    // Source: ticket 86c9yxv94 ACs 2 + 4. Defect 6a per Bram's triage —
+    // `buildActivity("finished", ...)` returned the bare string `"finished"`
+    // and the sponsor's V1 dogfood observation #6 ("Bram finished 2s" static
+    // for several minutes) shows the freshness signal was missing. The fix
+    // routes a finishedAtMs through `FinishedMap` and surfaces elapsed time.
+
+    it("AC4 literal: nowMs=1000, finishedAtMs=0 → 'finished 1s'", () => {
+      // The literal AC4 spec from the ticket — pin the math contract.
+      // Math: (1000 - 0) / 1000 = 1 second.
+      expect(buildActivity("finished", undefined, 1000, 0)).toBe("finished 1s");
+    });
+
+    it("elapsed=0 ('just finished') → 'finished 0s' (NOT bare 'finished')", () => {
+      // The freshness signal sponsor noticed missing in Obs 6: an agent that
+      // just finished should still show "0s" so the user knows it just
+      // completed — the bare "finished" string was indistinguishable from
+      // "finished hours ago".
+      expect(buildActivity("finished", undefined, 5000, 5000)).toBe(
+        "finished 0s",
+      );
+    });
+
+    it("elapsed=120s → 'finished 120s' (no minute formatting at reducer level)", () => {
+      // Reducer emits raw seconds; webview can format units if desired.
+      // Spec §1.4 stays presenter-agnostic at the reducer boundary.
+      expect(buildActivity("finished", undefined, 125_000, 5_000)).toBe(
+        "finished 120s",
+      );
+    });
+
+    it("finishedAtMs omitted → bare 'finished' (back-compat)", () => {
+      // Legacy callers that don't supply the parameter still get the
+      // pre-86c9yxv94 string shape.
+      expect(buildActivity("finished", undefined, 1000)).toBe("finished");
+    });
+
+    it("finishedAtMs=undefined explicit → bare 'finished' (back-compat)", () => {
+      expect(buildActivity("finished", undefined, 1000, undefined)).toBe(
+        "finished",
+      );
+    });
+
+    it("nowMs < finishedAtMs (clock skew) → 'finished 0s' (clamped)", () => {
+      // Defensive: if upstream JSONL timestamps are in the future (machine
+      // clock skew, NTP correction during a tick), `Math.max(0, ...)` keeps
+      // the elapsed display non-negative.
+      expect(buildActivity("finished", undefined, 1000, 5000)).toBe(
+        "finished 0s",
+      );
+    });
+
+    it("state='running' ignores finishedAtMs entirely", () => {
+      // finishedAtMs only affects the finished branch.
+      const activity = makeActivity({ lastTool: "Bash" });
+      expect(buildActivity("running", activity, 1000, 0)).toBe("tool:Bash");
+    });
+
+    it("state='idle' ignores finishedAtMs entirely", () => {
+      const activity = makeActivity({ mtimeMs: 800 });
+      expect(buildActivity("idle", activity, 5000, 0)).toMatch(/^idle \d+s$/);
+    });
+
+    it("state='error' ignores finishedAtMs entirely", () => {
+      expect(buildActivity("error", undefined, 1000, 0)).toBe(
+        "error: agent state unavailable",
+      );
+    });
+
+    // ---------------- buildAgentTree integration: FinishedMap flows through
+    it("buildAgentTree: finishedAtMs in FinishedMap renders 'finished Xs' on tile", () => {
+      // End-to-end: ensure the timestamp survives from FinishedMap → reducer
+      // → tile.activity string. Regression guard for the wire boundary —
+      // the value is `.get()`-ed inside the reducer and passed to
+      // buildActivity at the call site.
+      const session = makeSession();
+      const agentId = "agent_xv94_int";
+      const meta = makeMeta({ agentType: "felix", description: "Felix finished+ts" });
+      const activity = makeActivity({ mtimeMs: NOW_MS - 60_000 });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+      // finishedAt = 7s ago.
+      const finished: FinishedMap = new Map([[agentId, NOW_MS - 7_000]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        finished,
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.state).toBe("finished");
+      expect(tile!.activity).toBe("finished 7s");
+    });
+
+    it("buildAgentTree: agentId in finishedIds with value 0 → 'finished <huge>s' (sentinel pass-through)", () => {
+      // Pin the contract: `0` is NOT a sentinel inside buildActivity — the
+      // gate is `!== undefined`, not `> 0`. The parser must use `undefined`
+      // (i.e. omit the entry from the map) if it wants the bare "finished"
+      // fallback. In practice the parser stores `0` for unparseable
+      // timestamps; the math then produces a huge elapsed value, which is
+      // an acceptable diagnostic shape for an irrecoverable case.
+      const session = makeSession();
+      const agentId = "agent_xv94_sentinel";
+      const meta = makeMeta({ agentType: "felix", description: "Felix sentinel" });
+      const activity = makeActivity({ mtimeMs: NOW_MS - 60_000 });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+      const finished: FinishedMap = new Map([[agentId, 0]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        finished,
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.state).toBe("finished");
+      // Elapsed = NOW_MS - 0 = NOW_MS milliseconds → very large second count.
+      expect(tile!.activity).toMatch(/^finished \d+s$/);
+      // Sanity: it's clearly not the bare "finished" string.
+      expect(tile!.activity).not.toBe("finished");
+    });
+  });
+
   // ---------------------------------------------------------------- M3-10 — persona-tile collapse
   describe("M3-10 — persona-tile collapse (AC1/AC4/AC5/AC6)", () => {
     // Helper: build N rostered tiles with the same persona under one session.
@@ -1018,7 +1154,7 @@ describe("buildAgentTree", () => {
         [session],
         [data],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
         // Default options — collapse ON.
@@ -1054,7 +1190,7 @@ describe("buildAgentTree", () => {
         [session],
         [data],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -1091,7 +1227,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, agents)],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -1115,7 +1251,7 @@ describe("buildAgentTree", () => {
         [session],
         [data],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
         { collapsePersonaTiles: false },
@@ -1141,7 +1277,7 @@ describe("buildAgentTree", () => {
         [session],
         [data],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
         { collapsePersonaTiles: true },
@@ -1164,7 +1300,7 @@ describe("buildAgentTree", () => {
         [session],
         [data],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
         // Omit options entirely.
@@ -1209,7 +1345,7 @@ describe("buildAgentTree", () => {
         [session],
         [makeSessionData(session.sessionId, agents)],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );
@@ -1346,7 +1482,7 @@ describe("buildAgentTree", () => {
         [session],
         [data],
         activities,
-        new Set(),
+        new Map(),
         ROSTER_ALPHA,
         NOW_MS,
       );

@@ -197,6 +197,10 @@ A subagent is `finished` if:
 
 Otherwise → `idle` (PID alive but JSONL stale > 10s).
 
+### Finished timestamp source (86c9yxv94)
+
+The `tool_result` record's **top-level `timestamp` field** (ISO-8601 string, parseable via `Date.parse`) is the authoritative `finishedAtMs` for elapsed-time rendering on the finished tile. The reducer's input is `FinishedMap = Map<agentId, finishedAtMs>` (was `Set<string>` before 86c9yxv94); `buildActivity` uses the value to emit `"finished Xs"` when the timestamp is supplied and falls back to bare `"finished"` when omitted. Unparseable timestamps produce a `0` sentinel from the parser — `buildActivity`'s gate is `!== undefined`, so a `0` sentinel renders a very large elapsed value (diagnostic shape; production JSONL timestamps are always parseable).
+
 ## Pixel Agents coexistence
 
 The user's machine runs the **Pixel Agents** VS Code extension, which has its own hook server at `~/.pixel-agents/server.json` (port 55271, bearer-token auth, accepts POSTs to `/api/hooks/claude`). All 11 Claude Code lifecycle hooks are registered in `~/.claude/settings.json` to forward to that server.

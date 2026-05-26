@@ -48,16 +48,23 @@ export interface AgentMetaEntry {
 export type ActivityMap = Map<string, SubagentActivity>;
 
 /**
- * Finished-agent set: agentIds whose parent transcript has a `tool_result`
- * matching the agent's `meta.toolUseId`. Determined by the CLI reader (or
- * file-watcher in M2) by scanning the parent JSONL. Pure map from toolUseId
- * → agentId (both sides needed because that's how the parent links them).
+ * Finished-agent map: agentId → finishedAtMs (epoch ms parsed from the
+ * parent JSONL `tool_result` record's top-level `timestamp` field). Determined
+ * by the CLI reader (or file-watcher in M2) by scanning the parent JSONL.
  *
  * Per Bram's M1-02 finding (data-sources.md §3 "JSONL closing semantics"):
  * the parent JSONL's `tool_result` with `tool_use_id == meta.toolUseId` is
  * the ONLY reliable "finished" signal; the child JSONL never carries it.
+ *
+ * The map shape replaced the prior `FinishedSet = Set<string>` (ticket
+ * 86c9yxv94) to carry the finish timestamp through to `buildActivity` so
+ * "finished Xs" elapsed-time suffix can be rendered. Membership semantics
+ * are preserved via `.has(agentId)` — the value is the timestamp, not a
+ * sentinel. A timestamp of `0` is acceptable (e.g. unparseable JSONL
+ * timestamp); `buildActivity` falls back to bare `"finished"` when the
+ * timestamp is 0 OR omitted.
  */
-export type FinishedSet = Set<string>; // set of agentIds
+export type FinishedMap = Map<string, number>; // agentId → finishedAtMs
 
 /**
  * Per-session subagent inputs. One entry per live SessionRecord.
@@ -100,7 +107,10 @@ export interface BuildAgentTreeOptions {
  * @param sessions   All sessions from the session registry (listSessions).
  * @param agentData  Per-session subagent metadata (one entry per session).
  * @param activities Activity snapshot for each agent (agentId → SubagentActivity).
- * @param finishedIds Set of agentIds known to have finished (parent JSONL signal).
+ * @param finishedIds Map of agentIds known to have finished (parent JSONL signal)
+ *                    → epoch ms of the parent `tool_result` record's
+ *                    `timestamp` field. Use `.has(agentId)` for membership;
+ *                    the value flows into `buildActivity` for elapsed-time.
  * @param roster     Merged roster from the roster loader.
  * @param nowMs      Current epoch ms — injected for testability. Defaults to
  *                   Date.now() when not supplied (production CLI).
@@ -110,7 +120,7 @@ export function buildAgentTree(
   sessions: SessionRecord[],
   agentData: SessionAgentData[],
   activities: ActivityMap,
-  finishedIds: FinishedSet,
+  finishedIds: FinishedMap,
   roster: Team[],
   nowMs: number = Date.now(),
   options: BuildAgentTreeOptions = {},
@@ -161,7 +171,11 @@ export function buildAgentTree(
       const matchResult = matchAgent(meta, roster);
       const state = inferState(session, activity, finishedIds, agentId, nowMs);
       const model = resolveModel(activity);
-      const activityStr = buildActivity(state, activity, nowMs);
+      // Pass finishedAtMs so buildActivity can render "finished Xs" elapsed
+      // time. .get() returns undefined when the agent isn't finished — the
+      // signature accepts undefined and falls back to bare "finished".
+      const finishedAtMs = finishedIds.get(agentId);
+      const activityStr = buildActivity(state, activity, nowMs, finishedAtMs);
 
       if (matchResult === null) {
         // Background agent.
@@ -291,7 +305,7 @@ export const IDLE_THRESHOLD_MS = 10_000;
 function inferState(
   session: SessionRecord,
   activity: SubagentActivity | undefined,
-  finishedIds: FinishedSet,
+  finishedIds: FinishedMap,
   agentId: string,
   nowMs: number,
 ): AgentState {
@@ -423,11 +437,23 @@ export function groupTilesByPersona(
  * Build the activity field string per Iris's spec §1.4.
  *
  * Full string — truncation is the CLI presenter's job (spec §5 divergence #2).
+ *
+ * @param finishedAtMs Optional epoch ms of when the agent finished (sourced
+ *                     from the parent JSONL `tool_result` record's top-level
+ *                     `timestamp` field). When supplied AND state is
+ *                     "finished" AND non-zero, the output is
+ *                     `"finished ${elapsedS}s"`. Otherwise the bare
+ *                     `"finished"` string is returned — back-compat with
+ *                     pre-86c9yxv94 callers that only carried agentId
+ *                     membership.
+ *
+ * Exported for direct unit-test coverage (AC4 of ticket 86c9yxv94).
  */
-function buildActivity(
+export function buildActivity(
   state: AgentState,
   activity: SubagentActivity | undefined,
   nowMs: number,
+  finishedAtMs?: number,
 ): string {
   switch (state) {
     case "running": {
@@ -443,8 +469,26 @@ function buildActivity(
       const elapsedS = Math.max(0, Math.round((nowMs - activity.mtimeMs) / 1000));
       return `idle ${elapsedS}s`;
     }
-    case "finished":
+    case "finished": {
+      // 86c9yxv94 AC2: when finishedAtMs is supplied, suffix the elapsed
+      // time so the user can distinguish "just finished" from "finished
+      // 20 min ago". When the caller omits the parameter (legacy callers,
+      // tests that don't supply it), fall back to bare "finished" —
+      // preserves back-compat.
+      //
+      // The gate is `!== undefined`, not `> 0`, because elapsed=0 ("just
+      // finished") is a meaningful display — bare `"finished"` would hide
+      // the freshness signal sponsor noticed missing in V1 dogfood Obs 6.
+      // Production JSONL timestamps are always parseable ISO-8601 strings
+      // written by Claude Code; the unparseable-timestamp edge case
+      // (parser returns 0 sentinel) would render `"finished <huge>s"`
+      // which is acceptable for an irrecoverable diagnostic case.
+      if (finishedAtMs !== undefined) {
+        const elapsedS = Math.max(0, Math.round((nowMs - finishedAtMs) / 1000));
+        return `finished ${elapsedS}s`;
+      }
       return "finished";
+    }
     case "error":
       return "error: agent state unavailable";
   }
