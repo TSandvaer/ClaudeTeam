@@ -562,6 +562,24 @@ function readSessionTitle(jsonlPath: string): string | null {
  * the `"finished Xs"` elapsed-time suffix. When a record's timestamp is
  * missing or unparseable, the value is `0` — the reducer treats 0 as
  * "no timestamp" and falls back to bare `"finished"`.
+ *
+ * Obs 9 fix (86c9zc5dd): when an Agent tool_use is dispatched with
+ * `run_in_background: true`, Claude Code writes an IMMEDIATE tool_result
+ * at spawn time ("Async agent launched successfully...") with the
+ * spawning toolUseId. The record carries top-level `toolUseResult.isAsync:
+ * true` + `toolUseResult.status: "async_launched"`. We MUST skip these
+ * records — they're dispatch acks, not completion signals. For background
+ * agents the actual completion is delivered out-of-band (notification
+ * to the orchestrator); the parent JSONL never receives a second
+ * tool_result for the same toolUseId. Verified against parent JSONL
+ * `baf09ef7-...` Bram Round-3 dispatch (toolUseId
+ * `toolu_01MMAeiEPr44os17jq9mJ8UY`): exactly two occurrences — the
+ * tool_use itself and one async-launched tool_result — no completion
+ * record.
+ *
+ * Foreground (`Agent` without `run_in_background:true`) tool_results
+ * do NOT carry a `toolUseResult.isAsync` field; they're real completions
+ * and remain in the finished map.
  */
 function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
   const finished = new Map<string, number>();
@@ -576,6 +594,20 @@ function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
     try {
       const rec = JSON.parse(line) as Record<string, unknown>;
       if (rec["type"] !== "user") continue;
+      // Obs 9: skip background-dispatch acknowledgments. The wrapper
+      // record carries `toolUseResult.isAsync === true` — this signals the
+      // tool_result is the spawn ack, not a completion. Skipping the
+      // entire record is correct because async-launched records carry
+      // exactly one tool_result (the ack itself).
+      const tur = rec["toolUseResult"];
+      if (
+        tur !== null &&
+        typeof tur === "object" &&
+        !Array.isArray(tur) &&
+        (tur as Record<string, unknown>)["isAsync"] === true
+      ) {
+        continue;
+      }
       const msg = rec["message"];
       if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
       const content = (msg as Record<string, unknown>)["content"];

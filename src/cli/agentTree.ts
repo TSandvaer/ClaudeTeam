@@ -102,6 +102,13 @@ function readSessionTitle(jsonlPath: string): string | null {
  * missing or unparseable, the map records `0` for that toolUseId — the
  * reducer treats 0 as "no timestamp" and falls back to bare `"finished"`.
  *
+ * Obs 9 fix (86c9zc5dd): skip records whose top-level
+ * `toolUseResult.isAsync === true`. Those are background-dispatch
+ * acknowledgments ("Async agent launched successfully...") written by
+ * Claude Code at spawn time — they would otherwise immediately classify
+ * a still-running background agent as finished. See watcherLoop.ts copy
+ * for full rationale + verified evidence.
+ *
  * Returns a Map of toolUseId → finishedAtMs (0 sentinel when unparseable).
  */
 function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
@@ -117,6 +124,16 @@ function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
     try {
       const rec = JSON.parse(line) as Record<string, unknown>;
       if (rec["type"] !== "user") continue;
+      // Obs 9: skip background-dispatch acknowledgments.
+      const tur = rec["toolUseResult"];
+      if (
+        tur !== null &&
+        typeof tur === "object" &&
+        !Array.isArray(tur) &&
+        (tur as Record<string, unknown>)["isAsync"] === true
+      ) {
+        continue;
+      }
       const msg = rec["message"];
       if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
       const content = (msg as Record<string, unknown>)["content"];

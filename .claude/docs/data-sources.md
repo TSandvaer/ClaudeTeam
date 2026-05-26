@@ -201,6 +201,35 @@ Otherwise → `idle` (PID alive but JSONL stale > 10s).
 
 The `tool_result` record's **top-level `timestamp` field** (ISO-8601 string, parseable via `Date.parse`) is the authoritative `finishedAtMs` for elapsed-time rendering on the finished tile. The reducer's input is `FinishedMap = Map<agentId, finishedAtMs>` (was `Set<string>` before 86c9yxv94); `buildActivity` uses the value to emit `"finished Xs"` when the timestamp is supplied and falls back to bare `"finished"` when omitted. Unparseable timestamps produce a `0` sentinel from the parser — `buildActivity`'s gate is `!== undefined`, so a `0` sentinel renders a very large elapsed value (diagnostic shape; production JSONL timestamps are always parseable).
 
+### Background-dispatch acknowledgment is NOT a finished signal (86c9zc5dd / Obs 9)
+
+When the orchestrator dispatches a sub-agent via the `Agent` tool with `run_in_background: true`, Claude Code writes an **immediate** `tool_result` record to the parent JSONL at spawn time — milliseconds after the dispatch itself, NOT on completion. The record's `tool_use_id` matches the spawning `Agent` call (i.e. matches the child's `meta.toolUseId`). Without disambiguation, `readFinishedToolUseIds` would classify every background agent as `"finished"` within 2 seconds of dispatch.
+
+**Discriminator: top-level `toolUseResult.isAsync` field.**
+
+The dispatch-ack record carries a `toolUseResult` object at the JSONL record root (sibling of `message`) shaped like:
+
+```json
+"toolUseResult": {
+  "isAsync": true,
+  "status": "async_launched",
+  "agentId": "ad8ae64968850a339",
+  "description": "Bram Round-3 Surface C 7s triage",
+  "prompt": "...",
+  "outputFile": "...",
+  "canReadOutputFile": true
+}
+```
+
+The watcher (`readFinishedToolUseIds` in `src/extension/watcher/watcherLoop.ts` and the duplicate in `src/cli/agentTree.ts`) checks `rec.toolUseResult?.isAsync === true` per JSONL line — if true, the entire record is skipped. Foreground (synchronous) Agent tool_results do NOT carry a `toolUseResult.isAsync` field at all, so the discriminator is unambiguous: only background dispatch acks have it, and only they should be skipped.
+
+**Verified evidence (parent JSONL `baf09ef7-...jsonl`, Bram Round-3 agent, toolUseId `toolu_01MMAeiEPr44os17jq9mJ8UY`):**
+- Line 1335: `type:"assistant"` tool_use (the `Agent` call) at `2026-05-26T13:21:17.564Z`.
+- Line 1336: `type:"user"` tool_result with `toolUseResult.isAsync:true` + `status:"async_launched"` at `2026-05-26T13:21:17.860Z`.
+- No third record with this `tool_use_id` exists anywhere in the file, even though Bram completed ~1 hour later. Background completions are delivered out-of-band (sub-agent finishes its turn into its own JSONL + the harness sends a `<task-notification>` to the orchestrator) — the parent JSONL never receives a second `tool_result` for the same toolUseId.
+
+Test fixtures: `tests/fixtures/parent-jsonl-async-launched.jsonl` (verbatim 2-line capture from the real session) + `tests/fixtures/meta-bram-async-launched.json` (matching meta). Covered in `tests/integration/fixtureFs.test.ts` describe-block `AC2.4b`.
+
 ## Pixel Agents coexistence
 
 The user's machine runs the **Pixel Agents** VS Code extension, which has its own hook server at `~/.pixel-agents/server.json` (port 55271, bearer-token auth, accepts POSTs to `/api/hooks/claude`). All 11 Claude Code lifecycle hooks are registered in `~/.claude/settings.json` to forward to that server.
