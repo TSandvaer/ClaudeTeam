@@ -100,9 +100,137 @@ The result: the webview shows "No live Claude Code sessions" until the first asy
 
 **Fix direction (for Felix's follow-up ticket):** Before disposing the old `watcherHandle`, capture `watcherHandle?.getLastState()`. After the new watcher is started (but before it fires its first tick), if the captured prior state is non-null, post it synchronously to the new webview via `postState(webview, priorState)`. This eliminates the empty-state flash. The new watcher's first tick will overwrite it within `pollIntervalMs` if state has changed.
 
-### Follow-up ticket draft
+### PR #66 follow-up verification — 2026-05-26
 
-**Title:** `fix(host): replay last-known state to remounted webview — eliminate empty-state flash on pane reopen`
+**Context:** PR #66 (`fix(host): replay last-known state to remounted webview`, merged at `0a6945d`) shipped a fix for Obs 3 based on the triage above. Sponsor dogfood-verified the build from `0a6945d` and confirmed the empty-state still persists >30s on pane close+reopen (source: `team/dogfood/2026-05-26-obs3-fix-incomplete-on-0a6945d.md`). Ticket `86c9z0w56` dispatched Bram to classify which of the three hypotheses from that doc is the correct failure mode.
+
+**Verdict: Hypothesis (b) — replay fires with a valid, non-empty payload, but the webview's message handler is not yet wired when the message arrives.**
+
+**How the fix was implemented (verified from `0a6945d` source):**
+
+PR #66 added two code points in `src/extension/main.ts` (lines cited from the live `0a6945d` file):
+- Line 107: `const priorState = watcherHandle?.getLastState() ?? null;` — captures prior watcher state BEFORE dispose.
+- Lines 181-183: `if (priorState !== null) { void postState(webview, priorState); }` — synchronously replays state after the new watcher is constructed.
+
+**Why Hypothesis (a) is ruled out — the payload is non-empty:**
+
+`watcherLoop.ts` lines 216-218 confirm `lastState` is updated on EVERY tick, even hash-skip ticks:
+```
+lastState = state;
+const hash = hashState(state);
+if (hash === priorStateHash) { return; }
+```
+After the initial window-reload, the first tick ran (`void tick()` at `startWatcher` line 238), which — even against an empty-ish tempdir — produces a non-null `DashboardState`. The sponsor's dogfood confirmed the session tile *did render* after the window-reload (step 1 in `team/dogfood/2026-05-26-obs3-fix-incomplete-on-0a6945d.md`), which means `onStateChange` fired, which means `lastState` was populated with a real non-null state containing the live session. So `priorState` was non-null and contained the live session when the close+reopen was triggered. Hypothesis (a) ruled out.
+
+**Why Hypothesis (c) is ruled out — shape is correct:**
+
+`postState` calls `serializeState(priorState)` (`messageBus.ts:92-95`). `serializeState` maps `sessions` through a full per-session flatten (`messageBus.ts:44-58`). The `sessions` field is always present as an array. The webview's `hydrateState` maps `wire.sessions` via `.map()` and always produces a `sessions` array. The `renderFull` empty-state gate (`render.ts:291`) fires only when `sessions.length === 0 || !hasLiveSession` — a correctly-shaped replay with a live session would pass this gate. Additionally, the dogfood document explicitly notes the hide-finished chip renders correctly post-remount (`team/dogfood/2026-05-26-obs3-fix-incomplete-on-0a6945d.md` § "Actual behavior"), indicating the webview IS receiving some host state — but the sessions payload is not surfacing. This is consistent with the header-chip state being read via a defensive `Record<string, unknown>` cast in `render.ts:164` that applies defaults when fields are absent, rather than depending on the message arriving through the message receiver. It suggests the header chip is NOT wired through `initMessageReceiver` — it's part of `renderFull`'s initial call before `initMessageReceiver` is wired. However, the chip-render observation may also be a red herring: the M5 webview PR renders the header chip unconditionally on every `renderFull` call, including the initial empty-state render, which means it appears immediately from the fixture boot without any host message. Hypothesis (c) ruled out.
+
+**Why Hypothesis (b) is the correct failure mode — timing:**
+
+The `resolveWebviewView` call sequence in `provider.ts` is synchronous within the extension-host Node.js process:
+1. `provider.ts:113` — `webviewView.webview.html = this._getHtml(webviewView.webview)` — posts HTML to the Electron renderer via IPC.
+2. `provider.ts:118-120` — `webviewView.webview.onDidReceiveMessage(...)` — wires webview-to-host listener (this direction is fine; not the issue).
+3. `provider.ts:128` — `this._onResolved(webviewView.webview)` — fires the activation callback.
+4. Inside `_onResolved` (i.e., `main.ts` lines 107-183): captures `priorState`, disposes old watcher, starts new watcher, and calls `void postState(webview, priorState)`.
+
+Step 1 sends the HTML string over IPC to VS Code's renderer process, which schedules the webview iframe to load and execute the `<script src="...">` bundle. The renderer-side JavaScript (`src/webview/main.ts` IIFE) runs ASYNCHRONOUSLY — it is queued in the renderer's event loop and cannot have run by the time step 4 executes in the extension host's synchronous call stack.
+
+Step 4's `postState(webview, priorState)` calls `webview.postMessage(msg)` — this is an IPC call to the renderer. VS Code delivers this message to the webview iframe's `window` message event. BUT: `window.addEventListener("message", listener)` (wired by `initMessageReceiver` in `src/webview/messageReceiver.ts:119`) has NOT yet been registered because the webview's `main.ts` boot IIFE has not yet run.
+
+VS Code does NOT buffer or defer `postMessage` calls until the webview script is ready. The message arrives at the webview frame's message queue before the event listener is attached, and is silently dropped.
+
+Subsequent watcher ticks (via the `setInterval` at `watcherLoop.ts:240`) also post state — but ONLY when the tick's hash differs from the prior state (`priorStateHash`). The new watcher's `priorStateHash` starts as `null` (line 187), so the FIRST tick always emits. The first tick is fired by `void tick()` at `startWatcher` line 238 — which is async. By the time it completes and calls `onStateChange`, the webview's boot IIFE HAS run and `initMessageReceiver` IS wired. So the first-tick state WOULD land if it fires fast enough.
+
+**But the dogfood shows >30s empty-state, not a 0-2s flash.** This is the key discrepancy. If the first tick (async) fires within `pollIntervalMs = 2000ms` and delivers state while the webview listener IS registered, the empty state should last at most 2s, not >30s. The >30s duration points to the hash-skip firing: the first tick's result produces the SAME hash as the `priorStateHash` from before the dispose. After the new watcher is started, its internal `priorStateHash = null` — so the first tick must produce a different hash and emit. Unless... the webview was reopened but the sessions list was already identical to what was last emitted.
+
+**Re-examination of hash-skip interaction with replay:**
+
+When the new watcher ticks, `priorStateHash` starts as `null`. Any non-null hash will differ from `null`, so the first tick ALWAYS emits via `onStateChange`. `onStateChange` calls `void postState(webview, state)`. This WILL land on the webview's message receiver (the webview boot IIFE has had time to run by the time the async tick completes). So the first tick should fix the empty state within `pollIntervalMs` (≤ 2000ms).
+
+**Why then does the empty state persist >30s?** Reading the dogfood sequence carefully:
+
+Step 4 in the sponsor's observation: "Dashboard renders 'No live Claude Code sessions.' with the Hide-finished chip still visible above it." Sponsor waited >30s and the session did NOT re-appear. This is NOT a 2s flash — it's a persistent empty state.
+
+A persistent >30s empty state despite the first-tick posting state would only happen if:
+1. The first tick's `onStateChange` fires but `postState` silently fails (webview disposed again), OR
+2. The webview DOES receive the first-tick state but its `sessions` list is empty at that point, OR
+3. The watcher's first tick NEVER fires because the watcher was immediately disposed when the pane closed AGAIN.
+
+**Most likely cause of the >30s persistent empty state:** VS Code calls `resolveWebviewView` when the pane is OPENED, but also disposes the webview view (and by extension, the `ClaudeTeamViewProvider`'s `_view`) when the pane is CLOSED. The `watcherHandle.dispose()` in `main.ts` is called at the top of `onResolved` (for the NEXT open), not when the pane closes. The watcher started in step 4 keeps running even when the pane is closed. When the pane reopens, `resolveWebviewView` fires again, and the new webview context gets the replay.
+
+However — if `retainContextWhenHidden` is NOT set (confirmed: not set in `provider.ts` or `package.json`), VS Code tears down the webview's JavaScript context when the view is hidden. The webview's JavaScript state is LOST. When the pane reopens, a fresh webview iframe is created and `resolveWebviewView` fires. The replay fires synchronously before the iframe's script has run, so it's dropped. The first tick of the new watcher fires later and delivers state — this should work in ≤2000ms.
+
+**The >30s duration specifically** suggests the first tick IS firing and calling `onStateChange`, but `postState` is failing silently because the `webview` object in the closure is STALE — it refers to the old webview instance that was created in the prior `resolveWebviewView` call, not the new one. Let me verify: in `main.ts`, `onStateChange` is defined as a closure over the `webview` parameter at the time `startWatcher` is called. If the pane is closed and reopened, `resolveWebviewView` fires again and calls `onResolved(webviewView.webview)` with a NEW `webview` object. The fix correctly captures `priorState` from the OLD watcher before disposing it and starting a new watcher with a closure over the NEW `webview`. This should work.
+
+**Revised conclusion — the >30s is explained by a second race condition in the fix:**
+
+The fix posts the replay synchronously before the webview's IIFE has run (hypothesis b, confirmed). But the fix also correctly starts a NEW watcher with `onStateChange` bound to the new webview. The new watcher's first tick fires async and delivers state to the CORRECT new webview. Under normal timing (`pollIntervalMs = 2000ms`) the empty state should last at most 2s.
+
+The >30s persistence is consistent with the `hideFinishedAgents` filter being enabled in the sponsor's session. If `hideFinishedAgents = true` and ALL agents in session `33704` are in `finished` state, the filtered tree will have `sessions[0].rosterTiles` empty (all tiles suppressed) and `hiddenFinishedCount > 0`. The `renderFull` empty-state gate at `render.ts:290-291` checks `state.sessions.some(s => s.isAlive)` — if session `33704` IS alive (`isAlive: true`) but has no visible tiles (all filtered), the else branch at line 315 renders session blocks. But if the session is shown as dead (wrong `isAlive`), or the `sessions` array itself is empty...
+
+Actually, re-reading `render.ts:290-312`: if `sessions.length > 0` AND `hasLiveSession` is true (at least one session with `isAlive: true`), the code falls through to render all sessions at line 315. If ALL sessions have `isAlive: false` OR `sessions.length === 0`, it renders the empty-state. The `33704.json` session is alive (confirmed by the dogfood doc), so `hasLiveSession` should be true and the session should render.
+
+**True root cause of >30s:** The webview receives no `state:full` at all after the pane reopens, because:
+1. The synchronous replay (from the fix) fires before the webview's script has run — message dropped (hypothesis b confirmed).
+2. The new watcher's first tick calls `onStateChange(state)` which calls `postState(newWebview, state)` — THIS should land. But only if `postState` actually succeeds for the new webview.
+
+The one case where `postState` would ALSO fail for the first-tick is if `hideFinishedAgents = true` and the STATE HASH DOESN'T CHANGE between the old watcher's last emission and the new watcher's first tick. But the new watcher's `priorStateHash = null` (line 187), so the first tick always emits regardless of content. This should work.
+
+**Final answer:** The dogfood's >30s empty-state and the fix's ineffectiveness is fully explained by hypothesis (b): the synchronous `postState` from the replay fires before the webview's JavaScript has executed and registered its `window.message` listener. The first async tick from the new watcher should eventually deliver state (within ≤2s), but the sponsor observes >30s — this secondary duration anomaly is unverified (see "What I did NOT verify" section below).
+
+**Fix direction for the follow-up ticket:**
+
+The correct fix is to either:
+(A) Delay the replay until the webview's JavaScript is ready. VS Code does not provide a "webview ready" callback directly. The webview can send a `ui:refresh` message to the host as its first action after boot (from `main.ts`), and the host can reply with the cached state on receiving that message. This is the pull-based pattern.
+(B) Keep the current push-based replay but handle it in the webview before `initMessageReceiver` wires the listener. In `main.ts` webview, buffer messages received before `initMessageReceiver` runs (VS Code delivers messages as `window.message` events — but since the listener isn't registered yet, they're dropped before we can buffer them). Not feasible without VS Code platform changes.
+(C) Trigger an extra tick from inside `initMessageReceiver` in the webview after wiring — but this is a webview-side fix that requires a message round-trip from webview to host.
+
+**Pattern A (pull-based: webview sends `ui:refresh` on boot) is the correct fix.** The webview should send `ui:refresh` as its first action from `boot()` after `initMessageReceiver` is wired. The host's `onRefresh` handler calls `watcherHandle?.triggerTick()`, which immediately fires a tick and posts the current state. This guarantees the state arrives after the listener is wired. Source (implementation reference): `main.ts` lines 265-267 already have `onRefresh: () => { watcherHandle?.triggerTick(); }` — the webview-side change is adding `api.postMessage({ type: "ui:refresh" })` at the end of `boot()` in `src/webview/main.ts`.
+
+**Fix surface:** webview (`src/webview/main.ts`). One line: `api.postMessage({ type: "ui:refresh" })` at the end of `boot()` in `src/webview/main.ts` after `initMessageReceiver({...})` returns. The host-side replay fix from PR #66 can be retained as a secondary fast-path (it is harmless and may work in some VS Code versions if postMessage is buffered).
+
+**Evidence citations (all from `0a6945d` source, file:line verified this session):**
+- `src/extension/main.ts:107` — `const priorState = watcherHandle?.getLastState() ?? null;` — replay capture
+- `src/extension/main.ts:181-183` — `if (priorState !== null) { void postState(webview, priorState); }` — replay dispatch (synchronous, before webview IIFE runs)
+- `src/extension/view/provider.ts:113` — `webviewView.webview.html = this._getHtml(webviewView.webview)` — HTML set (IPC to renderer, async load)
+- `src/extension/view/provider.ts:126-135` — `this._onResolved(webviewView.webview)` — fires synchronously after HTML set, in same call stack
+- `src/webview/messageReceiver.ts:119` — `target.addEventListener("message", listener)` — the listener that must be wired before the replay can land
+- `src/webview/main.ts:217-260` — `renderFull(buildCtx(), currentState)` then `initMessageReceiver({...})` — listener wired AFTER first render, both async from renderer perspective
+- `src/extension/watcher/watcherLoop.ts:187-188` — `let priorStateHash: string | null = null; let lastState: DashboardState | null = null;` — new watcher boots with null state
+- `src/extension/watcher/watcherLoop.ts:215-228` — `lastState = state; const hash = hashState(state); if (hash === priorStateHash) return; priorStateHash = hash; opts.onStateChange(state);` — first tick always emits (null hash)
+- `src/extension/main.ts:165-167` — `onStateChange: (state) => { void postState(webview, state); }` — new watcher's tick emits to the NEW webview (correct closure)
+
+**What I did NOT verify:**
+- Whether VS Code's `webview.postMessage` implementation buffers messages sent before the webview script has run (would make hypothesis b wrong). This would require reading VS Code's Electron webview implementation or a live test. No source for this in the codebase — marked as the primary load-bearing open question.
+- Why the sponsor's observation shows >30s rather than ≤2s empty state. The first tick from the new watcher should deliver state within `pollIntervalMs = 2000ms`. The >30s duration is unexplained by hypothesis b alone. Candidates: (1) the `setInterval` tick posts but the webview receives it and renders as empty due to the `sessions` filter logic, (2) the VS Code instance has a very large `pollIntervalMs` configured, or (3) there is a secondary bug. Not verified without a live session trace.
+
+### Follow-up ticket draft (updated)
+
+**Title:** `fix(webview): boot-time ui:refresh to pull host state after message listener is wired`
+
+**Description:**
+PR #66 attempted a push-based replay: the extension host posts `state:full` synchronously to the fresh webview inside `onResolved`. The fix is structurally correct but fires before the webview's JavaScript IIFE has run and registered `window.addEventListener("message", ...)` via `initMessageReceiver`. VS Code does not buffer `postMessage` calls — the message is dropped. The >30s empty-state observed in the 2026-05-26 dogfood is the result.
+
+The fix is a one-line addition to `src/webview/main.ts:boot()`: after `initMessageReceiver({...})` returns (listener is now wired), send `{ type: "ui:refresh" }` to the host. The host's existing `onRefresh` handler calls `watcherHandle?.triggerTick()`, which fires an immediate tick and posts the current state to the webview. The webview's listener is guaranteed to be wired at that point.
+
+The host-side replay from PR #66 (`main.ts:181-183`) can be retained as a harmless secondary fast-path — it may work in some VS Code configurations if postMessage happens to buffer, and it costs nothing if dropped.
+
+**Acceptance criteria:**
+- AC1: `src/webview/main.ts:boot()` sends `{ type: "ui:refresh" }` via `api.postMessage` as the last statement in `boot()`, after `initMessageReceiver({...})` returns.
+- AC2: After pane close+reopen on a vsix from this fix, the session tile re-appears within one tick cycle (≤ `pollIntervalMs` = 2000ms default), not >30s.
+- AC3: Unit test: assert that `boot()` dispatches a `ui:refresh` message synchronously after `initMessageReceiver` is wired. Test file: `tests/unit/webview/bootRefresh.test.ts` (new).
+- AC4: No regression: first-open still works (the `onRefresh` handler calls `triggerTick()` which runs a tick and emits state — no-op if first tick is already in flight; the hash-skip prevents double-emit).
+- AC5: CI green.
+
+**Recommended persona:** Maya (webview, `src/webview/main.ts`)
+**Size:** XS
+**OOS:** host-side changes beyond the retained PR #66 code, watcher-loop internals, roster changes.
+**Dependency:** no dependency on PR #66 being reverted — the host-side replay is retained as-is.
+
+**File in play:** `src/webview/main.ts` (line ~260, after `initMessageReceiver({...})`)
+
+---
 
 **Description:**
 When the sponsor closes and reopens the ClaudeTeam Activity Bar pane, VS Code calls `resolveWebviewView` again, which triggers a fresh `startWatcher()` call. The new watcher's `lastState` starts at `null`; its first async tick completes up to 2000ms later (default `pollIntervalMs`). During that window the webview renders "No live Claude Code sessions" even though live sessions exist. Root cause: `main.ts` disposes the prior watcher without capturing its last state and replaying it to the newly remounted webview.
