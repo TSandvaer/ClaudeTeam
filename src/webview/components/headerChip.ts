@@ -18,14 +18,17 @@
  * The chip ALWAYS renders (both with-sessions and empty branches) so the
  * toggle is discoverable in an otherwise-empty dashboard. See spec §4.6.
  *
- * State table (spec §4.2):
+ * State table (spec §4.2, label revised per Obs 8 / ticket 86c9zfmgg —
+ * label describes the action the click WILL TAKE, not the current state;
+ * sponsor verbatim 2026-05-26: *"If i click the 'Hide finished x hidden'
+ * button, that should be named 'show finished x hidden'."*):
  *
  *   data-hide-finished | hiddenCount | label rendered            | aria-pressed
  *   -------------------|-------------|---------------------------|--------------
- *   "false"            | 0           | "Hide finished"           | false
- *   "true"             | 0           | "Hide finished — none yet"| true
- *   "true"             | 1           | "Hide finished — 1 hidden"| true
- *   "true"             | N>1         | "Hide finished — N hidden"| true
+ *   "false"            | 0           | "Hide finished"           | false   (click WILL hide)
+ *   "true"             | 0           | "Show finished — none yet"| true    (click WILL show)
+ *   "true"             | 1           | "Show finished — 1 hidden"| true    (click WILL show)
+ *   "true"             | N>1         | "Show finished — N hidden"| true    (click WILL show)
  *
  * Interaction (spec §4.3):
  *   - Click + Enter + Space on the toggle fire `ui:set-config` with the
@@ -148,11 +151,20 @@ export function renderHeaderChip(props: HeaderChipProps): HTMLElement {
  * Compute the chip's label string from the props. Exported for unit tests
  * so the spec §5.2 / §7.3 label templates can be asserted directly.
  *
+ * **Label convention (revised — ticket `86c9zfmgg` / Obs 8):** the label
+ * describes the action the click WILL TAKE, not the current state. This
+ * matches the sponsor's mental model — "the button names what happens
+ * next." When filter is OFF (finished VISIBLE), clicking will hide them →
+ * label "Hide finished". When filter is ON (finished HIDDEN), clicking
+ * will show them → label "Show finished — N hidden". The count phrase
+ * stays on the ON branch (the user wants to know HOW MANY are hidden
+ * before deciding to reveal them).
+ *
  * Templates (em-dash U+2014):
  *   filter off                  → "Hide finished"
- *   filter on  + 0 hidden       → "Hide finished — none yet"
- *   filter on  + 1 hidden       → "Hide finished — 1 hidden"
- *   filter on  + N>1 hidden     → "Hide finished — N hidden"
+ *   filter on  + 0 hidden       → "Show finished — none yet"
+ *   filter on  + 1 hidden       → "Show finished — 1 hidden"
+ *   filter on  + N>1 hidden     → "Show finished — N hidden"
  *
  * Edge case (spec §4.2 row 2 — "impossible by §3.2 contract"): when
  * `hideFinished === false` but `hiddenCount > 0`, the host has violated
@@ -166,10 +178,10 @@ export function labelTextForState(
     return "Hide finished";
   }
   if (hiddenCount <= 0) {
-    return `Hide finished ${EM_DASH} none yet`;
+    return `Show finished ${EM_DASH} none yet`;
   }
   if (hiddenCount === 1) {
-    return `Hide finished ${EM_DASH} 1 hidden`;
+    return `Show finished ${EM_DASH} 1 hidden`;
   }
-  return `Hide finished ${EM_DASH} ${hiddenCount} hidden`;
+  return `Show finished ${EM_DASH} ${hiddenCount} hidden`;
 }
