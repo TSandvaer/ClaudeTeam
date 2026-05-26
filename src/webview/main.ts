@@ -126,11 +126,11 @@ export function hydrateState(wire: SerializedDashboardState): WebviewAgentTree {
         background: s.background,
       }),
     ),
-    // M3-03 / M3-04: top-level scalar / string-array fields pass through
-    // verbatim. The renderer treats `undefined` as default per the type's
-    // contract (false / empty array). Preserving `undefined` rather than
-    // coercing keeps the in-memory shape distinguishable from a host that
-    // explicitly sent the field.
+    // M3-03 / M3-04 / M5: top-level scalar / string-array / config-mirror
+    // fields pass through verbatim. The renderer treats `undefined` as
+    // default per the type's contract (false / empty array / 0).
+    // Preserving `undefined` rather than coercing keeps the in-memory
+    // shape distinguishable from a host that explicitly sent the field.
     ...(wire.filterApplied !== undefined
       ? { filterApplied: wire.filterApplied }
       : {}),
@@ -140,6 +140,18 @@ export function hydrateState(wire: SerializedDashboardState): WebviewAgentTree {
     ...(wire.rosterWarnings !== undefined
       ? { rosterWarnings: wire.rosterWarnings }
       : {}),
+    // M5 (86c9z5j3r): both fields originate in `applyHideFinishedFilter`
+    // and are stamped by the watcher tick onto every serialized state. The
+    // renderer's header chip reads them via `readHeaderChipState` in
+    // `src/webview/render.ts` — until this hydrator passes them through,
+    // the chip falls back to its defaults (off + 0) even when the host
+    // sent real values. Wire-shape source of truth: `SerializedDashboardState`
+    // fields `hiddenFinishedCount?: number` + `config?: { hideFinishedAgents?: boolean }`
+    // in `src/shared/messages.ts`.
+    ...(wire.hiddenFinishedCount !== undefined
+      ? { hiddenFinishedCount: wire.hiddenFinishedCount }
+      : {}),
+    ...(wire.config !== undefined ? { config: wire.config } : {}),
   };
 }
 
