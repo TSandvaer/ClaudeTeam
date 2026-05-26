@@ -323,6 +323,7 @@ ENTRY-2026-05-25T09:00:01Z: 86c9ygcmj -> in review (M4-06 PR opened — V1 close
 ENTRY-2026-05-25T11:15:00Z: 86c9yjy4w -> in progress (M4-04 follow-up dispatch — Felix authoring extension-host heap-probe procedure addendum)
 ENTRY-2026-05-25T11:30:00Z: 86c9yjy4w -> in review (PR opened — extension-host heap-probe procedure addendum; procedure-only Path C, no production code change)
 ENTRY-2026-05-26T00:00:00Z: 86c9yteju -> in review (Bram PR opened — dogfood triage; 6 observations classified; 3 defect follow-up tickets drafted)
+ENTRY-2026-05-26T06:44:00Z: 86c9yxvah -> in review (Maya PR opened — Defect 6b fix: collapsed-group state-dot with worst-case-live-instance priority; 33 unit tests green incl. ACs 2/3/4)
 ```
 
 ## NEW-TICKET-REQUEST — In-extension-host heap snapshot probe (M4-04 follow-up; Felix-recommended, Maya-endorsed NIT-class)

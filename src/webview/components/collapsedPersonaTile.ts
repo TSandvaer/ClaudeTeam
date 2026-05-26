@@ -6,9 +6,11 @@
  *
  * DOM shape:
  *
- *   <section class="collapsed-persona" data-persona-name data-expanded>
+ *   <section class="collapsed-persona" data-persona-name data-expanded
+ *            data-state>
  *     <button class="collapsed-persona-header" type="button"
  *             aria-expanded="false">
+ *       <span class="state-dot" data-state aria-label title></span>
  *       <span class="collapsed-persona-chevron">▶</span>
  *       <span class="collapsed-persona-name">{personaName} ×{N}</span>
  *     </button>
@@ -22,6 +24,15 @@
  * at the `teamCard.ts` call-site but isn't currently needed inside the
  * wrapper's DOM; if a future feature needs it, thread it through
  * `CollapsedPersonaTileProps` and set `section.dataset.teamId` here.
+ *
+ * Group state label (ClickUp 86c9yxvah — worst-case-live-instance):
+ *   The header renders a state-dot reflecting the group's most-active-first
+ *   priority across `group.instances`:
+ *       running > idle > finished > error
+ *   "Most-active-first" — any live activity should surface even if other
+ *   instances have already finished. So a group of [finished, idle, finished]
+ *   reads `idle` (one Priya still working), not `finished` (which would
+ *   wrongly imply the work is done). See `computeGroupState()` below.
  *
  * Interaction (AC2):
  *   - Collapsed by default — `data-expanded="false"`, instances `hidden`.
@@ -54,12 +65,71 @@
  */
 
 import type {
+  AgentState,
   AgentTile,
   CollapsedPersonaGroup,
 } from "../../shared/types.js";
 import { renderAgentTile, type PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
+
+/**
+ * Human-readable label per state — matches `agentTile.ts STATE_LABEL` so
+ * the aria-label vocabulary is consistent across bare tiles and collapsed
+ * group headers.
+ */
+const STATE_LABEL: Record<AgentState, string> = {
+  running: "Running",
+  idle: "Idle",
+  finished: "Finished",
+  error: "Error",
+};
+
+/**
+ * Compute the group's display state from its per-instance states with
+ * most-active-first priority. The order is `running > idle > finished >
+ * error` per ClickUp 86c9yxvah AC1: any `running` instance forces the
+ * group label to `running`; otherwise any `idle` forces `idle`; only when
+ * ALL instances are `finished` does the group read `finished`; the
+ * remaining residual (instances are some mix that contains at least one
+ * `error` but no `running`/`idle` and is not all-`finished`) reads
+ * `error`.
+ *
+ * Why "worst-case-live": a Priya×3 group with [finished, idle, finished]
+ * has one Priya still working — the user needs to see that live activity,
+ * not the dominant `finished`. Aggregating to the most-active state
+ * preserves that signal.
+ *
+ * The function is exported for the AC unit tests (ACs 2/3/4) and is a
+ * pure function over `AgentState[]` — no DOM, no clock, idempotent.
+ *
+ * Empty input: defensive — returns `error` (a group with zero instances
+ * should not exist on the wire; the reducer's invariant is `count >= 2`
+ * for any wrapper. Surfacing `error` makes the violation visible in the
+ * dashboard rather than silently picking `finished`).
+ *
+ * Source: ClickUp 86c9yxvah (Defect 6b — collapsed-group state label)
+ */
+export function computeGroupState(instances: AgentTile[]): AgentState {
+  if (instances.length === 0) return "error";
+  let sawIdle = false;
+  let sawError = false;
+  let allFinished = true;
+  for (const t of instances) {
+    if (t.state === "running") return "running";
+    if (t.state !== "finished") allFinished = false;
+    if (t.state === "idle") sawIdle = true;
+    if (t.state === "error") sawError = true;
+  }
+  if (sawIdle) return "idle";
+  if (allFinished) return "finished";
+  if (sawError) return "error";
+  // Residual — no running/idle, not all finished, no error. The four
+  // AgentState values are exhaustive so this branch is unreachable in
+  // practice; default to `error` for the same surfacing reason as the
+  // empty-input branch above.
+  return "error";
+}
 
 export interface CollapsedPersonaTileProps {
   group: CollapsedPersonaGroup;
@@ -113,14 +183,34 @@ export function renderCollapsedPersonaTile(
   // expanded list.
   const instanceCount = group.instances.length;
 
+  // Group state label (ClickUp 86c9yxvah) — computed from per-instance
+  // states with most-active-first priority (running > idle > finished >
+  // error). Mirrored onto BOTH the section dataset (`data-state`) and the
+  // state-dot's `data-state` so callers / future CSS can hook in at either
+  // level. The state-dot reuses the `.state-dot[data-state="..."]` CSS rules
+  // already shipped for `agentTile.ts` (M2 §5.2 + M4-01 §2.2 pulse on
+  // running) — no new CSS needed.
+  const groupState = computeGroupState(group.instances);
+  section.dataset.state = groupState;
+
   const header = document.createElement("button");
   header.type = "button";
   header.className = "collapsed-persona-header";
   header.setAttribute("aria-expanded", "false");
   header.setAttribute(
     "aria-label",
-    `${group.personaName} grouped — ${instanceCount} instances, collapsed`,
+    `${group.personaName} grouped — ${instanceCount} instances, ${STATE_LABEL[groupState]}, collapsed`,
   );
+
+  // State dot — placed first so the visual scan order matches the per-tile
+  // agentTile.ts layout (dot → name). The chevron follows; the persona
+  // name + count read last.
+  const stateDot = document.createElement("span");
+  stateDot.className = "state-dot";
+  stateDot.dataset.state = groupState;
+  stateDot.setAttribute("aria-label", STATE_LABEL[groupState]);
+  stateDot.setAttribute("title", STATE_LABEL[groupState]);
+  header.appendChild(stateDot);
 
   const chevron = document.createElement("span");
   chevron.className = "collapsed-persona-chevron";
@@ -180,7 +270,7 @@ export function renderCollapsedPersonaTile(
     header.setAttribute("aria-expanded", String(expanded));
     header.setAttribute(
       "aria-label",
-      `${group.personaName} grouped — ${instanceCount} instances, ${
+      `${group.personaName} grouped — ${instanceCount} instances, ${STATE_LABEL[groupState]}, ${
         expanded ? "expanded" : "collapsed"
       }`,
     );

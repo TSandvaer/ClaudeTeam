@@ -36,6 +36,7 @@ import type {
 import {
   renderCollapsedPersonaTile,
   isCollapsedPersonaGroup,
+  computeGroupState,
 } from "../../../src/webview/components/collapsedPersonaTile.js";
 import { renderTeamCard } from "../../../src/webview/components/teamCard.js";
 import { renderFull } from "../../../src/webview/render.js";
@@ -116,6 +117,186 @@ describe("isCollapsedPersonaGroup — type-guard discipline", () => {
     // `kind` should NOT be routed through this branch.
     const otherKind = { kind: "some-other-kind" } as unknown as AgentTile;
     expect(isCollapsedPersonaGroup(otherKind)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeGroupState — ClickUp 86c9yxvah (Defect 6b)
+//   ACs 1-4: priority running > idle > finished > error; only all-finished
+//   groups render as `finished`; running dominates everything.
+// ---------------------------------------------------------------------------
+
+describe("computeGroupState — worst-case-live-instance priority (86c9yxvah)", () => {
+  it("AC2: [finished, idle, finished] → idle", () => {
+    // Dogfood Priya×3 scenario verbatim — the failure mode that triggered
+    // the ticket. A user looking at a collapsed Priya×3 tile reading
+    // `finished` would think all the Priya dispatches are done; the truth
+    // is one is still working (mtime-stale → idle) and that signal is the
+    // load-bearing one. Group must surface `idle` so the user knows live
+    // work is in flight.
+    const instances: AgentTile[] = [
+      makeTile({ state: "finished", agentId: "p-0" }),
+      makeTile({ state: "idle", agentId: "p-1" }),
+      makeTile({ state: "finished", agentId: "p-2" }),
+    ];
+    expect(computeGroupState(instances)).toBe("idle");
+  });
+
+  it("AC3: [finished, finished] → finished", () => {
+    // Only when ALL instances are finished does the group read finished.
+    // Two-instance all-finished case — the most common "wrap-up" shape.
+    const instances: AgentTile[] = [
+      makeTile({ state: "finished", agentId: "f-0" }),
+      makeTile({ state: "finished", agentId: "f-1" }),
+    ];
+    expect(computeGroupState(instances)).toBe("finished");
+  });
+
+  it("AC4: [running, finished] → running", () => {
+    // running always wins — even one live tool-using instance forces the
+    // group label to `running`. The user reading the dashboard at a glance
+    // must see the live activity.
+    const instances: AgentTile[] = [
+      makeTile({ state: "running", agentId: "r-0" }),
+      makeTile({ state: "finished", agentId: "f-0" }),
+    ];
+    expect(computeGroupState(instances)).toBe("running");
+  });
+
+  it("running beats every other state regardless of position", () => {
+    // Defensive: the implementation must not depend on instance order.
+    // Place `running` LAST — same outcome.
+    const instances: AgentTile[] = [
+      makeTile({ state: "finished", agentId: "f-0" }),
+      makeTile({ state: "idle", agentId: "i-0" }),
+      makeTile({ state: "error", agentId: "e-0" }),
+      makeTile({ state: "running", agentId: "r-0" }),
+    ];
+    expect(computeGroupState(instances)).toBe("running");
+  });
+
+  it("idle beats finished when at least one idle is present", () => {
+    // Symmetric to the [finished, idle, finished] case with the idle at
+    // the head of the array — exercises the order-independence claim.
+    const instances: AgentTile[] = [
+      makeTile({ state: "idle", agentId: "i-0" }),
+      makeTile({ state: "finished", agentId: "f-0" }),
+      makeTile({ state: "finished", agentId: "f-1" }),
+    ];
+    expect(computeGroupState(instances)).toBe("idle");
+  });
+
+  it("error surfaces only when no running/idle AND not all finished", () => {
+    // Per the AC text — `error` is the residual after running/idle/
+    // all-finished are ruled out. [finished, error] = "not all finished,
+    // no live activity, has error" → error.
+    const instances: AgentTile[] = [
+      makeTile({ state: "finished", agentId: "f-0" }),
+      makeTile({ state: "error", agentId: "e-0" }),
+    ];
+    expect(computeGroupState(instances)).toBe("error");
+  });
+
+  it("running takes priority over error (live activity dominates)", () => {
+    // An error mixed with a running instance — the group label is
+    // `running` because most-active-first means a live process beats a
+    // dead one for at-a-glance readout. The error is still surfaced
+    // when the user expands the group (each instance keeps its own
+    // state-dot via renderAgentTile).
+    const instances: AgentTile[] = [
+      makeTile({ state: "running", agentId: "r-0" }),
+      makeTile({ state: "error", agentId: "e-0" }),
+    ];
+    expect(computeGroupState(instances)).toBe("running");
+  });
+
+  it("empty instances → error (defensive — should not happen on the wire)", () => {
+    // Reducer invariant: a wrapper has count >= 2. Zero-instance input is
+    // a host-side bug; we surface as `error` rather than silently picking
+    // `finished` because `finished` would imply "work is done" — and an
+    // empty group is more likely to be a host bug than completed work.
+    expect(computeGroupState([])).toBe("error");
+  });
+});
+
+describe("renderCollapsedPersonaTile — group state-dot rendering (86c9yxvah)", () => {
+  it("state-dot mirrors the computed group state", () => {
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Priya",
+      count: 3,
+      instances: [
+        makeTile({ state: "finished", agentId: "p-0" }),
+        makeTile({ state: "idle", agentId: "p-1" }),
+        makeTile({ state: "finished", agentId: "p-2" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    const dot = el.querySelector<HTMLSpanElement>(
+      ".collapsed-persona-header .state-dot",
+    );
+    expect(dot).not.toBeNull();
+    expect(dot?.dataset.state).toBe("idle");
+    expect(dot?.getAttribute("aria-label")).toBe("Idle");
+    expect(dot?.getAttribute("title")).toBe("Idle");
+    // Section also carries the group state for CSS hooks.
+    expect(el.dataset.state).toBe("idle");
+  });
+
+  it("running group renders a running state-dot (sponsor's at-a-glance read)", () => {
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 2,
+      instances: [
+        makeTile({ state: "running", agentId: "f-0" }),
+        makeTile({ state: "finished", agentId: "f-1" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    expect(el.dataset.state).toBe("running");
+    expect(
+      el
+        .querySelector<HTMLSpanElement>(
+          ".collapsed-persona-header .state-dot",
+        )
+        ?.dataset.state,
+    ).toBe("running");
+  });
+
+  it("aria-label includes the state segment in collapsed AND expanded modes", () => {
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Maya",
+      count: 2,
+      instances: [
+        makeTile({ state: "finished", agentId: "m-0" }),
+        makeTile({ state: "finished", agentId: "m-1" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    const header = el.querySelector<HTMLButtonElement>(
+      ".collapsed-persona-header",
+    )!;
+    expect(header.getAttribute("aria-label")).toBe(
+      "Maya grouped — 2 instances, Finished, collapsed",
+    );
+    header.click();
+    expect(header.getAttribute("aria-label")).toBe(
+      "Maya grouped — 2 instances, Finished, expanded",
+    );
   });
 });
 
@@ -271,8 +452,10 @@ describe("renderCollapsedPersonaTile — AC2 collapsed render", () => {
     const header = el.querySelector<HTMLButtonElement>(
       ".collapsed-persona-header",
     );
+    // Default makeTile returns state: "running" → aria-label state segment
+    // reflects the computed group state (most-active-first priority).
     expect(header?.getAttribute("aria-label")).toBe(
-      "Felix grouped — 3 instances, collapsed",
+      "Felix grouped — 3 instances, Running, collapsed",
     );
     // Expanding renders 3 tiles, not 99 — the lazy populate walks the array.
     header!.click();
@@ -281,7 +464,7 @@ describe("renderCollapsedPersonaTile — AC2 collapsed render", () => {
     ).toBe(3);
     // Aria-label also reflects the array length after the expand toggle.
     expect(header?.getAttribute("aria-label")).toBe(
-      "Felix grouped — 3 instances, expanded",
+      "Felix grouped — 3 instances, Running, expanded",
     );
   });
 
