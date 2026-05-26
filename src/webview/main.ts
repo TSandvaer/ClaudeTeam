@@ -47,6 +47,7 @@ import {
 } from "./render.js";
 import { createFinishedTracker } from "./finishedTracker.js";
 import { createPrevStateTracker } from "./prevStateTracker.js";
+import { createExpandedGroupsTracker } from "./expandedGroupsTracker.js";
 
 // =============================================================================
 // VS Code API shim
@@ -207,6 +208,17 @@ function boot(): void {
    * finishedTracker's lifecycle.
    */
   const prevStateTracker = createPrevStateTracker();
+  /**
+   * Obs 10 (86c9zfmh1): webview-local expansion tracker for
+   * CollapsedPersonaGroup wrappers. Single instance per webview boot —
+   * survives the ~2s poll-tick re-renders so clicking "expand on Bram"
+   * doesn't snap shut on the next host `state:full`. Sponsor verbatim
+   * symptom: "If i click on bram i see image 2, but it closes in 1 second
+   * everytime i try to expand a finished agent." Persistence scope is
+   * intentionally short — webview reload resets the tracker (acceptable;
+   * reload is a coarse user action).
+   */
+  const expandedGroupsTracker = createExpandedGroupsTracker();
 
   // Browser dev mode → render FIXTURE_STATE immediately. VS Code mode →
   // render the empty state until the first `state:full` arrives from the
@@ -224,6 +236,7 @@ function boot(): void {
     },
     finishedTracker,
     prevStateTracker,
+    expandedGroupsTracker,
   });
 
   renderFull(buildCtx(), currentState);

@@ -55,6 +55,10 @@ import { renderHeaderChip } from "./components/headerChip.js";
 import { isCollapsedPersonaGroup } from "./components/collapsedPersonaTile.js";
 import type { FinishedTracker } from "./finishedTracker.js";
 import type { PrevStateTracker } from "./prevStateTracker.js";
+import type {
+  ExpandedGroupKey,
+  ExpandedGroupsTracker,
+} from "./expandedGroupsTracker.js";
 
 /** Persistent error state stored on the dashboard. */
 export interface DashboardErrorState {
@@ -120,6 +124,18 @@ export interface RenderContext {
    * Source: team/iris-ux/m4-polish-spec.md §2.5
    */
   prevStateTracker?: PrevStateTracker;
+  /**
+   * Webview-local expansion-state tracker (Obs 10, ClickUp 86c9zfmh1).
+   * Threaded down to every `renderCollapsedPersonaTile` so user-expanded
+   * persona wrappers survive the next host-driven re-render. Owned by the
+   * boot closure in `main.ts`; the prune pass below evicts entries whose
+   * wrappers no longer exist (e.g. a team disappears, a session goes dead).
+   *
+   * Optional — when omitted (component tests) wrappers always start
+   * collapsed and clicks don't persist beyond the current DOM, matching
+   * pre-Obs-10 behavior.
+   */
+  expandedGroupsTracker?: ExpandedGroupsTracker;
 }
 
 /**
@@ -186,13 +202,15 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     finishedTracker,
     nowMs,
     prevStateTracker,
+    expandedGroupsTracker,
   } = ctx;
 
-  // Prune the finished- and prev-state-trackers BEFORE the render pass — any
-  // tile no longer present (or, for finishedTracker, no longer in `finished`
-  // state) sheds its tracker entry. Without pruning, a long-running
-  // dashboard slowly leaks entries for every agent that ever existed. See
-  // finishedTracker.ts §lifecycle and prevStateTracker.ts §lifecycle.
+  // Prune the finished-, prev-state-, and expanded-groups-trackers BEFORE
+  // the render pass — any tile no longer present (or, for finishedTracker,
+  // no longer in `finished` state) sheds its tracker entry. Without
+  // pruning, a long-running dashboard slowly leaks entries for every agent
+  // / group that ever existed. See finishedTracker.ts §lifecycle,
+  // prevStateTracker.ts §lifecycle, expandedGroupsTracker.ts §lifecycle.
   //
   // M3-10: rosterTiles values are now `(AgentTile | CollapsedPersonaGroup)[]`.
   // We descend into CollapsedPersonaGroup.instances so tiles inside a
@@ -200,18 +218,34 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   // a wrapper would re-anchor every finished instance to "now", and prevState
   // would flash a spurious transition the first time the wrapper expands).
   //
-  // Single pass — both trackers prune off the same walk to keep the per-tick
-  // cost down.
-  if (finishedTracker || prevStateTracker) {
+  // Obs 10: the expanded-groups tracker is keyed at the WRAPPER level
+  // (sessionId:teamId:personaName), so we register a key for each wrapper
+  // we see — bare-tile entries do not contribute. The teamId is the
+  // rosterTiles Map key.
+  //
+  // Single pass — all three trackers prune off the same walk to keep the
+  // per-tick cost down.
+  if (finishedTracker || prevStateTracker || expandedGroupsTracker) {
     const currentFinishedKeys = new Set<`${string}:${string}`>();
     const currentAllKeys = new Set<`${string}:${string}`>();
+    const currentGroupKeys = new Set<ExpandedGroupKey>();
     for (const session of state.sessions) {
       if (!session.isAlive) continue;
-      for (const entries of session.rosterTiles.values()) {
+      for (const [teamId, entries] of session.rosterTiles.entries()) {
         for (const entry of entries) {
           // Wrapper case — walk instances so tiles inside a collapsed
-          // wrapper still keep their tracker entries.
+          // wrapper still keep their tracker entries, AND register the
+          // wrapper's own key for the expansion tracker.
           if (isCollapsedPersonaGroup(entry)) {
+            if (expandedGroupsTracker) {
+              currentGroupKeys.add(
+                expandedGroupsTracker.makeKey(
+                  session.sessionId,
+                  teamId,
+                  entry.personaName,
+                ),
+              );
+            }
             for (const inst of entry.instances) {
               const key: `${string}:${string}` = `${session.sessionId}:${inst.agentId}`;
               currentAllKeys.add(key);
@@ -235,6 +269,9 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     }
     if (prevStateTracker) {
       prevStateTracker.prune(currentAllKeys);
+    }
+    if (expandedGroupsTracker) {
+      expandedGroupsTracker.prune(currentGroupKeys);
     }
   }
 
@@ -319,6 +356,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         postMessage,
         ...(finishedTracker ? { finishedTracker } : {}),
         ...(prevStateTracker ? { prevStateTracker } : {}),
+        ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
       }),
     );

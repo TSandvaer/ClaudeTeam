@@ -72,6 +72,7 @@ import type {
 import { renderAgentTile, type PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
+import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
 
 /**
  * Human-readable label per state — matches `agentTile.ts STATE_LABEL` so
@@ -135,6 +136,13 @@ export interface CollapsedPersonaTileProps {
   group: CollapsedPersonaGroup;
   /** Session id passed through to each per-instance tile renderer. */
   sessionId: string;
+  /**
+   * Team id owning this wrapper — used (together with sessionId +
+   * personaName) to compose the persistence key for the
+   * `expandedGroupsTracker`. Optional only for back-compat with older
+   * callers / tests that don't thread the tracker.
+   */
+  teamId?: string;
   /** Webview → host postMessage fn passed through to instances. */
   postMessage: PostMessageFn;
   /**
@@ -153,6 +161,19 @@ export interface CollapsedPersonaTileProps {
    * and records the current state.
    */
   prevStateTracker?: PrevStateTracker;
+  /**
+   * Optional webview-local expansion-state tracker (Obs 10, 86c9zfmh1).
+   * When provided, the wrapper:
+   *   - reads `isExpanded(key)` once in the constructor to choose the
+   *     initial render state — pre-expand if the user previously opened
+   *     this same group in this webview session;
+   *   - writes back via `setExpanded(key, value)` on every click toggle so
+   *     the next host poll-tick re-render restores the user's intent.
+   * When omitted (e.g. component tests / pre-Obs-10 callers), the wrapper
+   * always starts collapsed and clicks don't persist beyond the current
+   * DOM — the pre-Obs-10 behavior, exercised by the existing AC2 tests.
+   */
+  expandedGroupsTracker?: ExpandedGroupsTracker;
   /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
   nowMs?: number;
 }
@@ -163,16 +184,34 @@ export function renderCollapsedPersonaTile(
   const {
     group,
     sessionId,
+    teamId,
     postMessage,
     finishedTracker,
     prevStateTracker,
+    expandedGroupsTracker,
     nowMs,
   } = props;
+
+  // Obs 10 (86c9zfmh1) — read initial expansion intent from the persistent
+  // tracker. Composed key includes sessionId + teamId + personaName so two
+  // different teams can host a same-named persona wrapper without sharing
+  // expansion state. When the tracker / teamId is absent (back-compat
+  // callers), default to collapsed exactly as pre-Obs-10.
+  const trackerKey =
+    expandedGroupsTracker && teamId !== undefined
+      ? expandedGroupsTracker.makeKey(sessionId, teamId, group.personaName)
+      : undefined;
+  const initiallyExpanded =
+    trackerKey !== undefined && expandedGroupsTracker !== undefined
+      ? expandedGroupsTracker.isExpanded(trackerKey)
+      : false;
 
   const section = document.createElement("section");
   section.className = "collapsed-persona";
   section.dataset.personaName = group.personaName;
-  section.dataset.expanded = "false";
+  // dataset value is set authoritatively further down via `setExpanded(...)`
+  // — initialised here so the attribute is present from the first paint.
+  section.dataset.expanded = String(initiallyExpanded);
 
   // Header — a real <button> so the keyboard / screen-reader semantics are
   // free (Enter + Space activation, focus ring, role=button).
@@ -196,10 +235,16 @@ export function renderCollapsedPersonaTile(
   const header = document.createElement("button");
   header.type = "button";
   header.className = "collapsed-persona-header";
-  header.setAttribute("aria-expanded", "false");
+  // Obs 10 — initial aria-expanded reflects the restored expansion intent.
+  // The same string is recomputed authoritatively in `setExpanded(...)`
+  // when populating below, so this initial set is only the first-paint
+  // value before populateInstances / setExpanded runs.
+  header.setAttribute("aria-expanded", String(initiallyExpanded));
   header.setAttribute(
     "aria-label",
-    `${group.personaName} grouped — ${instanceCount} instances, ${STATE_LABEL[groupState]}, collapsed`,
+    `${group.personaName} grouped — ${instanceCount} instances, ${STATE_LABEL[groupState]}, ${
+      initiallyExpanded ? "expanded" : "collapsed"
+    }`,
   );
 
   // State dot — placed first so the visual scan order matches the per-tile
@@ -214,7 +259,10 @@ export function renderCollapsedPersonaTile(
 
   const chevron = document.createElement("span");
   chevron.className = "collapsed-persona-chevron";
-  chevron.textContent = "▶";
+  // Obs 10 — initial chevron glyph matches the restored expansion intent
+  // (▼ when restored expanded; ▶ when collapsed). setExpanded(...) rewrites
+  // it on every toggle.
+  chevron.textContent = initiallyExpanded ? "▼" : "▶";
   chevron.setAttribute("aria-hidden", "true");
   header.appendChild(chevron);
 
@@ -228,9 +276,14 @@ export function renderCollapsedPersonaTile(
   // Instances container — populated lazily on first expand; once populated
   // it stays in the DOM (toggling `hidden`) so subsequent expand/collapse
   // cycles don't churn the per-instance tile state (e.g. tile :hover).
+  //
+  // Obs 10 — when the tracker reports the wrapper as previously-expanded,
+  // we populate eagerly so the freshly-built DOM matches the restored
+  // intent. The lazy-collapsed path remains the default (and is exercised
+  // by AC3 / AC2-collapsed tests).
   const instancesDiv = document.createElement("div");
   instancesDiv.className = "collapsed-persona-instances";
-  instancesDiv.hidden = true;
+  instancesDiv.hidden = !initiallyExpanded;
   section.appendChild(instancesDiv);
 
   let populated = false;
@@ -279,7 +332,21 @@ export function renderCollapsedPersonaTile(
       populateInstances();
     }
     instancesDiv.hidden = !expanded;
+    // Obs 10 — persist the user's intent so the next host poll-tick
+    // re-render restores this same state. Tracker / key absent (back-compat
+    // callers) → no-op, behavior matches pre-Obs-10.
+    if (trackerKey !== undefined && expandedGroupsTracker !== undefined) {
+      expandedGroupsTracker.setExpanded(trackerKey, expanded);
+    }
   };
+
+  // Obs 10 — when restored expanded, populate the instances eagerly so the
+  // DOM matches the dataset/hidden state set above. Calling populateInstances
+  // here (idempotent guarded by `populated`) parallels what setExpanded does
+  // on a click toggle.
+  if (initiallyExpanded) {
+    populateInstances();
+  }
 
   header.addEventListener("click", () => {
     setExpanded(section.dataset.expanded !== "true");
