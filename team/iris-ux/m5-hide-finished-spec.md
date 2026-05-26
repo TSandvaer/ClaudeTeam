@@ -478,7 +478,7 @@ All three open questions confirmed by sponsor 2026-05-26 (accept-defaults; Iris'
 
 The sponsor's verbatim said *"idle agents"*. This M5 spec scopes to `finished` only because Defect 6 (idle-misclassified-as-finished) was unresolved at design time. Now that Defect 6a (`86c9yxv94` PR #69) + Defect 6b (`86c9yxvah` PR #68) merged 2026-05-26, `idle` is a reliable distinct state and the extension follow-up is unblocked.
 
-- **Follow-up ticket:** ClickUp ID `<INSERT-CLICKUP-FOLLOWUP-ID>` — `feat(ux): extend hide-finished filter to idle agents (hideIdleAgents)` (orchestrator-filed 2026-05-26 this round; ID to be backfilled by orchestrator since sub-agent does not have ClickUp MCP access to fetch the verbatim ID). The follow-up adds a SECOND scalar `claudeteam.hideIdleAgents` per §2.1's two-scalars-not-one-enum design — it does NOT re-shape the M5 scope.
+- **Follow-up ticket:** ClickUp ID [`86c9yyw7a`](https://app.clickup.com/t/86c9yyw7a) — `feat(followup): extend hide-finished filter to idle state (post-base-feature)` (orchestrator-filed 2026-05-26 this round, P4, tags `feat` / `followup` / `post-v1`). The follow-up adds a SECOND scalar `claudeteam.hideIdleAgents` per §2.1's two-scalars-not-one-enum design — it does NOT re-shape the M5 scope.
 - **This M5 ticket ships finished-only** — no scope creep.
 
 **Q2 — Default `false` or `true`?** **ANSWERED 2026-05-26: `false` — sponsor confirmed Iris recommendation.**
