@@ -329,6 +329,8 @@ ENTRY-2026-05-26T00:00:00Z: 86c9yteju -> in review (Bram PR opened — dogfood t
 ENTRY-2026-05-26T06:44:00Z: 86c9yxvah -> in review (Maya PR opened — Defect 6b fix: collapsed-group state-dot with worst-case-live-instance priority; 33 unit tests green incl. ACs 2/3/4)
 ENTRY-2026-05-26T08:55:00Z: 86c9yxv94 -> in review (Felix PR opened — fix(reducer): FinishedMap with finishedAtMs + "finished Xs" suffix per Obs 6a; 397 unit + 71 integration green; live CLI smoke confirms elapsed-time on rostered tiles)
 ENTRY-2026-05-26T09:40:30Z: 86c9ytyq7 -> in review (Maya PR opened — M5-WV hide-finished header chip; new `src/webview/components/headerChip.ts` + render.ts mount at position 3 in BOTH empty + with-sessions branches + dashboard.css `.ct-header-chip` block + 21 jsdom tests; 429 unit tests green, typecheck clean, build clean; vocabulary contract preserved — no touches to `src/shared/messages.ts` / `src/shared/types.ts` / `package.json` / `src/extension/**`)
+ENTRY-2026-05-26T14:00:00Z: 86c9z5hyp -> in progress (Felix accepted dispatch — Obs 3 host-side force-refresh fix; Option A — add `forceRefresh()` to WatcherHandle that clears `priorStateHash` before tick to defeat the boot-time hash-skip race)
+ENTRY-2026-05-26T14:05:00Z: 86c9z5hyp -> in review (Felix PR opened — fix(ext): forceRefresh bypass; +`forceRefresh()` on WatcherHandle, `onRefresh` calls it instead of `triggerTick`; 3 new integration tests in `tests/integration/watcherHandle.test.ts` covering AC5 force-bypass / AC6 steady-state hash-skip retained / dispose no-op; 456 unit + 77 integration green; typecheck clean; vsce package clean)
 ```
 
 ## NEW-TICKET-REQUEST — In-extension-host heap snapshot probe (M4-04 follow-up; Felix-recommended, Maya-endorsed NIT-class)

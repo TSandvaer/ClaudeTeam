@@ -217,3 +217,99 @@ describe("M2-06 AC5 — WatcherHandle.triggerTick + getLastState", () => {
     expect(emissions.length).toBe(baselineCount);
   });
 });
+
+describe("86c9z5hyp — WatcherHandle.forceRefresh bypasses hash-skip", () => {
+  let root: string;
+  let cleanup: () => void;
+  let rosterPath: string;
+  let handle: WatcherHandle | null = null;
+  let emissions: DashboardState[];
+
+  beforeEach(() => {
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    emissions = [];
+    handle = null;
+  });
+
+  afterEach(() => {
+    handle?.dispose();
+    handle = null;
+    cleanup();
+  });
+
+  it("AC5 — forceRefresh re-emits identical state (defeats boot-time hash-skip race)", async () => {
+    // This reproduces the boot-time race from Bram's round-2 triage
+    // (86c9z5a3k): startWatcher's tick-0 produces a state hash that primes
+    // priorStateHash. A subsequent `triggerTick()` against unchanged state
+    // hash-skips → onStateChange NOT called → webview never receives the
+    // re-emit. `forceRefresh()` MUST bypass that skip so `ui:refresh` after
+    // close+reopen reliably drives state to the freshly-mounted webview.
+    handle = startWatcher({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      pollIntervalMs: SLOW_POLL_MS,
+      onStateChange: (s) => emissions.push(s),
+    });
+
+    // Wait for tick-0 to land — this primes priorStateHash on an empty tree.
+    expect(await waitFor(() => emissions.length >= 1, 1500)).toBe(true);
+    const baselineCount = emissions.length;
+
+    // Sanity: a plain triggerTick on unchanged state hash-skips.
+    handle.triggerTick();
+    await sleep(300);
+    expect(emissions.length).toBe(baselineCount);
+
+    // forceRefresh on the same unchanged state MUST re-emit.
+    handle.forceRefresh();
+    expect(
+      await waitFor(() => emissions.length > baselineCount, 1500),
+    ).toBe(true);
+
+    // The re-emitted state must equal the baseline shape (no spurious mutation).
+    const baseline = emissions[baselineCount - 1]!;
+    const replay = emissions[emissions.length - 1]!;
+    expect(replay.sessions).toEqual(baseline.sessions);
+    expect(replay.filterApplied).toEqual(baseline.filterApplied);
+  });
+
+  it("AC6 — steady-state hash-skip behavior unchanged when forceRefresh is NOT called", async () => {
+    // Regression guard for AC6: the hash-skip optimization must continue to
+    // work for ordinary `triggerTick()` calls (FS-watcher events,
+    // config-change listeners). Only the explicit `forceRefresh()` path
+    // bypasses it.
+    handle = startWatcher({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      pollIntervalMs: SLOW_POLL_MS,
+      onStateChange: (s) => emissions.push(s),
+    });
+
+    expect(await waitFor(() => emissions.length >= 1, 1500)).toBe(true);
+    const baselineCount = emissions.length;
+
+    // Fire many triggerTicks against unchanged state — none should re-emit.
+    for (let i = 0; i < 5; i++) handle.triggerTick();
+    await sleep(500);
+    expect(emissions.length).toBe(baselineCount);
+  });
+
+  it("forceRefresh after dispose is a no-op (does not throw)", async () => {
+    handle = startWatcher({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      pollIntervalMs: SLOW_POLL_MS,
+      onStateChange: (s) => emissions.push(s),
+    });
+
+    expect(await waitFor(() => emissions.length >= 1, 1500)).toBe(true);
+    handle.dispose();
+    const baselineCount = emissions.length;
+
+    expect(() => handle!.forceRefresh()).not.toThrow();
+    await sleep(300);
+
+    expect(emissions.length).toBe(baselineCount);
+  });
+});

@@ -146,17 +146,36 @@ export const MIN_POLL_MS = 250;
  * Extended disposable returned by `startWatcher` (M2-06 AC5).
  *
  * In addition to standard `dispose()`, exposes:
- *   - `triggerTick()` — fire an immediate out-of-band tick. Called by the
- *     host's `ui:refresh` handler so the user can force a re-poll without
- *     waiting for the next interval.
+ *   - `triggerTick()` — fire an immediate out-of-band tick. Hash-skip is
+ *     respected (no emission if the state is identical to the prior tick).
+ *     Used by FS-watcher event handlers and config-change listeners — the
+ *     content may not actually have changed, so hash-skip is the correct
+ *     guard.
+ *   - `forceRefresh()` (86c9z5hyp) — fire an immediate tick that BYPASSES
+ *     hash-skip by clearing `priorStateHash` first. The next tick is
+ *     guaranteed to call `onStateChange` regardless of hash equality.
+ *     Used by the webview's `ui:refresh` handler to fix the boot-race:
+ *     `startWatcher` fires tick-0 BEFORE the webview's IIFE wires
+ *     `addEventListener("message", ...)`, so tick-0's `state:full` is
+ *     silently dropped — but it sets `priorStateHash`, causing the
+ *     subsequent `ui:refresh`-driven tick to hash-skip and the webview to
+ *     never receive any state. `forceRefresh` is the explicit "the prior
+ *     emission may not have reached anyone — re-send regardless" signal.
  *   - `getLastState()` — the most recently emitted `DashboardState`, or
  *     `null` before the first tick completes. Host uses this to derive
  *     paths from `sessionId` for `ui:open-transcript` without re-reading
  *     disk.
  */
 export interface WatcherHandle extends vscode.Disposable {
-  /** Fire an immediate tick (in addition to the regular poll cadence). */
+  /** Fire an immediate tick (hash-skip is respected). */
   triggerTick(): void;
+  /**
+   * Fire an immediate tick that bypasses hash-skip — the next tick WILL
+   * call `onStateChange` even when the state is identical to the prior
+   * emission. Used by `ui:refresh` to defeat the boot-time hash-skip race
+   * (see 86c9z5hyp / Bram's round-2 triage `86c9z5a3k`).
+   */
+  forceRefresh(): void;
   /** Most recently emitted state; null before the first emission. */
   getLastState(): DashboardState | null;
 }
@@ -254,6 +273,16 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
 
   return {
     triggerTick: () => {
+      void tick();
+    },
+    forceRefresh: () => {
+      // 86c9z5hyp: clear the hash BEFORE firing the tick so the new tick's
+      // hash comparison at `if (hash === priorStateHash)` ALWAYS misses
+      // (null !== string), guaranteeing `onStateChange` is invoked. Used by
+      // `ui:refresh` to defeat the webview boot race where tick-0's
+      // `state:full` is dropped (no listener yet) but its hash still primes
+      // the skip-cache.
+      priorStateHash = null;
       void tick();
     },
     getLastState: () => lastState,
