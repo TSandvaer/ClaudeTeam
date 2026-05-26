@@ -263,7 +263,15 @@ export function activate(context: vscode.ExtensionContext): void {
         void openRoster();
       },
       onRefresh: () => {
-        watcherHandle?.triggerTick();
+        // 86c9z5hyp: use forceRefresh (not triggerTick) so the boot-time
+        // `ui:refresh` from the webview's `boot()` (PR #73) actually
+        // re-emits `state:full`. Without the hash bypass, tick-0 fires
+        // before the webview's listener is wired, drops its `state:full`,
+        // but primes `priorStateHash` — the subsequent ui:refresh-driven
+        // tick produces the same hash and hash-skips, leaving the webview
+        // stranded on empty-state. Bram's round-2 triage at
+        // `team/bram-research/86c9yteju-triage-2026-05-26.md` § Round 2.
+        watcherHandle?.forceRefresh();
       },
       // M5: chip / command toggled a config-backed setting. Write to VS Code
       // settings at Global scope (sponsor confirmed per spec §8 Q3); the
