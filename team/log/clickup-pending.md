@@ -384,3 +384,8 @@ Replicate the M4-04 memory probe under VS Code extension-host runtime (not tsx).
 ```
 
 Create with: `list_id=901523520912`, `status=to do`, `name="chore(ext): in-extension-host heap snapshot probe (M4-04 follow-up)"`, `markdown_description=` the body above.
+
+```
+ENTRY-2026-05-26T15:34:00Z: 86c9zbuqq -> in progress (Bram accepted dispatch — Obs 9 init-phase invisibility triage)
+ENTRY-2026-05-26T15:34:01Z: 86c9zbuqq -> in review (Bram PR opened — research(obs9): init-phase invisibility root cause identified — background-dispatch acknowledgment misread as finished signal)
+```
