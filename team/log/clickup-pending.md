@@ -388,4 +388,6 @@ Create with: `list_id=901523520912`, `status=to do`, `name="chore(ext): in-exten
 ```
 ENTRY-2026-05-26T15:34:00Z: 86c9zbuqq -> in progress (Bram accepted dispatch — Obs 9 init-phase invisibility triage)
 ENTRY-2026-05-26T15:34:01Z: 86c9zbuqq -> in review (Bram PR opened — research(obs9): init-phase invisibility root cause identified — background-dispatch acknowledgment misread as finished signal)
+ENTRY-2026-05-26T16:30:00Z: 86c9zfbpg -> in progress (Bram accepted dispatch — obs-roster-count chip triage)
+ENTRY-2026-05-26T16:30:01Z: 86c9zfbpg -> in review (Bram PR opened — research(obs-roster-count): chip label is by-design, not a bug)
 ```
