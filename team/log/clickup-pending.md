@@ -104,6 +104,7 @@ ENTRY-2026-05-25T07:51:16Z: 86c9ygckv -> in review (M4-05 PR opened — status-s
 ENTRY-2026-05-25T10:25:00Z: 86c9ygck9 -> in progress (M4-04 recovery dispatch — Felix resumed prior scaffold; running foreground measurement)
 ENTRY-2026-05-25T10:55:00Z: 86c9ygck9 -> in review (M4-04 PR #59 opened — cadence tuning + memory probe; 386 unit + 68 integration green; vsce package clean)
 ENTRY-2026-05-26T00:30:00Z: 86c9yteju -> in progress (Felix dispatched on doc-captures phase — 4 doc additions to vscode-extension-conventions.md + 1 package.json description tweak)
+ENTRY-2026-05-26T00:45:00Z: 86c9yteju -> in review (PR #65 opened — 4 doc additions + rosterPath description flip; Self-Test Report posted; vsce package clean; 386 unit + 68 integration green)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
