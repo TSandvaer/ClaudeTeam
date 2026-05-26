@@ -3,12 +3,19 @@
  *
  * Unit tests for `renderHeaderChip` — M5 hide-finished header chip.
  *
+ * Label-revision note (ticket `86c9zfmgg` / Obs 8 — 2026-05-26): the ON
+ * branch now reads "Show finished — N hidden" (was "Hide finished — N
+ * hidden") so the label names what the click WILL TAKE, not the current
+ * state. Sponsor verbatim: *"If i click the 'Hide finished x hidden'
+ * button, that should be named 'show finished x hidden'."* OFF branch is
+ * unchanged (`Hide finished`).
+ *
  * Coverage:
- *   - State matrix (spec §4.2 table):
+ *   - State matrix (spec §4.2 table, revised labels):
  *     - hideFinished=false, count=0 → label "Hide finished",        aria-pressed="false"
- *     - hideFinished=true,  count=0 → label "Hide finished — none yet"
- *     - hideFinished=true,  count=1 → label "Hide finished — 1 hidden"
- *     - hideFinished=true,  count=N → label "Hide finished — N hidden"
+ *     - hideFinished=true,  count=0 → label "Show finished — none yet"
+ *     - hideFinished=true,  count=1 → label "Show finished — 1 hidden"
+ *     - hideFinished=true,  count=N → label "Show finished — N hidden"
  *   - data-hide-finished + data-hidden-count attributes on the <aside>.
  *   - Click handler posts `ui:set-config` with toggled value.
  *   - Enter + Space (via native <button>) fire the same message.
@@ -53,18 +60,18 @@ describe("labelTextForState — spec §5.2 template coverage", () => {
     expect(labelTextForState(false, 5)).toBe("Hide finished");
   });
 
-  it("returns 'Hide finished — none yet' when filter on + count=0", () => {
-    expect(labelTextForState(true, 0)).toBe(`Hide finished ${EM_DASH} none yet`);
+  it("returns 'Show finished — none yet' when filter on + count=0 (Obs 8 — action-named label)", () => {
+    expect(labelTextForState(true, 0)).toBe(`Show finished ${EM_DASH} none yet`);
   });
 
-  it("returns 'Hide finished — 1 hidden' for singular count", () => {
-    expect(labelTextForState(true, 1)).toBe(`Hide finished ${EM_DASH} 1 hidden`);
+  it("returns 'Show finished — 1 hidden' for singular count (Obs 8 — click WILL show)", () => {
+    expect(labelTextForState(true, 1)).toBe(`Show finished ${EM_DASH} 1 hidden`);
   });
 
-  it("returns 'Hide finished — N hidden' for plural count", () => {
-    expect(labelTextForState(true, 2)).toBe(`Hide finished ${EM_DASH} 2 hidden`);
+  it("returns 'Show finished — N hidden' for plural count (Obs 8 — click WILL show)", () => {
+    expect(labelTextForState(true, 2)).toBe(`Show finished ${EM_DASH} 2 hidden`);
     expect(labelTextForState(true, 14)).toBe(
-      `Hide finished ${EM_DASH} 14 hidden`,
+      `Show finished ${EM_DASH} 14 hidden`,
     );
   });
 });
@@ -97,7 +104,7 @@ describe("renderHeaderChip — state matrix", () => {
     );
   });
 
-  it("filter ON + count 0 → aria-pressed=true, label 'Hide finished — none yet'", () => {
+  it("filter ON + count 0 → aria-pressed=true, label 'Show finished — none yet' (Obs 8)", () => {
     const chip = renderHeaderChip({
       hideFinished: true,
       hiddenCount: 0,
@@ -112,11 +119,11 @@ describe("renderHeaderChip — state matrix", () => {
     expect(toggle!.getAttribute("title")).toBe("Show finished agents");
 
     expect(chip.querySelector(".ct-header-chip-label")?.textContent).toBe(
-      `Hide finished ${EM_DASH} none yet`,
+      `Show finished ${EM_DASH} none yet`,
     );
   });
 
-  it("filter ON + count 1 → label 'Hide finished — 1 hidden'", () => {
+  it("filter ON + count 1 → label 'Show finished — 1 hidden' (Obs 8)", () => {
     const chip = renderHeaderChip({
       hideFinished: true,
       hiddenCount: 1,
@@ -126,11 +133,11 @@ describe("renderHeaderChip — state matrix", () => {
     expect(chip.dataset.hideFinished).toBe("true");
     expect(chip.dataset.hiddenCount).toBe("1");
     expect(chip.querySelector(".ct-header-chip-label")?.textContent).toBe(
-      `Hide finished ${EM_DASH} 1 hidden`,
+      `Show finished ${EM_DASH} 1 hidden`,
     );
   });
 
-  it("filter ON + count 7 → label 'Hide finished — 7 hidden'", () => {
+  it("filter ON + count 7 → label 'Show finished — 7 hidden' (Obs 8)", () => {
     const chip = renderHeaderChip({
       hideFinished: true,
       hiddenCount: 7,
@@ -139,7 +146,7 @@ describe("renderHeaderChip — state matrix", () => {
 
     expect(chip.dataset.hiddenCount).toBe("7");
     expect(chip.querySelector(".ct-header-chip-label")?.textContent).toBe(
-      `Hide finished ${EM_DASH} 7 hidden`,
+      `Show finished ${EM_DASH} 7 hidden`,
     );
   });
 
@@ -368,7 +375,7 @@ describe("renderFull — M5 header chip mount", () => {
     expect(chip.dataset.hideFinished).toBe("true");
     expect(chip.dataset.hiddenCount).toBe("3");
     expect(chip.querySelector(".ct-header-chip-label")?.textContent).toBe(
-      `Hide finished ${EM_DASH} 3 hidden`,
+      `Show finished ${EM_DASH} 3 hidden`,
     );
   });
 

@@ -108,6 +108,8 @@ ENTRY-2026-05-26T00:45:00Z: 86c9yteju -> in review (PR #65 opened — 4 doc addi
 ENTRY-2026-05-26T01:00:00Z: 86c9ytyq7 -> in review (M5 hide-finished spec PR opened — Iris design spec; Shape 1 + header-chip hybrid; parallel-ready vocabulary contract for Felix M5-EH + Maya M5-WV)
 ENTRY-2026-05-26T08:50:00Z: 86c9yxv6d -> in review (PR #66 opened — fix(host): replay last-known state to remounted webview; eliminates pane-reopen empty-state flash; 386 unit + 71 integration green; Self-Test Report posted)
 ENTRY-2026-05-26T10:58:00Z: 86c9z171k -> in review (PR opened — fix(webview): boot-time ui:refresh to pull host state after message listener is wired; one-line dispatch in boot() + bootRefresh.test.ts; 456 unit + 2 skipped green; lint + typecheck clean)
+ENTRY-2026-05-26T22:30:00Z: 86c9zfmgg -> in progress (Maya accepted dispatch — Obs 8 hide-finished chip state-aware label)
+ENTRY-2026-05-26T22:31:00Z: 86c9zfmgg -> in review (PR #84 opened — fix(webview): hide-finished chip label state-aware; ON branch reads "Show finished — N hidden"; 464 unit + 2 skipped green; jsdom data-plane smoke output included in Self-Test Report)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
