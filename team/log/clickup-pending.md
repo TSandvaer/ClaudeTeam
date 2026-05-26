@@ -331,6 +331,8 @@ ENTRY-2026-05-26T08:55:00Z: 86c9yxv94 -> in review (Felix PR opened — fix(redu
 ENTRY-2026-05-26T09:40:30Z: 86c9ytyq7 -> in review (Maya PR opened — M5-WV hide-finished header chip; new `src/webview/components/headerChip.ts` + render.ts mount at position 3 in BOTH empty + with-sessions branches + dashboard.css `.ct-header-chip` block + 21 jsdom tests; 429 unit tests green, typecheck clean, build clean; vocabulary contract preserved — no touches to `src/shared/messages.ts` / `src/shared/types.ts` / `package.json` / `src/extension/**`)
 ENTRY-2026-05-26T14:00:00Z: 86c9z5hyp -> in progress (Felix accepted dispatch — Obs 3 host-side force-refresh fix; Option A — add `forceRefresh()` to WatcherHandle that clears `priorStateHash` before tick to defeat the boot-time hash-skip race)
 ENTRY-2026-05-26T14:05:00Z: 86c9z5hyp -> in review (Felix PR opened — fix(ext): forceRefresh bypass; +`forceRefresh()` on WatcherHandle, `onRefresh` calls it instead of `triggerTick`; 3 new integration tests in `tests/integration/watcherHandle.test.ts` covering AC5 force-bypass / AC6 steady-state hash-skip retained / dispose no-op; 456 unit + 77 integration green; typecheck clean; vsce package clean)
+ENTRY-2026-05-26T14:40:00Z: 86c9z4p86 -> in progress (Felix accepted dispatch — PR #74 NITs follow-up; single-pass scan + HEREDOC fixtures + cites footer 2-line)
+ENTRY-2026-05-26T14:50:00Z: 86c9z4p86 -> in review (Felix PR #79 opened — chore(hooks): PR #74 NITs; 3 NITs applied; 11/11 hook tests PASS; 464 unit + 2 skipped green; typecheck clean; vsce package clean LICENSE warn separate ticket 86c9z7ahe)
 ```
 
 ## NEW-TICKET-REQUEST — In-extension-host heap snapshot probe (M4-04 follow-up; Felix-recommended, Maya-endorsed NIT-class)
