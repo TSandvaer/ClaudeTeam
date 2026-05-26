@@ -86,6 +86,12 @@ let currentState: AgentTree = isVsCodeMode ? FIXTURE_EMPTY_STATE : FIXTURE_STATE
 
 **Test coverage:** `tests/unit/webview/bootBleed.test.ts` (4 jsdom tests, landed PR #41).
 
+## Session-tile identity and DEAD prune semantics
+
+**Session-tile identity is (sessionId, pid), not sessionId alone.** The sessions directory (`~/.claude/sessions/`) holds one `{pid}.json` per Claude Code process. When a VS Code window reloads, the old process file may not be immediately cleaned up, so the dashboard can briefly show two (or more) tiles for the same `sessionId` with different PIDs — both correctly marked DEAD. This is the expected audit-trail shape: each tile represents a PID-scoped process snapshot. The tiles disappear on the next poll tick after Claude Code's process cleanup removes the stale file(s) from `sessions/`. No deduplication by `sessionId` is applied.
+
+**DEAD tile pruning is file-driven, not timer-driven.** When a process's `{pid}.json` is removed from `~/.claude/sessions/` (Claude Code cleans up on process exit), the corresponding tile disappears from the dashboard on the next poll tick. The `vscode.workspace.createFileSystemWatcher` on `~/.claude/sessions/*.json` fires an `onDidDelete` event for the deletion, which triggers an immediate out-of-band tick — so DEAD tiles typically vanish within a few seconds of the file being removed, without waiting for the next scheduled interval (default 2000 ms). There is no explicit prune timer; the tile lifecycle is entirely driven by `{pid}.json` presence on disk.
+
 ## Message protocol (host ↔ webview)
 
 Every message is a typed object with a `type` discriminator. Source of truth: `src/shared/messages.ts` — both sides import it.
@@ -133,6 +139,14 @@ The extension should activate lazily on `onView:claudeteam.dashboard`. Avoid:
 - Allocating webview HTML before resolveWebviewView fires.
 
 VS Code measures activation time; long activation gets flagged in the Output panel as a warning. Aim for <100ms cold activation.
+
+## Session filter edge cases
+
+**Multi-session / cwd-filter model.** The dashboard scopes session visibility by **cwd match against the current VS Code workspace folder(s)** when `claudeteam.showAllSessionsGlobally: false` (the default). Implementation: `src/extension/watcher/sessionFilter.ts:75-88` (the `filterSessionsToWindow` function). All sessions whose `cwd` (after path normalization — see `normalizePath` at `sessionFilter.ts:150-164`) matches a workspace-folder path are surfaced — **not just "one current session"**. In practice the sponsor usually runs one Claude Code session per project at a time, but if multiple are alive concurrently (e.g. two VS Code windows open on the same project, or a CLI Claude alongside a `claude-vscode` session) the dashboard will show agents from both. Sessions whose process is no longer alive get a dead-session header (no agent tiles rendered — see `src/webview/components/sessionBlock.ts:66-92`). Dead headers self-prune when the underlying `~/.claude/sessions/{pid}.json` file is removed by Claude Code on process exit, per the file-driven prune semantics documented above. **The session-boundary semantics is workspace-cwd, NOT process-PID.** This is the intended product behavior per sponsor's 2026-05-26 clarification during V1 dogfood — the dashboard is scoped to "what's happening in this project," not "this one specific process."
+
+**Window-filter passthrough when no folder is open.** The `claudeteam.showAllSessionsGlobally` setting (default `false`) is intended to scope the dashboard to the current VS Code workspace. However, when VS Code has NO workspace folder open (e.g., a File > Open File window with no folder), the filter passes through all sessions rather than showing an empty dashboard. This is the "don't strand the user" behavior — without a workspace folder, there is no filter signal to interpret. If a sponsor opens the ClaudeTeam pane in a no-folder window and sees sessions from other projects, this is expected behavior, not a filter leak. To restrict visibility in a no-folder window, set `claudeteam.showAllSessionsGlobally: false` and open the desired folder first.
+
+**`showAllSessionsGlobally: true` disables the filter entirely.** When set to `true` (not the default), the dashboard shows all sessions on the machine regardless of the current window's workspace. This is also a valid cause of cross-workspace session visibility if the user has previously enabled the setting.
 
 ## Open questions (decide during M2)
 

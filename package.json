@@ -64,7 +64,7 @@
         "claudeteam.rosterPath": {
           "type": "string",
           "default": "",
-          "description": "Override path to teams.yaml roster file. Empty string uses the default global location (~/.claudeteam/teams.yaml) with per-project fallback."
+          "description": "Override path to teams.yaml roster file. Empty string uses the default per-project location (<workspace>/.claude/teams.yaml), falling back to the global location (~/.claudeteam/teams.yaml) if no per-project roster is present."
         },
         "claudeteam.pollIntervalMs": {
           "type": "number",
