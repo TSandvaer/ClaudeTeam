@@ -232,6 +232,83 @@ The host-side replay from PR #66 (`main.ts:181-183`) can be retained as a harmle
 
 ---
 
+### Round 2 — PR #73 follow-up (2026-05-26, ticket 86c9z5a3k)
+
+**Context:** PR #73 (`fix(webview): boot-time ui:refresh to pull host state after listener wired`, merged at `daf6109`, tip is `7db627d`) shipped the webview-side fix. Sponsor dogfood-verified `7db627d` and confirmed Surface A (close+reopen) STILL fails ("No live Claude Code sessions" persists). Surface C (window-reload) eventually works but takes >2s.
+
+**Per-hypothesis verdicts — all verified from `7db627d` source at `c:/Trunk/PRIVATE/ClaudeTeam-bram-wt`:**
+
+#### Hypothesis 1 — `ui:refresh` arrives BEFORE host `onRefresh` listener is registered
+
+**REFUTED.**
+
+`main.ts:94` — `provider.onResolved((webview) => { ... provider.setMessageHandlers(handlers); })`. The full `onResolved` callback runs synchronously inside `resolveWebviewView` at `provider.ts:128`. The sequence within `resolveWebviewView`:
+
+1. `webview.html = ...` (`provider.ts:113`) — sends HTML to renderer process (async iframe load begins)
+2. `webview.onDidReceiveMessage(dispatch)` (`provider.ts:118`) — host CAN receive messages
+3. `this._onResolved(webview)` (`provider.ts:128`) — fires synchronously:
+   - `startWatcher(...)` called → `void tick()` (tick-0) scheduled (async, not yet run)
+   - `provider.setMessageHandlers(handlers)` called at `main.ts:275` — `onRefresh` IS registered
+
+The renderer process cannot have executed the webview IIFE before step 3 completes — JS is single-threaded on the host side, and the renderer is a separate process. Any `ui:refresh` from the webview arrives only after `boot()` executes, which is after the renderer loads the bundle asynchronously, which takes longer than the synchronous step 3. By the time `ui:refresh` arrives at the host, `onRefresh` is definitely wired.
+
+Evidence: `provider.ts:113-135` (full sequence), `main.ts:248-275` (handlers built + setMessageHandlers inside onResolved), `watcherLoop.ts:256-258` (`triggerTick: () => { void tick(); }`).
+
+#### Hypothesis 2 — `triggerTick()` runs but the `state:full` response hash-skips
+
+**VERIFIED — this is the root cause.**
+
+`startWatcher` fires `void tick()` (tick-0) at `watcherLoop.ts:238`. This async tick completes, reads the filesystem, produces a `DashboardState`, and (since `priorStateHash === null`) always emits via `opts.onStateChange(state)` → `postState(webview, state)`. However, at the time tick-0 completes, the webview's `initMessageReceiver` has NOT yet run — the `state:full` message is delivered to the webview's message bus but silently dropped (no listener registered). CRITICALLY: tick-0 also sets `priorStateHash = hash(state)` at `watcherLoop.ts:224`.
+
+When the webview subsequently runs `boot()`, calls `initMessageReceiver`, and sends `api.postMessage({ type: "ui:refresh" })`, the host's `onRefresh` handler calls `watcherHandle?.triggerTick()` → `void tick()` (tick-1). Tick-1 reads the same filesystem (nothing has changed), produces the same `DashboardState`, computes the same hash — `hash === priorStateHash` → hash-skip fires at `watcherLoop.ts:220-223` → `onStateChange` is NOT called → `postState` is NOT called → the webview never receives `state:full`.
+
+The `setInterval` ticks (every 2000ms) also hash-skip for the same reason. The webview is permanently stuck in empty-state until something on disk changes (a new session appears, a JSONL updates, etc.).
+
+Evidence:
+- `watcherLoop.ts:187-188` — `let priorStateHash: string | null = null` — null on new watcher
+- `watcherLoop.ts:216-226` — tick-0 always emits (null hash), sets `priorStateHash = hash`, calls `onStateChange`
+- `watcherLoop.ts:238` — `void tick()` — fires BEFORE `setMessageHandlers` is called on the host (tick-0 is scheduled as a microtask, but executes after the entire synchronous `startWatcher` returns and `onResolved` finishes — at which point the webview IIFE STILL hasn't run)
+- `watcherLoop.ts:256-258` — `triggerTick` just calls `void tick()` with no hash reset
+- `messageBus.ts:88-106` — `postState` is fire-and-forget; returns `Thenable<false>` only on thrown error (view disposed), NOT when the webview listener isn't registered. The watcher never knows the message was silently dropped.
+
+#### Hypothesis 3 — Webview's `window.addEventListener("message", ...)` has a deeper async gap than assumed
+
+**PARTIALLY VERIFIED — this is the secondary effect, not the root cause.**
+
+The webview's `window.addEventListener` is registered inside `initMessageReceiver` at `messageReceiver.ts:119`, called from `boot()`. `boot()` is called from the IIFE at `main.ts:280-283` after `document.readyState` is `"loading"` check. The `<script src="...">` is at end of `<body>` (per `provider.ts:220`), so `boot()` runs synchronously when the script executes. This gap is NOT deeper than assumed — `initMessageReceiver` runs immediately in `boot()` before `api.postMessage({ type: "ui:refresh" })`. The listener IS wired before `ui:refresh` is sent.
+
+The hypothesis is "partially verified" only in the sense that the gap EXISTS (tick-0 fires before the listener is wired) — but the root cause identified in H2 explains why the recovery mechanism (the `ui:refresh`) also fails.
+
+#### Hypothesis 4 — Surface C's >2s window-reload latency is unrelated watcher first-tick latency
+
+**PARTIALLY VERIFIED — same root cause applies, different timing outcome.**
+
+Surface C (window-reload) sometimes works but takes >2s. The explanation: on window-reload, tick-0 fires and reads all session/JSONL/roster files from disk. If this I/O takes longer than the renderer loading the webview bundle and running `boot()`, the webview listener IS wired before tick-0 calls `onStateChange` — and `state:full` lands successfully. The ">2s" is the I/O time for tick-0 on a cold cache (sessions dir + JSONL tailing + roster load). On a warm cache it's much faster, which is why the behavior is non-deterministic.
+
+When tick-0 completes BEFORE the webview listener is wired (the common case): same hash-skip trap as Surface A, and the window-reload also shows empty state persistently. The >2s result in the dogfood indicates the I/O happened to take long enough for the renderer to win the race.
+
+Evidence: `watcherLoop.ts:317-452` (`runTick` does `listSessions`, per-session `readActivity` + JSONL loop, `loadRoster`, `buildAgentTree`) — multiple sync/async file reads per tick.
+
+**Fix surface and recommendation:**
+
+The root cause is `triggerTick()` at `watcherLoop.ts:256-258` calling `void tick()` without resetting `priorStateHash`. The fix is to expose a `forceRefresh()` method on `WatcherHandle` that resets `priorStateHash = null` before calling `tick()`, ensuring the next tick always emits regardless of state hash. The `onRefresh` handler in `main.ts:265-267` should call `watcherHandle?.forceRefresh()` instead of `watcherHandle?.triggerTick()`.
+
+**Confidence: HIGH** — the code path is fully traced at file:line level. The only unverified aspect is the exact timing of tick-0 completion vs. renderer bundle load (race timing), but the hash-skip mechanism is deterministic once tick-0 has fired.
+
+**File surfaces for the fix:**
+- `src/extension/watcher/watcherLoop.ts` — add `forceRefresh: () => { priorStateHash = null; void tick(); }` to the returned `WatcherHandle` (line ~255, alongside `triggerTick`)
+- `src/extension/main.ts:265-267` — change `watcherHandle?.triggerTick()` in `onRefresh` to `watcherHandle?.forceRefresh()`
+- `src/shared/types.ts` (or wherever `WatcherHandle` is typed) — add `forceRefresh?(): void` to the interface
+
+**Alternative fix (also valid):** Reset `priorStateHash = null` inside `triggerTick` itself (always force-emit on explicit refresh request). Simpler — no new method needed. Downside: any caller of `triggerTick` (config-change, roster-change, command-palette refresh) would also bypass hash-skip. This is acceptable — those are all explicit user actions that should produce a guaranteed state update.
+
+**What I did NOT verify:**
+- Exact timing of tick-0 completion vs. renderer bundle load — this is a runtime race not determinable from source alone. The analysis assumes tick-0 completes first based on the expected I/O speed vs. renderer startup latency, which is consistent with the dogfood outcome but not proven from source.
+- Whether VS Code's `webview.postMessage` ever retries or buffers when the listener isn't registered. If it does buffer (on some VS Code versions), the fix would not be needed for those versions — but the consistent failure in the dogfood suggests no buffering occurs.
+- The `hydrateState` missing `config` and `hiddenFinishedCount` fields (`main.ts:110-143` — those fields are absent from the hydration output). This is a separate bug in M5's webview wire-shape deserialization, not related to Obs 3 empty-state.
+
+---
+
 **Description:**
 When the sponsor closes and reopens the ClaudeTeam Activity Bar pane, VS Code calls `resolveWebviewView` again, which triggers a fresh `startWatcher()` call. The new watcher's `lastState` starts at `null`; its first async tick completes up to 2000ms later (default `pollIntervalMs`). During that window the webview renders "No live Claude Code sessions" even though live sessions exist. Root cause: `main.ts` disposes the prior watcher without capturing its last state and replaying it to the newly remounted webview.
 
