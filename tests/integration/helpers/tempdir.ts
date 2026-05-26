@@ -250,6 +250,23 @@ export function writeParentJsonl(
 }
 
 /**
+ * Write a parent JSONL whose body is the verbatim content of a fixture file.
+ * Use when an integration test needs the exact on-disk shape of a real
+ * capture (e.g. background-dispatch acks).
+ */
+export function writeParentJsonlFromFixture(
+  root: string,
+  cwd: string,
+  sessionId: string,
+  fixtureName: string,
+): string {
+  const path = parentJsonlPath(root, cwd, sessionId);
+  const body = loadFixture(fixtureName);
+  writeFileSync(path, body.endsWith("\n") ? body : body + "\n", "utf8");
+  return path;
+}
+
+/**
  * Append a tool_result record to an existing parent JSONL.
  * Used mid-test to simulate a subagent finishing after the test scene was set up.
  * AC2: "subagent finishes" scenario — append the tool_result, then re-reduce.
@@ -262,6 +279,41 @@ export function appendFinishedToolResult(
 ): void {
   const path = parentJsonlPath(root, cwd, sessionId);
   appendFileSync(path, buildToolResultLine(sessionId, toolUseId) + "\n", "utf8");
+}
+
+/**
+ * Append a background-dispatch acknowledgment record (Obs 9 / 86c9zc5dd).
+ *
+ * When the orchestrator dispatches a sub-agent with `run_in_background: true`,
+ * Claude Code writes an IMMEDIATE tool_result at spawn time:
+ *   - `message.content[0]` is a `tool_result` with the spawning `tool_use_id`
+ *     and a "Async agent launched successfully..." text body.
+ *   - The record's TOP-LEVEL `toolUseResult` field is
+ *     `{ isAsync: true, status: "async_launched", agentId, description, ... }`.
+ *
+ * The watcher must NOT treat this as a "finished" signal — the agent is just
+ * spawning, not completing. Tests use this helper to write a realistic ack
+ * record and assert the agent is classified `running`, not `finished`.
+ *
+ * Source: verbatim shape captured from
+ *   ~/.claude/projects/c--Trunk-PRIVATE-ClaudeTeam/baf09ef7-...jsonl line 1336
+ *   (Bram Round-3 dispatch, toolUseId `toolu_01MMAeiEPr44os17jq9mJ8UY`,
+ *   timestamp 2026-05-26T13:21:17.860Z). Trimmed to fields the watcher
+ *   actually inspects.
+ */
+export function appendAsyncLaunchedAck(
+  root: string,
+  cwd: string,
+  sessionId: string,
+  toolUseId: string,
+  agentId: string,
+): void {
+  const path = parentJsonlPath(root, cwd, sessionId);
+  appendFileSync(
+    path,
+    buildAsyncLaunchedAckLine(sessionId, toolUseId, agentId) + "\n",
+    "utf8",
+  );
 }
 
 function buildToolResultLine(sessionId: string, toolUseId: string): string {
@@ -280,6 +332,43 @@ function buildToolResultLine(sessionId: string, toolUseId: string): string {
           is_error: false,
         },
       ],
+    },
+  });
+}
+
+function buildAsyncLaunchedAckLine(
+  sessionId: string,
+  toolUseId: string,
+  agentId: string,
+): string {
+  return JSON.stringify({
+    type: "user",
+    sessionId,
+    timestamp: new Date().toISOString(),
+    uuid: `async-launched-${toolUseId.slice(-8)}`,
+    message: {
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: toolUseId,
+          content: [
+            {
+              type: "text",
+              text:
+                `Async agent launched successfully.\nagentId: ${agentId} (internal ID — do not mention to user.)\n` +
+                `The agent is working in the background. You will be notified automatically when it completes.`,
+            },
+          ],
+        },
+      ],
+    },
+    // Top-level toolUseResult — THIS is the discriminator the watcher checks.
+    toolUseResult: {
+      isAsync: true,
+      status: "async_launched",
+      agentId,
+      description: "Background dispatch test",
     },
   });
 }

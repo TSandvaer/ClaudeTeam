@@ -37,7 +37,9 @@ import {
   writeMetaJson,
   writeSubagentJsonl,
   writeParentJsonl,
+  writeParentJsonlFromFixture,
   appendFinishedToolResult,
+  appendAsyncLaunchedAck,
   writeRoster,
   loadFixture,
   FIXTURES_DIR,
@@ -158,7 +160,9 @@ function collectAgentMetas(subagentsDir: string): AgentMetaEntry[] {
 /**
  * Scan a parent JSONL for tool_result entries and collect finished toolUseIds.
  * Mirrors src/cli/agentTree.ts readFinishedToolUseIds(). Returns
- * Map<toolUseId, finishedAtMs> per 86c9yxv94.
+ * Map<toolUseId, finishedAtMs> per 86c9yxv94. Obs 9 (86c9zc5dd): skip
+ * records with top-level `toolUseResult.isAsync === true` (background
+ * dispatch acks).
  */
 function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
   const finished = new Map<string, number>();
@@ -173,6 +177,15 @@ function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
     try {
       const rec = JSON.parse(line) as Record<string, unknown>;
       if (rec["type"] !== "user") continue;
+      const tur = rec["toolUseResult"];
+      if (
+        tur !== null &&
+        typeof tur === "object" &&
+        !Array.isArray(tur) &&
+        (tur as Record<string, unknown>)["isAsync"] === true
+      ) {
+        continue;
+      }
       const msg = rec["message"] as Record<string, unknown> | undefined;
       if (!msg) continue;
       const content = msg["content"];
@@ -264,12 +277,14 @@ describe("fixture pre-check (AC3)", () => {
     "meta-old-schema.json",
     "meta-new-schema.json",
     "meta-new-schema-persona.json",
+    "meta-bram-async-launched.json",
     "subagent-running.jsonl",
     "subagent-finished.jsonl",
     "subagent-malformed.jsonl",
     "session-alive.json",
     "session-dead-pid.json",
     "teams-valid.yaml",
+    "parent-jsonl-async-launched.jsonl",
   ];
 
   for (const name of REQUIRED_FIXTURES) {
@@ -515,6 +530,134 @@ describe("AC2.4: subagent finishes (parent transcript gets tool_result → reduc
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
     const felixTile = findTile(alphaTiles, "felix");
     expect(felixTile!.state).not.toBe("finished");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC2.4b — Obs 9 (86c9zc5dd): background-dispatch ack must NOT register as finished
+// ---------------------------------------------------------------------------
+
+describe("AC2.4b: Obs 9 — async_launched dispatch ack is not a finished signal", () => {
+  let root: string;
+  let cleanup: () => void;
+  let rosterPath: string;
+
+  // The persona fixture's toolUseId — matches meta-new-schema-persona.json.
+  const TOOL_USE_ID = "toolu_01SZsHqGceAQC4Loovg6ion1";
+
+  beforeEach(() => {
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    writeSessionFile(root, { pid: DEAD_PID_1, sessionId: SESSION_A, cwd: CWD_A });
+    writeParentJsonl(root, CWD_A, SESSION_A, { title: "Obs 9 background-dispatch test" });
+    writeMetaJson(root, CWD_A, SESSION_A, AGENT_FELIX, "meta-new-schema-persona.json");
+    writeSubagentJsonl(root, CWD_A, SESSION_A, AGENT_FELIX, "subagent-running.jsonl");
+  });
+
+  afterEach(() => cleanup());
+
+  it("parent JSONL with only a background-dispatch ack → tile state is NOT finished", async () => {
+    // Append the async-launched ack record (top-level `toolUseResult.isAsync:true`).
+    // The watcher must skip this record — it's a spawn ack, not a completion.
+    appendAsyncLaunchedAck(root, CWD_A, SESSION_A, TOOL_USE_ID, AGENT_FELIX);
+
+    const { roster } = loadRoster(rosterPath);
+    const { sessions, agentData, activities, finishedIds } = await collectFromTempdir(root);
+    const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
+
+    // The agent must NOT appear in finishedIds — the ack is a dispatch, not a completion.
+    expect(finishedIds.has(AGENT_FELIX)).toBe(false);
+
+    const s = tree.sessions[0]!;
+    const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
+    const felixTile = findTile(alphaTiles, "felix");
+    expect(felixTile).toBeDefined();
+    // Pre-fix bug: this asserted `"finished"` because the ack was misread as a completion.
+    expect(felixTile!.state).not.toBe("finished");
+  });
+
+  it("background-dispatch ack followed by a real completion → finished only after the real tool_result lands", async () => {
+    // 1. Background dispatch fires → ack appears immediately.
+    appendAsyncLaunchedAck(root, CWD_A, SESSION_A, TOOL_USE_ID, AGENT_FELIX);
+
+    const beforeCompletion = await collectFromTempdir(root);
+    expect(beforeCompletion.finishedIds.has(AGENT_FELIX)).toBe(false);
+
+    // 2. (Hypothetical future world where Claude Code DOES emit a real
+    //    completion record for background agents.) The watcher must
+    //    register it normally — that record will NOT carry
+    //    `toolUseResult.isAsync:true` (only the ack does).
+    appendFinishedToolResult(root, CWD_A, SESSION_A, TOOL_USE_ID);
+
+    const { roster } = loadRoster(rosterPath);
+    const { sessions, agentData, activities, finishedIds } = await collectFromTempdir(root);
+    const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
+
+    expect(finishedIds.has(AGENT_FELIX)).toBe(true);
+
+    const s = tree.sessions[0]!;
+    const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
+    const felixTile = findTile(alphaTiles, "felix");
+    expect(felixTile!.state).toBe("finished");
+  });
+
+  it("foreground (sync) Agent tool_result has no `isAsync` field → still classifies as finished", async () => {
+    // Foreground Agent completions are written without a toolUseResult.isAsync
+    // field. `appendFinishedToolResult` already writes this shape (no
+    // toolUseResult wrapper) — confirming the discriminator doesn't
+    // over-match.
+    appendFinishedToolResult(root, CWD_A, SESSION_A, TOOL_USE_ID);
+
+    const { roster } = loadRoster(rosterPath);
+    const { sessions, agentData, activities, finishedIds } = await collectFromTempdir(root);
+    const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
+
+    expect(finishedIds.has(AGENT_FELIX)).toBe(true);
+    const s = tree.sessions[0]!;
+    const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
+    const felixTile = findTile(alphaTiles, "felix");
+    expect(felixTile!.state).toBe("finished");
+  });
+
+  it("real-capture fixture (Bram Round-3 dispatch + ack) → not classified as finished", async () => {
+    // tests/fixtures/parent-jsonl-async-launched.jsonl is a verbatim 2-line
+    // excerpt from baf09ef7-...jsonl (lines 1335-1336): the Bram Round-3
+    // toolUseId=toolu_01MMAeiEPr44os17jq9mJ8UY dispatch + async_launched ack.
+    // tests/fixtures/meta-bram-async-launched.json matches that toolUseId.
+    //
+    // This is the strongest regression test: the discriminator runs against
+    // EXACTLY the on-disk bytes that triggered Obs 9 — no synthesis.
+    const { root: realRoot, cleanup: realCleanup } = createTempRoot();
+    try {
+      const realRoster = writeRoster(realRoot, "teams-valid.yaml");
+      const REAL_SESSION = "aaaabbbb-0000-0000-0000-00000000bram";
+      const REAL_AGENT = "ad8ae64968850a339"; // Bram Round-3 agentId from the ack
+      writeSessionFile(realRoot, { pid: DEAD_PID_1, sessionId: REAL_SESSION, cwd: CWD_A });
+      writeParentJsonlFromFixture(
+        realRoot,
+        CWD_A,
+        REAL_SESSION,
+        "parent-jsonl-async-launched.jsonl",
+      );
+      writeMetaJson(realRoot, CWD_A, REAL_SESSION, REAL_AGENT, "meta-bram-async-launched.json");
+      writeSubagentJsonl(realRoot, CWD_A, REAL_SESSION, REAL_AGENT, "subagent-running.jsonl");
+
+      const { roster } = loadRoster(realRoster);
+      const { sessions, agentData, activities, finishedIds } = await collectFromTempdir(realRoot);
+      const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
+
+      // The Bram agent must NOT be in finishedIds — the only tool_result
+      // record in the fixture is an async_launched ack.
+      expect(finishedIds.has(REAL_AGENT)).toBe(false);
+
+      const s = tree.sessions[0]!;
+      const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
+      const bramTile = findTile(alphaTiles, "bram");
+      expect(bramTile, "bram tile must exist (roster match on agentType)").toBeDefined();
+      expect(bramTile!.state).not.toBe("finished");
+    } finally {
+      realCleanup();
+    }
   });
 });
 
