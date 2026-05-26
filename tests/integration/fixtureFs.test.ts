@@ -55,7 +55,7 @@ import {
   buildAgentTree,
   type AgentMetaEntry,
   type ActivityMap,
-  type FinishedSet,
+  type FinishedMap,
   type SessionAgentData,
 } from "../../src/extension/state/reducer.js";
 import { MetaParseError, isCollapsedPersonaGroup } from "../../src/shared/types.js";
@@ -157,10 +157,11 @@ function collectAgentMetas(subagentsDir: string): AgentMetaEntry[] {
 
 /**
  * Scan a parent JSONL for tool_result entries and collect finished toolUseIds.
- * Mirrors src/cli/agentTree.ts readFinishedToolUseIds().
+ * Mirrors src/cli/agentTree.ts readFinishedToolUseIds(). Returns
+ * Map<toolUseId, finishedAtMs> per 86c9yxv94.
  */
-function readFinishedToolUseIds(jsonlPath: string): Set<string> {
-  const finished = new Set<string>();
+function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
+  const finished = new Map<string, number>();
   let raw: string;
   try {
     raw = readFileSync(jsonlPath, "utf8");
@@ -176,6 +177,11 @@ function readFinishedToolUseIds(jsonlPath: string): Set<string> {
       if (!msg) continue;
       const content = msg["content"];
       if (!Array.isArray(content)) continue;
+      const ts = rec["timestamp"];
+      const finishedAtMs =
+        typeof ts === "string" && Number.isFinite(Date.parse(ts))
+          ? Date.parse(ts)
+          : 0;
       for (const item of content) {
         if (
           item !== null &&
@@ -184,7 +190,9 @@ function readFinishedToolUseIds(jsonlPath: string): Set<string> {
           (item as Record<string, unknown>)["type"] === "tool_result"
         ) {
           const id = (item as Record<string, unknown>)["tool_use_id"];
-          if (typeof id === "string") finished.add(id);
+          if (typeof id === "string" && !finished.has(id)) {
+            finished.set(id, finishedAtMs);
+          }
         }
       }
     } catch {
@@ -204,14 +212,14 @@ async function collectFromTempdir(root: string): Promise<{
   sessions: ReturnType<typeof listSessions>;
   agentData: SessionAgentData[];
   activities: ActivityMap;
-  finishedIds: FinishedSet;
+  finishedIds: FinishedMap;
 }> {
   const sessions = listSessions(root);
   const projectsDir = join(root, "projects");
 
   const agentData: SessionAgentData[] = [];
   const allActivities: ActivityMap = new Map();
-  const finishedIds: FinishedSet = new Set();
+  const finishedIds: FinishedMap = new Map();
 
   for (const session of sessions) {
     const slug = cwdToSlug(session.cwd);
@@ -221,11 +229,14 @@ async function collectFromTempdir(root: string): Promise<{
     // Collect metas
     const agents = collectAgentMetas(subagentsDirForSession);
 
-    // Collect finished toolUseIds from parent JSONL
+    // Collect finished toolUseId → finishedAtMs map from parent JSONL
     const finishedTuids = readFinishedToolUseIds(parentJsonl);
     for (const agent of agents) {
-      if (agent.meta?.toolUseId && finishedTuids.has(agent.meta.toolUseId)) {
-        finishedIds.add(agent.agentId);
+      if (agent.meta?.toolUseId) {
+        const finishedAtMs = finishedTuids.get(agent.meta.toolUseId);
+        if (finishedAtMs !== undefined) {
+          finishedIds.set(agent.agentId, finishedAtMs);
+        }
       }
     }
 
@@ -471,7 +482,13 @@ describe("AC2.4: subagent finishes (parent transcript gets tool_result → reduc
     const felixTile = findTile(alphaTiles, "felix");
     expect(felixTile).toBeDefined();
     expect(felixTile!.state).toBe("finished");
-    expect(felixTile!.activity).toBe("finished");
+    // 86c9yxv94: tool_result is written via `appendFinishedToolResult`
+    // which stamps `timestamp: new Date().toISOString()`. The finishedAtMs
+    // is therefore very close to NOW_MS (captured at module load),
+    // typically a fraction of a second earlier — Math.round + clamp give
+    // "finished 0s" but the assertion uses a regex so the test stays
+    // robust against tiny timing variations.
+    expect(felixTile!.activity).toMatch(/^finished \d+s$/);
 
     // Negative path: the agentId must be in finishedIds (the parent-transcript signal).
     expect(finishedIds.has(AGENT_FELIX)).toBe(true);

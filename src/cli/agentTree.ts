@@ -33,7 +33,7 @@ import {
   buildAgentTree,
   type ActivityMap,
   type AgentMetaEntry,
-  type FinishedSet,
+  type FinishedMap,
   type SessionAgentData,
 } from "../extension/state/reducer.js";
 import type { AgentTree, SessionTree, AgentTile, BackgroundAgent, Team } from "../shared/types.js";
@@ -91,15 +91,21 @@ function readSessionTitle(jsonlPath: string): string | null {
 /**
  * Scan the parent JSONL for `tool_result` entries that close a subagent spawn.
  * A tool_result closing a subagent has `tool_use_id` matching the subagent's
- * `meta.toolUseId`. We collect the toolUseId values of all found results.
+ * `meta.toolUseId`. We collect a map from toolUseId → finishedAtMs (epoch ms
+ * parsed from the record's top-level `timestamp` ISO-8601 string).
  *
  * Per data-sources.md §3 "JSONL closing semantics": the parent JSONL is the
  * ONLY reliable "finished" signal. The child JSONL never carries it.
  *
- * Returns a Set of toolUseIds that have been completed.
+ * Per 86c9yxv94: the timestamp flows through to `buildActivity` to render
+ * the `"finished Xs"` elapsed-time suffix. When a record's timestamp is
+ * missing or unparseable, the map records `0` for that toolUseId — the
+ * reducer treats 0 as "no timestamp" and falls back to bare `"finished"`.
+ *
+ * Returns a Map of toolUseId → finishedAtMs (0 sentinel when unparseable).
  */
-function readFinishedToolUseIds(jsonlPath: string): Set<string> {
-  const finished = new Set<string>();
+function readFinishedToolUseIds(jsonlPath: string): Map<string, number> {
+  const finished = new Map<string, number>();
   let raw: string;
   try {
     raw = readFileSync(jsonlPath, "utf8");
@@ -115,6 +121,12 @@ function readFinishedToolUseIds(jsonlPath: string): Set<string> {
       if (!msg || typeof msg !== "object" || Array.isArray(msg)) continue;
       const content = (msg as Record<string, unknown>)["content"];
       if (!Array.isArray(content)) continue;
+      // Parse the record's top-level timestamp once per line.
+      const ts = rec["timestamp"];
+      const finishedAtMs =
+        typeof ts === "string" && Number.isFinite(Date.parse(ts))
+          ? Date.parse(ts)
+          : 0;
       for (const item of content) {
         if (
           item !== null &&
@@ -124,7 +136,12 @@ function readFinishedToolUseIds(jsonlPath: string): Set<string> {
         ) {
           const toolUseId = (item as Record<string, unknown>)["tool_use_id"];
           if (typeof toolUseId === "string") {
-            finished.add(toolUseId);
+            // If a toolUseId appears in multiple tool_result records (rare
+            // — would require a duplicate close), keep the FIRST occurrence
+            // since that's when the subagent actually finished.
+            if (!finished.has(toolUseId)) {
+              finished.set(toolUseId, finishedAtMs);
+            }
           }
         }
       }
@@ -206,14 +223,14 @@ async function collect(claudeHome: string): Promise<{
   sessions: ReturnType<typeof listSessions>;
   agentData: SessionAgentData[];
   activities: ActivityMap;
-  finishedIds: FinishedSet;
+  finishedIds: FinishedMap;
 }> {
   const sessions = listSessions(claudeHome, { warn: (m) => process.stderr.write(m + "\n") });
   const projectsDir = join(claudeHome, "projects");
 
   const agentData: SessionAgentData[] = [];
   const allActivities: ActivityMap = new Map();
-  const finishedIds: FinishedSet = new Set();
+  const finishedIds: FinishedMap = new Map();
 
   for (const session of sessions) {
     const slug = cwdToSlug(session.cwd);
@@ -224,17 +241,21 @@ async function collect(claudeHome: string): Promise<{
     // Read title from parent JSONL.
     const title = readSessionTitle(parentJsonlPath) ?? "(no title yet)";
 
-    // Read finished toolUseId set from parent JSONL.
+    // Read finished toolUseId → finishedAtMs map from parent JSONL.
     const finishedToolUseIds = readFinishedToolUseIds(parentJsonlPath);
 
     // Collect agent metas (sync).
     const agents = collectAgentMetas(subagentsDir);
 
-    // Map toolUseIds → agentIds for the finishedIds set.
-    // finishedIds uses agentId as the key (not toolUseId), per reducer contract.
+    // Map toolUseIds → agentIds for the finishedIds map (keyed by agentId
+    // per reducer contract; value = finishedAtMs sourced from the
+    // tool_result record's timestamp).
     for (const agent of agents) {
-      if (agent.meta?.toolUseId && finishedToolUseIds.has(agent.meta.toolUseId)) {
-        finishedIds.add(agent.agentId);
+      if (agent.meta?.toolUseId) {
+        const finishedAtMs = finishedToolUseIds.get(agent.meta.toolUseId);
+        if (finishedAtMs !== undefined) {
+          finishedIds.set(agent.agentId, finishedAtMs);
+        }
       }
     }
 
