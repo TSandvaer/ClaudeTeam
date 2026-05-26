@@ -492,3 +492,164 @@ Note: the Obs 4 roster-matching gap is already in `roster-matching.md` — no ne
 - Obs 6a (missing finished elapsed time) is a missing feature that affects every finished tile — medium priority.
 - Obs 6b (CollapsedPersonaGroup state label aggregation) requires webview reading to fully confirm root cause — recommend Maya investigate before implementing the fix.
 - Obs 1, 2, 5 docs are purely additive and can land in a single PR (no code changes needed).
+
+---
+
+## Round 3 — Surface C residual 7s gap (ticket 86c9z8ev9, 2026-05-26)
+
+### Question
+
+Surface C (window-reload) still takes ~7s to show tiles on main `9e29686` despite PR #77's `forceRefresh` fix (ticket `86c9z5hyp`). Activation is 22ms. What segment dominates the ~6.98s post-activation gap?
+
+### Answer (2 sentences)
+
+The ~7s is dominated by VS Code window-reload cold-start overhead — specifically the gap between `Developer: Reload Window` and when VS Code schedules `resolveWebviewView` on the freshly restarted extension host — NOT by the `forceRefresh` chain or disk I/O. The `runTick` disk I/O measured at 47–99ms (warm cache) on the sponsor's actual session data, and the `forceRefresh` → `tick` → `postState` chain adds another ~100–200ms; the remaining ~6.7s must sit in the unmeasured VS Code-internal segment: extension host process spawn, 674KB bundle load, Activity Bar re-render, and `resolveWebviewView` scheduling.
+
+### Per-segment analysis (file:line evidence on `9e29686`)
+
+#### Segment 1 — `listSessions` disk reads
+
+**`src/extension/watcher/sessionRegistry.ts`** + **`watcherLoop.ts:348-350`** (`listSessions` call).
+
+`listSessions` does: `readdirSync(sessionsDir)` + one `readFileSync` per `.json` file + one `process.kill(pid, 0)` liveness probe per session. Sponsor has 4 live session files (`C:\Users\538252\.claude\sessions\`: `33904.json`, `35068.json`, `35508.json`, `48508.json`, each ~247-249 bytes). Measured on sponsor's machine: **2–22ms** (warm cache 2ms, cold 22ms). Not the dominant segment.
+
+#### Segment 2 — `filterSessionsToWindow`
+
+**`watcherLoop.ts:356-367`**. Pure in-memory filter over the 4 session records against workspace folders. Sub-millisecond. Not a candidate.
+
+#### Segment 3 — `readSessionTitle` (full parent JSONL read)
+
+**`watcherLoop.ts:385`** calls `readSessionTitle(parentJsonlPath)`. **`watcherLoop.ts:531-551`** (`readSessionTitle`): `readFileSync(jsonlPath, "utf8")` — reads the ENTIRE parent JSONL. For the live ClaudeTeam session (`baf09ef7`), the parent JSONL is **5,275 KB**. Measured: **15–39ms** per read (warm cache 15ms, first-access ~39ms).
+
+**Critical: this function is called twice per live session** — once at `watcherLoop.ts:385` (`readSessionTitle`) and once at `watcherLoop.ts:389` (`readFinishedToolUseIds`), both calling `readFileSync` on the same path independently. No deduplication. Combined cost: **28–78ms** warm.
+
+The `baf09ef7` parent JSONL is 5.2 MB because this is the live orchestrator session — large after ~51 ClaudeTeam sub-agent dispatches. On smaller sessions this segment is faster.
+
+#### Segment 4 — `collectAgentMetas` + `readActivity` (subagent I/O)
+
+**`watcherLoop.ts:391`** calls `collectAgentMetas(subagentsDir)`: `readdirSync(subagentsDir)` + 16x `readFileSync` of `.meta.json` files. Then **`watcherLoop.ts:405-419`** runs `Promise.all` over 16x `readActivity` calls. Each `readActivity` (`subagentTailer.ts:75-171`) does: `stat()` + partial read (256KB tail window, but all 16 files are smaller so full read). Live session has 16 subagents totalling 4,197 KB.
+
+Measured: meta reads **6–10ms**, JSONL tail-reads **11–31ms** (warm). Total Segment 4: **17–41ms**.
+
+#### Segment 5 — `loadRoster`
+
+**`watcherLoop.ts:424-427`**. Reads `~/.claudeteam/teams.yaml` and `<project>/.claude/teams.yaml`. Measured: **0–1ms**. Not a candidate.
+
+#### Segment 6 — `buildAgentTree` + `applyHideFinishedFilter`
+
+**`watcherLoop.ts:437-459`**. Pure in-memory reduction over 16 agents + roster matching. No I/O. Sub-millisecond at this scale. Not a candidate.
+
+#### Measured total `runTick` I/O (warm cache)
+
+Five runs measured on sponsor's actual data (session `baf09ef7`, 4 session files, 16 subagents, 5.2MB parent JSONL):
+
+| Run | sessions | parentJSONL×2 | metas | JSONL tails | roster | Total |
+|-----|----------|--------------|-------|-------------|--------|-------|
+| 1   | 22ms     | 39ms         | 10ms  | 27ms        | 1ms    | **99ms** |
+| 2   | 2ms      | 30ms         | 8ms   | 12ms        | 0ms    | **52ms** |
+| 3   | 3ms      | 29ms         | 6ms   | 12ms        | 0ms    | **50ms** |
+| 4   | 3ms      | 30ms         | 10ms  | 11ms        | 0ms    | **54ms** |
+| 5   | 2ms      | 28ms         | 6ms   | 11ms        | 0ms    | **47ms** |
+
+**Warm-cache `runTick` I/O: 47–99ms.** The dominant sub-segment within the tick is the double `readFileSync` of the 5.2MB parent JSONL (28–39ms of the total). Even on a cold cache this cannot approach 7s.
+
+#### Segment 7 — webview boot and `forceRefresh` chain
+
+After `resolveWebviewView`:
+1. `provider.ts:113` — `webview.html = _getHtml()` — IPC to renderer (async iframe load starts, returns immediately)
+2. `provider.ts:118-120` — host message listener wired (sync)
+3. `main.ts:94-283` — `_onResolved` fires synchronously: `startWatcher()` called, `void tick()` scheduled, handlers set (sync)
+4. [async] — Electron renderer fetches + parses + executes the 36KB webview bundle (`dist/webview/main.js`)
+5. `main.ts:286` — `boot()` runs: `renderFull(empty)` + `initMessageReceiver` (listener wired) + `api.postMessage({type:'ui:refresh'})`
+6. IPC round-trip: `ui:refresh` reaches host `onRefresh` handler
+7. `main.ts:274` — `watcherHandle?.forceRefresh()`: clears `priorStateHash = null` (`watcherLoop.ts:285`), schedules `void tick()`
+8. `tick()` runs `runTick()` (~50ms I/O) → `onStateChange(state)` → `void postState(webview, state)`
+9. IPC to renderer → `hydrateState` + `renderFull` → tiles visible
+
+Steps 4–9 add at most ~200–300ms beyond step 3 (36KB bundle parse is fast; two IPC round-trips + one disk tick). **Total for Segment 7: ~200–300ms estimated.** Not confirmed by instrumentation — see "What I did NOT verify."
+
+#### Segment 8 — VS Code window-reload cold-start (the likely dominant segment)
+
+This is the segment between `Developer: Reload Window` and VS Code calling `resolveWebviewView`. It includes:
+
+- Extension host process teardown + Node.js process spawn
+- Extension bundle load: `dist/extension/main.cjs` is **674 KB**. Node.js `require()` of a 674KB CJS bundle in a freshly spawned process involves filesystem read + V8 parse + execution. Estimated 200–800ms depending on V8 cold-JIT state.
+- `activate()` runs (22ms — sponsor-measured)
+- VS Code re-renders the Activity Bar sidebar and schedules `resolveWebviewView`
+
+The sponsor's "22ms activation" measurement from `Developer: Show Running Extensions` reflects only `activate()` return time, NOT the process-spawn + bundle-load preceding it. VS Code measures activation as the time from when it calls `activate()` to when the returned promise resolves. The process spawn and bundle load are invisible to this measurement.
+
+**This segment is not measurable from source alone** — it requires `console.time` instrumentation at the `resolveWebviewView` entry point correlated against the user's Reload command.
+
+### Predicted likely-dominant segment
+
+**Segment 8 (VS Code cold-start overhead): HIGH confidence.**
+
+Reasoning: Segments 1–7 total is bounded at ~300–500ms warm (measured 47–99ms for disk I/O + estimated ~200ms for webview boot chain). The measured gap is ~6,980ms. That leaves ~6.5–6.7s unaccounted. The only unmeasured segment long enough to fill this gap is the VS Code-internal cold-start path: extension host process spawn + 674KB bundle V8-parse + Activity Bar re-render + `resolveWebviewView` scheduling. This is consistent with VS Code's documented behavior: `Developer: Reload Window` is a full extension host restart, not a hot reload. The 22ms "activation time" is a red herring — it measures only `activate()` body execution, not what precedes it.
+
+**Caveat:** the exact VS Code-internal timing is unverified (see below). If instrumentation shows `resolveWebviewView` fires within ~500ms of reload, the residual gap would need a different explanation (e.g. VS Code's Activity Bar lazy-resolve delaying `resolveWebviewView` further than expected).
+
+### Recommended instrumentation patch (≤30 lines)
+
+Insert `console.time` markers at four named boundaries. All markers use `performance.now()` for sub-millisecond resolution and log via the existing `console.warn` logger pattern.
+
+**File: `src/extension/view/provider.ts`** — line 97, top of `resolveWebviewView`:
+
+```typescript
+// INSTRUMENT: Surface C timing probe — remove after measurement
+const _t0 = performance.now();
+console.warn(`[claudeteam.timing] resolveWebviewView START t=${_t0.toFixed(1)}ms (epoch=${Date.now()})`);
+```
+
+**File: `src/extension/main.ts`** — line 171, inside `startWatcher({...})` call, after the `watcherHandle =` assignment (line ~171):
+
+```typescript
+// INSTRUMENT
+console.warn(`[claudeteam.timing] startWatcher() returned t=${(performance.now() - _t0).toFixed(1)}ms`);
+```
+
+**File: `src/extension/watcher/watcherLoop.ts`** — line 214, top of `tick()` async body; and line 245, just after `opts.onStateChange(state)`:
+
+```typescript
+// INSTRUMENT top of tick()
+const _tickStart = performance.now();
+console.warn(`[claudeteam.timing] tick START t=${_tickStart.toFixed(1)}ms`);
+
+// INSTRUMENT after onStateChange (state:full posted)
+console.warn(`[claudeteam.timing] tick COMPLETE + state posted, elapsed=${(performance.now() - _tickStart).toFixed(1)}ms`);
+```
+
+**File: `src/webview/main.ts`** — line 286, just before `api.postMessage({ type: "ui:refresh" })`:
+
+```typescript
+// INSTRUMENT
+console.warn(`[claudeteam.timing] webview boot() COMPLETE, sending ui:refresh at t=${performance.now().toFixed(1)}ms`);
+```
+
+**How to read the output:** Open VS Code Output panel → select "ClaudeTeam" channel. After `Developer: Reload Window`, timestamps appear in order. The gap between the reload command (recorded manually) and the first `resolveWebviewView START` line is Segment 8. The gap from `resolveWebviewView START` to `tick COMPLETE` is Segments 1–7.
+
+**Total lines added: 8 log statements across 4 files.** All inside `// INSTRUMENT` comments for easy grep-and-remove.
+
+### Discriminator for Segment 1 (session file count)
+
+Run in PowerShell to count session files:
+
+```powershell
+(Get-ChildItem "$env:USERPROFILE\.claude\sessions\*.json" -ErrorAction SilentlyContinue).Count
+```
+
+**Current value on sponsor's machine: 4** (verified this session by reading `C:\Users\538252\.claude\sessions\`). 4 files is not a meaningful I/O burden — Segment 1 ruled out as dominant regardless of this count. The >50 threshold in the dispatch brief would be relevant if sessions/ accumulated stale files, but Claude Code's cleanup keeps this bounded in practice.
+
+### What I did NOT verify
+
+- The exact VS Code-internal time from `Developer: Reload Window` to `resolveWebviewView` firing. This is the load-bearing gap and cannot be determined from source alone. The instrumentation patch above is designed to measure it directly.
+- Whether the 674KB extension host bundle's Node.js `require()` / V8 cold-JIT time is measured in hundreds of milliseconds or multiple seconds. This varies by machine, Node version, and whether the file is in the OS page cache.
+- Whether VS Code delays `resolveWebviewView` for Activity Bar views until after the sidebar is fully rendered (as opposed to firing immediately after `activate()` returns). If VS Code has a deliberate deferral here, it would be a documented platform behavior — not a code defect.
+- The webview renderer's time to fetch + parse + execute the 36KB `main.js` IIFE. Estimated at tens of milliseconds based on bundle size, but not measured in a VS Code webview context specifically.
+- Whether the `forceRefresh` → `tick` → `postState` chain itself introduces any meaningful delay beyond the disk I/O (e.g. Node.js `Promise` microtask queue depth under VS Code's event loop).
+
+### Implications for ClaudeTeam
+
+- The ~7s Surface C latency is almost certainly not fixable via code changes alone — it reflects VS Code platform overhead during window reload. There is no application-level hook into the extension host spawn or Activity Bar re-render sequence.
+- If instrumentation confirms the dominant gap IS within our control (i.e., `resolveWebviewView` fires quickly but something in Segments 1–7 is slow), the double `readFileSync` of the parent JSONL (`readSessionTitle` + `readFinishedToolUseIds` both calling `readFileSync` independently on the same 5.2MB file) is the first optimization target — memoizing this read within a single tick would save ~28–39ms warm, more on cold cache.
+- The sponsor should understand that Surface C (window-reload) is categorically different from Surface A (pane close+reopen). Surface A is fully in our control and was correctly fixed by PR #73 + PR #77. Surface C involves platform cold-start overhead that the extension cannot influence.
