@@ -92,6 +92,20 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   provider.onResolved((webview) => {
+    // M-fix (ticket 86c9yxv6d): capture the prior watcher's last-known state
+    // BEFORE disposing it, so we can replay it to the freshly remounted
+    // webview. VS Code calls `resolveWebviewView` every time the user
+    // closes + reopens the Activity Bar pane (the webview is disposed in
+    // between, losing its in-memory state). The new watcher starts with
+    // `lastState = null` and its first async tick can take up to
+    // `pollIntervalMs` (default 2000ms), during which the webview renders
+    // the empty fixture state ("No live Claude Code sessions"). Posting
+    // the prior state synchronously bridges that boot gap. The new
+    // watcher's first tick still runs and overwrites with fresh state —
+    // this is a fast-path, not a replacement. Source: Bram's triage
+    // `team/bram-research/86c9yteju-triage-2026-05-26.md` § Observation 3.
+    const priorState = watcherHandle?.getLastState() ?? null;
+
     // Dispose any prior watcher BEFORE rebinding — VS Code resolves the view
     // again after `Reload Window`, and a stale watcher would keep ticking
     // against a disposed webview (postMessage throws → caught in messageBus).
@@ -148,6 +162,18 @@ export function activate(context: vscode.ExtensionContext): void {
         warn: (msg) => console.warn(`[claudeteam.watcher] ${msg}`),
       },
     });
+
+    // M-fix (ticket 86c9yxv6d) AC1: replay the prior watcher's last-known
+    // state to the freshly remounted webview synchronously after the new
+    // watcher is constructed, BEFORE its first async tick can fire. This
+    // closes the 0–2s "No live Claude Code sessions" empty-state flash that
+    // occurs on every pane close+reopen when sessions are active. Skip
+    // entirely on first-resolve (priorState === null) — AC5: no regression
+    // on first-open empty-state path; the new watcher's initial tick is the
+    // sole source of state in that case.
+    if (priorState !== null) {
+      void postState(webview, priorState);
+    }
 
     // M3-03 AC5: react to the showAllSessionsGlobally toggle (and any other
     // claudeteam.* setting change) without requiring Reload Window. The next
