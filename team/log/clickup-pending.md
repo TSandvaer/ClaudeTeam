@@ -105,6 +105,7 @@ ENTRY-2026-05-25T10:25:00Z: 86c9ygck9 -> in progress (M4-04 recovery dispatch �
 ENTRY-2026-05-25T10:55:00Z: 86c9ygck9 -> in review (M4-04 PR #59 opened — cadence tuning + memory probe; 386 unit + 68 integration green; vsce package clean)
 ENTRY-2026-05-26T00:30:00Z: 86c9yteju -> in progress (Felix dispatched on doc-captures phase — 4 doc additions to vscode-extension-conventions.md + 1 package.json description tweak)
 ENTRY-2026-05-26T00:45:00Z: 86c9yteju -> in review (PR #65 opened — 4 doc additions + rosterPath description flip; Self-Test Report posted; vsce package clean; 386 unit + 68 integration green)
+ENTRY-2026-05-26T01:00:00Z: 86c9ytyq7 -> in review (M5 hide-finished spec PR opened — Iris design spec; Shape 1 + header-chip hybrid; parallel-ready vocabulary contract for Felix M5-EH + Maya M5-WV)
 ENTRY-2026-05-26T08:50:00Z: 86c9yxv6d -> in review (PR #66 opened — fix(host): replay last-known state to remounted webview; eliminates pane-reopen empty-state flash; 386 unit + 71 integration green; Self-Test Report posted)
 ```
 
