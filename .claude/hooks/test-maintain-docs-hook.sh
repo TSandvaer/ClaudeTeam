@@ -13,8 +13,10 @@
 #   7. stop_hook_active re-entry guard → silent exit 0
 #   8. Missing transcript_path         → block-response (fail-open)
 #
-# Each test logs PASS/FAIL with a short rationale and accumulates a counter.
-# Exit code reflects total fails (0 = all green).
+# Fixtures are HEREDOC-inlined per test so each case reads as literal JSONL —
+# the prior helper-based shape obscured the actual content the hook regexes
+# against. Each test logs PASS/FAIL with a short rationale and accumulates a
+# counter. Exit code reflects total fails (0 = all green).
 
 set -u
 
@@ -67,116 +69,90 @@ run_hook() {
   printf '%s' "$envelope" | bash "$HOOK"
 }
 
-# --- fixture builders --------------------------------------------------------
-
-# Transcript line shapes — minimal viable JSONL.
-user_msg() {
-  printf '{"role":"user","message":{"content":[{"type":"text","text":"%s"}]}}\n' "$1"
-}
-
-tool_use_edit() {
-  # $1 = file_path (already JSON-escaped for backslashes if needed)
-  printf '{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s","name":"Edit","input":{"file_path":"%s","old_string":"a","new_string":"b"}}]}}\n' \
-    "$(printf '%s' "$1" | tr -dc 'a-zA-Z0-9' | head -c 10)" "$1"
-}
-
-tool_use_write() {
-  printf '{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s","name":"Write","input":{"file_path":"%s","content":"x"}}]}}\n' \
-    "$(printf '%s' "$1" | tr -dc 'a-zA-Z0-9' | head -c 10)" "$1"
-}
-
-tool_use_agent() {
-  printf '{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_agent_%s","name":"Agent","input":{"description":"%s"}}]}}\n' \
-    "$(date +%s%N | tail -c 8)" "$1"
-}
-
-tool_use_read() {
-  printf '{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_read_%s","name":"Read","input":{"file_path":"%s"}}]}}\n' \
-    "$(printf '%s' "$1" | tr -dc 'a-zA-Z0-9' | head -c 10)" "$1"
-}
-
 # --- test cases --------------------------------------------------------------
 
 # Test 1: substantive code edit → block
 T1="$TMP_DIR/t1-code-edit.jsonl"
-{
-  user_msg "fix the parser"
-  tool_use_edit "c:/Trunk/PRIVATE/ClaudeTeam-felix-wt/src/extension/watcher/metaJsonLoader.ts"
-} > "$T1"
+cat > "$T1" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"fix the parser"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t1","name":"Edit","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam-felix-wt/src/extension/watcher/metaJsonLoader.ts","old_string":"a","new_string":"b"}}]}}
+EOF
 OUT=$(run_hook "$T1"); RC=$?
 assert_block "1. substantive code edit (Edit on src/...)" "$OUT" "$RC"
 
 # Test 2: substantive Agent dispatch → block (even when no edit paths)
 T2="$TMP_DIR/t2-agent.jsonl"
-{
-  user_msg "dispatch felix"
-  tool_use_agent "felix on M5-EH"
-} > "$T2"
+cat > "$T2" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"dispatch felix"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t2","name":"Agent","input":{"description":"felix on M5-EH"}}]}}
+EOF
 OUT=$(run_hook "$T2"); RC=$?
 assert_block "2. Agent dispatch (no edits)" "$OUT" "$RC"
 
 # Test 3: tick-class — STATE.md only → silent
 T3="$TMP_DIR/t3-tick-state.jsonl"
-{
-  user_msg "Status"
-  tool_use_edit "c:/Trunk/PRIVATE/ClaudeTeam/team/STATE.md"
-} > "$T3"
+cat > "$T3" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"Status"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t3","name":"Edit","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam/team/STATE.md","old_string":"a","new_string":"b"}}]}}
+EOF
 OUT=$(run_hook "$T3"); RC=$?
 assert_silent "3. tick-class — STATE.md only" "$OUT" "$RC"
 
 # Test 3b: tick-class with Windows backslash path → silent
+# Double-backslash escapes survive as `\\` in JSON (representing one `\`),
+# matching the on-disk transcript shape.
 T3B="$TMP_DIR/t3b-tick-backslash.jsonl"
-{
-  user_msg "Status"
-  tool_use_edit "c:\\\\Trunk\\\\PRIVATE\\\\ClaudeTeam\\\\team\\\\STATE.md"
-} > "$T3B"
+cat > "$T3B" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"Status"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t3b","name":"Edit","input":{"file_path":"c:\\Trunk\\PRIVATE\\ClaudeTeam\\team\\STATE.md","old_string":"a","new_string":"b"}}]}}
+EOF
 OUT=$(run_hook "$T3B"); RC=$?
 assert_silent "3b. tick-class — STATE.md (Windows backslash path)" "$OUT" "$RC"
 
 # Test 4: tick-class — clickup-pending + decisions-while-away → silent
 T4="$TMP_DIR/t4-tick-multi.jsonl"
-{
-  user_msg "merge PR and log"
-  tool_use_edit "c:/Trunk/PRIVATE/ClaudeTeam/team/log/clickup-pending.md"
-  tool_use_write "c:/Trunk/PRIVATE/ClaudeTeam/.claude/decisions-while-away.md"
-} > "$T4"
+cat > "$T4" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"merge PR and log"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t4a","name":"Edit","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam/team/log/clickup-pending.md","old_string":"a","new_string":"b"}}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t4b","name":"Write","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam/.claude/decisions-while-away.md","content":"x"}}]}}
+EOF
 OUT=$(run_hook "$T4"); RC=$?
 assert_silent "4. tick-class — clickup-pending + decisions-while-away" "$OUT" "$RC"
 
 # Test 4b: persona scratch path → silent
 T4B="$TMP_DIR/t4b-persona-scratch.jsonl"
-{
-  user_msg "review"
-  tool_use_write "c:/Trunk/PRIVATE/ClaudeTeam-maya-wt/team/maya-dev/pr-71-review-body.md"
-} > "$T4B"
+cat > "$T4B" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"review"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t4b","name":"Write","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam-maya-wt/team/maya-dev/pr-71-review-body.md","content":"x"}}]}}
+EOF
 OUT=$(run_hook "$T4B"); RC=$?
 assert_silent "4b. tick-class — persona scratch (team/maya-dev/)" "$OUT" "$RC"
 
 # Test 5: mixed — code + STATE.md → block (any non-tick wins)
 T5="$TMP_DIR/t5-mixed.jsonl"
-{
-  user_msg "ship and update state"
-  tool_use_edit "c:/Trunk/PRIVATE/ClaudeTeam-felix-wt/src/extension/main.ts"
-  tool_use_edit "c:/Trunk/PRIVATE/ClaudeTeam/team/STATE.md"
-} > "$T5"
+cat > "$T5" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"ship and update state"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t5a","name":"Edit","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam-felix-wt/src/extension/main.ts","old_string":"a","new_string":"b"}}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t5b","name":"Edit","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam/team/STATE.md","old_string":"a","new_string":"b"}}]}}
+EOF
 OUT=$(run_hook "$T5"); RC=$?
 assert_block "5. mixed — code + STATE.md (non-tick wins)" "$OUT" "$RC"
 
 # Test 6: pure Q&A — only Read tool_use → silent
 T6="$TMP_DIR/t6-qa.jsonl"
-{
-  user_msg "what does this file do?"
-  tool_use_read "c:/Trunk/PRIVATE/ClaudeTeam/CLAUDE.md"
-} > "$T6"
+cat > "$T6" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"what does this file do?"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t6","name":"Read","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam/CLAUDE.md"}}]}}
+EOF
 OUT=$(run_hook "$T6"); RC=$?
 assert_silent "6. pure Q&A (Read only, no Edit/Write/Agent)" "$OUT" "$RC"
 
 # Test 7: stop_hook_active re-entry guard → silent (even with code edit)
 T7="$TMP_DIR/t7-reentry.jsonl"
-{
-  user_msg "fix"
-  tool_use_edit "c:/Trunk/PRIVATE/ClaudeTeam-felix-wt/src/extension/main.ts"
-} > "$T7"
+cat > "$T7" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"fix"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t7","name":"Edit","input":{"file_path":"c:/Trunk/PRIVATE/ClaudeTeam-felix-wt/src/extension/main.ts","old_string":"a","new_string":"b"}}]}}
+EOF
 OUT=$(run_hook "$T7" '"stop_hook_active":true'); RC=$?
 assert_silent "7. stop_hook_active re-entry guard" "$OUT" "$RC"
 

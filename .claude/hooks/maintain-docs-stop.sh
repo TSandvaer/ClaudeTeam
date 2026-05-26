@@ -63,23 +63,26 @@ if [[ -z "${last_user_line:-}" ]]; then
   last_user_line=1
 fi
 
-# Slice the transcript from the boundary forward — one buffer, multi-grep.
-turn_slice=$(tail -n "+${last_user_line}" "$transcript_path")
+# Single-pass extraction of every doc-worthy tool_use in the slice. One grep
+# stream emits either an `AGENT` marker (sub-agent dispatch) or an `EDIT <path>`
+# line (Edit/Write/NotebookEdit). Avoids re-scanning the slice — important on
+# 20k+ line transcripts.
+classified=$(tail -n "+${last_user_line}" "$transcript_path" \
+  | grep -oE '"type":"tool_use","id":"[^"]+","name":"(Agent|Edit|Write|NotebookEdit)"(,"input":\{[^}]*"file_path":"[^"]+")?' \
+  | sed -E \
+      -e 's/.*"name":"Agent".*/AGENT/' \
+      -e 's/.*"name":"(Edit|Write|NotebookEdit)".*"file_path":"([^"]+)".*/EDIT \2/')
 
 # Agent dispatches always count as doc-worthy — sub-agent work may produce
 # findings that should land in .claude/docs/.
-if printf '%s' "$turn_slice" \
-    | grep -Eq '"type":"tool_use","id":"[^"]+","name":"Agent"'; then
+if printf '%s\n' "$classified" | grep -q '^AGENT$'; then
   printf '%s' "$block_response"
   exit 0
 fi
 
-# Collect every Edit/Write/NotebookEdit tool_use's file_path. If there are
-# none, the turn had no doc-worthy file writes — exit silently.
-edit_paths=$(printf '%s' "$turn_slice" \
-  | grep -oE '"type":"tool_use","id":"[^"]+","name":"(Edit|Write|NotebookEdit)","input":\{[^}]*"file_path":"[^"]+"' \
-  | grep -oE '"file_path":"[^"]+"' \
-  | sed -E 's/"file_path":"([^"]+)"/\1/')
+# Collect every Edit/Write/NotebookEdit file_path. If there are none, the turn
+# had no doc-worthy file writes — exit silently.
+edit_paths=$(printf '%s\n' "$classified" | sed -n 's/^EDIT //p')
 
 if [[ -z "${edit_paths:-}" ]]; then
   # No file-modifying / agent-spawning tool calls this turn — skip silently.
