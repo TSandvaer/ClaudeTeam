@@ -23,6 +23,7 @@ import {
 } from "./collapsedPersonaTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
+import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
 
 export interface TeamCardProps {
   /** Team metadata (id + display name from the loaded roster). */
@@ -62,6 +63,13 @@ export interface TeamCardProps {
    * the wrapper expands (instances aren't in the DOM until then).
    */
   prevStateTracker?: PrevStateTracker;
+  /**
+   * Optional webview-local expansion-state tracker (Obs 10, 86c9zfmh1).
+   * Threaded through to each `renderCollapsedPersonaTile` so user-expanded
+   * wrappers survive the next host-driven `renderFull` re-build. Bare
+   * tiles ignore it (nothing to expand at the leaf level).
+   */
+  expandedGroupsTracker?: ExpandedGroupsTracker;
   /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
   nowMs?: number;
 }
@@ -74,6 +82,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
     postMessage,
     finishedTracker,
     prevStateTracker,
+    expandedGroupsTracker,
     nowMs,
   } = props;
 
@@ -103,17 +112,23 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
   for (const entry of tiles) {
     if (isCollapsedPersonaGroup(entry)) {
       // M3-10 AC2 — collapsed-persona wrapper renders a header tile + lazy
-      // instances container. Both trackers forwarded so when the user
-      // expands the wrapper, finished instances pick up the freshness suffix
-      // AND state transitions trigger their visual treatment exactly as
-      // bare tiles do.
+      // instances container. All three trackers forwarded so when the user
+      // expands the wrapper, finished instances pick up the freshness
+      // suffix AND state transitions trigger their visual treatment exactly
+      // as bare tiles do; the expandedGroupsTracker (Obs 10) persists the
+      // user's expansion intent across the next host-driven re-render so
+      // the wrapper doesn't snap shut every ~2s poll tick. `teamId` is
+      // required to compose the expansion-tracker key — it's always
+      // available here at the team-card render site.
       card.appendChild(
         renderCollapsedPersonaTile({
           group: entry,
           sessionId,
+          teamId: team.id,
           postMessage,
           ...(finishedTracker ? { finishedTracker } : {}),
           ...(prevStateTracker ? { prevStateTracker } : {}),
+          ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
           ...(nowMs !== undefined ? { nowMs } : {}),
         }),
       );

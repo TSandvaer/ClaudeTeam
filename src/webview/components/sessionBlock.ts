@@ -31,6 +31,7 @@ import { renderBackgroundChip } from "./backgroundChip.js";
 import type { PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
+import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
 
 export interface SessionBlockProps {
   /**
@@ -53,13 +54,25 @@ export interface SessionBlockProps {
    * can fire the `data-transition="to-<state>"` attribute / animation.
    */
   prevStateTracker?: PrevStateTracker;
+  /**
+   * Optional webview-local expansion-state tracker (Obs 10, 86c9zfmh1).
+   * Threaded down to teamCard → collapsedPersonaTile so user-expanded
+   * persona wrappers survive the next host-driven `renderFull`.
+   */
+  expandedGroupsTracker?: ExpandedGroupsTracker;
   /** Current wall-clock ms — defaults to Date.now() downstream. */
   nowMs?: number;
 }
 
 export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
-  const { session, postMessage, finishedTracker, prevStateTracker, nowMs } =
-    props;
+  const {
+    session,
+    postMessage,
+    finishedTracker,
+    prevStateTracker,
+    expandedGroupsTracker,
+    nowMs,
+  } = props;
 
   const block = document.createElement("section");
   block.className = "session-block";
@@ -111,6 +124,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
         postMessage,
         ...(finishedTracker ? { finishedTracker } : {}),
         ...(prevStateTracker ? { prevStateTracker } : {}),
+        ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
       }),
     );
