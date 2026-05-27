@@ -170,7 +170,7 @@ if (tile.memberColor !== undefined) {
 
 **No global CSS rule churn.** Existing M4-01 tokens are untouched; the new `--ct-color-running-dot` is a per-tile inline custom property with a fallback to the existing token, so untagged tiles paint exactly as today.
 
-**Pulse animation still runs.** M4-01 §2.4's `ct-pulse` animation runs on `.state-dot[data-state="running"]` — it animates `box-shadow` / `transform`, not `background-color`, so the pulse just inherits whatever color the dot paints. No animation rule needs to know about `memberColor`.
+**Pulse animation still runs.** M4-01 §2.4's `ct-pulse` animation runs on `.state-dot[data-state="running"]` — it animates `opacity`, not `background-color`, so the pulse just modulates the visibility of whatever color the dot paints. No animation rule needs to know about `memberColor`.
 
 ### 2.5 Theme-contrast considerations
 
@@ -463,7 +463,7 @@ Dark theme:           Light theme:
    Felix                 Felix
 ```
 
-The dot remains slate-blue. The halo (pulse animation) inherits `--ct-color-state-running` (Material Green) per §2.5 guardrail — the halo is visible in both themes (green-on-dark + green-on-light both pass contrast). The dot's contrast against the theme background is the sponsor's responsibility (per §2.5 doc note).
+The dot remains slate-blue in both themes; the pulse animation modulates opacity only (no halo). Members with `color` unset or dropped-as-invalid fall back to `--ct-color-state-running` per §2.3 Option A and §2.6. The dot's contrast against the theme background is the sponsor's responsibility (per §2.5 doc note).
 
 ---
 
