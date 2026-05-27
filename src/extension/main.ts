@@ -50,6 +50,10 @@ import {
 } from "./commands/openRoster.js";
 import { postState } from "./messageBus.js";
 import { cwdToSlug } from "../shared/slug.js";
+import {
+  createDiagnosticChannel,
+  type DiagnosticChannel,
+} from "./diagnostics/output.js";
 
 /**
  * Called by VS Code when the extension activates (lazy — fires on first
@@ -58,6 +62,20 @@ import { cwdToSlug } from "../shared/slug.js";
  */
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new ClaudeTeamViewProvider(context.extensionUri);
+
+  // 86c9zn7vw: diagnostic Output channel. Constructed once at activate
+  // time; survives `resolveWebviewView` remounts so the user's existing
+  // scrollback isn't lost when the Activity Bar pane is closed + reopened.
+  // The underlying `vscode.OutputChannel` is allocated lazily on the first
+  // verbose emit — when the setting stays false from boot to deactivate,
+  // no channel ever appears in the user's Output dropdown.
+  const diagnosticChannel: DiagnosticChannel = createDiagnosticChannel({
+    isVerbose: () =>
+      vscode.workspace
+        .getConfiguration("claudeteam")
+        .get<boolean>("diagnostic.verbose") ?? false,
+    createOutputChannel: (name) => vscode.window.createOutputChannel(name),
+  });
 
   // Held out-of-band across resolveWebviewView invocations. Disposed-and-
   // replaced on every rebind so the subscription stack stays bounded
@@ -88,6 +106,9 @@ export function activate(context: vscode.ExtensionContext): void {
       watcherHandle = null;
       rosterWatcherDisposable?.dispose();
       rosterWatcherDisposable = null;
+      // 86c9zn7vw: dispose the diagnostic channel (only releases the
+      // underlying vscode.OutputChannel if one was actually allocated).
+      diagnosticChannel.dispose();
     },
   });
 
@@ -165,8 +186,21 @@ export function activate(context: vscode.ExtensionContext): void {
       onStateChange: (state) => {
         void postState(webview, state);
       },
+      // 86c9zn7vw: feed the diagnostic dispatcher every tick. The
+      // dispatcher's `recordTick` is a no-op fast path when
+      // `claudeteam.diagnostic.verbose` is false; when true, emits the
+      // per-tick summary line plus per-agent state-transition lines.
+      onTickComplete: (info) => {
+        diagnosticChannel.recordTick(info);
+      },
       logger: {
-        warn: (msg) => console.warn(`[claudeteam.watcher] ${msg}`),
+        warn: (msg) => {
+          console.warn(`[claudeteam.watcher] ${msg}`);
+          // 86c9zn7vw: also surface watcher warnings to the diagnostic
+          // channel when verbose is on — the user can correlate the
+          // error timeline with tick history in one place.
+          diagnosticChannel.recordError(msg);
+        },
       },
     });
 
@@ -229,11 +263,19 @@ export function activate(context: vscode.ExtensionContext): void {
       globalPath: globalRosterPath,
       projectPath: projectRosterPath,
       pollIntervalMs: rosterPollIntervalMs,
-      onRosterChange: () => {
+      onRosterChange: (result) => {
         // The tick re-reads disk; we discard the RosterLoadResult here
         // and let runTick own the canonical reload. Keeps a single source
         // of truth for "what roster is in effect right now".
         watcherHandle?.triggerTick();
+        // 86c9zn7vw: surface the reload to the diagnostic timeline. The
+        // dispatcher's gate (claudeteam.diagnostic.verbose) makes this a
+        // no-op when verbose is off.
+        diagnosticChannel.recordRosterReload({
+          teamsCount: result.roster.length,
+          errorsCount: result.errors.length,
+          warningsCount: result.warnings.length,
+        });
       },
       logger: {
         warn: (msg) => console.warn(`[claudeteam.rosterWatcher] ${msg}`),
