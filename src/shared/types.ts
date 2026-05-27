@@ -748,8 +748,28 @@ export interface SessionLabelInputs {
 export const NO_AI_TITLE_SENTINEL = "(no title yet)" as const;
 
 /**
- * Resolve the session card's display label per the locked vocabulary contract
- * (sponsor 2-question approval 2026-05-27):
+ * Which tier of the priority chain resolved the label. Used by the webview's
+ * `data-label-source` attribute + tooltip so a glance hints WHY a given title
+ * is showing.
+ */
+export type SessionLabelSource =
+  | "custom-title"
+  | "ai-title"
+  | "workspace-folder";
+
+/**
+ * Resolution result: the rendered label string PLUS the tier that produced it.
+ * Returned by `resolveSessionLabelWithSource`; callers that only need the
+ * string can keep using `resolveSessionLabel` (thin back-compat wrapper).
+ */
+export interface SessionLabelResolution {
+  label: string;
+  source: SessionLabelSource;
+}
+
+/**
+ * Resolve the session card's display label PLUS which tier produced it, per
+ * the locked vocabulary contract (sponsor 2-question approval 2026-05-27):
  *
  *   customTitle > aiTitle > workspace-folder fallback (basename of cwd)
  *
@@ -760,30 +780,47 @@ export const NO_AI_TITLE_SENTINEL = "(no title yet)" as const;
  * `cwd` itself is empty/whitespace (defensive — Claude Code session files
  * always carry a non-empty `cwd` in practice).
  *
- * Pure function; no filesystem reads, no VS Code API. Safe to call repeatedly
- * during render. Distinct from `SessionTree.title` which remains the raw
- * `ai-title` JSONL value on the wire (back-compat with CLI presenter,
- * diagnostic panel, older tests).
+ * This is the single source of truth for tier dispatch. `resolveSessionLabel`
+ * delegates here; the webview's `sessionBlock` calls this directly so the
+ * label string AND the `data-label-source` attribute / tooltip are derived
+ * from one pass (no risk of the label saying one tier and the attribute
+ * saying another).
+ *
+ * Pure function; no filesystem reads, no VS Code API.
  *
  * Source: `team/bram-research/86ca00xcd-claude-vscode-label-surfaces-2026-05-27.md`
  *         §"Display priority suggestion"; `.claude/docs/vscode-extension-conventions.md`
  *         §"Session label resolution".
  */
-export function resolveSessionLabel(rec: SessionLabelInputs): string {
+export function resolveSessionLabelWithSource(
+  rec: SessionLabelInputs,
+): SessionLabelResolution {
   // Tier 1: sponsor-authored `customTitle`.
   if (typeof rec.customTitle === "string") {
     const t = rec.customTitle.trim();
-    if (t.length > 0) return t;
+    if (t.length > 0) return { label: t, source: "custom-title" };
   }
   // Tier 2: AI-generated `aiTitle` (the existing `title` field). Treat the
   // sentinel `(no title yet)` as "absent" so it does NOT win over the
   // workspace-folder fallback.
   if (typeof rec.title === "string") {
     const t = rec.title.trim();
-    if (t.length > 0 && t !== NO_AI_TITLE_SENTINEL) return t;
+    if (t.length > 0 && t !== NO_AI_TITLE_SENTINEL) {
+      return { label: t, source: "ai-title" };
+    }
   }
   // Tier 3: workspace-folder fallback — basename of cwd.
-  return workspaceFolderName(rec.cwd);
+  return { label: workspaceFolderName(rec.cwd), source: "workspace-folder" };
+}
+
+/**
+ * Thin wrapper returning just the resolved label string. Kept for
+ * back-compat with callers that don't need the source tier (CLI presenter,
+ * diagnostic panel, older tests). New callers that need both should use
+ * `resolveSessionLabelWithSource` directly.
+ */
+export function resolveSessionLabel(rec: SessionLabelInputs): string {
+  return resolveSessionLabelWithSource(rec).label;
 }
 
 /**

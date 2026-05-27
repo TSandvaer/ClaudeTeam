@@ -25,14 +25,30 @@
  * Source: team/iris-ux/m2-dashboard-tile-spec.md §4
  */
 
-import type { SessionTree, WebviewSessionTree } from "../../shared/types.js";
-import { resolveSessionLabel } from "../../shared/types.js";
+import type {
+  SessionLabelSource,
+  SessionTree,
+  WebviewSessionTree,
+} from "../../shared/types.js";
+import { resolveSessionLabelWithSource } from "../../shared/types.js";
 import { renderTeamCard, teamFromId } from "./teamCard.js";
 import { renderBackgroundChip } from "./backgroundChip.js";
 import type { PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
+
+/**
+ * Tooltip text shown on the `.session-title` span keyed by the resolution
+ * source. Kept adjacent to the renderer so a UI-copy change is a one-file
+ * edit. Exhaustive on `SessionLabelSource` — TypeScript will surface a
+ * missing key if a new source value is added to the union.
+ */
+const LABEL_SOURCE_TOOLTIPS: Record<SessionLabelSource, string> = {
+  "custom-title": "Sponsor rename (custom-title)",
+  "ai-title": "AI-generated title (ai-title)",
+  "workspace-folder": "Workspace folder name (no title set)",
+};
 
 export interface SessionBlockProps {
   /**
@@ -125,37 +141,22 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
   cwdSpan.textContent = session.cwd;
   header.appendChild(cwdSpan);
 
-  // 86ca03nww: resolve display label via the host-shared priority chain
-  // (customTitle > aiTitle > workspace-folder fallback). `session.title`
-  // carries the raw `ai-title` value on the wire; `session.customTitle`
-  // carries the sponsor-authored rename when set. The resolver normalizes
-  // empty / whitespace-only customTitle and the `(no title yet)` sentinel
-  // so the fallback chain fires correctly.
+  // 86ca03nww: resolve display label AND its source in one pass via the
+  // shared `resolveSessionLabelWithSource` helper. The helper centralizes
+  // the priority chain (customTitle > aiTitle > workspace-folder fallback)
+  // and normalization rules (empty/whitespace customTitle, `(no title yet)`
+  // sentinel) so the label text and `data-label-source` attribute can never
+  // drift apart.
   const labelSpan = document.createElement("span");
   labelSpan.className = "session-title";
-  labelSpan.textContent = resolveSessionLabel({
+  const resolved = resolveSessionLabelWithSource({
     title: session.title,
     customTitle: session.customTitle,
     cwd: session.cwd,
   });
-  // Tooltip surfaces the source so a glance hints which tier resolved.
-  // customTitle > ai-title > workspace-folder fallback — only the resolved
-  // source string appears (truth) so the sponsor can confirm a rename
-  // landed without opening the raw JSONL.
-  if (typeof session.customTitle === "string" && session.customTitle.trim().length > 0) {
-    labelSpan.setAttribute("title", "Sponsor rename (custom-title)");
-    labelSpan.dataset.labelSource = "custom-title";
-  } else if (
-    typeof session.title === "string" &&
-    session.title.trim().length > 0 &&
-    session.title !== "(no title yet)"
-  ) {
-    labelSpan.setAttribute("title", "AI-generated title (ai-title)");
-    labelSpan.dataset.labelSource = "ai-title";
-  } else {
-    labelSpan.setAttribute("title", "Workspace folder name (no title set)");
-    labelSpan.dataset.labelSource = "workspace-folder";
-  }
+  labelSpan.textContent = resolved.label;
+  labelSpan.setAttribute("title", LABEL_SOURCE_TOOLTIPS[resolved.source]);
+  labelSpan.dataset.labelSource = resolved.source;
   header.appendChild(labelSpan);
 
   // 86ca03nww: gitBranch chip — small badge near the title surfacing the
