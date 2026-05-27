@@ -584,6 +584,16 @@ function renderCompactInstanceRow(
   );
   article.setAttribute("title", "Open agent transcript");
 
+  // 86c9zqa75 — member-color paint mirrors the bare-tile rule in
+  // `agentTile.ts`. Uniform-cluster auto-collapse gates running tiles out
+  // of compact rows in practice (`computeIsUniform` returns false for
+  // state === "running"), so the branch is effectively unreachable at
+  // populate-time; the guard stays in place for forward-compat if a future
+  // spec widens uniform-cluster eligibility to running.
+  if (tile.state === "running" && tile.memberColor !== undefined) {
+    article.style.setProperty("--ct-color-running-dot", tile.memberColor);
+  }
+
   // State dot (re-uses the shared `.state-dot[data-state]` CSS from agentTile).
   const dot = document.createElement("span");
   dot.className = "state-dot";

@@ -397,3 +397,267 @@ describe("renderFull — M5 header chip mount", () => {
     expect(chip.dataset.hiddenCount).toBe("2");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Idle-chip variant — 86c9zqa75 / spec 86c9zmyef §3 + §7.3 templates
+// ---------------------------------------------------------------------------
+
+describe("labelTextForState — idle variant (spec 86c9zmyef §7.3)", () => {
+  it("returns 'Hide idle' when filter off (count irrelevant)", () => {
+    expect(labelTextForState(false, 0, "idle")).toBe("Hide idle");
+    expect(labelTextForState(false, 7, "idle")).toBe("Hide idle");
+  });
+
+  it("returns 'Show idle — none yet' when filter on + count=0", () => {
+    expect(labelTextForState(true, 0, "idle")).toBe(
+      `Show idle ${EM_DASH} none yet`,
+    );
+  });
+
+  it("returns 'Show idle — 1 hidden' for singular count", () => {
+    expect(labelTextForState(true, 1, "idle")).toBe(
+      `Show idle ${EM_DASH} 1 hidden`,
+    );
+  });
+
+  it("returns 'Show idle — N hidden' for plural count", () => {
+    expect(labelTextForState(true, 2, "idle")).toBe(
+      `Show idle ${EM_DASH} 2 hidden`,
+    );
+    expect(labelTextForState(true, 14, "idle")).toBe(
+      `Show idle ${EM_DASH} 14 hidden`,
+    );
+  });
+});
+
+describe("renderHeaderChip — idle variant state matrix (spec 86c9zmyef §3)", () => {
+  it("kind=idle, filter OFF + count 0 → data-hide-idle=false, label 'Hide idle'", () => {
+    const chip = renderHeaderChip({
+      kind: "idle",
+      hideFinished: false,
+      hiddenCount: 0,
+      postMessage: vi.fn(),
+    });
+
+    expect(chip.tagName).toBe("ASIDE");
+    expect(chip.classList.contains("ct-header-chip")).toBe(true);
+    expect(chip.dataset.hideIdle).toBe("false");
+    expect(chip.dataset.hiddenIdleCount).toBe("0");
+    // The M5 data attributes MUST NOT appear on the idle chip — that would
+    // confuse selectors targeting either chip.
+    expect(chip.dataset.hideFinished).toBeUndefined();
+    expect(chip.dataset.hiddenCount).toBeUndefined();
+
+    const toggle = chip.querySelector(".ct-header-chip-toggle");
+    expect(toggle!.getAttribute("aria-pressed")).toBe("false");
+    expect(toggle!.getAttribute("title")).toBe("Hide idle agents");
+
+    expect(chip.querySelector(".ct-header-chip-label")?.textContent).toBe(
+      "Hide idle",
+    );
+  });
+
+  it("kind=idle, filter ON + count 3 → label 'Show idle — 3 hidden'", () => {
+    const chip = renderHeaderChip({
+      kind: "idle",
+      hideFinished: true,
+      hiddenCount: 3,
+      postMessage: vi.fn(),
+    });
+
+    expect(chip.dataset.hideIdle).toBe("true");
+    expect(chip.dataset.hiddenIdleCount).toBe("3");
+
+    const toggle = chip.querySelector(".ct-header-chip-toggle");
+    expect(toggle!.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle!.getAttribute("title")).toBe("Show idle agents");
+
+    expect(chip.querySelector(".ct-header-chip-label")?.textContent).toBe(
+      `Show idle ${EM_DASH} 3 hidden`,
+    );
+  });
+
+  it("kind=idle click when OFF posts { ui:set-config, hideIdleAgents: true }", () => {
+    const postMessage = vi.fn<[WebviewMessage], void>();
+    const chip = renderHeaderChip({
+      kind: "idle",
+      hideFinished: false,
+      hiddenCount: 0,
+      postMessage,
+    });
+
+    const toggle = chip.querySelector(
+      ".ct-header-chip-toggle",
+    ) as HTMLButtonElement;
+    toggle.click();
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: "ui:set-config",
+      payload: { key: "hideIdleAgents", value: true },
+    });
+  });
+
+  it("kind=idle click when ON posts { ui:set-config, hideIdleAgents: false }", () => {
+    const postMessage = vi.fn<[WebviewMessage], void>();
+    const chip = renderHeaderChip({
+      kind: "idle",
+      hideFinished: true,
+      hiddenCount: 5,
+      postMessage,
+    });
+
+    const toggle = chip.querySelector(
+      ".ct-header-chip-toggle",
+    ) as HTMLButtonElement;
+    toggle.click();
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: "ui:set-config",
+      payload: { key: "hideIdleAgents", value: false },
+    });
+  });
+
+  it("kind=idle optimistic UI flips data-hide-idle + aria-pressed after click", () => {
+    const chip = renderHeaderChip({
+      kind: "idle",
+      hideFinished: false,
+      hiddenCount: 0,
+      postMessage: vi.fn(),
+    });
+
+    const toggle = chip.querySelector(
+      ".ct-header-chip-toggle",
+    ) as HTMLButtonElement;
+    toggle.click();
+
+    expect(chip.dataset.hideIdle).toBe("true");
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(toggle.getAttribute("title")).toBe("Show idle agents");
+  });
+
+  it("kind omitted defaults to 'finished' (M5 back-compat)", () => {
+    const chip = renderHeaderChip({
+      hideFinished: false,
+      hiddenCount: 0,
+      postMessage: vi.fn(),
+    });
+    // Defaults to finished kind → M5 dataset attributes.
+    expect(chip.dataset.hideFinished).toBe("false");
+    expect(chip.dataset.hiddenCount).toBe("0");
+    expect(chip.querySelector(".ct-header-chip-label")?.textContent).toBe(
+      "Hide finished",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Both chips render side-by-side in renderFull — 86c9zqa75 mount integration
+// ---------------------------------------------------------------------------
+
+describe("renderFull — both header chips mount (86c9zqa75)", () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    mount = document.createElement("div");
+    mount.id = "root";
+    document.body.appendChild(mount);
+  });
+
+  it("renders both finished + idle chips in the empty-state branch", () => {
+    renderFull({ mount, postMessage: vi.fn() }, FIXTURE_EMPTY_STATE);
+    // Two <aside class="ct-header-chip"> — one finished, one idle.
+    const chips = mount.querySelectorAll(".ct-header-chip");
+    expect(chips.length).toBe(2);
+
+    const finishedChip = mount.querySelector(
+      ".ct-header-chip[data-hide-finished]",
+    );
+    const idleChip = mount.querySelector(".ct-header-chip[data-hide-idle]");
+    expect(finishedChip).not.toBeNull();
+    expect(idleChip).not.toBeNull();
+  });
+
+  it("finished chip mounts BEFORE the idle chip (canonical order)", () => {
+    renderFull({ mount, postMessage: vi.fn() }, FIXTURE_EMPTY_STATE);
+    const finishedChip = mount.querySelector(
+      ".ct-header-chip[data-hide-finished]",
+    );
+    const idleChip = mount.querySelector(".ct-header-chip[data-hide-idle]");
+    expect(
+      finishedChip!.compareDocumentPosition(idleChip!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("idle chip boots ON when state.config.hideIdleAgents=true (defaults match Felix's Pt 1)", () => {
+    const augmented = {
+      ...FIXTURE_EMPTY_STATE,
+      hiddenIdleCount: 4,
+      config: { hideIdleAgents: true },
+    } as unknown as AgentTree;
+
+    renderFull({ mount, postMessage: vi.fn() }, augmented);
+    const idleChip = mount.querySelector(
+      ".ct-header-chip[data-hide-idle]",
+    ) as HTMLElement;
+    expect(idleChip).not.toBeNull();
+    expect(idleChip.dataset.hideIdle).toBe("true");
+    expect(idleChip.dataset.hiddenIdleCount).toBe("4");
+    expect(idleChip.querySelector(".ct-header-chip-label")?.textContent).toBe(
+      `Show idle ${EM_DASH} 4 hidden`,
+    );
+  });
+
+  it("idle chip defaults to OFF + 0 when state.config and hiddenIdleCount are absent", () => {
+    renderFull({ mount, postMessage: vi.fn() }, FIXTURE_EMPTY_STATE);
+    const idleChip = mount.querySelector(
+      ".ct-header-chip[data-hide-idle]",
+    ) as HTMLElement;
+    expect(idleChip.dataset.hideIdle).toBe("false");
+    expect(idleChip.dataset.hiddenIdleCount).toBe("0");
+  });
+
+  it("both chips render AFTER both error chips (canonical order preserved)", () => {
+    const stateWithRosterErrors: AgentTree = {
+      ...FIXTURE_EMPTY_STATE,
+      rosterErrors: ["YAML parse: bad indent"],
+    };
+    renderFull(
+      {
+        mount,
+        postMessage: vi.fn(),
+        error: {
+          level: "error",
+          title: "File-watcher error",
+          detail: "Lost contact",
+          showOpenRosterButton: false,
+        },
+      },
+      stateWithRosterErrors,
+    );
+
+    const rosterChip = mount.querySelector(".roster-error-chip");
+    const legacyChip = mount.querySelector(
+      ".error-chip:not(.roster-error-chip)",
+    );
+    const finishedChip = mount.querySelector(
+      ".ct-header-chip[data-hide-finished]",
+    );
+    const idleChip = mount.querySelector(".ct-header-chip[data-hide-idle]");
+
+    // Order: rosterErrorChip → legacy errorChip → finished chip → idle chip.
+    expect(
+      rosterChip!.compareDocumentPosition(legacyChip!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      legacyChip!.compareDocumentPosition(finishedChip!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      finishedChip!.compareDocumentPosition(idleChip!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});

@@ -37,6 +37,9 @@ import {
   FIXTURE_STATE,
 } from "../../../src/shared/fixtures.js";
 
+// Em-dash (U+2014) — vocabulary contract per spec 86c9zmyef §7.3.
+const EM_DASH = "—";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -130,6 +133,50 @@ describe("renderAgentTile — state coverage", () => {
     });
     expect(el.getAttribute("title")).toBe("Open agent transcript");
   });
+});
+
+// ---------------------------------------------------------------------------
+// Agent tile — member-color paint (86c9zqa75 / spec 86c9zmyef §2)
+// ---------------------------------------------------------------------------
+
+describe("renderAgentTile — member-color paint", () => {
+  it("sets inline --ct-color-running-dot when tile is running AND memberColor is defined", () => {
+    const el = renderAgentTile({
+      tile: makeTile({ state: "running", memberColor: "#5d8aa8" }),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    // jsdom returns inline style values verbatim. The CSS rule (in
+    // dashboard.css) reads this var() with a fallback to
+    // --ct-color-state-running — verified visually in the manual reload.
+    expect((el as HTMLElement).style.getPropertyValue("--ct-color-running-dot")).toBe(
+      "#5d8aa8",
+    );
+  });
+
+  it("does NOT set the override when memberColor is undefined (back-compat)", () => {
+    const el = renderAgentTile({
+      tile: makeTile({ state: "running" }),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    expect((el as HTMLElement).style.getPropertyValue("--ct-color-running-dot")).toBe("");
+  });
+
+  for (const state of ["idle", "finished", "error"] as const) {
+    it(`does NOT set the override when state="${state}" even if memberColor is defined (spec §1.3)`, () => {
+      const el = renderAgentTile({
+        tile: makeTile({ state, memberColor: "#5d8aa8" }),
+        sessionId: "sess-1",
+        postMessage: vi.fn(),
+      });
+      // Idle / finished / error retain the M4-01 semantic state colors —
+      // the running-dot override must not paint on non-running tiles.
+      expect(
+        (el as HTMLElement).style.getPropertyValue("--ct-color-running-dot"),
+      ).toBe("");
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1339,5 +1386,134 @@ describe("M4-05 reduced-motion — JS-side invariants", () => {
     } finally {
       window.matchMedia = origMatchMedia;
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-team idle-hidden row — 86c9zqa75 / spec 86c9zmyef §3.4 Option A+B
+//
+// The row appears at the END of a team card when BOTH
+// `state.config.hideIdleAgents === true` AND `state.hiddenIdleCount > 0`.
+// Clicking the row fires the same `ui:set-config` message as the global
+// header chip — passive informational hint, NOT a per-team filter scope.
+// ---------------------------------------------------------------------------
+
+describe("per-team idle-hidden row (86c9zqa75)", () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    mount = document.createElement("div");
+    mount.id = "root";
+    document.body.appendChild(mount);
+  });
+
+  it("does NOT render when hideIdleAgents=false (filter off)", () => {
+    const state = {
+      ...FIXTURE_STATE,
+      hiddenIdleCount: 3,
+      config: { hideIdleAgents: false },
+    } as unknown as AgentTree;
+    renderFull({ mount, postMessage: vi.fn() }, state);
+    expect(mount.querySelector(".ct-team-idle-row")).toBeNull();
+  });
+
+  it("does NOT render when hiddenIdleCount=0 (nothing to hide)", () => {
+    const state = {
+      ...FIXTURE_STATE,
+      hiddenIdleCount: 0,
+      config: { hideIdleAgents: true },
+    } as unknown as AgentTree;
+    renderFull({ mount, postMessage: vi.fn() }, state);
+    expect(mount.querySelector(".ct-team-idle-row")).toBeNull();
+  });
+
+  it("renders one row per team card when hideIdleAgents=true AND count>0", () => {
+    const state = {
+      ...FIXTURE_STATE,
+      hiddenIdleCount: 2,
+      config: { hideIdleAgents: true },
+    } as unknown as AgentTree;
+    renderFull({ mount, postMessage: vi.fn() }, state);
+
+    const rows = mount.querySelectorAll(".ct-team-idle-row");
+    // FIXTURE_STATE has one live team card (the dead session is empty).
+    const teamCards = mount.querySelectorAll(".team-card");
+    expect(rows.length).toBe(teamCards.length);
+  });
+
+  it("row label reads '<N> idle hidden — show' (em-dash U+2014)", () => {
+    const state = {
+      ...FIXTURE_STATE,
+      hiddenIdleCount: 5,
+      config: { hideIdleAgents: true },
+    } as unknown as AgentTree;
+    renderFull({ mount, postMessage: vi.fn() }, state);
+
+    const row = mount.querySelector(".ct-team-idle-row") as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(row.textContent).toBe(`5 idle hidden ${EM_DASH} show`);
+    expect(row.dataset.hiddenIdleCount).toBe("5");
+  });
+
+  it("singular row label reads '1 idle hidden — show' (no plural)", () => {
+    const state = {
+      ...FIXTURE_STATE,
+      hiddenIdleCount: 1,
+      config: { hideIdleAgents: true },
+    } as unknown as AgentTree;
+    renderFull({ mount, postMessage: vi.fn() }, state);
+
+    const row = mount.querySelector(".ct-team-idle-row") as HTMLElement;
+    expect(row).not.toBeNull();
+    expect(row.textContent).toBe(`1 idle hidden ${EM_DASH} show`);
+    expect(row.getAttribute("aria-label")).toBe(
+      "1 idle agent hidden — click to show",
+    );
+  });
+
+  it("plural aria-label says 'agents' (count > 1)", () => {
+    const state = {
+      ...FIXTURE_STATE,
+      hiddenIdleCount: 3,
+      config: { hideIdleAgents: true },
+    } as unknown as AgentTree;
+    renderFull({ mount, postMessage: vi.fn() }, state);
+
+    const row = mount.querySelector(".ct-team-idle-row") as HTMLElement;
+    expect(row.getAttribute("aria-label")).toBe(
+      "3 idle agents hidden — click to show",
+    );
+  });
+
+  it("clicking the row posts { ui:set-config, hideIdleAgents: false }", () => {
+    const postMessage = vi.fn<[WebviewMessage], void>();
+    const state = {
+      ...FIXTURE_STATE,
+      hiddenIdleCount: 2,
+      config: { hideIdleAgents: true },
+    } as unknown as AgentTree;
+    renderFull({ mount, postMessage }, state);
+
+    const row = mount.querySelector(".ct-team-idle-row") as HTMLButtonElement;
+    row.click();
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: "ui:set-config",
+      payload: { key: "hideIdleAgents", value: false },
+    });
+  });
+
+  it("row sits AFTER the last agent tile inside its team card", () => {
+    const state = {
+      ...FIXTURE_STATE,
+      hiddenIdleCount: 1,
+      config: { hideIdleAgents: true },
+    } as unknown as AgentTree;
+    renderFull({ mount, postMessage: vi.fn() }, state);
+
+    const card = mount.querySelector(".team-card") as HTMLElement;
+    const lastChild = card.lastElementChild;
+    expect(lastChild?.classList.contains("ct-team-idle-row")).toBe(true);
   });
 });

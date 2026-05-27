@@ -254,9 +254,29 @@ body {
 }
 
 .state-dot[data-state="running"] {
-  background-color: var(--ct-color-state-running);
+  /* 86c9zqa75 (spec 86c9zmyef §2.4) — per-tile member-color override.
+   * The `--ct-color-running-dot` custom property is set inline on the
+   * containing `<article class="agent-tile">` (or compact row) when the
+   * matched-roster member supplied a color; cascade carries it down to
+   * this `.state-dot` rule. When absent the fallback resolves to the
+   * existing semantic `--ct-color-state-running` token so untagged tiles
+   * paint unchanged (full back-compat).
+   *
+   * Idle / finished / error rules below intentionally do NOT consume the
+   * override — those states retain the semantic state colors per spec
+   * §1.3 ("Idle / finished / error states IGNORE this field"). */
+  background-color: var(
+    --ct-color-running-dot,
+    var(--ct-color-state-running)
+  );
   /* Subtle 1.8s breathing pulse — M4-01 §2.2. Reserved for `running` only;
-   * idle/finished/error use steady-state visuals (fade / check / static). */
+   * idle/finished/error use steady-state visuals (fade / check / static).
+   * Pulse is opacity-only so it inherits whatever background-color the
+   * dot resolves to — the per-member color personalization composes
+   * trivially with the existing animation. No box-shadow halo (spec
+   * AC5 / NIT1 decision — see PR body: a competing-color halo around a
+   * member-color dot reads as a bug, not a contrast guardrail; sponsor
+   * retains authority over color choice per roster-matching.md). */
   animation: ct-pulse 1.8s ease-in-out infinite;
 }
 
@@ -518,6 +538,49 @@ body {
    * `overflow-wrap: anywhere` rule continues to apply. */
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* ===========================================================================
+ * Per-team idle-hidden hint row — 86c9zqa75 (spec 86c9zmyef §3.4 Option A+B)
+ *
+ * Passive informational row appended to each team card when the global
+ * `hideIdleAgents` filter is on AND there are tiles currently hidden. The
+ * row reads "N idle hidden — show"; clicking fires the SAME
+ * `ui:set-config` message as the global header chip (no per-team scope).
+ * Style intent: subtle, muted, smaller than agent tiles — readable as a
+ * "secondary annotation" rather than a primary affordance.
+ * =========================================================================== */
+
+.ct-team-idle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-state-dot-gap);
+  /* Indent matches `.tile-row--role/.tile-row--activity/.tile-row--model`
+   * so the hint sits visually under the tile rows above it. */
+  padding: var(--ct-space-xs)
+    calc(var(--ct-state-dot-size) + var(--ct-state-dot-gap) + var(--ct-space-s));
+  background-color: transparent;
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+  font-style: italic;
+  border: 0;
+  /* The row is interactive — focus/hover affordance reuses the bg-hover
+   * pattern from agent tiles + chip headers for visual consistency. */
+  cursor: pointer;
+  outline: 0 solid transparent;
+  text-align: left;
+  /* Let the row consume the full width of the team card so the entire
+   * span (not just the text) is clickable. */
+  width: 100%;
+  font-family: inherit;
+}
+
+.ct-team-idle-row:hover,
+.ct-team-idle-row:focus-visible {
+  background-color: var(--ct-color-bg-hover);
+  outline: 1px solid var(--ct-color-focus);
+  border-radius: var(--ct-radius-chip);
+  color: var(--ct-color-fg);
 }
 
 /* ===========================================================================

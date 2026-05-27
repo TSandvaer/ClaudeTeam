@@ -152,6 +152,16 @@ export function hydrateState(wire: SerializedDashboardState): WebviewAgentTree {
     ...(wire.hiddenFinishedCount !== undefined
       ? { hiddenFinishedCount: wire.hiddenFinishedCount }
       : {}),
+    // 86c9zqa75 (spec 86c9zmyef §3): `hiddenIdleCount` is the parallel
+    // surface for the new idle-filter chip. Same hydration contract as
+    // `hiddenFinishedCount` — pass through verbatim when defined; `readIdleChipState`
+    // in `src/webview/render.ts` defaults to 0 when absent. Without this
+    // passthrough the idle chip would always read 0 even when Felix's Pt 1
+    // wire delivered real counts. The `config` block already passes through
+    // verbatim below; `config.hideIdleAgents` rides through that path.
+    ...(wire.hiddenIdleCount !== undefined
+      ? { hiddenIdleCount: wire.hiddenIdleCount }
+      : {}),
     ...(wire.config !== undefined ? { config: wire.config } : {}),
   };
 }

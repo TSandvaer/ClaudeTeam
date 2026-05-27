@@ -161,6 +161,25 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     "aria-label",
     `${tile.display} — ${tile.role} — ${STATE_LABEL[tile.state]}`,
   );
+
+  // 86c9zqa75 — member-color paint on the running dot (spec 86c9zmyef §2.4).
+  // When the matched-roster member supplied a color AND the tile is in the
+  // `running` state, paint via an inline `--ct-color-running-dot` custom
+  // property; the CSS rule at `.state-dot[data-state="running"]` reads this
+  // override with a fallback to the semantic `--ct-color-state-running`
+  // token. Idle / finished / error states IGNORE `memberColor` per spec
+  // §1.3 — the custom property simply isn't applied so those dots paint
+  // from the semantic state tokens unchanged.
+  //
+  // Setting on the article (not on the `.state-dot` span itself) keeps the
+  // override scope at the tile level — same precedent as M3-10 / 86c9zmqa8
+  // data-* attributes that gate descendant CSS. Loader normalization
+  // guarantees `tile.memberColor` is a 6-digit lowercase hex with leading
+  // `#` (or undefined); invalid values are dropped upstream with a roster-
+  // warning chip surface — no defensive validation needed at the renderer.
+  if (tile.state === "running" && tile.memberColor !== undefined) {
+    article.style.setProperty("--ct-color-running-dot", tile.memberColor);
+  }
   // M4-03 AC3: drill-in affordance tooltip. Wording locked in M4-01 §3.3
   // ("Open agent transcript") — concrete destination ("agent transcript")
   // beats vague phrasings ("View activity log") and avoids leaking the
