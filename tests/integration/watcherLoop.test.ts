@@ -577,3 +577,119 @@ describe("M5: runTick applies hideFinishedAgents filter", () => {
     expect(state.config?.hideFinishedAgents).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 86c9zq9vm (spec 86c9zmyef §3) — runTick applies hideIdleAgents filter
+// ---------------------------------------------------------------------------
+
+describe("86c9zq9vm: runTick applies hideIdleAgents filter", () => {
+  let root: string;
+  let cleanup: () => void;
+  let rosterPath: string;
+
+  /**
+   * Age the subagent JSONL's mtime backwards so the reducer's liveness
+   * inference (`session alive + JSONL mtime < 10s` → running, else idle)
+   * classifies the tile as idle. 60 seconds is well past the 10s threshold.
+   */
+  async function ageJsonlToIdle(filePath: string): Promise<void> {
+    const { utimesSync } = await import("node:fs");
+    const oldSec = (Date.now() - 60_000) / 1000;
+    utimesSync(filePath, oldSec, oldSec);
+  }
+
+  beforeEach(() => {
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    writeSessionFile(root, {
+      pid: DEAD_PID,
+      sessionId: SESSION_A,
+      cwd: CWD_A,
+    });
+    writeParentJsonl(root, CWD_A, SESSION_A, { title: "idle-filter-test" });
+    writeMetaJson(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "meta-new-schema-persona.json",
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("filter on by default (V1): idle tile suppressed; hiddenIdleCount=1; config mirrored", async () => {
+    // Write the subagent JSONL then immediately age it past the 10s freshness
+    // window so the reducer classifies the tile as idle.
+    const jsonl = writeSubagentJsonl(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "subagent-running.jsonl",
+    );
+    await ageJsonlToIdle(jsonl);
+
+    // Omit hideIdleAgents from the options — defaults to true per V1 ship
+    // contract (sponsor Q1).
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+    });
+
+    expect(
+      state.sessions[0]?.rosterTiles.get("claudeteam-alpha"),
+    ).toBeUndefined();
+    expect(state.hiddenIdleCount).toBe(1);
+    expect(state.config?.hideIdleAgents).toBe(true);
+  });
+
+  it("filter explicit off: idle tile stays; hiddenIdleCount=0", async () => {
+    const jsonl = writeSubagentJsonl(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "subagent-running.jsonl",
+    );
+    await ageJsonlToIdle(jsonl);
+
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      hideIdleAgents: false,
+    });
+
+    // Tile present; count 0; config mirror false.
+    const entries = state.sessions[0]?.rosterTiles.get("claudeteam-alpha");
+    expect(entries).toBeDefined();
+    expect(entries!.length).toBeGreaterThan(0);
+    expect(state.hiddenIdleCount).toBe(0);
+    expect(state.config?.hideIdleAgents).toBe(false);
+  });
+
+  it("filter on with running (fresh) agent: tile stays; hiddenIdleCount=0", async () => {
+    // Don't age — the JSONL's mtime is now → tile is running.
+    writeSubagentJsonl(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "subagent-running.jsonl",
+    );
+
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      hideIdleAgents: true,
+    });
+
+    const entries = state.sessions[0]?.rosterTiles.get("claudeteam-alpha");
+    expect(entries).toBeDefined();
+    expect(entries!.length).toBeGreaterThan(0);
+    expect(state.hiddenIdleCount).toBe(0);
+    expect(state.config?.hideIdleAgents).toBe(true);
+  });
+});

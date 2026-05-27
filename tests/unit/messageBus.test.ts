@@ -165,6 +165,64 @@ describe("serializeState — Map → Record conversion", () => {
     expect(serialized.config?.hideFinishedAgents).toBe(false);
   });
 
+  // 86c9zq9vm (spec 86c9zmyef §3) — hide-idle wire surface, sibling of M5.
+  it("threads hiddenIdleCount through to the wire (86c9zq9vm)", () => {
+    const tiles = new Map<string, AgentTile[]>([
+      ["claudeteam-alpha", [makeTile("felix")]],
+    ]);
+    const state: AgentTree = {
+      sessions: [makeSession("sid-idle", tiles)],
+      hiddenIdleCount: 7,
+    };
+
+    const serialized = serializeState(state);
+    expect(serialized.hiddenIdleCount).toBe(7);
+  });
+
+  it("defaults hiddenIdleCount to 0 when absent on the tree (86c9zq9vm)", () => {
+    const serialized = serializeState({ sessions: [] });
+    expect(serialized.hiddenIdleCount).toBe(0);
+  });
+
+  it("threads config.hideIdleAgents through to the wire (86c9zq9vm)", () => {
+    const state: AgentTree = {
+      sessions: [],
+      config: { hideIdleAgents: true },
+    };
+
+    const serialized = serializeState(state);
+    expect(serialized.config?.hideIdleAgents).toBe(true);
+  });
+
+  it("defaults config.hideIdleAgents to false when absent (86c9zq9vm)", () => {
+    const serialized = serializeState({ sessions: [] });
+    expect(serialized.config?.hideIdleAgents).toBe(false);
+  });
+
+  it("threads memberColor on AgentTile through to the wire (86c9zq9vm)", () => {
+    const tile = { ...makeTile("felix"), memberColor: "#5d8aa8" };
+    const tiles = new Map<string, AgentTile[]>([["alpha", [tile]]]);
+    const state: AgentTree = { sessions: [makeSession("sid-mc", tiles)] };
+
+    const serialized = serializeState(state);
+    const wire = JSON.parse(JSON.stringify(serialized));
+    expect(wire.sessions[0].rosterTiles["alpha"][0].memberColor).toBe(
+      "#5d8aa8",
+    );
+  });
+
+  it("memberColor absent on AgentTile stays absent on the wire (86c9zq9vm)", () => {
+    const tile = makeTile("maya"); // no memberColor
+    const tiles = new Map<string, AgentTile[]>([["alpha", [tile]]]);
+    const state: AgentTree = { sessions: [makeSession("sid-nc", tiles)] };
+
+    const serialized = serializeState(state);
+    const wire = JSON.parse(JSON.stringify(serialized));
+    expect(
+      "memberColor" in wire.sessions[0].rosterTiles["alpha"][0],
+    ).toBe(false);
+  });
+
   it("serialized state round-trips through JSON.stringify without losing tiles", () => {
     // This is the failure mode `serializeState` exists to prevent.
     // Without the Map → Record conversion, JSON.stringify(map) emits "{}" and

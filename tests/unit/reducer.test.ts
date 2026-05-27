@@ -1686,4 +1686,135 @@ describe("buildAgentTree", () => {
       expect((wire as CollapsedPersonaGroup).instances).toHaveLength(2);
     });
   });
+
+  // =========================================================================
+  // 86c9zq9vm (spec 86c9zmyef §2.2) — memberColor projection from roster onto
+  // AgentTile. The reducer is a pure projector — it copies the
+  // already-validated `Member.color` (loader-normalized) onto the tile when
+  // present, and omits the field when absent.
+  // =========================================================================
+  describe("memberColor projection (86c9zq9vm — spec 86c9zmyef)", () => {
+    const ROSTER_WITH_COLORS: Team[] = [
+      {
+        id: "alpha",
+        name: "ClaudeTeam Alpha",
+        members: [
+          {
+            id: "felix",
+            display: "Felix",
+            role: "Extension Host Dev",
+            color: "#5d8aa8",
+            match: [{ agentType_equals: "felix" }],
+          },
+          {
+            id: "maya",
+            display: "Maya",
+            role: "Webview UI Dev",
+            // No color — projection must omit the field on the tile.
+            match: [{ agentType_equals: "maya" }],
+          },
+        ],
+      },
+    ];
+
+    it("stamps memberColor on the tile when roster member.color is set", () => {
+      const session = makeSession();
+      const agentId = "agent-felix-01";
+      const meta = makeMeta({
+        agentType: "felix",
+        description: "Felix host plumb",
+      });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_WITH_COLORS,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.memberId).toBe("felix");
+      expect(tile!.memberColor).toBe("#5d8aa8");
+    });
+
+    it("omits memberColor (undefined) when roster member.color is absent", () => {
+      const session = makeSession();
+      const agentId = "agent-maya-01";
+      const meta = makeMeta({
+        agentType: "maya",
+        description: "Maya webview",
+      });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_WITH_COLORS,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.memberId).toBe("maya");
+      expect(tile!.memberColor).toBeUndefined();
+      // Absent in JSON shape — `"memberColor"` key not present at all.
+      expect(Object.prototype.hasOwnProperty.call(tile, "memberColor")).toBe(
+        false,
+      );
+    });
+
+    it("memberColor survives JSON.stringify (wire-shape safe)", () => {
+      const session = makeSession();
+      const agentId = "agent-felix-02";
+      const meta = makeMeta({
+        agentType: "felix",
+        description: "Felix runtime",
+      });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_WITH_COLORS,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      const wire = JSON.parse(JSON.stringify(tile)) as { memberColor?: string };
+      expect(wire.memberColor).toBe("#5d8aa8");
+    });
+
+    it("works regardless of liveness state — idle tiles also carry the color", () => {
+      const session = makeSession();
+      const agentId = "agent-felix-03";
+      const meta = makeMeta({
+        agentType: "felix",
+        description: "Felix idle",
+      });
+      // Stale mtime → idle. Stamp memberColor regardless — webview decides
+      // whether to paint the dot in this color (running-only per spec §1.3).
+      const activities: ActivityMap = new Map([
+        [agentId, makeActivity({ mtimeMs: NOW_MS - 60_000 })],
+      ]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_WITH_COLORS,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.state).toBe("idle");
+      expect(tile!.memberColor).toBe("#5d8aa8");
+    });
+  });
 });

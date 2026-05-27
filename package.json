@@ -66,6 +66,11 @@
         "command": "claudeteam.openDiagnosticPanel",
         "title": "ClaudeTeam: Open Diagnostic Panel",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "claudeteam.toggleHideIdle",
+        "title": "ClaudeTeam: Toggle Hide Idle Agents",
+        "icon": "$(eye-closed)"
       }
     ],
     "configuration": {
@@ -117,6 +122,11 @@
           "type": "boolean",
           "default": true,
           "description": "Auto-collapse uniform clusters (same persona, same state, all idle or finished). When true, the dashboard hides per-instance rows for clusters that carry no varying information; the chevron still allows manual expand and an 'all idle'/'all finished' hint is shown in the header. When expanded, instances render as compact one-line rows. Default true; turn off to restore the always-respect-expand-tracker behavior."
+        },
+        "claudeteam.hideIdleAgents": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide rostered agent tiles whose state is 'idle'. When true (default — V1 ships running-focused), the dashboard suppresses idle tiles by default and running members are the foreground; a 'N idle hidden — show' chip in the header reveals the hidden tiles on click. Set false to restore the show-everything M5-baseline behavior. Background-noise rows are not affected — they collapse via the background chip instead."
         }
       }
     }

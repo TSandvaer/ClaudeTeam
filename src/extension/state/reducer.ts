@@ -228,6 +228,14 @@ export function buildAgentTree(
         ...(finishedAtMs !== undefined && finishedAtMs > 0
           ? { finishedAtMs }
           : {}),
+        // 86c9zq9vm (spec 86c9zmyef §2.2): stamp the roster-supplied member
+        // color onto the tile so the webview can paint the running-state dot.
+        // The loader already validates + normalizes `member.color` to 6-digit
+        // lowercase hex (or drops invalid entries to `undefined` with a
+        // warning) — this layer is a pure projection, no further check.
+        // Absent on tiles whose matched member has no `color` set, preserving
+        // the pre-86c9zq9vm wire shape for sponsors who haven't opted in.
+        ...(member.color !== undefined ? { memberColor: member.color } : {}),
       };
 
       if (!rosterTiles.has(teamId)) {

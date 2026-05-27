@@ -164,12 +164,13 @@ describe("M2-06 AC7(e) — context.subscriptions.length is bounded across 3 reso
     // After activate: subscriptions should hold exactly:
     //   1. cleanup wrapper (registered once)
     //   2. registerWebviewViewProvider's disposable
-    //   3-7. five command registrations (refresh, openRoster,
+    //   3-8. six command registrations (refresh, openRoster,
     //        openAgentTranscript, toggleHideFinished — M5,
-    //        openDiagnosticPanel — 86c9zn7tm)
-    // Total expected: 7 entries.
+    //        openDiagnosticPanel — 86c9zn7tm,
+    //        toggleHideIdle — 86c9zq9vm spec 86c9zmyef)
+    // Total expected: 8 entries.
     const afterActivate = ctx.subscriptions.length;
-    expect(afterActivate).toBe(7);
+    expect(afterActivate).toBe(8);
 
     const provider = getRegisteredProvider();
     expect(provider).not.toBeNull();

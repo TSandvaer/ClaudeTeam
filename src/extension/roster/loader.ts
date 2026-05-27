@@ -37,6 +37,51 @@ interface ParseFileResult {
 }
 
 /**
+ * Validate and normalize a raw `member.color` value from YAML (spec 86c9zmyef §2.6).
+ *
+ * Rules:
+ *   - Absent / `undefined`            → `undefined` (no warning).
+ *   - 6-digit hex with leading `#`    → lowercased pass-through (`"#5d8aa8"`).
+ *   - 3-digit hex with leading `#`    → expanded to 6-digit lowercase
+ *                                       (`"#5da"` → `"#55ddaa"` per sponsor Q4).
+ *   - Anything else                   → `undefined` + a warning string pushed
+ *                                       onto the caller's warnings list.
+ *
+ * `#` is mandatory — sponsor-supplied colors without a leading `#` (e.g.
+ * `"5d8aa8"`, `"reddish"`, `"rgb(...)"`) are rejected and the field is
+ * dropped. The webview default semantic running color paints in their place.
+ *
+ * Pure function. Exported for unit-test coverage.
+ */
+export function normalizeMemberColor(
+  raw: string | undefined,
+  context: { teamId: string; memberId: string },
+  warnings: string[],
+): string | undefined {
+  if (raw === undefined) return undefined;
+
+  // 6-digit hex: #RRGGBB (case-insensitive). Lowercased pass-through.
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) {
+    return raw.toLowerCase();
+  }
+
+  // 3-digit hex: #RGB → expand to #RRGGBB (sponsor Q4, accept + normalize).
+  if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+    const r = raw[1]!;
+    const g = raw[2]!;
+    const b = raw[3]!;
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+
+  // Invalid — drop with warning. Verbatim raw value preserved for the
+  // sponsor to spot the typo without re-reading the YAML.
+  warnings.push(
+    `team "${context.teamId}" member "${context.memberId}": invalid color "${raw}" — expected 6-digit hex with leading '#' (e.g. "#5d8aa8") or 3-digit hex (e.g. "#5da"). Falling back to default running color.`,
+  );
+  return undefined;
+}
+
+/**
  * Parse a single teams.yaml file. Missing file → warning + empty result;
  * malformed YAML → error + empty result; schema rejection → error + empty.
  */
@@ -107,7 +152,16 @@ function parseFile(path: string | undefined, label: "global" | "project"): Parse
         id: m.id,
         display: m.display,
         role: m.role,
-        color: m.color,
+        // 86c9zq9vm (spec 86c9zmyef §2.6): validate + normalize the
+        // sponsor-supplied color to 6-digit lowercase hex with `#`. 3-digit
+        // shorthand expands; invalid formats drop the field and push a
+        // warning onto this file's warnings list (surfaced by the loader's
+        // RosterLoadResult and the M3-04 chip).
+        color: normalizeMemberColor(
+          m.color,
+          { teamId: t.id, memberId: m.id },
+          result.warnings,
+        ),
         match: m.match as unknown as MatchRule[],
       }),
     ),

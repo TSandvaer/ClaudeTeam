@@ -212,6 +212,15 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.workspace
           .getConfiguration("claudeteam")
           .get<boolean>("autoCollapseUniformClusters") ?? true,
+      // 86c9zq9vm (spec 86c9zmyef): read-fresh-every-tick pattern for the
+      // hide-idle toggle. Default true (filter ON — V1 default per sponsor
+      // Q1) matches the package.json schema default. The host applies the
+      // post-reducer filter when ON; when OFF the dashboard restores the
+      // pre-86c9zq9vm "show everything" behavior.
+      getHideIdleAgents: () =>
+        vscode.workspace
+          .getConfiguration("claudeteam")
+          .get<boolean>("hideIdleAgents") ?? true,
       onStateChange: (state) => {
         void postState(webview, state);
       },
@@ -273,6 +282,14 @@ export function activate(context: vscode.ExtensionContext): void {
         // hashState change ensures the webview is notified even if the
         // visible tile set is unchanged).
         if (e.affectsConfiguration("claudeteam.autoCollapseUniformClusters")) {
+          watcherHandle?.triggerTick();
+        }
+        // 86c9zq9vm (spec 86c9zmyef): same instant-effect pattern for
+        // hideIdleAgents. Toggling via Settings UI, command palette, or the
+        // dashboard header chip re-renders within one tick. The chip's
+        // optimistic UI flips immediately on click; this listener confirms
+        // authoritatively on the next host tick.
+        if (e.affectsConfiguration("claudeteam.hideIdleAgents")) {
           watcherHandle?.triggerTick();
         }
       },
@@ -412,15 +429,28 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("claudeteam.openDiagnosticPanel", () => {
       diagnosticPanelManager.show();
     }),
+
+    // 86c9zq9vm (spec 86c9zmyef §7.1): toggle `claudeteam.hideIdleAgents`
+    // from the command palette or a user-bound keybinding. Default is ON
+    // (V1 ships running-focused — sponsor Q1) so the natural use is "flip
+    // OFF temporarily to see idle members". Same Global-scope write +
+    // instant-effect listener as toggleHideFinished.
+    vscode.commands.registerCommand("claudeteam.toggleHideIdle", () => {
+      const current =
+        vscode.workspace
+          .getConfiguration("claudeteam")
+          .get<boolean>("hideIdleAgents") ?? true;
+      void handleSetConfig("hideIdleAgents", !current);
+    }),
   );
 }
 
 /**
- * Apply a `ui:set-config` write — used by both the webview chip handler and
- * the `claudeteam.toggleHideFinished` command (M5). The key is validated by
- * the provider's `isWebviewMessage` guard before reaching this function; the
- * literal-union narrows future expansion (§8 Q1 follow-up adds
- * `hideIdleAgents`).
+ * Apply a `ui:set-config` write — used by the webview chip handlers and the
+ * `claudeteam.toggleHideFinished` / `claudeteam.toggleHideIdle` commands
+ * (M5 + 86c9zq9vm). The key is validated by the provider's `isWebviewMessage`
+ * guard before reaching this function; the literal-union covers every
+ * dashboard-toggleable config scalar.
  *
  * Exported for unit-test coverage.
  *
@@ -428,7 +458,7 @@ export function activate(context: vscode.ExtensionContext): void {
  * @param value New boolean value.
  */
 export function handleSetConfig(
-  key: "hideFinishedAgents",
+  key: "hideFinishedAgents" | "hideIdleAgents",
   value: boolean,
 ): Thenable<void> {
   return vscode.workspace

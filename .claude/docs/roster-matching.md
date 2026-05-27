@@ -14,7 +14,7 @@ teams:
       - id: felix                 # stable internal id
         display: "Felix"          # name shown on the tile
         role: "Extension Host Dev"
-        color: "#5d8aa8"          # optional; falls back to a generated color
+        color: "#5d8aa8"          # optional; paints the running-state dot
         match:
           - name_prefix: "felix-"           # new schema (v2.1.145+)
           - agentType_equals: "felix"       # old schema (v2.1.119)
@@ -26,6 +26,21 @@ teams:
           - name_prefix: "maya-"
           - agentType_equals: "maya"
 ```
+
+### `member.color` validation and theme-contrast (spec 86c9zmyef §2.5 / §2.6)
+
+The `color` field personalizes the **running-state dot** on the dashboard so each rostered persona is identifiable at a glance. Idle / finished / error dots IGNORE the field and retain the semantic state colors (M4-01 §2.2). The roster loader (`src/extension/roster/loader.ts`) validates and normalizes each value:
+
+| Raw value | Loader behavior | Tile result |
+|---|---|---|
+| Field absent | `Member.color = undefined`; no warning | Running dot paints default `--ct-color-state-running` |
+| `"#5d8aa8"` (6-digit hex with `#`) | Lowercased pass-through | Dot paints in `#5d8aa8` |
+| `"#5DA"` / `"#5da"` (3-digit hex) | Expanded to 6-digit lowercase (`"#55ddaa"`) | Dot paints in expanded form |
+| `"reddish"`, `"rgb(0,0,0)"`, `"5d8aa8"` (no `#`), 8-digit hex | Dropped to `undefined` + warning on `RosterLoadResult.warnings` | Running dot paints default (warning chip surfaces the typo) |
+
+No auto-generation when `color` is absent — sponsors opt in by setting the field (per spec §2.3 Option A). V1 is sponsor-curated only.
+
+**Theme-contrast suggestion (not enforced):** pick a color that contrasts with both light and dark editor backgrounds. Material palette mid-saturation values (e.g. `#5d8aa8`, `#9caf88`, `#cd853f`) typically pass; pure black (`#000000`) or pure white (`#ffffff`) fail one theme. The webview's pulse halo continues to render in the semantic `--ct-color-state-running` token so a hard-to-see member color still has a baseline contrast cue.
 
 ## Match rule types
 
