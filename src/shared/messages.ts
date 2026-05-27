@@ -16,6 +16,7 @@
  */
 
 import type {
+  AgentState,
   RosterTileEntry,
   SessionTree,
   StateDelta,
@@ -157,12 +158,73 @@ export type RosterErrorMessage = {
   payload: { error: string };
 };
 
+/**
+ * One state transition observed during a tick (86c9zn7tm). Mirror of the
+ * extension-host `TickTransition` shape — JSON-safe scalars only. The panel
+ * webview renders the short-id pair + the prev→next arrow.
+ */
+export interface DiagnosticTickTransition {
+  sessionShortId: string;
+  agentShortId: string;
+  /** Full id retained on the wire for future drill-in support. */
+  sessionId: string;
+  /** Full id retained on the wire for future drill-in support. */
+  agentId: string;
+  prev: AgentState;
+  next: AgentState;
+}
+
+/**
+ * One ring-buffer entry posted to the diagnostic panel (86c9zn7tm). Mirror
+ * of the extension-host `TickHistoryEntry` shape — JSON-safe primitives only.
+ *
+ * `timestampMs` is the host's `Date.now()` at record time; the panel renders
+ * it via `new Date(timestampMs).toISOString()` so the format stays uniform
+ * with the Output channel's `[<ISO>]` prefix.
+ */
+export interface DiagnosticTickHistoryEntry {
+  tickNumber: number;
+  timestampMs: number;
+  durationMs: number;
+  emitted: boolean;
+  transitions: DiagnosticTickTransition[];
+}
+
+/**
+ * Diagnostic panel state snapshot (86c9zn7tm). Posted on every tick (when
+ * the panel is open and not paused) and on `ui:diagnostic-refresh`.
+ *
+ * `state` is null only before the first tick lands — opening the panel
+ * BEFORE any state has been recorded shows an empty body with the "no
+ * ticks yet" empty-state message.
+ *
+ * Reuses the dashboard's `SerializedDashboardState` so the panel can render
+ * the current per-session per-agent breakdown without owning a second
+ * serialization path. Maya's pre-existing `hydrateState` is NOT reused — the
+ * panel does its own pure-projection rendering against the wire shape
+ * directly (avoids a Map allocation per push for data the panel only reads).
+ */
+export type DiagnosticStateMessage = {
+  type: "diagnostic:state";
+  payload: {
+    ticks: DiagnosticTickHistoryEntry[];
+    state: SerializedDashboardState | null;
+    /**
+     * Whether the diagnostic Output channel's verbose setting is currently
+     * on. Shown as a chip in the panel header so the user knows whether
+     * the Output channel scrollback is being populated alongside.
+     */
+    verbose: boolean;
+  };
+};
+
 /** Union of all host → webview messages. */
 export type HostMessage =
   | StateFullMessage
   | StateDeltaMessage
   | RosterLoadedMessage
-  | RosterErrorMessage;
+  | RosterErrorMessage
+  | DiagnosticStateMessage;
 
 // =============================================================================
 // Webview → Host
@@ -205,9 +267,46 @@ export type SetConfigMessage = {
   };
 };
 
+/**
+ * Diagnostic panel asked the host to clear the in-memory tick ring buffer
+ * (86c9zn7tm). Triggered by the panel's "Clear" button. Does NOT clear the
+ * Output channel scrollback (that's a VS Code action on the channel
+ * dropdown). After clearing, the next tick will repopulate the buffer.
+ */
+export type DiagnosticClearMessage = {
+  type: "ui:diagnostic-clear";
+};
+
+/**
+ * Diagnostic panel asked the host to pause / resume auto-refresh pushes
+ * (86c9zn7tm). When paused, the host continues to update the ring buffer
+ * (ticks keep flowing) but suppresses `diagnostic:state` pushes to the
+ * panel — useful for inspecting a frozen moment without it scrolling out.
+ * Sending `paused: false` resumes pushes AND immediately sends a fresh
+ * snapshot so the panel catches up.
+ */
+export type DiagnosticPauseMessage = {
+  type: "ui:diagnostic-pause";
+  payload: { paused: boolean };
+};
+
+/**
+ * Diagnostic panel asked the host for a fresh snapshot (86c9zn7tm). Used
+ * by the panel's "Refresh" button and by the panel's boot handshake (the
+ * webview-initiated pull pattern — see `vscode-extension-conventions.md`
+ * §"`webview.postMessage` is fire-and-forget — NOT buffered"). The host
+ * responds with a `diagnostic:state` carrying the current snapshot.
+ */
+export type DiagnosticRefreshMessage = {
+  type: "ui:diagnostic-refresh";
+};
+
 /** Union of all webview → host messages. */
 export type WebviewMessage =
   | OpenTranscriptMessage
   | OpenRosterMessage
   | RefreshMessage
-  | SetConfigMessage;
+  | SetConfigMessage
+  | DiagnosticClearMessage
+  | DiagnosticPauseMessage
+  | DiagnosticRefreshMessage;

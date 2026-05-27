@@ -54,6 +54,10 @@ import {
   createDiagnosticChannel,
   type DiagnosticChannel,
 } from "./diagnostics/output.js";
+import {
+  createDiagnosticPanelManager,
+  type DiagnosticPanelManager,
+} from "./diagnostics/panel.js";
 
 /**
  * Called by VS Code when the extension activates (lazy — fires on first
@@ -69,13 +73,27 @@ export function activate(context: vscode.ExtensionContext): void {
   // The underlying `vscode.OutputChannel` is allocated lazily on the first
   // verbose emit — when the setting stays false from boot to deactivate,
   // no channel ever appears in the user's Output dropdown.
+  const isVerboseSetting = (): boolean =>
+    vscode.workspace
+      .getConfiguration("claudeteam")
+      .get<boolean>("diagnostic.verbose") ?? false;
   const diagnosticChannel: DiagnosticChannel = createDiagnosticChannel({
-    isVerbose: () =>
-      vscode.workspace
-        .getConfiguration("claudeteam")
-        .get<boolean>("diagnostic.verbose") ?? false,
+    isVerbose: isVerboseSetting,
     createOutputChannel: (name) => vscode.window.createOutputChannel(name),
   });
+
+  // 86c9zn7tm: diagnostic panel manager — interactive companion to the
+  // Output channel. The underlying `vscode.WebviewPanel` is allocated
+  // lazily on the first `show()` (i.e. when the user invokes the
+  // `claudeteam.openDiagnosticPanel` command). Manager construction is
+  // cheap (an object + closure references); deferring the panel itself
+  // means a session that never opens the panel pays zero cost.
+  const diagnosticPanelManager: DiagnosticPanelManager =
+    createDiagnosticPanelManager({
+      diagnosticChannel,
+      isVerbose: isVerboseSetting,
+      extensionUri: context.extensionUri,
+    });
 
   // Held out-of-band across resolveWebviewView invocations. Disposed-and-
   // replaced on every rebind so the subscription stack stays bounded
@@ -109,6 +127,10 @@ export function activate(context: vscode.ExtensionContext): void {
       // 86c9zn7vw: dispose the diagnostic channel (only releases the
       // underlying vscode.OutputChannel if one was actually allocated).
       diagnosticChannel.dispose();
+      // 86c9zn7tm: dispose the diagnostic panel manager — releases the
+      // underlying WebviewPanel + the tick subscription if the panel was
+      // ever opened during the session.
+      diagnosticPanelManager.dispose();
     },
   });
 
@@ -381,6 +403,14 @@ export function activate(context: vscode.ExtensionContext): void {
           .getConfiguration("claudeteam")
           .get<boolean>("hideFinishedAgents") ?? false;
       void handleSetConfig("hideFinishedAgents", !current);
+    }),
+
+    // 86c9zn7tm: open (or reveal) the diagnostic panel. Idempotent — the
+    // manager itself handles "already open" via `panel.reveal()`. The
+    // command palette entry doubles as the keybinding surface for users
+    // who diagnose state issues often.
+    vscode.commands.registerCommand("claudeteam.openDiagnosticPanel", () => {
+      diagnosticPanelManager.show();
     }),
   );
 }
