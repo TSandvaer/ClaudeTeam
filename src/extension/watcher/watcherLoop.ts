@@ -318,6 +318,12 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
     // is false the hook is a no-op fast path. Errors caught at the
     // boundary so a broken diagnostic CANNOT take down the watcher loop.
     if (opts.onTickComplete) {
+      // Partial fallback: only `sessions[]` is consumed by the diagnostic hook
+      // (recordTick walks rostered tiles + collapsed-group instances), so
+      // omitting filterApplied / rosterErrors / rosterWarnings /
+      // hiddenFinishedCount / config is intentional. A future maintainer
+      // extending the tick line (e.g. roster-error column) must broaden this
+      // empty-state shape before reading those fields.
       const hookState =
         stateForHook ?? lastState ?? { sessions: [] };
       try {
