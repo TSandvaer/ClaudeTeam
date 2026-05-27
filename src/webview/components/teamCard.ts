@@ -4,13 +4,21 @@
  *   <section class="team-card" data-team-id>
  *     <header class="team-header">
  *       <span class="team-name">TEAM {teamName}</span>
- *       <span class="team-count">({count} rostered)</span>
+ *       <span class="team-count">({count} visible)</span>
  *     </header>
  *     {agent tiles, in roster order}
  *   </section>
  *
  * Teams with zero matched tiles are suppressed by the caller (sessionBlock)
  * per §6 — no empty cards rendered.
+ *
+ * Label note (2026-05-27, ticket 86c9zfj2g): the chip reads `({N} visible)`
+ * — N is the number of `RosterTileEntry` items currently rendered on this
+ * team card (post hide-finished filter, this session only). It is NOT the
+ * count of members in `teams.yaml`. Sponsor chose `visible` over `rostered`
+ * because "rostered" misread as "members declared in the YAML roster" — the
+ * chip actually surfaces "how many persona groups are present on screen
+ * right now," which the new label expresses directly.
  *
  * Source: team/iris-ux/m2-dashboard-tile-spec.md §6
  */
@@ -32,10 +40,12 @@ export interface TeamCardProps {
    * Tiles already filtered to this team's members, in roster order. Each
    * entry is either a bare `AgentTile` (N=1 / pre-M3-10 back-compat) or a
    * `CollapsedPersonaGroup` wrapper (M3-10 when N>1 dispatches share a
-   * persona name). The card counts each entry as "1 rostered" regardless of
+   * persona name). The card counts each entry as "1 visible" regardless of
    * wrapper expansion — a Felix ×4 wrapper still reads as a single tile in
    * the header (matches sponsor's mental model that the persona is the unit
-   * of display, not the dispatch).
+   * of display, not the dispatch). The chip label is `({N} visible)` —
+   * N reflects what is currently on screen for this team in this session
+   * (after the hide-finished filter), NOT the YAML-declared roster size.
    */
   tiles: RosterTileEntry[];
   /** Session id used to construct drill-in messages on tile clicks. */
@@ -110,8 +120,10 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
   countSpan.className = "team-count";
   // Count = number of header tiles (wrappers count as 1; their N>1 is in the
   // wrapper's own "×N" badge). Matches the sponsor's "Felix ×4 reads as one
-  // persona tile" framing.
-  countSpan.textContent = `(${tiles.length} rostered)`;
+  // persona tile" framing. Label is `visible` (sponsor decision 2026-05-27,
+  // ticket 86c9zfj2g) — chip reflects on-screen tile count for this team in
+  // this session post-filter, NOT the YAML roster member count.
+  countSpan.textContent = `(${tiles.length} visible)`;
   header.appendChild(countSpan);
 
   card.appendChild(header);
