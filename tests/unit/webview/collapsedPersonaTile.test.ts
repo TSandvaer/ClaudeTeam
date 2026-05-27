@@ -37,7 +37,11 @@ import {
   renderCollapsedPersonaTile,
   isCollapsedPersonaGroup,
   computeGroupState,
+  computeIsUniform,
+  disambiguatorFor,
+  STATUS_HINT_LABEL,
 } from "../../../src/webview/components/collapsedPersonaTile.js";
+import { createExpandedGroupsTracker } from "../../../src/webview/expandedGroupsTracker.js";
 import { renderTeamCard } from "../../../src/webview/components/teamCard.js";
 import { renderFull } from "../../../src/webview/render.js";
 import { createFinishedTracker } from "../../../src/webview/finishedTracker.js";
@@ -880,5 +884,638 @@ describe("CollapsedPersonaGroup — finished-tracker integration", () => {
     expect(tile?.querySelector(".agent-activity")?.textContent).toBe(
       "finished 30s",
     );
+  });
+});
+
+// ===========================================================================
+// 86c9zmqa8 — uniform-cluster polish (Iris spec §8.4 grep-discoverable names)
+// ===========================================================================
+
+describe("computeIsUniform — true for all-idle same-role", () => {
+  it("returns true for [idle, idle, idle] same role", () => {
+    // The canonical uniform-cluster shape: ≥2 instances, all `idle`, all
+    // sharing the same role string. This is the case sponsor 2026-05-27
+    // flagged — "why do i need to see al these repeadet names under each
+    // name?" — and is the load-bearing branch for the polish behavior.
+    const instances: AgentTile[] = [
+      makeTile({ state: "idle", role: "Extension Host Dev", agentId: "f-0" }),
+      makeTile({ state: "idle", role: "Extension Host Dev", agentId: "f-1" }),
+      makeTile({ state: "idle", role: "Extension Host Dev", agentId: "f-2" }),
+    ];
+    expect(computeIsUniform(instances)).toBe(true);
+  });
+
+  it("returns true for [finished, finished] same role (2-instance all-finished)", () => {
+    // Symmetric to the idle case — `finished` is the second uniform-eligible
+    // state per spec §1.2 (running / error excluded). A 2-instance all-
+    // finished cluster is the minimum-size uniform group and must still
+    // qualify.
+    const instances: AgentTile[] = [
+      makeTile({ state: "finished", role: "Webview UI Dev", agentId: "m-0" }),
+      makeTile({ state: "finished", role: "Webview UI Dev", agentId: "m-1" }),
+    ];
+    expect(computeIsUniform(instances)).toBe(true);
+  });
+});
+
+describe("computeIsUniform — false on size <2", () => {
+  it("returns false for a single-instance array", () => {
+    // The wrapper itself wouldn't exist for N=1 (reducer's invariant is N≥2),
+    // but `computeIsUniform` is a pure helper that may be called against any
+    // AgentTile[]. The size guard prevents a false-positive "uniform" verdict
+    // on a synthetic single-tile input.
+    expect(computeIsUniform([makeTile({ state: "idle" })])).toBe(false);
+  });
+
+  it("returns false for an empty array (defensive)", () => {
+    // Mirrors `computeGroupState`'s empty-array defensive branch — the
+    // function must not crash on an unexpected input shape. Same surfacing
+    // rationale: a host-side bug delivering 0 instances should NOT silently
+    // collapse to "uniform = true" and skip the per-instance render path.
+    expect(computeIsUniform([])).toBe(false);
+  });
+});
+
+describe("computeIsUniform — false on running state", () => {
+  it("returns false for [running, running] (excluded by spec §1.2)", () => {
+    // Running is excluded because the activity line varies per poll
+    // (tool:Edit src/...) — the rows are NOT visually repeated even if every
+    // other field matches. Sponsor likely DOES want to drill in on a running
+    // cluster to see what each instance is doing, so the polish must NOT
+    // suppress it.
+    const instances: AgentTile[] = [
+      makeTile({ state: "running", role: "Webview UI Dev", agentId: "m-0" }),
+      makeTile({ state: "running", role: "Webview UI Dev", agentId: "m-1" }),
+    ];
+    expect(computeIsUniform(instances)).toBe(false);
+  });
+});
+
+describe("computeIsUniform — false on error state", () => {
+  it("returns false for [error, error] (excluded — errors are load-bearing)", () => {
+    // Errors are load-bearing alerts. Even if every instance shares the same
+    // error reason, each is potentially a separate failure to investigate.
+    // Auto-collapsing visibility on an error cluster is the wrong call.
+    const instances: AgentTile[] = [
+      makeTile({ state: "error", role: "Researcher", agentId: "b-0" }),
+      makeTile({ state: "error", role: "Researcher", agentId: "b-1" }),
+    ];
+    expect(computeIsUniform(instances)).toBe(false);
+  });
+});
+
+describe("computeIsUniform — false on mixed states", () => {
+  it("returns false for [idle, finished]", () => {
+    // Even though both states are individually uniform-eligible, the cluster
+    // is mixed — one finished, one still parked-but-not-done — and the
+    // user's question is "what's the state of these?", which the per-
+    // instance rows answer. Polish does NOT apply.
+    const instances: AgentTile[] = [
+      makeTile({ state: "idle", role: "Researcher", agentId: "b-0" }),
+      makeTile({ state: "finished", role: "Researcher", agentId: "b-1" }),
+    ];
+    expect(computeIsUniform(instances)).toBe(false);
+  });
+
+  it("returns false for [idle, idle, finished] (3-instance mixed)", () => {
+    // A 3-instance mostly-uniform cluster still fails uniformity because of
+    // the one outlier. There is no "majority rules" — the polish requires
+    // strict equality across all instances.
+    const instances: AgentTile[] = [
+      makeTile({ state: "idle", role: "Researcher", agentId: "b-0" }),
+      makeTile({ state: "idle", role: "Researcher", agentId: "b-1" }),
+      makeTile({ state: "finished", role: "Researcher", agentId: "b-2" }),
+    ];
+    expect(computeIsUniform(instances)).toBe(false);
+  });
+});
+
+describe("computeIsUniform — false on mixed roles", () => {
+  it("returns false when two instances share state but differ on role", () => {
+    // V1 roster-derived guarantee: every instance of a persona has the same
+    // `role` (the role comes from roster.member.role). This case is more
+    // forward-compat — if the role is ever derived from a per-spawn field,
+    // the polish must respect role variance. Verifies the rule is checked,
+    // not just trusted from the roster guarantee.
+    const instances: AgentTile[] = [
+      makeTile({ state: "idle", role: "Reviewer", agentId: "x-0" }),
+      makeTile({ state: "idle", role: "Implementer", agentId: "x-1" }),
+    ];
+    expect(computeIsUniform(instances)).toBe(false);
+  });
+});
+
+describe("disambiguatorFor — bracketed-letter strategy (spec §3.3)", () => {
+  it("returns '[a]' / '[b]' / '[c]' / '[d]' for indices 0-3", () => {
+    expect(disambiguatorFor(0)).toBe("[a]");
+    expect(disambiguatorFor(1)).toBe("[b]");
+    expect(disambiguatorFor(2)).toBe("[c]");
+    expect(disambiguatorFor(3)).toBe("[d]");
+  });
+
+  it("rolls over to '[aa]' / '[ab]' beyond 26 (spec §3.3)", () => {
+    // The spec allows beyond-26 by base-26 rollover. We've never seen >26
+    // instances in practice, but the function must not blow up if the host
+    // delivers a 27-instance cluster.
+    expect(disambiguatorFor(25)).toBe("[z]");
+    expect(disambiguatorFor(26)).toBe("[aa]");
+    expect(disambiguatorFor(27)).toBe("[ab]");
+  });
+
+  it("returns '[?]' for invalid indices (defensive)", () => {
+    // Negative / non-integer indices are caller bugs. The header text is
+    // display-only — surface visually as `[?]` rather than throwing, because
+    // the agentId on data-agent-id is the real drill-in key.
+    expect(disambiguatorFor(-1)).toBe("[?]");
+    expect(disambiguatorFor(1.5)).toBe("[?]");
+  });
+});
+
+describe("STATUS_HINT_LABEL — sponsor-confirmed wording (spec §7 / §8.3)", () => {
+  it("idle cluster → 'all idle'", () => {
+    expect(STATUS_HINT_LABEL.idle).toBe("all idle");
+  });
+
+  it("finished cluster → 'all finished'", () => {
+    expect(STATUS_HINT_LABEL.finished).toBe("all finished");
+  });
+
+  it("running / error are deliberately absent (uniform-cluster ineligible)", () => {
+    // The map is `Partial<Record<AgentState, string>>` — running and error
+    // have NO entry. If a future hand-edit added one, the renderer would
+    // surface labels for clusters that aren't uniform-eligible per
+    // `computeIsUniform`, leaking a label like "all running" into the
+    // header. Guard against that drift here.
+    expect(STATUS_HINT_LABEL.running).toBeUndefined();
+    expect(STATUS_HINT_LABEL.error).toBeUndefined();
+  });
+});
+
+describe("uniform cluster — auto-collapsed regardless of tracker", () => {
+  it("starts collapsed even when the expansion tracker says expanded", () => {
+    // Spec §2.3 — the uniformity gate fires BEFORE the tracker read.
+    // Pre-populate the tracker as expanded for this cluster key, then assert
+    // the rendered wrapper opens collapsed anyway.
+    const tracker = createExpandedGroupsTracker();
+    const trackerKey = tracker.makeKey("sess-UNI", "claudeteam-alpha", "Felix");
+    tracker.setExpanded(trackerKey, true);
+
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 4,
+      instances: [
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "u-0" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "u-1" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "u-2" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "u-3" }),
+      ],
+    };
+
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-UNI",
+      teamId: "claudeteam-alpha",
+      postMessage: vi.fn(),
+      expandedGroupsTracker: tracker,
+      autoCollapseUniformClusters: true,
+    });
+
+    // Despite the tracker saying expanded, the uniform cluster opens collapsed.
+    expect(el.dataset.expanded).toBe("false");
+    expect(el.dataset.uniform).toBe("true");
+    const header = el.querySelector<HTMLButtonElement>(
+      ".collapsed-persona-header",
+    )!;
+    expect(header.getAttribute("aria-expanded")).toBe("false");
+    // Instance container hidden — no compact rows in DOM yet.
+    const instancesDiv = el.querySelector<HTMLDivElement>(
+      ".collapsed-persona-instances",
+    )!;
+    expect(instancesDiv.hidden).toBe(true);
+    expect(instancesDiv.children.length).toBe(0);
+  });
+
+  it("renders the status-hint row in the header (Option A.1, 'all idle')", () => {
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 3,
+      instances: [
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "h-0" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "h-1" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "h-2" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      autoCollapseUniformClusters: true,
+    });
+    const hint = el.querySelector(".collapsed-persona-status-hint");
+    expect(hint).not.toBeNull();
+    expect(hint?.textContent).toBe("all idle");
+    expect(hint?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("renders the status-hint row as 'all finished' for a finished cluster", () => {
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Maya",
+      count: 2,
+      instances: [
+        makeTile({ state: "finished", role: "Webview UI Dev", agentId: "f-0" }),
+        makeTile({ state: "finished", role: "Webview UI Dev", agentId: "f-1" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      autoCollapseUniformClusters: true,
+    });
+    expect(el.querySelector(".collapsed-persona-status-hint")?.textContent).toBe(
+      "all finished",
+    );
+  });
+});
+
+describe("uniform cluster — manual click still expands", () => {
+  it("expands on header click and writes 'true' to the tracker", () => {
+    // The user CAN still get at the per-instance data — click expands per
+    // spec §2.3. The tracker is written (intent is recorded for diagnostic /
+    // replay purposes) — it just doesn't drive the NEXT render's initial
+    // state because the uniformity gate short-circuits the tracker read.
+    const tracker = createExpandedGroupsTracker();
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 2,
+      instances: [
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "u-0" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "u-1" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-UNI",
+      teamId: "claudeteam-alpha",
+      postMessage: vi.fn(),
+      expandedGroupsTracker: tracker,
+      autoCollapseUniformClusters: true,
+    });
+    const header = el.querySelector<HTMLButtonElement>(
+      ".collapsed-persona-header",
+    )!;
+    header.click();
+    expect(el.dataset.expanded).toBe("true");
+    expect(
+      tracker.isExpanded(
+        tracker.makeKey("sess-UNI", "claudeteam-alpha", "Felix"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("uniform cluster — compact rows render with disambiguator", () => {
+  it("expands to N compact rows with [a]/[b]/[c] labels and one row per instance", () => {
+    // Spec §3.2 — the compact row is `<article class="agent-tile agent-tile--compact">`
+    // with state-dot + display+disambiguator + activity. Verify the
+    // expanded DOM matches.
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 3,
+      instances: [
+        makeTile({
+          state: "idle",
+          role: "Extension Host Dev",
+          agentId: "c-0",
+          activity: "idle 14s",
+        }),
+        makeTile({
+          state: "idle",
+          role: "Extension Host Dev",
+          agentId: "c-1",
+          activity: "idle 16s",
+        }),
+        makeTile({
+          state: "idle",
+          role: "Extension Host Dev",
+          agentId: "c-2",
+          activity: "idle 15s",
+        }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-COMPACT",
+      postMessage: vi.fn(),
+      autoCollapseUniformClusters: true,
+    });
+    el.querySelector<HTMLButtonElement>(".collapsed-persona-header")!.click();
+
+    const instancesDiv = el.querySelector<HTMLDivElement>(
+      ".collapsed-persona-instances",
+    )!;
+    expect(instancesDiv.dataset.compact).toBe("true");
+
+    const rows = el.querySelectorAll<HTMLElement>(".agent-tile--compact");
+    expect(rows.length).toBe(3);
+
+    // First row: 'Felix [a]' + 'idle 14s' + agentId 'c-0'.
+    expect(rows[0]!.dataset.agentId).toBe("c-0");
+    expect(rows[0]!.querySelector(".agent-display")?.textContent).toBe(
+      "Felix [a]",
+    );
+    expect(rows[0]!.querySelector(".agent-activity")?.textContent).toBe(
+      "idle 14s",
+    );
+    // Activity span carries BOTH classes (standard .agent-activity for theming
+    // + .agent-activity-compact for layout).
+    expect(
+      rows[0]!
+        .querySelector(".agent-activity")
+        ?.classList.contains("agent-activity-compact"),
+    ).toBe(true);
+
+    // Second / third rows: disambiguator b / c.
+    expect(rows[1]!.querySelector(".agent-display")?.textContent).toBe(
+      "Felix [b]",
+    );
+    expect(rows[2]!.querySelector(".agent-display")?.textContent).toBe(
+      "Felix [c]",
+    );
+
+    // No role row, no model row — compact omits them (uniform).
+    expect(rows[0]!.querySelector(".tile-row--role")).toBeNull();
+    expect(rows[0]!.querySelector(".tile-row--model")).toBeNull();
+  });
+
+  it("compact row click dispatches ui:open-transcript with the real agentId (not the letter)", () => {
+    // Spec §3.3 — the `[a]` / `[b]` labels are display-only sugar. The real
+    // agentId stays on data-agent-id and is what flies on the postMessage.
+    const post = vi.fn();
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 2,
+      instances: [
+        makeTile({
+          state: "idle",
+          role: "Extension Host Dev",
+          agentId: "REAL-ID-0",
+        }),
+        makeTile({
+          state: "idle",
+          role: "Extension Host Dev",
+          agentId: "REAL-ID-1",
+        }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-CLICK",
+      postMessage: post,
+      autoCollapseUniformClusters: true,
+    });
+    el.querySelector<HTMLButtonElement>(".collapsed-persona-header")!.click();
+    const rows = el.querySelectorAll<HTMLElement>(".agent-tile--compact");
+    rows[1]!.click();
+    expect(post).toHaveBeenCalledWith({
+      type: "ui:open-transcript",
+      payload: { sessionId: "sess-CLICK", agentId: "REAL-ID-1" },
+    });
+  });
+
+  it("compact row Enter/Space key activation fires drill-in (keyboard accessibility)", () => {
+    const post = vi.fn();
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 2,
+      instances: [
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "k-0" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "k-1" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-K",
+      postMessage: post,
+      autoCollapseUniformClusters: true,
+    });
+    el.querySelector<HTMLButtonElement>(".collapsed-persona-header")!.click();
+    const rows = el.querySelectorAll<HTMLElement>(".agent-tile--compact");
+    // Enter key.
+    rows[0]!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+    expect(post).toHaveBeenCalledWith({
+      type: "ui:open-transcript",
+      payload: { sessionId: "sess-K", agentId: "k-0" },
+    });
+  });
+});
+
+describe("mixed cluster — expand respects tracker as before", () => {
+  it("mixed cluster: initial-expanded state still follows the tracker", () => {
+    // Spec §6 comparison matrix — Option A's auto-collapse fires ONLY for
+    // uniform clusters. A mixed cluster respects the tracker exactly as in
+    // pre-86c9zmqa8 (Obs 10) behavior.
+    const tracker = createExpandedGroupsTracker();
+    const trackerKey = tracker.makeKey(
+      "sess-MIX",
+      "claudeteam-alpha",
+      "Felix",
+    );
+    tracker.setExpanded(trackerKey, true);
+
+    // Mixed: one running + one idle.
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 2,
+      instances: [
+        makeTile({
+          state: "running",
+          role: "Extension Host Dev",
+          agentId: "m-0",
+        }),
+        makeTile({
+          state: "idle",
+          role: "Extension Host Dev",
+          agentId: "m-1",
+        }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-MIX",
+      teamId: "claudeteam-alpha",
+      postMessage: vi.fn(),
+      expandedGroupsTracker: tracker,
+      autoCollapseUniformClusters: true,
+    });
+    // Mixed cluster → tracker drives initial state → opens expanded.
+    expect(el.dataset.expanded).toBe("true");
+    expect(el.dataset.uniform).toBe("false");
+  });
+});
+
+describe("mixed cluster — compact-row treatment NOT applied", () => {
+  it("expands to standard 4-row agent-tile (no compact variant)", () => {
+    // Even on click, a mixed cluster renders standard tiles. The
+    // `agent-tile--compact` modifier is absent; the per-tile DOM matches the
+    // pre-86c9zmqa8 baseline.
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 2,
+      instances: [
+        makeTile({ state: "running", agentId: "x-0" }),
+        makeTile({ state: "idle", agentId: "x-1" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+      autoCollapseUniformClusters: true,
+    });
+    el.querySelector<HTMLButtonElement>(".collapsed-persona-header")!.click();
+    const tiles = el.querySelectorAll<HTMLElement>(".agent-tile");
+    expect(tiles.length).toBe(2);
+    // Standard tile — 4 rows present.
+    expect(tiles[0]!.querySelectorAll(".tile-row").length).toBe(4);
+    // Not the compact variant.
+    expect(tiles[0]!.classList.contains("agent-tile--compact")).toBe(false);
+    // No status hint for a mixed cluster.
+    expect(el.querySelector(".collapsed-persona-status-hint")).toBeNull();
+    expect(el.dataset.uniform).toBe("false");
+  });
+});
+
+describe("claudeteam.autoCollapseUniformClusters=false → uniform cluster behaves as M3-10 baseline", () => {
+  it("uniform cluster with flag OFF respects the tracker + renders standard tiles", () => {
+    // Spec §8.4 grep-discoverable test name. When the sponsor turns off the
+    // setting, the uniform-cluster polish disappears entirely — uniform
+    // clusters behave exactly like M3-10 + Obs 10 did before.
+    const tracker = createExpandedGroupsTracker();
+    const trackerKey = tracker.makeKey(
+      "sess-OFF",
+      "claudeteam-alpha",
+      "Felix",
+    );
+    tracker.setExpanded(trackerKey, true);
+
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 3,
+      instances: [
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "o-0" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "o-1" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "o-2" }),
+      ],
+    };
+
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-OFF",
+      teamId: "claudeteam-alpha",
+      postMessage: vi.fn(),
+      expandedGroupsTracker: tracker,
+      autoCollapseUniformClusters: false, // FLAG OFF
+    });
+
+    // No polish: data-uniform="false" because the renderer gates the polish
+    // visually on isUniformPolish (flag AND uniformity), not on uniformity
+    // alone.
+    expect(el.dataset.uniform).toBe("false");
+    // Tracker says expanded → wrapper opens expanded (M3-10 baseline).
+    expect(el.dataset.expanded).toBe("true");
+    // No status-hint row.
+    expect(el.querySelector(".collapsed-persona-status-hint")).toBeNull();
+    // Expanded children are STANDARD 4-row tiles, not compact rows.
+    const tiles = el.querySelectorAll<HTMLElement>(".agent-tile");
+    expect(tiles.length).toBe(3);
+    expect(tiles[0]!.classList.contains("agent-tile--compact")).toBe(false);
+    expect(tiles[0]!.querySelectorAll(".tile-row").length).toBe(4);
+  });
+
+  it("uniform cluster with flag undefined (default) behaves as M3-10 baseline (back-compat)", () => {
+    // The renderCollapsedPersonaTile prop is optional; older callers (M3-10
+    // / pre-86c9zmqa8 component tests) omit it entirely. Verify back-compat
+    // — when the prop is undefined, the polish does NOT apply.
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Felix",
+      count: 2,
+      instances: [
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "b-0" }),
+        makeTile({ state: "idle", role: "Extension Host Dev", agentId: "b-1" }),
+      ],
+    };
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-BC",
+      postMessage: vi.fn(),
+      // autoCollapseUniformClusters intentionally OMITTED.
+    });
+    expect(el.dataset.uniform).toBe("false");
+    expect(el.querySelector(".collapsed-persona-status-hint")).toBeNull();
+  });
+});
+
+describe("uniform cluster — compact row freshness suffix for finished instances", () => {
+  it("compact rows pick up 'finished Xs' freshness via the finishedTracker", () => {
+    // The compact-row path must integrate with `formatFreshness` the same way
+    // `renderAgentTile` does. Verify a finished uniform cluster expanded at
+    // t0 picks up "finished 0s" — `createFinishedTracker` is the same helper
+    // the earlier wrapper-integration test uses (imported at file top).
+    const tracker = createFinishedTracker();
+    const t0 = 8_000_000;
+
+    const group: CollapsedPersonaGroup = {
+      kind: "collapsed-persona",
+      personaName: "Sage",
+      count: 2,
+      instances: [
+        makeTile({
+          state: "finished",
+          role: "QA Engineer",
+          agentId: "qa-0",
+          activity: "finished",
+        }),
+        makeTile({
+          state: "finished",
+          role: "QA Engineer",
+          agentId: "qa-1",
+          activity: "finished",
+        }),
+      ],
+    };
+
+    const el = renderCollapsedPersonaTile({
+      group,
+      sessionId: "sess-FRESH",
+      postMessage: vi.fn(),
+      finishedTracker: tracker,
+      autoCollapseUniformClusters: true,
+      nowMs: t0,
+    });
+    el.querySelector<HTMLButtonElement>(".collapsed-persona-header")!.click();
+    const rows = el.querySelectorAll<HTMLElement>(".agent-tile--compact");
+    // First-seen at t0 → elapsed = 0 → "finished 0s".
+    expect(rows[0]!.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 0s",
+    );
+    expect(rows[1]!.querySelector(".agent-activity")?.textContent).toBe(
+      "finished 0s",
+    );
+    // Tracker now holds two entries (one per finished compact instance).
+    expect(tracker.size()).toBe(2);
   });
 });

@@ -73,6 +73,7 @@ import { renderAgentTile, type PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
+import { formatFreshness } from "../freshness.js";
 
 /**
  * Human-readable label per state — matches `agentTile.ts STATE_LABEL` so
@@ -85,6 +86,84 @@ const STATE_LABEL: Record<AgentState, string> = {
   finished: "Finished",
   error: "Error",
 };
+
+/**
+ * 86c9zmqa8 §8.3 — status-hint label vocabulary for the auto-collapsed
+ * uniform-cluster header (Option A.1). Only `idle` and `finished` are
+ * uniform-cluster-eligible per `computeIsUniform` below (running excluded
+ * because activity-line varies per poll; error excluded because each
+ * instance is potentially a separate failure). The `Partial<Record<...>>`
+ * shape means a lookup for any state returns `undefined` cleanly when the
+ * caller (defensively) tries to compose a hint for a non-eligible state.
+ *
+ * Source: team/iris-ux/86c9zmqa8-uniform-cluster-spec.md §2.4, §7, §8.3.
+ */
+export const STATUS_HINT_LABEL: Partial<Record<AgentState, string>> = {
+  idle: "all idle",
+  finished: "all finished",
+};
+
+/**
+ * 86c9zmqa8 §3.3 / §8.2 — disambiguator letters for compact rows. Letters
+ * read like sibling labels (`[a]`, `[b]`); numbers would read like priority
+ * ordering. The display-only labels do NOT replace `data-agent-id` — the
+ * real agentId still drives drill-in. Beyond 26 instances (a count never
+ * observed in practice), `disambiguatorFor` rolls over to `[aa]`, `[ab]`,
+ * etc. — collision impossible because the agentId is the real key.
+ */
+export const DISAMBIGUATOR_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+
+/**
+ * Compose the disambiguator label for a 0-indexed instance position.
+ * Mirrors a base-26 numeral system using `DISAMBIGUATOR_LETTERS`. Pure /
+ * cheap — exercised by the compact-row tests in
+ * `tests/unit/webview/collapsedPersonaTile.test.ts`.
+ */
+export function disambiguatorFor(index: number): string {
+  // Defensive: a negative or non-integer index would be a caller bug; surface
+  // as `[?]` rather than throwing — the header text is decorative, not
+  // load-bearing for drill-in (agentId is on data-agent-id).
+  if (!Number.isInteger(index) || index < 0) return "[?]";
+  let n = index;
+  let label = "";
+  do {
+    label = DISAMBIGUATOR_LETTERS[n % 26] + label;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return `[${label}]`;
+}
+
+/**
+ * 86c9zmqa8 §2.1 — uniform-cluster detection.
+ *
+ * Returns `true` when ALL of:
+ *   1. `instances.length >= 2` (it's already a group — bare tiles unaffected).
+ *   2. Every instance shares the same `state`.
+ *   3. The shared state is `idle` OR `finished` (not `running`, not `error`).
+ *   4. Every instance shares the same `role`.
+ *
+ * Returns `false` otherwise (mixed states, mixed roles, running/error cluster,
+ * size < 2). A cluster that fails the test is "mixed" — the M3-10 expand
+ * behavior is correct for it. Activity and model are intentionally NOT in
+ * the uniformity test (activity wobbles per poll; model is roster-stable
+ * and redundant with role).
+ *
+ * Pure function over the input array — no DOM, no clock, idempotent. Used
+ * both by the initial-render gate (Option A) and the expand-time compact
+ * render branch (Option B).
+ *
+ * Source: team/iris-ux/86c9zmqa8-uniform-cluster-spec.md §1.2 + §2.1.
+ */
+export function computeIsUniform(instances: AgentTile[]): boolean {
+  if (instances.length < 2) return false;
+  const first = instances[0]!;
+  if (first.state === "running" || first.state === "error") return false;
+  for (const t of instances) {
+    if (t.state !== first.state) return false;
+    if (t.role !== first.role) return false;
+  }
+  return true;
+}
 
 /**
  * Compute the group's display state from its per-instance states with
@@ -174,6 +253,23 @@ export interface CollapsedPersonaTileProps {
    * DOM — the pre-Obs-10 behavior, exercised by the existing AC2 tests.
    */
   expandedGroupsTracker?: ExpandedGroupsTracker;
+  /**
+   * 86c9zmqa8 — uniform-cluster polish toggle. When `true` AND the group
+   * satisfies `computeIsUniform`, the wrapper:
+   *   - renders auto-collapsed by default regardless of `expandedGroupsTracker`
+   *     (Option A — §2.1 / §2.3);
+   *   - shows a one-line status hint in the header reading `"all idle"` /
+     *   `"all finished"` (Option A.1 — §2.4);
+   *   - on manual expand, renders instances as compact one-line rows with
+   *     `[a]` / `[b]` / `[c]` disambiguator labels and a single state-dot +
+   *     activity span per row (Option B — §3.2).
+   * When `false` OR the group is mixed, the wrapper renders per pre-86c9zmqa8
+   * (M3-10 + Obs 10) behavior. Optional; default `false` so back-compat
+   * callers (component tests, fixture mode) see no behavior change.
+   *
+   * Source: team/iris-ux/86c9zmqa8-uniform-cluster-spec.md §7 + §8.
+   */
+  autoCollapseUniformClusters?: boolean;
   /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
   nowMs?: number;
 }
@@ -189,26 +285,49 @@ export function renderCollapsedPersonaTile(
     finishedTracker,
     prevStateTracker,
     expandedGroupsTracker,
+    autoCollapseUniformClusters,
     nowMs,
   } = props;
+
+  // 86c9zmqa8 §2.1 — compute uniformity ONCE per render. The polish behavior
+  // (auto-collapse + status hint + compact rows) is gated by BOTH the
+  // sponsor's autoCollapseUniformClusters flag AND the cluster's actual
+  // uniformity. Either is sufficient to revert to pre-86c9zmqa8 behavior:
+  //   - flag off → full back-compat regardless of uniformity;
+  //   - flag on + mixed cluster → still pre-86c9zmqa8 expand behavior.
+  const isUniform = computeIsUniform(group.instances);
+  const isUniformPolish = autoCollapseUniformClusters === true && isUniform;
 
   // Obs 10 (86c9zfmh1) — read initial expansion intent from the persistent
   // tracker. Composed key includes sessionId + teamId + personaName so two
   // different teams can host a same-named persona wrapper without sharing
   // expansion state. When the tracker / teamId is absent (back-compat
   // callers), default to collapsed exactly as pre-Obs-10.
+  //
+  // 86c9zmqa8 §2.3 — when the uniform-cluster polish applies, the
+  // expansion-tracker read is short-circuited: uniform clusters always
+  // render collapsed by default regardless of prior user intent. The
+  // tracker is STILL written to on click below (intent is recorded for
+  // diagnostic / replay purposes) — it just doesn't drive the initial
+  // render. This is the "click doesn't stick across polls" trade-off the
+  // spec calls out explicitly (§2.5 Cons + §2.6 mitigation).
   const trackerKey =
     expandedGroupsTracker && teamId !== undefined
       ? expandedGroupsTracker.makeKey(sessionId, teamId, group.personaName)
       : undefined;
-  const initiallyExpanded =
-    trackerKey !== undefined && expandedGroupsTracker !== undefined
+  const initiallyExpanded = isUniformPolish
+    ? false
+    : trackerKey !== undefined && expandedGroupsTracker !== undefined
       ? expandedGroupsTracker.isExpanded(trackerKey)
       : false;
 
   const section = document.createElement("section");
   section.className = "collapsed-persona";
   section.dataset.personaName = group.personaName;
+  // 86c9zmqa8 §8.2 — `data-uniform` attribute lets CSS gate compact-row
+  // styling and any future uniformity-conditional visuals without re-running
+  // the JS uniformity check. "true" / "false" string values per spec table.
+  section.dataset.uniform = String(isUniformPolish);
   // dataset value is set authoritatively further down via `setExpanded(...)`
   // — initialised here so the attribute is present from the first paint.
   section.dataset.expanded = String(initiallyExpanded);
@@ -271,6 +390,28 @@ export function renderCollapsedPersonaTile(
   nameSpan.textContent = `${group.personaName} ×${instanceCount}`;
   header.appendChild(nameSpan);
 
+  // 86c9zmqa8 §2.4 — status-hint row (Option A.1). Only appended when the
+  // uniform-cluster polish applies; the shared state must be in
+  // STATUS_HINT_LABEL (idle / finished) — `computeIsUniform` already
+  // guarantees this, but the lookup defensively yields `undefined` for
+  // non-eligible states so a future widening doesn't surface a label like
+  // "all running" accidentally. The hint reads "all idle" / "all finished"
+  // per spec §7 sponsor-confirmed wording.
+  if (isUniformPolish) {
+    const hintLabel = STATUS_HINT_LABEL[groupState];
+    if (hintLabel) {
+      const hint = document.createElement("span");
+      hint.className = "collapsed-persona-status-hint";
+      hint.textContent = hintLabel;
+      // aria-hidden — the aria-label on the header already conveys the state
+      // ("Maya grouped — N instances, Idle, collapsed"), so the hint span is
+      // visual-only sugar; avoiding double-announcement keeps the SR output
+      // clean.
+      hint.setAttribute("aria-hidden", "true");
+      header.appendChild(hint);
+    }
+  }
+
   section.appendChild(header);
 
   // Instances container — populated lazily on first expand; once populated
@@ -283,6 +424,10 @@ export function renderCollapsedPersonaTile(
   // by AC3 / AC2-collapsed tests).
   const instancesDiv = document.createElement("div");
   instancesDiv.className = "collapsed-persona-instances";
+  // 86c9zmqa8 §3.2 — mirror data-compact onto the instances container so CSS
+  // can target compact-row layout (`.collapsed-persona-instances[data-compact="true"]`)
+  // without re-reading the section's data-uniform.
+  instancesDiv.dataset.compact = String(isUniformPolish);
   instancesDiv.hidden = !initiallyExpanded;
   section.appendChild(instancesDiv);
 
@@ -291,7 +436,15 @@ export function renderCollapsedPersonaTile(
   const populateInstances = (): void => {
     if (populated) return;
     const now = nowMs ?? Date.now();
-    for (const tile of group.instances) {
+    // 86c9zmqa8 §3 — uniform clusters render instances as compact one-line
+    // rows (Option B); mixed clusters fall back to the standard 4-row
+    // renderAgentTile path (M3-10 baseline). The branch is captured at
+    // populate-time off `isUniformPolish` — a host-side state change that
+    // turns the cluster mixed between renders forces a full re-render via
+    // renderFull (tracker prune walks the new tile set), so the populated
+    // flag is correctly invalidated.
+    for (let i = 0; i < group.instances.length; i++) {
+      const tile = group.instances[i]!;
       const finishedAtMs =
         tile.state === "finished" && finishedTracker
           ? finishedTracker.observe(sessionId, tile.agentId, now)
@@ -301,16 +454,36 @@ export function renderCollapsedPersonaTile(
       // undefined → renderer skips the transition flash (correct: first
       // appearance is not a transition).
       const prevState = prevStateTracker?.previous(sessionId, tile.agentId);
-      instancesDiv.appendChild(
-        renderAgentTile({
-          tile,
-          sessionId,
-          postMessage,
-          ...(finishedAtMs !== undefined ? { finishedAtMs } : {}),
-          ...(prevState !== undefined ? { prevState } : {}),
-          nowMs: now,
-        }),
-      );
+
+      if (isUniformPolish) {
+        // 86c9zmqa8 §3.2 — compact row variant. Single state-dot + display
+        // (with `[a]`/`[b]` disambiguator) + activity span. Drill-in click
+        // continues to fire `ui:open-transcript` against the real agentId.
+        // No role row, no model row — uniform clusters share both, so
+        // omitting them is the win (sponsor's verbatim "why do I need to see
+        // these repeated names").
+        instancesDiv.appendChild(
+          renderCompactInstanceRow({
+            tile,
+            sessionId,
+            postMessage,
+            disambiguator: disambiguatorFor(i),
+            ...(finishedAtMs !== undefined ? { finishedAtMs } : {}),
+            nowMs: now,
+          }),
+        );
+      } else {
+        instancesDiv.appendChild(
+          renderAgentTile({
+            tile,
+            sessionId,
+            postMessage,
+            ...(finishedAtMs !== undefined ? { finishedAtMs } : {}),
+            ...(prevState !== undefined ? { prevState } : {}),
+            nowMs: now,
+          }),
+        );
+      }
       if (prevStateTracker) {
         prevStateTracker.record(sessionId, tile.agentId, tile.state);
       }
@@ -353,6 +526,108 @@ export function renderCollapsedPersonaTile(
   });
 
   return section;
+}
+
+/**
+ * 86c9zmqa8 §3.2 — compact instance row used inside a uniform-cluster
+ * wrapper when expanded. Renders ONE row per instance:
+ *
+ *   <article class="agent-tile agent-tile--compact" data-agent-id data-session-id
+ *            data-state role="button" tabindex="0" aria-label title>
+ *     <span class="state-dot" data-state aria-label title></span>
+ *     <span class="agent-display">Felix [a]</span>
+ *     <span class="agent-activity agent-activity-compact">idle 14s</span>
+ *   </article>
+ *
+ * Layout differences vs `renderAgentTile`:
+ *   - single horizontal flex row (no role / model rows);
+ *   - display label appended with the disambiguator (`[a]`, `[b]`, …);
+ *   - activity carries an extra `agent-activity-compact` class (CSS rule in
+ *     dashboard.css) so the compact row can target tighter spacing without
+ *     re-styling every `.agent-activity` site.
+ *
+ * Drill-in contract is preserved verbatim — click + Enter/Space dispatch
+ * `ui:open-transcript` with the real `tile.agentId`; the `[a]`/`[b]` label
+ * is display-only sugar.
+ *
+ * Reduced-motion / transition: compact rows are uniform-only and never carry
+ * a `data-transition` attribute — the per-poll activity wobble is the only
+ * varying signal (and it's small), so flashing the row on every minor change
+ * would be visual noise. The standard 4-row tile path (mixed clusters)
+ * retains the existing transition behavior.
+ */
+interface CompactInstanceRowProps {
+  tile: AgentTile;
+  sessionId: string;
+  postMessage: PostMessageFn;
+  disambiguator: string;
+  finishedAtMs?: number;
+  nowMs?: number;
+}
+
+function renderCompactInstanceRow(
+  props: CompactInstanceRowProps,
+): HTMLElement {
+  const { tile, sessionId, postMessage, disambiguator, finishedAtMs, nowMs } =
+    props;
+
+  const article = document.createElement("article");
+  article.className = "agent-tile agent-tile--compact";
+  article.dataset.state = tile.state;
+  article.dataset.agentId = tile.agentId;
+  article.dataset.sessionId = sessionId;
+  article.setAttribute("role", "button");
+  article.setAttribute("tabindex", "0");
+  article.setAttribute(
+    "aria-label",
+    `${tile.display} ${disambiguator} — ${tile.role} — ${STATE_LABEL[tile.state]}`,
+  );
+  article.setAttribute("title", "Open agent transcript");
+
+  // State dot (re-uses the shared `.state-dot[data-state]` CSS from agentTile).
+  const dot = document.createElement("span");
+  dot.className = "state-dot";
+  dot.dataset.state = tile.state;
+  dot.setAttribute("aria-label", STATE_LABEL[tile.state]);
+  dot.setAttribute("title", STATE_LABEL[tile.state]);
+  article.appendChild(dot);
+
+  // Display + disambiguator: "Felix [a]" reads as a sibling label, not a
+  // priority ordering (per spec §3.3 — "Felix 1" rejected because it reads
+  // ordinal).
+  const displaySpan = document.createElement("span");
+  displaySpan.className = "agent-display";
+  displaySpan.textContent = `${tile.display} ${disambiguator}`;
+  article.appendChild(displaySpan);
+
+  // Activity — finished-instance freshness suffix matches the standard
+  // tile's behavior. `formatFreshness` is the same helper renderAgentTile
+  // uses, so "idle 14s" / "finished 12m" come from the same source.
+  const activityText =
+    tile.state === "finished" && typeof finishedAtMs === "number"
+      ? `${tile.activity} ${formatFreshness((nowMs ?? Date.now()) - finishedAtMs)}`
+      : tile.activity;
+  const activitySpan = document.createElement("span");
+  activitySpan.className = "agent-activity agent-activity-compact";
+  activitySpan.textContent = activityText;
+  article.appendChild(activitySpan);
+
+  // Drill-in handlers — identical contract to bare AgentTile.
+  const fire = (): void => {
+    postMessage({
+      type: "ui:open-transcript",
+      payload: { sessionId, agentId: tile.agentId },
+    });
+  };
+  article.addEventListener("click", fire);
+  article.addEventListener("keydown", (ev: KeyboardEvent) => {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      fire();
+    }
+  });
+
+  return article;
 }
 
 /**

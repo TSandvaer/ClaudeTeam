@@ -70,6 +70,13 @@ export interface TeamCardProps {
    * tiles ignore it (nothing to expand at the leaf level).
    */
   expandedGroupsTracker?: ExpandedGroupsTracker;
+  /**
+   * 86c9zmqa8: when true, uniform CollapsedPersonaGroups render auto-
+   * collapsed by default + use compact one-line instance rows on expand.
+   * Threaded through to `renderCollapsedPersonaTile`. Bare tiles ignore it
+   * (no uniform-cluster concept at the leaf level).
+   */
+  autoCollapseUniformClusters?: boolean;
   /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
   nowMs?: number;
 }
@@ -83,6 +90,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
     finishedTracker,
     prevStateTracker,
     expandedGroupsTracker,
+    autoCollapseUniformClusters,
     nowMs,
   } = props;
 
@@ -129,6 +137,9 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
           ...(finishedTracker ? { finishedTracker } : {}),
           ...(prevStateTracker ? { prevStateTracker } : {}),
           ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
+          ...(autoCollapseUniformClusters !== undefined
+            ? { autoCollapseUniformClusters }
+            : {}),
           ...(nowMs !== undefined ? { nowMs } : {}),
         }),
       );

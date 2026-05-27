@@ -71,6 +71,12 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
     hiddenFinishedCount: state.hiddenFinishedCount ?? 0,
     config: {
       hideFinishedAgents: state.config?.hideFinishedAgents === true,
+      // 86c9zmqa8 (uniform-cluster polish): mirror the auto-collapse flag onto
+      // the wire so the webview's collapsedPersonaTile renderer can read it
+      // without re-reading VS Code Settings. Defaults to false here when the
+      // host omits the field — back-compat with pre-86c9zmqa8 watchers.
+      autoCollapseUniformClusters:
+        state.config?.autoCollapseUniformClusters === true,
     },
   };
 }

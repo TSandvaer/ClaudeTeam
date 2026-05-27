@@ -60,6 +60,16 @@ export interface SessionBlockProps {
    * persona wrappers survive the next host-driven `renderFull`.
    */
   expandedGroupsTracker?: ExpandedGroupsTracker;
+  /**
+   * 86c9zmqa8: when true (the renderFull default — see render.ts), uniform
+   * CollapsedPersonaGroups (same persona, same state, all idle/finished)
+   * render auto-collapsed by default and use compact one-line instance rows
+   * when expanded. Threaded down to teamCard → collapsedPersonaTile. When
+   * false, every wrapper renders per pre-86c9zmqa8 (M3-10 + Obs 10) behavior.
+   * Optional — when omitted, treated as false (back-compat with sessionBlock
+   * component tests authored before the polish).
+   */
+  autoCollapseUniformClusters?: boolean;
   /** Current wall-clock ms — defaults to Date.now() downstream. */
   nowMs?: number;
 }
@@ -71,6 +81,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
     finishedTracker,
     prevStateTracker,
     expandedGroupsTracker,
+    autoCollapseUniformClusters,
     nowMs,
   } = props;
 
@@ -125,6 +136,9 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
         ...(finishedTracker ? { finishedTracker } : {}),
         ...(prevStateTracker ? { prevStateTracker } : {}),
         ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
+        ...(autoCollapseUniformClusters !== undefined
+          ? { autoCollapseUniformClusters }
+          : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
       }),
     );

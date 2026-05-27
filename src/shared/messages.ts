@@ -103,6 +103,13 @@ export interface SerializedDashboardState {
    */
   config?: {
     hideFinishedAgents?: boolean;
+    /**
+     * Mirror of `claudeteam.autoCollapseUniformClusters` (uniform-cluster
+     * polish ticket 86c9zmqa8). See `AgentTree.config.autoCollapseUniformClusters`
+     * for semantics. Optional for back-compat — webview MUST treat
+     * `undefined` as `false`.
+     */
+    autoCollapseUniformClusters?: boolean;
   };
 }
 

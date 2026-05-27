@@ -107,6 +107,11 @@
           "type": "boolean",
           "default": false,
           "description": "Enable verbose per-tick diagnostic logging to the 'Claude Team — Diagnostics' Output channel. Emits one line per watcher tick (timestamp + duration + emitted flag), plus per-agent state-transition lines (running → idle → finished), roster reload events, and watcher errors. Default: false (silent). Toggle takes effect within one tick — no Reload Window required. Use for diagnosing why a tile is stuck in a given state or why an emit isn't reaching the webview."
+        },
+        "claudeteam.autoCollapseUniformClusters": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-collapse uniform clusters (same persona, same state, all idle or finished). When true, the dashboard hides per-instance rows for clusters that carry no varying information; the chevron still allows manual expand and an 'all idle'/'all finished' hint is shown in the header. When expanded, instances render as compact one-line rows. Default true; turn off to restore the always-respect-expand-tracker behavior."
         }
       }
     }

@@ -512,6 +512,18 @@ export interface AgentTree {
    */
   config?: {
     hideFinishedAgents?: boolean;
+    /**
+     * Mirror of `claudeteam.autoCollapseUniformClusters` (uniform-cluster
+     * polish ticket 86c9zmqa8). When true, a CollapsedPersonaGroup whose
+     * instances are all-same-state + all-same-role (and the shared state is
+     * not running/error) renders auto-collapsed by default and, when manually
+     * expanded, lays its instances out as compact single-row tiles. Optional
+     * for back-compat with pre-86c9zmqa8 consumers; absent → webview treats
+     * as `false` (uniform-cluster polish OFF).
+     *
+     * Source: team/iris-ux/86c9zmqa8-uniform-cluster-spec.md §8.1.
+     */
+    autoCollapseUniformClusters?: boolean;
   };
 }
 

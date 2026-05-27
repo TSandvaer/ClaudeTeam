@@ -135,6 +135,14 @@ export interface WatcherOptions {
    */
   getHideFinishedAgents?: () => boolean;
 
+  /**
+   * Optional resolver for the `claudeteam.autoCollapseUniformClusters`
+   * setting (86c9zmqa8). Read fresh every tick so toggling applies on the
+   * next tick without restart. When omitted, treated as `true` (uniform-
+   * cluster polish ON — same default as the package.json config schema).
+   */
+  getAutoCollapseUniformClusters?: () => boolean;
+
   /** Optional logger; defaults to a no-op so silent in production. */
   logger?: { warn: (msg: string) => void };
 
@@ -260,6 +268,13 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // M5: read-fresh-every-tick pattern for the hide-finished toggle.
         // Default false (filter OFF) matches package.json config default.
         hideFinishedAgents: opts.getHideFinishedAgents?.() ?? false,
+        // 86c9zmqa8: read-fresh-every-tick pattern for the uniform-cluster
+        // polish toggle. Default true (auto-collapse ON) matches package.json
+        // config default. The flag is webview-only behavior (no host code
+        // path changes); it's stamped onto the produced tree so the webview
+        // can read it from state.config.
+        autoCollapseUniformClusters:
+          opts.getAutoCollapseUniformClusters?.() ?? true,
         logger,
       });
       // Always update lastState — even on hash-skip — so host lookups against
@@ -386,6 +401,13 @@ export interface RunTickOptions {
    * is stamped onto the produced tree.
    */
   hideFinishedAgents?: boolean;
+  /**
+   * Value of `claudeteam.autoCollapseUniformClusters` (86c9zmqa8). Defaults
+   * to `true`. Webview-only behavior — does NOT change the host reducer or
+   * filter output; merely stamped onto the produced tree's `config` block so
+   * the webview's collapsedPersonaTile renderer can read it from state.
+   */
+  autoCollapseUniformClusters?: boolean;
   logger?: { warn: (msg: string) => void };
 }
 
@@ -517,6 +539,10 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     tree,
     hideFinished,
   );
+  // 86c9zmqa8: webview-only uniform-cluster auto-collapse. Default true when
+  // omitted to match the package.json schema default. Stamped onto the
+  // produced tree's config block; consumed entirely webview-side.
+  const autoCollapseUniformClusters = opts.autoCollapseUniformClusters !== false;
 
   // M3-03 AC7: stamp the window-filter flag on the produced tree. Reducer
   // is workspace-agnostic — it doesn't know about the filter, just the
@@ -536,6 +562,8 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     hiddenFinishedCount,
     config: {
       hideFinishedAgents: hideFinished,
+      // 86c9zmqa8: pass-through scalar; webview-only behavior.
+      autoCollapseUniformClusters,
     },
   };
 }
@@ -585,6 +613,12 @@ export function hashState(state: DashboardState): string {
     rosterWarnings: state.rosterWarnings ?? [],
     hiddenFinishedCount: state.hiddenFinishedCount ?? 0,
     hideFinishedAgents: state.config?.hideFinishedAgents === true,
+    // 86c9zmqa8: include the uniform-cluster auto-collapse flag so toggling
+    // the VS Code setting re-emits state even when the visible tile set is
+    // unchanged. The webview-side render branches off this flag, so missing
+    // emissions would leave the dashboard stale.
+    autoCollapseUniformClusters:
+      state.config?.autoCollapseUniformClusters !== false,
   });
 }
 
