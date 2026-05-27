@@ -287,12 +287,9 @@ function renderTeamIdleRow(
         value: false,
       },
     };
-    // PostMessageFn is narrowly typed to OpenTranscriptMessage for the
-    // tile drill-in path; the underlying webview dispatcher accepts the
-    // full WebviewMessage union (see src/webview/main.ts acquireApi).
-    // Cast through `unknown` parallels the existing pattern at the
-    // M5 chip's pre-merge site (pre-Felix-merge SetConfigMessage cast).
-    (postMessage as unknown as (m: WebviewMessage) => void)(msg);
+    // PostMessageFn now types as `(msg: WebviewMessage) => void` (PR #98
+    // NIT #2 — Felix 2026-05-27), so `ui:set-config` passes without a cast.
+    postMessage(msg);
   });
 
   return row;

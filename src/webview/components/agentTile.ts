@@ -33,7 +33,10 @@
  */
 
 import type { AgentTile, AgentState } from "../../shared/types.js";
-import type { OpenTranscriptMessage } from "../../shared/messages.js";
+import type {
+  OpenTranscriptMessage,
+  WebviewMessage,
+} from "../../shared/messages.js";
 import { formatFreshness } from "../../shared/freshness.js";
 
 /** Human-readable label per state — used in aria-label and title tooltip. */
@@ -44,8 +47,19 @@ const STATE_LABEL: Record<AgentState, string> = {
   error: "Error",
 };
 
-/** Function the tile uses to dispatch webview → host messages. */
-export type PostMessageFn = (msg: OpenTranscriptMessage) => void;
+/**
+ * Function the tile uses to dispatch webview → host messages.
+ *
+ * Widened to the full `WebviewMessage` union (PR #98 NIT #2 — Felix
+ * 2026-05-27) so threaded consumers (teamCard's "show idle" row, collapsed
+ * persona tiles, future siblings) can post any webview→host message without
+ * the `(postMessage as unknown as (m: WebviewMessage) => void)` cast that
+ * was needed when this alias was narrowed to `OpenTranscriptMessage`. The
+ * tile itself still only posts `OpenTranscriptMessage`; the underlying
+ * dispatcher (`acquireVsCodeApi().postMessage` in `src/webview/main.ts`)
+ * accepts the full union by construction.
+ */
+export type PostMessageFn = (msg: WebviewMessage) => void;
 
 export interface AgentTileProps {
   tile: AgentTile;

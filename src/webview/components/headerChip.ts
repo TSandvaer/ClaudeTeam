@@ -94,11 +94,15 @@ export interface HeaderChipProps {
    * `"idle"` for the running-focused dashboard spec.
    */
   kind?: HeaderChipKind;
-  /** Current filter state (per `state.config?.{configKey} ?? false`). */
-  hideFinished: boolean;
+  /**
+   * Current filter state (per `state.config?.{configKey} ?? false`). Named
+   * kind-agnostically (`filterOn`) so callers passing `kind="idle"` don't
+   * read as `hideFinished: hideIdle` (PR #98 NIT #1 — Felix 2026-05-27).
+   */
+  filterOn: boolean;
   /**
    * Count of tiles hidden this tick (per `state.{countField} ?? 0`). Always 0
-   * when `hideFinished === false` per the host contract. Webview renders 0
+   * when `filterOn === false` per the host contract. Webview renders 0
    * even if the host violates the contract.
    */
   hiddenCount: number;
@@ -112,7 +116,7 @@ export interface HeaderChipProps {
  * dashboard is empty).
  */
 export function renderHeaderChip(props: HeaderChipProps): HTMLElement {
-  const { kind = "finished", hideFinished, hiddenCount, postMessage } = props;
+  const { kind = "finished", filterOn, hiddenCount, postMessage } = props;
   const copy = CHIP_COPY[kind];
 
   // Outer <aside> — semantically a tangential utility control. Screen readers
@@ -123,7 +127,7 @@ export function renderHeaderChip(props: HeaderChipProps): HTMLElement {
   // side-by-side with disambiguable selectors. The `data-hide-finished`
   // attribute is the M5 baseline — kept as-is so existing CSS / tests
   // continue to match. The idle variant uses `data-hide-idle`.
-  chip.dataset[copy.dataKey] = String(hideFinished);
+  chip.dataset[copy.dataKey] = String(filterOn);
   // Stringified for the CSS `[data-hidden-count="0"]` selector (M5 §6.1).
   chip.dataset[copy.dataCountKey] = String(hiddenCount);
 
@@ -131,8 +135,8 @@ export function renderHeaderChip(props: HeaderChipProps): HTMLElement {
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "ct-header-chip-toggle";
-  toggle.setAttribute("aria-pressed", String(hideFinished));
-  toggle.title = hideFinished
+  toggle.setAttribute("aria-pressed", String(filterOn));
+  toggle.title = filterOn
     ? `Show ${copy.noun} agents`
     : `Hide ${copy.noun} agents`;
 
@@ -141,7 +145,7 @@ export function renderHeaderChip(props: HeaderChipProps): HTMLElement {
   // variant per spec 86c9zmyef §7.3).
   const label = document.createElement("span");
   label.className = "ct-header-chip-label";
-  label.textContent = labelTextForState(hideFinished, hiddenCount, kind);
+  label.textContent = labelTextForState(filterOn, hiddenCount, kind);
   toggle.appendChild(label);
 
   // Count span — kept as a separate element for future expansions (per-state
@@ -161,7 +165,7 @@ export function renderHeaderChip(props: HeaderChipProps): HTMLElement {
   // sees instant feedback; the next `state:full` re-confirms.
   // -------------------------------------------------------------------------
   const onActivate = (): void => {
-    const newValue = !hideFinished;
+    const newValue = !filterOn;
     const msg: WebviewMessage = {
       type: "ui:set-config",
       payload: {
@@ -204,19 +208,19 @@ export function renderHeaderChip(props: HeaderChipProps): HTMLElement {
  * phrase stays on the ON branch.
  *
  * Edge case (M5 §4.2 row 2 — "impossible by §3.2 contract"): when
- * `hideFinished === false` but `hiddenCount > 0`, the host has violated
+ * `filterOn === false` but `hiddenCount > 0`, the host has violated
  * the contract. Render as if N=0 (the off label).
  *
  * Back-compat: `kind` defaults to `"finished"` so pre-86c9zqa75 callers /
  * tests that pass two arguments continue to render the M5 vocabulary.
  */
 export function labelTextForState(
-  hideFinished: boolean,
+  filterOn: boolean,
   hiddenCount: number,
   kind: HeaderChipKind = "finished",
 ): string {
   const { noun } = CHIP_COPY[kind];
-  if (!hideFinished) {
+  if (!filterOn) {
     return `Hide ${noun}`;
   }
   if (hiddenCount <= 0) {
@@ -227,3 +231,4 @@ export function labelTextForState(
   }
   return `Show ${noun} ${EM_DASH} ${hiddenCount} hidden`;
 }
+
