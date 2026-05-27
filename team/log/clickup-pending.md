@@ -407,3 +407,7 @@ ENTRY-2026-05-27T09:25:00Z: 86c9zfj2g -> in review (Maya PR #94 opened — polis
 ```
 ENTRY-2026-05-26T23:00:00Z: 86c9zfmhp -> in progress (Maya accepted dispatch — fix(webview): humanize finished elapsed-time format (Obs 11))
 ENTRY-2026-05-26T23:10:00Z: 86c9zfmhp -> in review (Maya PR #88 opened — fix(webview): humanize finished elapsed-time format (Obs 11) — sponsor approval requested on format choice)
+
+ENTRY 2026-05-27T1430-iris-86c9zmyef-todo-to-inprogress: 86c9zmyef -> in progress
+
+ENTRY 2026-05-27T1445-iris-86c9zmyef-inprogress-to-inreview: 86c9zmyef -> in review (PR opening)
