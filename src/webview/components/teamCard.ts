@@ -24,6 +24,7 @@
  */
 
 import type { RosterTileEntry, Team } from "../../shared/types.js";
+import type { WebviewMessage } from "../../shared/messages.js";
 import { renderAgentTile, type PostMessageFn } from "./agentTile.js";
 import {
   renderCollapsedPersonaTile,
@@ -32,6 +33,10 @@ import {
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
+
+// Em-dash (U+2014) — matches headerChip vocabulary contract per spec
+// 86c9zmyef §7.3.
+const EM_DASH = "—";
 
 export interface TeamCardProps {
   /** Team metadata (id + display name from the loaded roster). */
@@ -87,6 +92,23 @@ export interface TeamCardProps {
    * (no uniform-cluster concept at the leaf level).
    */
   autoCollapseUniformClusters?: boolean;
+  /**
+   * 86c9zqa75 — when true AND `hiddenIdleCount > 0`, the team card renders
+   * a per-team "N idle hidden — show" passive row at the END of its tile
+   * list (spec 86c9zmyef §3.4 Option A+B). The row's click fires the same
+   * `ui:set-config` message as the global header chip — it is informational
+   * sugar, not a per-team filter scope. When false / count==0, the row is
+   * suppressed (no idle tiles hidden means no row to render).
+   */
+  hideIdle?: boolean;
+  /**
+   * 86c9zqa75 — global count of idle tiles hidden this tick (from Felix's
+   * Pt 1 wire shape). The per-team row label embeds this number. V1
+   * limitation: count is global, not per-team — for multi-team rosters the
+   * same N appears in every team's row. V1 dogfood roster has one team so
+   * the discrepancy doesn't surface; multi-team breakdown is post-V1.
+   */
+  hiddenIdleCount?: number;
   /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
   nowMs?: number;
 }
@@ -101,6 +123,8 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
     prevStateTracker,
     expandedGroupsTracker,
     autoCollapseUniformClusters,
+    hideIdle,
+    hiddenIdleCount,
     nowMs,
   } = props;
 
@@ -188,7 +212,90 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
     }
   }
 
+  // 86c9zqa75 — per-team idle-hidden hint row (spec 86c9zmyef §3.4
+  // Option A+B). Appended AFTER all tiles so it visually closes the team
+  // card. Click fires the SAME `ui:set-config` message as the global
+  // header chip (passive informational hint — no per-team filter scope).
+  //
+  // Render conditions:
+  //   1. The global filter must be on (`hideIdle === true`); the row
+  //      makes no sense when idle tiles are already visible.
+  //   2. The global `hiddenIdleCount` must be > 0; rendering "0 idle
+  //      hidden — show" reads as a bug.
+  // V1 limitation: the count is global across all teams in all sessions —
+  // for multi-team rosters the same N appears in each team's row. V1
+  // dogfood roster has one team so the discrepancy doesn't surface;
+  // multi-team per-team-breakdown is flagged in the PR body as post-V1.
+  if (hideIdle === true && (hiddenIdleCount ?? 0) > 0) {
+    card.appendChild(renderTeamIdleRow(hiddenIdleCount ?? 0, postMessage));
+  }
+
   return card;
+}
+
+/**
+ * 86c9zqa75 — per-team "N idle hidden — show" passive informational row.
+ *
+ * Renders as a `<button>` so native Enter + Space activation comes for
+ * free. The click posts `ui:set-config` with the SAME key as the global
+ * header chip — the row is informational sugar, NOT a per-team filter
+ * scope (per spec 86c9zmyef §3.4 Option A+B). Label vocabulary mirrors the
+ * spec §7.3 templates verbatim:
+ *
+ *   N === 1 → "1 idle hidden — show"
+ *   N >  1 → "<N> idle hidden — show"
+ *
+ * Em-dash (U+2014) matches the header-chip vocabulary contract.
+ *
+ * Exported indirectly — only used by `renderTeamCard` above. Keeping it
+ * unexported reduces the public API surface; if tests want to assert the
+ * row in isolation they query for `.ct-team-idle-row` post-`renderTeamCard`.
+ */
+function renderTeamIdleRow(
+  count: number,
+  postMessage: PostMessageFn,
+): HTMLButtonElement {
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "ct-team-idle-row";
+  // Dataset count exposes the rendered N for CSS selectors / DOM queries
+  // (e.g. tests asserting "row appears with the right number").
+  row.dataset.hiddenIdleCount = String(count);
+  // aria-label restates the count + the action so screen readers don't
+  // need to parse the em-dash punctuation.
+  row.setAttribute(
+    "aria-label",
+    `${count} idle agent${count === 1 ? "" : "s"} hidden — click to show`,
+  );
+
+  const labelText =
+    count === 1
+      ? `1 idle hidden ${EM_DASH} show`
+      : `${count} idle hidden ${EM_DASH} show`;
+  row.textContent = labelText;
+
+  row.addEventListener("click", () => {
+    // Fire the same message the global chip fires — flipping the global
+    // filter off so all idle tiles reappear. The row itself doesn't
+    // re-render here; the next host `state:full` (which the host emits
+    // after `vscode.workspace.getConfiguration().update`) drives the
+    // re-render with the new tiles visible and the row absent.
+    const msg: WebviewMessage = {
+      type: "ui:set-config",
+      payload: {
+        key: "hideIdleAgents",
+        value: false,
+      },
+    };
+    // PostMessageFn is narrowly typed to OpenTranscriptMessage for the
+    // tile drill-in path; the underlying webview dispatcher accepts the
+    // full WebviewMessage union (see src/webview/main.ts acquireApi).
+    // Cast through `unknown` parallels the existing pattern at the
+    // M5 chip's pre-merge site (pre-Felix-merge SetConfigMessage cast).
+    (postMessage as unknown as (m: WebviewMessage) => void)(msg);
+  });
+
+  return row;
 }
 
 /**

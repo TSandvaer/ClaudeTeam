@@ -193,6 +193,36 @@ function readHeaderChipState(state: RenderableState): {
 }
 
 /**
+ * Extract the idle-chip inputs (86c9zqa75 / spec 86c9zmyef §3) from the
+ * rendered state. Mirrors `readHeaderChipState` for the parallel
+ * `hideIdleAgents` filter — both fields originate in Felix's Pt 1 wire
+ * (`AgentTree.hiddenIdleCount` + `AgentTree.config.hideIdleAgents`).
+ *
+ * Defensive cast through `Record<string, unknown>` so this code compiles
+ * against either branch state-shape (pre-Pt-1: fields absent → defaults;
+ * post-Pt-1: fields present → consumed). Defaults match spec §3.5 contract
+ * (off + 0).
+ */
+function readIdleChipState(state: RenderableState): {
+  hideIdle: boolean;
+  hiddenCount: number;
+} {
+  const bag = state as unknown as {
+    hiddenIdleCount?: unknown;
+    config?: { hideIdleAgents?: unknown };
+  };
+  const hideIdle =
+    typeof bag.config?.hideIdleAgents === "boolean"
+      ? bag.config.hideIdleAgents
+      : false;
+  const hiddenCount =
+    typeof bag.hiddenIdleCount === "number" && bag.hiddenIdleCount > 0
+      ? bag.hiddenIdleCount
+      : 0;
+  return { hideIdle, hiddenCount };
+}
+
+/**
  * Read `claudeteam.autoCollapseUniformClusters` off the rendered state's
  * config block (86c9zmqa8). Webview-only behavior — the host stamps the
  * scalar onto the wire so the renderer doesn't roundtrip through Settings.
@@ -339,8 +369,27 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   const { hideFinished, hiddenCount } = readHeaderChipState(state);
   mount.appendChild(
     renderHeaderChip({
+      kind: "finished",
       hideFinished,
       hiddenCount,
+      postMessage,
+    }),
+  );
+
+  // 86c9zqa75 (spec 86c9zmyef §3) — hide-idle header chip mounted alongside
+  // the M5 chip. Same always-rendered discipline: discoverable even when
+  // the dashboard is empty so the sponsor can flip the running-focused
+  // default without first spawning an idle agent.
+  //
+  // The two chips render as siblings (separate <aside> elements). When both
+  // filters are active they read "Show finished — N hidden" + "Show idle —
+  // N hidden" side-by-side per spec §5.3 ASCII wireframe.
+  const { hideIdle, hiddenCount: hiddenIdleCount } = readIdleChipState(state);
+  mount.appendChild(
+    renderHeaderChip({
+      kind: "idle",
+      hideFinished: hideIdle,
+      hiddenCount: hiddenIdleCount,
       postMessage,
     }),
   );
@@ -375,12 +424,24 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   // The flag is webview-only — its host-side journey ends in `state.config`.
   const autoCollapseUniformClusters = readAutoCollapseUniformClusters(state);
 
+  // 86c9zqa75 — thread the idle-filter state down to teamCard so each team
+  // can render the per-team "N idle hidden — show" passive row when the
+  // global filter is on AND tiles have been hidden. The host's
+  // `hiddenIdleCount` is a global (across all teams in all sessions) count
+  // per Felix's Pt 1 wire shape; the per-team row reuses the same global
+  // count number, with the click firing the SAME `ui:set-config` message
+  // as the header chip (per spec §3.4 Option A+B — passive informational
+  // hint, no per-team filter scope). V1 dogfood roster has one team so
+  // the global count = per-team count by construction; multi-team rosters
+  // are an acknowledged V1 limitation flagged in the PR body.
   for (const session of state.sessions) {
     mount.appendChild(
       renderSessionBlock({
         session,
         postMessage,
         autoCollapseUniformClusters,
+        hideIdle,
+        hiddenIdleCount,
         ...(finishedTracker ? { finishedTracker } : {}),
         ...(prevStateTracker ? { prevStateTracker } : {}),
         ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),

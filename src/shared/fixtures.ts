@@ -39,6 +39,11 @@ const FIXTURE_TILES: AgentTile[] = [
     state: "running",
     agentId: "a1d53b4a2db17f2f5",
     toolUseId: "toolu_01SZsHqGceAQC4Loovg6ion1",
+    // 86c9zqa75 — exercise the member-color paint in browser dev mode + tests.
+    // Slate blue; pairs with Maya's green below so the dev render visually
+    // demonstrates the spec §2.2 "Felix-the-blue-dot / Maya-the-green-dot"
+    // identification-at-a-glance affordance.
+    memberColor: "#5d8aa8",
   },
   {
     memberId: "maya",
@@ -72,6 +77,10 @@ const FIXTURE_TILES: AgentTile[] = [
     state: "running",
     agentId: "d83fc2ec1b4a82e93",
     toolUseId: "toolu_04NOSyTqrDecT1MrlbK8lrp4",
+    // 86c9zqa75 — sage-green; pairs with Felix's slate-blue for the dev
+    // render's two-distinct-running-dots demonstration. Material palette
+    // mid-saturation per roster-matching.md theme-contrast suggestion.
+    memberColor: "#9caf88",
   },
   {
     memberId: "sage",
