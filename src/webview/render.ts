@@ -192,6 +192,27 @@ function readHeaderChipState(state: RenderableState): {
   return { hideFinished, hiddenCount };
 }
 
+/**
+ * Read `claudeteam.autoCollapseUniformClusters` off the rendered state's
+ * config block (86c9zmqa8). Webview-only behavior — the host stamps the
+ * scalar onto the wire so the renderer doesn't roundtrip through Settings.
+ *
+ * Defensive cast through `Record<string, unknown>` so the renderer compiles
+ * even when running against older fixtures whose typed shape may not include
+ * the field (parallels `readHeaderChipState`'s cast for `hideFinishedAgents`).
+ * Default `true` matches the package.json schema default — polish is ON by
+ * default; a tree without the field is treated as polish-on.
+ */
+function readAutoCollapseUniformClusters(state: RenderableState): boolean {
+  const bag = state as unknown as {
+    config?: { autoCollapseUniformClusters?: unknown };
+  };
+  if (typeof bag.config?.autoCollapseUniformClusters === "boolean") {
+    return bag.config.autoCollapseUniformClusters;
+  }
+  return true;
+}
+
 export function renderFull(ctx: RenderContext, state: RenderableState): void {
   const {
     mount,
@@ -349,11 +370,17 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     return;
   }
 
+  // 86c9zmqa8: read the auto-collapse-uniform-clusters scalar from state
+  // once and thread it down to every session block / team card / wrapper.
+  // The flag is webview-only — its host-side journey ends in `state.config`.
+  const autoCollapseUniformClusters = readAutoCollapseUniformClusters(state);
+
   for (const session of state.sessions) {
     mount.appendChild(
       renderSessionBlock({
         session,
         postMessage,
+        autoCollapseUniformClusters,
         ...(finishedTracker ? { finishedTracker } : {}),
         ...(prevStateTracker ? { prevStateTracker } : {}),
         ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),

@@ -461,6 +461,65 @@ body {
   display: none;
 }
 
+/* ---------------------------------------------------------------------------
+ * Uniform-cluster polish (86c9zmqa8)
+ *
+ * Reads three new hooks set by `collapsedPersonaTile.ts`:
+ *   - `.collapsed-persona[data-uniform="true"]`  — the wrapper section
+ *   - `.collapsed-persona-status-hint`           — header status hint span
+ *   - `.collapsed-persona-instances[data-compact="true"]` — compact list
+ *   - `.agent-tile--compact`                     — compact instance row
+ *   - `.agent-activity-compact`                  — compact activity span
+ *
+ * When the wrapper is NOT uniform (mixed cluster or polish flag off), all
+ * three hooks are absent or "false" — every styling rule below is a no-op,
+ * and the wrapper renders per pre-86c9zmqa8 (M3-10) behavior unchanged.
+ * Theme-aware throughout — no hex values; everything resolves through the
+ * existing `--ct-*` tokens.
+ * --------------------------------------------------------------------------- */
+
+.collapsed-persona-status-hint {
+  /* Reads as secondary commentary on the header, not a primary identifier.
+   * Muted color + smaller font matches the role / model rows in agentTile,
+   * which is the closest precedent for "secondary descriptive text" in the
+   * dashboard's existing typography. */
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+  /* Push the hint to the right so the header reads: "● ▶ Felix ×4    all idle"
+   * — count + persona name on the left (primary id), state hint on the right
+   * (status). margin-left:auto inside a flex row achieves the right-anchor
+   * without breaking the chevron / dot left-anchored layout. */
+  margin-left: auto;
+}
+
+/* Compact instance rows — uniform-cluster polish §3.2.
+ *
+ * The base `.agent-tile` already supplies the hover + focus + drill-in
+ * affordance styling, so the compact variant only overrides layout
+ * (`flex-direction: row` instead of `column`) and tightens padding.
+ */
+.agent-tile--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ct-state-dot-gap);
+  /* Slightly tighter vertical padding than the standard tile so 4 compact
+   * rows in a uniform cluster don't add up to a taller block than 4 stacked
+   * tiles would have been (intentional density gain). */
+  padding: var(--ct-space-xs) var(--ct-space-s);
+}
+
+/* Within a compact row, the activity span sits inline and is allowed to
+ * wrap if a stray long activity string somehow appears (spec §3.2 says
+ * uniform clusters have low-variance activity, but the dashboard must not
+ * blow up on a 200-char activity line). */
+.agent-activity-compact {
+  /* Reuse the existing .agent-activity wrapping; the compact variant simply
+   * inherits and can grow horizontally before wrapping. The existing
+   * `overflow-wrap: anywhere` rule continues to apply. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* ===========================================================================
  * Background chip (spec §7)
  * =========================================================================== */

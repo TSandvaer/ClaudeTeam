@@ -183,6 +183,13 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.workspace
           .getConfiguration("claudeteam")
           .get<boolean>("hideFinishedAgents") ?? false,
+      // 86c9zmqa8: read-fresh-every-tick pattern for the uniform-cluster
+      // auto-collapse toggle. Default true (polish ON) matches package.json.
+      // Webview-only behavior; the host merely stamps it onto the wire.
+      getAutoCollapseUniformClusters: () =>
+        vscode.workspace
+          .getConfiguration("claudeteam")
+          .get<boolean>("autoCollapseUniformClusters") ?? true,
       onStateChange: (state) => {
         void postState(webview, state);
       },
@@ -237,6 +244,13 @@ export function activate(context: vscode.ExtensionContext): void {
         // flips immediately on click; this listener confirms authoritatively
         // on the next host tick.
         if (e.affectsConfiguration("claudeteam.hideFinishedAgents")) {
+          watcherHandle?.triggerTick();
+        }
+        // 86c9zmqa8: instant-effect pattern for the uniform-cluster polish
+        // toggle. Toggling it from Settings re-renders within one tick (the
+        // hashState change ensures the webview is notified even if the
+        // visible tile set is unchanged).
+        if (e.affectsConfiguration("claudeteam.autoCollapseUniformClusters")) {
           watcherHandle?.triggerTick();
         }
       },
