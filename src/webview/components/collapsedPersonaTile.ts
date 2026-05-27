@@ -585,11 +585,13 @@ function renderCompactInstanceRow(
   article.setAttribute("title", "Open agent transcript");
 
   // 86c9zqa75 — member-color paint mirrors the bare-tile rule in
-  // `agentTile.ts`. Uniform-cluster auto-collapse gates running tiles out
-  // of compact rows in practice (`computeIsUniform` returns false for
-  // state === "running"), so the branch is effectively unreachable at
-  // populate-time; the guard stays in place for forward-compat if a future
-  // spec widens uniform-cluster eligibility to running.
+  // `agentTile.ts`. Forward-compat guard (PR #98 NIT #3, Felix 2026-05-27):
+  // compact rows render only inside uniform clusters, and `computeIsUniform`
+  // returns `false` for `state === "running"` (see render.ts uniform-detection
+  // path) — so this branch is unreachable at populate-time today. Keep it in
+  // place because (a) future specs may widen uniform-cluster eligibility to
+  // running, and (b) the mirror with the bare-tile rule is the load-bearing
+  // invariant. Cheap to keep; expensive to re-derive after the spec widens.
   if (tile.state === "running" && tile.memberColor !== undefined) {
     article.style.setProperty("--ct-color-running-dot", tile.memberColor);
   }

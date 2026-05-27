@@ -83,7 +83,7 @@ describe("labelTextForState — spec §5.2 template coverage", () => {
 describe("renderHeaderChip — state matrix", () => {
   it("filter OFF + count 0 → aria-pressed=false, data-hide-finished=false, label 'Hide finished'", () => {
     const chip = renderHeaderChip({
-      hideFinished: false,
+      filterOn: false,
       hiddenCount: 0,
       postMessage: vi.fn(),
     });
@@ -106,7 +106,7 @@ describe("renderHeaderChip — state matrix", () => {
 
   it("filter ON + count 0 → aria-pressed=true, label 'Show finished — none yet' (Obs 8)", () => {
     const chip = renderHeaderChip({
-      hideFinished: true,
+      filterOn: true,
       hiddenCount: 0,
       postMessage: vi.fn(),
     });
@@ -125,7 +125,7 @@ describe("renderHeaderChip — state matrix", () => {
 
   it("filter ON + count 1 → label 'Show finished — 1 hidden' (Obs 8)", () => {
     const chip = renderHeaderChip({
-      hideFinished: true,
+      filterOn: true,
       hiddenCount: 1,
       postMessage: vi.fn(),
     });
@@ -139,7 +139,7 @@ describe("renderHeaderChip — state matrix", () => {
 
   it("filter ON + count 7 → label 'Show finished — 7 hidden' (Obs 8)", () => {
     const chip = renderHeaderChip({
-      hideFinished: true,
+      filterOn: true,
       hiddenCount: 7,
       postMessage: vi.fn(),
     });
@@ -152,7 +152,7 @@ describe("renderHeaderChip — state matrix", () => {
 
   it("includes a hidden count <span> reserved for future expansions", () => {
     const chip = renderHeaderChip({
-      hideFinished: true,
+      filterOn: true,
       hiddenCount: 3,
       postMessage: vi.fn(),
     });
@@ -173,7 +173,7 @@ describe("renderHeaderChip — click posts ui:set-config", () => {
   it("clicking the toggle when OFF posts { ui:set-config, hideFinishedAgents: true }", () => {
     const postMessage = vi.fn<[WebviewMessage], void>();
     const chip = renderHeaderChip({
-      hideFinished: false,
+      filterOn: false,
       hiddenCount: 0,
       postMessage,
     });
@@ -193,7 +193,7 @@ describe("renderHeaderChip — click posts ui:set-config", () => {
   it("clicking the toggle when ON posts { ui:set-config, hideFinishedAgents: false }", () => {
     const postMessage = vi.fn<[WebviewMessage], void>();
     const chip = renderHeaderChip({
-      hideFinished: true,
+      filterOn: true,
       hiddenCount: 4,
       postMessage,
     });
@@ -220,7 +220,7 @@ describe("renderHeaderChip — click posts ui:set-config", () => {
     // form-submit-equivalent: the click handler is the single source.
     const postMessage = vi.fn<[WebviewMessage], void>();
     const chip = renderHeaderChip({
-      hideFinished: false,
+      filterOn: false,
       hiddenCount: 0,
       postMessage,
     });
@@ -239,7 +239,7 @@ describe("renderHeaderChip — click posts ui:set-config", () => {
 
   it("optimistic UI flips data-hide-finished + aria-pressed + title immediately after click", () => {
     const chip = renderHeaderChip({
-      hideFinished: false,
+      filterOn: false,
       hiddenCount: 0,
       postMessage: vi.fn(),
     });
@@ -434,7 +434,7 @@ describe("renderHeaderChip — idle variant state matrix (spec 86c9zmyef §3)", 
   it("kind=idle, filter OFF + count 0 → data-hide-idle=false, label 'Hide idle'", () => {
     const chip = renderHeaderChip({
       kind: "idle",
-      hideFinished: false,
+      filterOn: false,
       hiddenCount: 0,
       postMessage: vi.fn(),
     });
@@ -460,7 +460,7 @@ describe("renderHeaderChip — idle variant state matrix (spec 86c9zmyef §3)", 
   it("kind=idle, filter ON + count 3 → label 'Show idle — 3 hidden'", () => {
     const chip = renderHeaderChip({
       kind: "idle",
-      hideFinished: true,
+      filterOn: true,
       hiddenCount: 3,
       postMessage: vi.fn(),
     });
@@ -481,7 +481,7 @@ describe("renderHeaderChip — idle variant state matrix (spec 86c9zmyef §3)", 
     const postMessage = vi.fn<[WebviewMessage], void>();
     const chip = renderHeaderChip({
       kind: "idle",
-      hideFinished: false,
+      filterOn: false,
       hiddenCount: 0,
       postMessage,
     });
@@ -501,7 +501,7 @@ describe("renderHeaderChip — idle variant state matrix (spec 86c9zmyef §3)", 
     const postMessage = vi.fn<[WebviewMessage], void>();
     const chip = renderHeaderChip({
       kind: "idle",
-      hideFinished: true,
+      filterOn: true,
       hiddenCount: 5,
       postMessage,
     });
@@ -520,7 +520,7 @@ describe("renderHeaderChip — idle variant state matrix (spec 86c9zmyef §3)", 
   it("kind=idle optimistic UI flips data-hide-idle + aria-pressed after click", () => {
     const chip = renderHeaderChip({
       kind: "idle",
-      hideFinished: false,
+      filterOn: false,
       hiddenCount: 0,
       postMessage: vi.fn(),
     });
@@ -537,7 +537,7 @@ describe("renderHeaderChip — idle variant state matrix (spec 86c9zmyef §3)", 
 
   it("kind omitted defaults to 'finished' (M5 back-compat)", () => {
     const chip = renderHeaderChip({
-      hideFinished: false,
+      filterOn: false,
       hiddenCount: 0,
       postMessage: vi.fn(),
     });

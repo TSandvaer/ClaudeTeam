@@ -370,7 +370,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   mount.appendChild(
     renderHeaderChip({
       kind: "finished",
-      hideFinished,
+      filterOn: hideFinished,
       hiddenCount,
       postMessage,
     }),
@@ -388,7 +388,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   mount.appendChild(
     renderHeaderChip({
       kind: "idle",
-      hideFinished: hideIdle,
+      filterOn: hideIdle,
       hiddenCount: hiddenIdleCount,
       postMessage,
     }),
