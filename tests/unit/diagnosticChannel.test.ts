@@ -407,7 +407,10 @@ describe("86c9zn7vw: per-agent state-transition lines", () => {
       emitted: true,
       state: makeState([
         makeSession("abcdefgh-1234-5678-90ab-cdef12345678", [
-          makeTile("agent-fedcba9876", "running"),
+          // Production agentIds are raw UUIDs — `collectAgentMetas` strips the
+          // `agent-` filename prefix before stamping the field (watcherLoop.ts
+          // ~:812). Use UUID-shape here so the short-id slice mirrors prod.
+          makeTile("fedcba98-7654-3210-abcd-ef1234567890", "running"),
         ]),
       ]),
     });
@@ -417,14 +420,14 @@ describe("86c9zn7vw: per-agent state-transition lines", () => {
       emitted: true,
       state: makeState([
         makeSession("abcdefgh-1234-5678-90ab-cdef12345678", [
-          makeTile("agent-fedcba9876", "finished"),
+          makeTile("fedcba98-7654-3210-abcd-ef1234567890", "finished"),
         ]),
       ]),
     });
     const ch = captured as unknown as FakeOutputChannel;
     const t = ch.lines.find((l) => l.includes("transition"))!;
     expect(t).toContain("session=abcdefgh");
-    expect(t).toContain("agent=agent-fe");
+    expect(t).toContain("agent=fedcba98");
     expect(t).toContain("running → finished");
     dispatcher.dispose();
   });
