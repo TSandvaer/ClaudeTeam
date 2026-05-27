@@ -62,22 +62,25 @@ describe("readActivity — real fixtures", () => {
     expect(got.lastTimestamp).toBe(Date.parse("2026-05-23T10:54:54.379Z"));
   });
 
-  it("subagent-finished.jsonl: extracts model + reports last activity (no closing-msg dependency)", async () => {
+  it("subagent-finished.jsonl: extracts model + reports last activity + flags isFinished (Obs 13)", async () => {
     const path = join(FIXTURES, "subagent-finished.jsonl");
     const got = await readActivity(path);
 
-    // Per Bram's M1-11 finding: in the wild, subagent JSONLs do NOT end
-    // with a closing assistant message — they end on a user tool_result.
-    // This fixture's line 7 IS a synthesized closing assistant text
-    // ("PR: https://...") so the tailer reports it as the last
-    // assistant message. The tailer does NOT claim "finished" — it
-    // just reports what it saw.
+    // Per Bram's Obs 13 triage (2026-05-26), the M1-11 claim that
+    // sub-agent JSONLs never end with a closing assistant message was
+    // wrong — completed background agents DO end on
+    // `type:"assistant", stop_reason:"end_turn"`. This fixture's line 7
+    // (a synthesized closing assistant text with stop_reason=end_turn) is
+    // now intentional rather than coincidental — it stands in for a real
+    // closing record.
     expect(got.model).toBe("claude-opus-4-7");
 
     // Line 7 is text-only — lastTool null is the correct projection.
     expect(got.lastTool).toBeNull();
     expect(got.mtimeMs).toBeGreaterThan(0);
     expect(got.lastTimestamp).toBe(Date.parse("2026-05-23T09:53:20.000Z"));
+    // Obs 13: the synthesized closing line has stop_reason=end_turn.
+    expect(got.isFinished).toBe(true);
   });
 
   it("subagent-malformed.jsonl: skips bad lines, returns sentinel when no valid assistant remains", async () => {
@@ -249,6 +252,114 @@ describe("readActivity — synthesized scenarios", () => {
     const got = await readActivity(path);
     expect(got.model).toBe("claude-opus-4-7");
     expect(got.lastTool).toBeNull();
+  });
+});
+
+// =============================================================================
+// Obs 13 / 86c9zmp5g — stop_reason=end_turn → isFinished:true
+// =============================================================================
+
+describe("readActivity — isFinished detection (Obs 13)", () => {
+  it("subagent-running.jsonl: no stop_reason on last assistant → isFinished:false", async () => {
+    // The fixture's last assistant message (line 18) is mid-action text;
+    // it has no stop_reason. The backward pass must NOT flag isFinished.
+    const path = join(FIXTURES, "subagent-running.jsonl");
+    const got = await readActivity(path);
+    expect(got.isFinished).toBe(false);
+  });
+
+  it("last assistant has stop_reason:end_turn → isFinished:true", async () => {
+    const path = join(tempDir, "closed.jsonl");
+    writeFileSync(
+      path,
+      [
+        `{"type":"assistant","message":{"model":"claude-opus-4-7","content":[{"type":"text","text":"start"}]},"timestamp":"2026-01-01T00:00:00Z"}`,
+        `{"type":"assistant","message":{"model":"claude-opus-4-7","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn"},"timestamp":"2026-01-01T00:00:30Z"}`,
+      ].join("\n") + "\n",
+    );
+
+    const got = await readActivity(path);
+    expect(got.isFinished).toBe(true);
+    // Other fields still resolve correctly.
+    expect(got.model).toBe("claude-opus-4-7");
+    expect(got.lastTool).toBeNull();
+  });
+
+  it("last assistant has stop_reason:tool_use → isFinished:false (only end_turn counts)", async () => {
+    // Mid-conversation assistant messages typically carry stop_reason:tool_use
+    // when they hand off to a tool. That's not a completion signal.
+    const path = join(tempDir, "tool-use.jsonl");
+    writeFileSync(
+      path,
+      [
+        `{"type":"assistant","message":{"model":"claude-opus-4-7","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}],"stop_reason":"tool_use"},"timestamp":"2026-01-01T00:00:00Z"}`,
+      ].join("\n") + "\n",
+    );
+
+    const got = await readActivity(path);
+    expect(got.isFinished).toBe(false);
+    expect(got.lastTool).toBe("Bash");
+  });
+
+  it("last assistant has stop_reason:null → isFinished:false (mid-write snapshot)", async () => {
+    // Per Obs 13 triage E2: 4/18 agents in session 5652d46e captured with
+    // empty stop_reason (mid-write at capture time). Must NOT flag finished.
+    const path = join(tempDir, "midwrite.jsonl");
+    writeFileSync(
+      path,
+      [
+        `{"type":"assistant","message":{"model":"claude-opus-4-7","content":[{"type":"text","text":"thinking"}],"stop_reason":null},"timestamp":"2026-01-01T00:00:00Z"}`,
+      ].join("\n") + "\n",
+    );
+
+    const got = await readActivity(path);
+    expect(got.isFinished).toBe(false);
+  });
+
+  it("last assistant has stop_reason:'' (empty string) → isFinished:false", async () => {
+    // Same class as null — observed in session 5652d46e mid-write captures.
+    const path = join(tempDir, "empty-stop.jsonl");
+    writeFileSync(
+      path,
+      [
+        `{"type":"assistant","message":{"model":"claude-opus-4-7","content":[{"type":"text","text":"x"}],"stop_reason":""},"timestamp":"2026-01-01T00:00:00Z"}`,
+      ].join("\n") + "\n",
+    );
+
+    const got = await readActivity(path);
+    expect(got.isFinished).toBe(false);
+  });
+
+  it("earlier assistant has end_turn but LAST is mid-action → isFinished:false (backward pass picks LAST)", async () => {
+    // Defensive: only the LAST assistant in the backward pass governs.
+    // If a transcript happens to contain an earlier end_turn (e.g. resumed
+    // session), and the LAST assistant is mid-action, we are NOT finished.
+    const path = join(tempDir, "resumed.jsonl");
+    writeFileSync(
+      path,
+      [
+        `{"type":"assistant","message":{"model":"claude-opus-4-7","content":[{"type":"text","text":"first turn"}],"stop_reason":"end_turn"},"timestamp":"2026-01-01T00:00:00Z"}`,
+        `{"type":"user","message":{"role":"user","content":"continue"},"timestamp":"2026-01-01T00:01:00Z"}`,
+        `{"type":"assistant","message":{"model":"claude-opus-4-7","content":[{"type":"tool_use","id":"t1","name":"Grep","input":{}}],"stop_reason":"tool_use"},"timestamp":"2026-01-01T00:01:30Z"}`,
+      ].join("\n") + "\n",
+    );
+
+    const got = await readActivity(path);
+    expect(got.isFinished).toBe(false);
+    expect(got.lastTool).toBe("Grep");
+  });
+
+  it("missing file: isFinished defaults to false (EMPTY_ACTIVITY)", async () => {
+    const path = join(tempDir, "missing.jsonl");
+    const got = await readActivity(path);
+    expect(got.isFinished).toBe(false);
+  });
+
+  it("empty file: isFinished:false", async () => {
+    const path = join(tempDir, "empty.jsonl");
+    writeFileSync(path, "");
+    const got = await readActivity(path);
+    expect(got.isFinished).toBe(false);
   });
 });
 

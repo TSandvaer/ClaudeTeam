@@ -88,16 +88,21 @@ Downstream effect: `buildActivity` in `src/extension/state/reducer.ts` currently
 
 **Deferral:** Extracting tool input arguments into `SubagentActivity.lastToolArg` is filed as a future ticket (`tailer-extract-tool-args`). It is not in the current M2 scope (pending sponsor approval of M2 lanes). Until that ticket ships, `tool:<tool-name>` without an argument summary is the defined V1 behavior.
 
-### JSONL closing semantics (verified, 2026-05-23)
+### JSONL closing semantics (revised 2026-05-26 — Obs 13)
 
-**A subagent JSONL never carries a closing assistant message.** Every subagent JSONL examined across 16 agents in two ClaudeTeam sessions ended on a `type: "user"` tool_result record — the agent's final report turn is NOT written into the subagent's own JSONL. The closing result lives exclusively in the **parent** JSONL as a `tool_result` content entry for the `Agent`/`Task` tool_use, identified by `toolUseId` (see §4).
+**A completed subagent JSONL DOES end on a closing assistant record with `message.stop_reason === "end_turn"`.** The earlier M1-11 claim (2026-05-23) — "a subagent JSONL never carries a closing assistant message" — was WRONG. Re-examination 2026-05-26 of 16 completed background agents in session `baf09ef7` showed 16/16 end on `type: "assistant", stop_reason: "end_turn"`. The original M1-11 finding looked at JSONLs from agents still mid-write at capture time (4/18 in session `5652d46e` ended on `stop_reason: ""` because they hadn't finished the closing turn yet) and confused "not-yet-written" with "never-written".
 
-Implications for the tailer:
-- Do NOT use "last record is type:assistant with stop_reason:end_turn" as a finished-detection heuristic — you will never see it in real data.
-- The reliable finished signal is: parent JSONL contains a `tool_result` with `tool_use_id == meta.json.toolUseId`.
-- The `subagent-finished.jsonl` test fixture (`tests/fixtures/subagent-finished.jsonl`) includes one synthesized line 7 with `stop_reason: "end_turn"` for parser branch coverage only — this is marked `"requestId": "req_SYNTHESIZED"` and does NOT reflect real on-disk behavior.
+**Implications for the tailer + reducer:**
+- **Foreground (synchronous) Agent completions:** parent JSONL contains a `tool_result` with `tool_use_id == meta.json.toolUseId`; `readFinishedToolUseIds` picks this up authoritatively (with the `finishedAtMs` timestamp).
+- **Background (`run_in_background: true`) dispatches:** parent JSONL writes ONLY the async-launched ack at spawn time (skipped by `readFinishedToolUseIds` since PR #82 via the `toolUseResult.isAsync === true` discriminator) — NO second `tool_result` ever lands, even hours after the child completes. The ONLY available completion signal is in the child's own JSONL: the last `type: "assistant"` record's `message.stop_reason === "end_turn"`.
+- **Detection mechanism:** `subagentTailer.readActivity()` extracts `isFinished: boolean` (true when the LAST `type:"assistant"` record in the backward pass has `stop_reason === "end_turn"`). The reducer's `inferState` consults `activity.isFinished` between the parent-signal check and the JSONL-mtime running/idle gate (Obs 13, ticket `86c9zmp5g`).
 
-Source: `team/bram-research/m1-fixtures-2026-05-23.md` §AC4.
+**Caveat:** verified on Claude Code v2.1.145 only. Pre-v2.1.145 closing semantics not re-probed; if older sessions emit a different shape the tailer falls back to `isFinished: false` because the gate requires an exact `"end_turn"` string match.
+
+**Fixtures:**
+- `tests/fixtures/subagent-finished.jsonl` line 7 (`stop_reason: "end_turn"`, `requestId: "req_SYNTHESIZED"`) — was correct by coincidence under the old framing; now correct on purpose as a stand-in for a real closing record.
+
+Source: `team/bram-research/obs13-background-finished-detection-2026-05-26.md` (current authority). Original M1-11 framing in `team/bram-research/m1-fixtures-2026-05-23.md` §AC4 superseded.
 
 ## 4. Subagent metadata
 
@@ -191,8 +196,9 @@ A subagent is `running` if:
 1. The session it belongs to has a live `~/.claude/sessions/{pid}.json` AND its PID maps to an actual `claude.exe` process.
 2. The subagent JSONL mtime is < ~10s old.
 
-A subagent is `finished` if:
-- The parent transcript has a `tool_result` entry with `tool_use_id == meta.json.toolUseId`.
+A subagent is `finished` if (any of):
+- The parent transcript has a `tool_result` entry with `tool_use_id == meta.json.toolUseId` (foreground / synchronous completions — see "Finished timestamp source" below for the authoritative `finishedAtMs` source).
+- The sub-agent's own JSONL ends on a `type: "assistant"` record with `message.stop_reason === "end_turn"` (background completions — Obs 13 / `86c9zmp5g`; the only available signal because the parent JSONL never receives a real `tool_result` for `run_in_background: true` dispatches, only the async-launched ack skipped per "Background-dispatch acknowledgment" below).
 - OR a `SubagentStop` hook event was observed (post-V1, when the hook tap is online).
 
 Otherwise → `idle` (PID alive but JSONL stale > 10s).

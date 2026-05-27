@@ -307,6 +307,158 @@ describe("buildAgentTree", () => {
       // Should be idle (stale), not finished
       expect(tile!.state).toBe("idle");
     });
+
+    // ----------------------- Obs 13 / 86c9zmp5g ------------------------
+    // Background sub-agents' parent JSONL never receives a real tool_result —
+    // only the async-launched ack (skipped by readFinishedToolUseIds since
+    // PR #82). The reducer must consult `activity.isFinished` (set by the
+    // child-JSONL tailer when stop_reason=end_turn) as a parallel finished
+    // signal, between the parent-signal check and the JSONL-mtime gate.
+    it("activity.isFinished=true → finished even when finishedIds is empty (Obs 13)", () => {
+      const session = makeSession();
+      const agentId = "agent013a";
+      const meta = makeMeta({ agentType: "felix", description: "Felix background completion" });
+      // Simulate a background agent's recent flush: mtime is fresh enough
+      // that without the isFinished gate the reducer would emit "running"
+      // and then flip to "idle" after 10s — never reaching "finished".
+      const activity = makeActivity({
+        mtimeMs: NOW_MS - 2_000,
+        isFinished: true,
+      });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(), // EMPTY — parent JSONL had no real tool_result for this background dispatch
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.state).toBe("finished");
+      // No finishedAtMs in the map → buildActivity falls back to bare
+      // "finished" (the child-JSONL path doesn't carry a parent-authoritative
+      // timestamp; the agent's own stop_reason record has its own timestamp
+      // but the reducer currently doesn't thread it through — accepted scope,
+      // see Obs 13 triage doc Implications §"Fix owner: Felix").
+      expect(tile!.activity).toBe("finished");
+    });
+
+    it("activity.isFinished=true overrides idle (stale mtime) — Obs 13 prevents stuck-at-idle", () => {
+      // The original sponsor-observed Obs 13 symptom: a background agent
+      // completed but the dashboard stuck on `idle 162s+` / `idle 279s+`
+      // because the reducer only saw a stale mtime. The new gate fixes it.
+      const session = makeSession();
+      const agentId = "agent013b";
+      const meta = makeMeta({ agentType: "felix", description: "Felix stuck-idle pre-fix" });
+      const activity = makeActivity({
+        mtimeMs: NOW_MS - 300_000, // 5 minutes stale — pre-fix would render "idle 300s"
+        isFinished: true,
+      });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.state).toBe("finished");
+      // Negative path: the pre-fix "idle 300s" rendering must NOT appear.
+      expect(tile!.activity).not.toMatch(/^idle /);
+    });
+
+    it("activity.isFinished=false → reducer uses the existing running/idle/error path", () => {
+      // Negative regression: an explicit false (or missing) must NOT push
+      // to finished. The existing mtime-based gate runs as before.
+      const session = makeSession();
+      const agentId = "agent013c";
+      const meta = makeMeta({ agentType: "felix", description: "Felix still running" });
+      const activity = makeActivity({
+        mtimeMs: NOW_MS - 2_000,
+        isFinished: false,
+      });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.state).toBe("running");
+    });
+
+    it("activity.isFinished undefined (legacy callers / pre-Obs-13 fixtures) → treated as false", () => {
+      // The field is optional on SubagentActivity; absence must not crash
+      // and must not be interpreted as truthy.
+      const session = makeSession();
+      const agentId = "agent013d";
+      const meta = makeMeta({ agentType: "felix", description: "Felix legacy activity" });
+      // Build an activity WITHOUT isFinished — exercises the optional path.
+      const activity: SubagentActivity = {
+        model: "claude-opus-4-7",
+        lastTool: "Edit",
+        lastTimestamp: NOW_MS - 5_000,
+        mtimeMs: NOW_MS - 5_000,
+        // no isFinished key
+      };
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      // mtime is fresh — running path wins.
+      expect(tile!.state).toBe("running");
+    });
+
+    it("finishedIds wins over activity.isFinished (foreground signal is authoritative)", () => {
+      // When both signals are present (rare — a foreground completion would
+      // also have stop_reason=end_turn in the child JSONL), the parent-side
+      // finishedIds carries the authoritative finishedAtMs → its priority
+      // is higher so the elapsed-time suffix renders.
+      const session = makeSession();
+      const agentId = "agent013e";
+      const meta = makeMeta({ agentType: "felix", description: "Felix both signals" });
+      const activity = makeActivity({
+        mtimeMs: NOW_MS - 2_000,
+        isFinished: true,
+      });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+      const finished: FinishedMap = new Map([[agentId, NOW_MS - 4_000]]); // 4s ago
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        finished,
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.state).toBe("finished");
+      // The parent signal's elapsed-time wins; bare "finished" would mean
+      // the isFinished branch fired (no finishedAtMs threaded through).
+      expect(tile!.activity).toBe("finished 4s");
+    });
   });
 
   // ---------------------------------------------------------------- matching

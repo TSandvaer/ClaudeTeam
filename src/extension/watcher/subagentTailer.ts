@@ -24,12 +24,34 @@
 //    most recent `type:"assistant"` record's LAST `tool_use` content
 //    entry's `name` is the agent's current/last activity.
 //
-// 4. NO "FINISHED" INFERENCE. Per Bram's M1-11 finding (data-sources.md
-//    §3 "JSONL closing semantics"), subagent JSONLs NEVER carry a closing
-//    assistant message in the wild. The reducer (M1-09) detects finished
-//    state by cross-referencing the parent transcript's `tool_result`
-//    with `meta.json.toolUseId`. This tailer reports "what was last
-//    happening" regardless of whether the agent has actually finished.
+// 4. CHILD-JSONL FINISHED SIGNAL. Per Bram's Obs 13 triage 2026-05-26
+//    (`team/bram-research/obs13-background-finished-detection-2026-05-26.md`),
+//    the M1-11 finding ("subagent JSONLs NEVER carry a closing assistant
+//    message") was WRONG. Re-examination of 16 completed background agents
+//    across two sessions showed every one ends on a
+//    `type:"assistant"` record with `message.stop_reason === "end_turn"`.
+//    The earlier M1-11 finding looked at agents that were still mid-write
+//    at capture time and confused "not-yet-written" with "never-written".
+//
+//    This tailer now sets `isFinished = true` when the LAST `type:"assistant"`
+//    record in the backward pass has `stop_reason === "end_turn"`. The
+//    reducer (M1-09 + Obs 13) consults this BEFORE the JSONL-mtime
+//    `running`/`idle` decision so background dispatches transition to
+//    `finished` without needing a parent-JSONL completion record (which
+//    Claude Code never writes for `run_in_background: true` dispatches —
+//    only an `isAsync` ack at spawn time, already skipped by
+//    `readFinishedToolUseIds` since PR #82).
+//
+//    Caveat: verified on Claude Code v2.1.145 only. Pre-v2.1.145 closing
+//    semantics not re-probed; if older sessions emit a different shape
+//    the tailer falls back to `isFinished = false` (the prior behavior)
+//    because the gate requires an exact `end_turn` string match.
+//
+//    Foreground (synchronous) Agent completions are unaffected — their
+//    parent JSONL still receives a real `tool_result` that
+//    `readFinishedToolUseIds` picks up; the reducer's parent-signal path
+//    still fires first and the `isFinished` path is the fallback only
+//    needed for background dispatches.
 //
 // 5. MALFORMED LINES. We never throw on a single bad line — we skip it
 //    and continue. JSONL is line-oriented; one corruption (truncated
@@ -58,6 +80,7 @@ const EMPTY_ACTIVITY: SubagentActivity = {
   lastTool: null,
   lastTimestamp: 0,
   mtimeMs: 0,
+  isFinished: false,
 };
 
 /**
@@ -132,6 +155,7 @@ export async function readActivity(jsonlPath: string): Promise<SubagentActivity>
   let model: string | null = null;
   let lastTool: string | null = null;
   let lastTimestamp = 0;
+  let isFinished = false;
 
   // Forward pass: first assistant with a resolved model wins.
   for (const line of lines) {
@@ -150,6 +174,11 @@ export async function readActivity(jsonlPath: string): Promise<SubagentActivity>
   // We capture lastTimestamp from the most recent assistant we see, even
   // if it has no tool_use (text-only). That matches AC3: "last assistant
   // message has only text content (lastTool = null, model still resolved)".
+  //
+  // Obs 13 (86c9zmp5g): also detect `message.stop_reason === "end_turn"` on
+  // the LAST assistant — that's the finished signal for background
+  // dispatches whose parent JSONL never receives a real tool_result. See
+  // design note #4 above for the full rationale.
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i]!;
     if (line.length === 0) continue;
@@ -159,6 +188,7 @@ export async function readActivity(jsonlPath: string): Promise<SubagentActivity>
 
     lastTimestamp = extractTimestampMs(rec);
     lastTool = extractLastToolName(rec); // null if text-only
+    isFinished = extractStopReason(rec) === "end_turn";
     break;
   }
 
@@ -167,6 +197,7 @@ export async function readActivity(jsonlPath: string): Promise<SubagentActivity>
     lastTool,
     lastTimestamp,
     mtimeMs,
+    isFinished,
   };
 }
 
@@ -247,6 +278,22 @@ function extractTimestampMs(rec: Record<string, unknown>): number {
   if (typeof ts !== "string") return 0;
   const parsed = Date.parse(ts);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Extract `message.stop_reason` if present and a string. Returns null when
+ * absent, null, or non-string. Per Obs 13 triage (2026-05-26), completed
+ * background sub-agents end their JSONL with a `type: "assistant"` record
+ * carrying `message.stop_reason === "end_turn"` — the only available
+ * completion signal for background dispatches.
+ *
+ * The exact string match is the gate; anything other than `"end_turn"`
+ * (including `null`, `""`, or `"tool_use"`) is treated as not-finished.
+ */
+function extractStopReason(rec: Record<string, unknown>): string | null {
+  const msg = rec["message"] as Record<string, unknown>;
+  const sr = msg["stop_reason"];
+  return typeof sr === "string" ? sr : null;
 }
 
 /** Narrow unknown to NodeJS.ErrnoException for `.code` inspection. */
