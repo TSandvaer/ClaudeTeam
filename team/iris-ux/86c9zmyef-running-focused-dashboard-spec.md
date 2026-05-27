@@ -177,7 +177,7 @@ if (tile.memberColor !== undefined) {
 Sponsor-supplied colors can be near-invisible against either VS Code's dark or light theme background. The webview cannot solve this universally (the sponsor chose the color), but the spec sets three guardrails:
 
 1. **Documented contrast suggestion.** `roster-matching.md` already documents the `color` field; the spec extends that doc with a brief note: "*Pick a color that contrasts with both light and dark editor backgrounds. Material palette mid-saturation values (e.g. `#5d8aa8`, `#9caf88`, `#cd853f`) typically pass; pure black (`#000`) or pure white (`#fff`) will fail one theme.*" No hard rule — sponsor authority.
-2. **Outline-on-pulse fallback (M4-01 §2.4 inheritance).** The pulse's `box-shadow` halo (currently `--ct-color-state-running` with reduced alpha) **continues to use the semantic token, NOT the memberColor**. This means the halo remains visible (M4-01 default green halo) even when the dot itself is hard to see against the background — the halo provides a constant contrast fallback. Subtle, but it means a hard-to-see memberColor still has *some* signal. Spec marks this as a guardrail not an end-state — if dogfood shows the dual-color (member dot + green halo) reads as a bug, the halo can be flipped to consume `--ct-color-running-dot` too (one-line change).
+2. **Sponsor selects the color; webview does not augment contrast.** No automatic outline / halo / shadow guardrail is layered behind a low-contrast `memberColor` — live `src/webview/styles/dashboard.css` paints the running dot as opacity-only (verified during PR #98 impl). Contrast is left to sponsor color selection at roster-yaml time; the documented contrast suggestion (item 1 above) is the only nudge. Members with `color` unset or dropped-as-invalid fall back to `--ct-color-state-running` per §2.3 Option A and §2.6 — those tiles render with the same default visibility as pre-reframe.
 3. **Validation drops invalid colors with a warning surface.** See §2.6.
 
 ### 2.6 Invalid-color handling
@@ -587,13 +587,13 @@ The `color` field is already documented as optional. The impl docs PR (downstrea
 
 - **ClickUp ticket `86c9zmyef`** — feature ask (running-focused dashboard reframe).
 - **Sponsor's verbatim intent** — paraphrased above (no quoted-verbatim file artifact yet; sponsor's dispatch brief is the source).
-- **`src/shared/types.ts:104-116`** — `Member.color?: string` already on schema (live `main` read).
+- **`src/shared/types.ts:105-133`** — `Member` interface (carries `Member.color?: string` at line 130) already on schema (live `main` read).
 - **`src/shared/types.ts:259`** — `AgentState` enum (live `main` read).
 - **`src/shared/types.ts:265-321`** — `AgentTile` shape (informs §2.2 `memberColor` placement).
 - **`src/shared/types.ts:495-547`** — `AgentTree.config` block (informs §3 mirror pattern).
 - **`src/webview/components/agentTile.ts:208-215`** — current state-dot DOM (informs §2.4 paint location).
 - **`src/webview/styles/dashboard.css:247-274`** — current `.state-dot` CSS (informs §2.4 fallback rule).
-- **`src/webview/styles/dashboard.css:56-60`** — semantic state-color tokens (informs §1.3 / §2.5).
+- **`src/webview/styles/dashboard.css:58-61`** — semantic state-color tokens (informs §1.3 / §2.5).
 - **`package.json:96-115`** — existing dashboard config scalars (informs §3.2 + §4.3 naming + structure).
 - **`.claude/docs/roster-matching.md:13-28, 56-73`** — roster YAML schema + config locations.
 - **`team/iris-ux/m4-polish-spec.md` §1.2.3 + §2.2 + §2.4** — token system + state visuals + pulse animation.
