@@ -220,6 +220,20 @@ export function writeParentJsonl(
   opts: {
     title?: string;
     finishedToolUseIds?: string[];
+    /**
+     * 86ca03nww: optional sequence of `custom-title` records to append after
+     * the ai-title. Each entry becomes a separate record so multi-rename
+     * "last-wins" semantics can be exercised. Pass a single-string array for
+     * the simple case.
+     */
+    customTitles?: string[];
+    /**
+     * 86ca03nww: optional top-level `gitBranch` value. When supplied, the
+     * helper writes an `attachment` record carrying the field. Pass a single
+     * value (real JSONLs carry the same branch on many records, so a single
+     * attachment is enough to exercise the extractor).
+     */
+    gitBranch?: string;
   } = {},
 ): string {
   const path = parentJsonlPath(root, cwd, sessionId);
@@ -233,6 +247,34 @@ export function writeParentJsonl(
         sessionId,
         timestamp: new Date().toISOString(),
         uuid: `ai-title-${sessionId.slice(0, 8)}`,
+      }),
+    );
+  }
+
+  // 86ca03nww: custom-title records (sponsor renames). Each entry is
+  // appended in declaration order so tests can assert last-write-wins.
+  for (const ct of opts.customTitles ?? []) {
+    lines.push(
+      JSON.stringify({
+        type: "custom-title",
+        sessionId,
+        customTitle: ct,
+      }),
+    );
+  }
+
+  // 86ca03nww: synthesize one attachment record carrying the top-level
+  // gitBranch field. Real on-disk JSONLs include `gitBranch` on attachment,
+  // user, assistant, and system records — the parser accepts all four types
+  // (verified PR #104 review NIT 4); attachment is the most representative.
+  if (typeof opts.gitBranch === "string" && opts.gitBranch.length > 0) {
+    lines.push(
+      JSON.stringify({
+        type: "attachment",
+        gitBranch: opts.gitBranch,
+        sessionId,
+        timestamp: new Date().toISOString(),
+        uuid: `attachment-${sessionId.slice(0, 8)}`,
       }),
     );
   }

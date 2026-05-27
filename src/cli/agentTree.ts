@@ -95,20 +95,33 @@ function parseArgs(argv: string[]): { claudeHome: string; rosterPath: string } {
  * acknowledgments, not completion signals. See watcherLoop.ts copy for
  * full rationale + verified evidence.
  *
- * Defensive contracts: read error → `{ title: null, finishedIds: empty }`;
- * single-line JSON.parse failure → skip that line.
+ * ## Custom-title + git-branch extraction (86ca03nww)
+ *
+ * Last-write-wins for both fields (equivalent to scan-backward-from-EOF-
+ * first-match). `customTitle` from `type: "custom-title"` records;
+ * `gitBranch` from the top-level field on `attachment` / `user` / `assistant`
+ * / `system` records. Whitespace-only normalizes to undefined. See
+ * `watcherLoop.ts` copy for full rationale + PR #104 review NIT references.
+ *
+ * Defensive contracts: read error → `{ title: null, finishedIds: empty,
+ * customTitle: undefined, gitBranch: undefined }`; single-line JSON.parse
+ * failure → skip that line.
  */
 function readSessionMetadata(jsonlPath: string): {
   title: string | null;
   finishedIds: Map<string, number>;
+  customTitle: string | undefined;
+  gitBranch: string | undefined;
 } {
   const finishedIds = new Map<string, number>();
   let title: string | null = null;
+  let customTitle: string | undefined = undefined;
+  let gitBranch: string | undefined = undefined;
   let raw: string;
   try {
     raw = readFileSync(jsonlPath, "utf8");
   } catch {
-    return { title: null, finishedIds };
+    return { title: null, finishedIds, customTitle: undefined, gitBranch: undefined };
   }
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) continue;
@@ -120,10 +133,29 @@ function readSessionMetadata(jsonlPath: string): {
     }
     const recType = rec["type"];
 
+    // 86ca03nww: gitBranch top-level field on multiple record types
+    // (attachment / user / assistant / system). Last-write-wins.
+    const gb = rec["gitBranch"];
+    if (typeof gb === "string") {
+      const trimmed = gb.trim();
+      if (trimmed.length > 0) gitBranch = trimmed;
+    }
+
     // Title branch.
     if (recType === "ai-title" && title === null) {
       const t = rec["title"];
       if (typeof t === "string" && t.length > 0) title = t;
+      continue;
+    }
+
+    // 86ca03nww: custom-title branch (sponsor renames). Last-write-wins +
+    // JSON.parse + named-field access for key-order tolerance per NIT 2.
+    if (recType === "custom-title") {
+      const ct = rec["customTitle"];
+      if (typeof ct === "string") {
+        const trimmed = ct.trim();
+        if (trimmed.length > 0) customTitle = trimmed;
+      }
       continue;
     }
 
@@ -163,7 +195,7 @@ function readSessionMetadata(jsonlPath: string): {
       }
     }
   }
-  return { title, finishedIds };
+  return { title, finishedIds, customTitle, gitBranch };
 }
 
 /**
@@ -255,8 +287,12 @@ async function collect(claudeHome: string): Promise<{
     // 86c9zfmke: single-pass parent JSONL scan — fuses former
     // readSessionTitle + readFinishedToolUseIds into one read + one
     // line-iteration. See readSessionMetadata above.
-    const { title: rawTitle, finishedIds: finishedToolUseIds } =
-      readSessionMetadata(parentJsonlPath);
+    const {
+      title: rawTitle,
+      finishedIds: finishedToolUseIds,
+      customTitle,
+      gitBranch,
+    } = readSessionMetadata(parentJsonlPath);
     const title = rawTitle ?? "(no title yet)";
 
     // Collect agent metas (sync).
@@ -283,7 +319,15 @@ async function collect(claudeHome: string): Promise<{
       allActivities.set(agentId, activity);
     }
 
-    agentData.push({ sessionId: session.sessionId, agents, title });
+    agentData.push({
+      sessionId: session.sessionId,
+      agents,
+      title,
+      // 86ca03nww: spread-only-when-defined keeps the CLI driver back-compat
+      // with sessions where no rename / no JSONL gitBranch field exists.
+      ...(customTitle !== undefined ? { customTitle } : {}),
+      ...(gitBranch !== undefined ? { gitBranch } : {}),
+    });
   }
 
   return { sessions, agentData, activities: allActivities, finishedIds };
