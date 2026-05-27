@@ -142,6 +142,29 @@ body {
   font-style: italic;
 }
 
+/* 86ca03nww — gitBranch chip near the session title. Small monospaced badge
+ * with a subtle border (no solid fill — leaves the running-state dots /
+ * tile content as the saturation focus per spec 86c9zmyef). Uses VS Code
+ * theme variables so the chip reads correctly in both light and dark themes.
+ */
+.session-git-branch {
+  padding: 0 var(--ct-space-xs);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-chip);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+  color: var(--ct-color-fg-muted);
+  /* Keep the chip together — branch names can include `/` and `-` that the
+   * browser would otherwise opportunistically wrap on. */
+  white-space: nowrap;
+  /* Truncate VERY long branch names defensively; we don't have a length
+   * limit on the host side (OOS) but a runaway value shouldn't push the
+   * dead-badge off the right edge. */
+  max-width: 28em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .session-dead-badge {
   margin-left: auto;
   padding: 0 var(--ct-space-s);

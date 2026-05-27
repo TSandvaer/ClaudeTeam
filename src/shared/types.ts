@@ -468,8 +468,48 @@ export interface SessionTree {
   /**
    * Session title from the `ai-title` JSONL record.
    * "(no title yet)" when no ai-title record found.
+   *
+   * Pre-86ca03nww: the only label surface on the session card. Post-86ca03nww:
+   * one of three resolved by `resolveSessionLabel` (priority:
+   * `customTitle > aiTitle > workspace-folder fallback`). `title` is the raw
+   * `ai-title` value and remains on the wire for back-compat (CLI presenter,
+   * older tests, diagnostic panel); the webview uses `resolveSessionLabel` to
+   * pick the display label.
    */
   title: string;
+  /**
+   * Sponsor-authored session rename from the `custom-title` JSONL record
+   * (86ca03nww). Highest-priority label surface — `resolveSessionLabel`
+   * returns this when defined and non-empty.
+   *
+   * Source: `~/.claude/projects/{slug}/{sessionId}.jsonl` `type: "custom-title"`
+   * records (schema: `{type, sessionId, customTitle}`). The parser scans
+   * backward from EOF and picks the FIRST match — Claude Code itself uses
+   * the LAST `customTitle` written, and EOF-first-backward is the cheap way
+   * to converge on that.
+   *
+   * Absent when the sponsor has never renamed the session. Empty / whitespace-
+   * only values are normalized to undefined by the parser so the resolver's
+   * priority chain falls through to `aiTitle`.
+   */
+  customTitle?: string;
+  /**
+   * Active git branch at the time of the latest user/assistant/system/attachment
+   * record in the session JSONL (86ca03nww). Used as a small chip near the
+   * title on the session card — high signal for ticket / feature branch context.
+   *
+   * Source: top-level `gitBranch` field on `attachment`, `user`, `assistant`,
+   * `system` records in the session JSONL (per Felix's PR #104 review NIT 4,
+   * verified against ClaudeTeam session 07e66f5e — 620 records carrying the
+   * field across the four types). The parser picks the LAST occurrence
+   * encountered when scanning forward, matching Claude Code's own behavior
+   * (extension.js `ba` function takes the last `gitBranch` in the JSONL tail).
+   *
+   * Absent when the JSONL has no records carrying the field. NOT used in the
+   * label resolution chain — this is a complementary display surface (chip),
+   * not a fallback for the title text.
+   */
+  gitBranch?: string;
   /**
    * Rostered tiles grouped by team.
    * Key = teamId; value = ordered list of `RosterTileEntry` entries
@@ -678,4 +718,100 @@ export interface StateDelta {
   updated: Array<{ sessionId: string; tile: AgentTile }>;
   /** Tiles that disappeared. Identified by `sessionId:agentId`. */
   removed: TileKey[];
+}
+
+// =============================================================================
+// Session-label resolution (86ca03nww)
+// =============================================================================
+
+/**
+ * Subset of `SessionTree` the resolver actually reads. Accepts the host-side
+ * `SessionTree`, the webview-side `WebviewSessionTree`, AND fixture / test
+ * shapes that only carry the three label-relevant fields — keeps the helper
+ * usable in unit tests without constructing a full tree.
+ */
+export interface SessionLabelInputs {
+  /** Raw `ai-title` JSONL value, or `"(no title yet)"` sentinel. */
+  title: string;
+  /** Sponsor rename from `custom-title` JSONL record. Absent → fall through. */
+  customTitle?: string | undefined;
+  /** Project working directory; basename feeds the workspace-folder fallback. */
+  cwd: string;
+}
+
+/**
+ * Sentinel value `SessionTree.title` carries when no `ai-title` record was
+ * found in the parent JSONL (see `readSessionMetadata`). Exported so the
+ * resolver and any future consumer can treat it as "ai-title absent" without
+ * hard-coding the literal.
+ */
+export const NO_AI_TITLE_SENTINEL = "(no title yet)" as const;
+
+/**
+ * Resolve the session card's display label per the locked vocabulary contract
+ * (sponsor 2-question approval 2026-05-27):
+ *
+ *   customTitle > aiTitle > workspace-folder fallback (basename of cwd)
+ *
+ * Empty / whitespace-only `customTitle` falls through. The `aiTitle` tier
+ * fires when `title` is a non-empty string AND not the `(no title yet)`
+ * sentinel. The workspace-folder fallback returns the basename of `cwd` —
+ * portable across `\` (Windows) and `/` (POSIX) separators; empty string when
+ * `cwd` itself is empty/whitespace (defensive — Claude Code session files
+ * always carry a non-empty `cwd` in practice).
+ *
+ * Pure function; no filesystem reads, no VS Code API. Safe to call repeatedly
+ * during render. Distinct from `SessionTree.title` which remains the raw
+ * `ai-title` JSONL value on the wire (back-compat with CLI presenter,
+ * diagnostic panel, older tests).
+ *
+ * Source: `team/bram-research/86ca00xcd-claude-vscode-label-surfaces-2026-05-27.md`
+ *         §"Display priority suggestion"; `.claude/docs/vscode-extension-conventions.md`
+ *         §"Session label resolution".
+ */
+export function resolveSessionLabel(rec: SessionLabelInputs): string {
+  // Tier 1: sponsor-authored `customTitle`.
+  if (typeof rec.customTitle === "string") {
+    const t = rec.customTitle.trim();
+    if (t.length > 0) return t;
+  }
+  // Tier 2: AI-generated `aiTitle` (the existing `title` field). Treat the
+  // sentinel `(no title yet)` as "absent" so it does NOT win over the
+  // workspace-folder fallback.
+  if (typeof rec.title === "string") {
+    const t = rec.title.trim();
+    if (t.length > 0 && t !== NO_AI_TITLE_SENTINEL) return t;
+  }
+  // Tier 3: workspace-folder fallback — basename of cwd.
+  return workspaceFolderName(rec.cwd);
+}
+
+/**
+ * Extract the workspace folder name (basename) from a `cwd` path. Portable
+ * across Windows backslash and POSIX forward-slash separators since the
+ * sponsor's machine runs Windows but `cwd` values from Claude Code carry
+ * either form (e.g. `c:\Trunk\PRIVATE\ClaudeTeam`, `c:/Trunk/PRIVATE/ClaudeTeam`).
+ *
+ * Returns `""` when `cwd` is empty / whitespace-only / consists entirely of
+ * trailing separators — defensive; production session files always carry a
+ * real path.
+ *
+ * Exported for direct unit-test coverage. Not intended for general path
+ * manipulation — for that, use `node:path`.
+ */
+export function workspaceFolderName(cwd: string): string {
+  if (typeof cwd !== "string") return "";
+  // Strip trailing separators (e.g. `c:\\foo\\` → `c:\\foo`) so the basename
+  // is the last non-empty segment.
+  let s = cwd;
+  while (s.length > 0 && (s.endsWith("\\") || s.endsWith("/"))) {
+    s = s.slice(0, -1);
+  }
+  if (s.trim().length === 0) return "";
+  // Split on either separator and take the last non-empty segment.
+  const idxBack = s.lastIndexOf("\\");
+  const idxFwd = s.lastIndexOf("/");
+  const idx = Math.max(idxBack, idxFwd);
+  if (idx < 0) return s; // no separator — the entire string is the name
+  return s.slice(idx + 1);
 }

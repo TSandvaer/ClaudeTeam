@@ -989,6 +989,78 @@ describe("buildAgentTree", () => {
     expect(tree.sessions[0]!.title).toBe("(no title yet)");
   });
 
+  // ---------------------------------------------------------------- 86ca03nww
+  describe("customTitle + gitBranch projection (86ca03nww)", () => {
+    it("customTitle from agentData lands on SessionTree", () => {
+      const session = makeSession();
+      const tree = buildAgentTree(
+        [session],
+        [{ sessionId: session.sessionId, agents: [], customTitle: "claude team" }],
+        new Map(),
+        new Map(),
+        [],
+        NOW_MS,
+      );
+      expect(tree.sessions[0]!.customTitle).toBe("claude team");
+    });
+
+    it("gitBranch from agentData lands on SessionTree", () => {
+      const session = makeSession();
+      const tree = buildAgentTree(
+        [session],
+        [{ sessionId: session.sessionId, agents: [], gitBranch: "felix/86ca03nww-x" }],
+        new Map(),
+        new Map(),
+        [],
+        NOW_MS,
+      );
+      expect(tree.sessions[0]!.gitBranch).toBe("felix/86ca03nww-x");
+    });
+
+    it("both fields absent → SessionTree omits them (back-compat wire shape)", () => {
+      const session = makeSession();
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [])],
+        new Map(),
+        new Map(),
+        [],
+        NOW_MS,
+      );
+      // Use Object.prototype.hasOwnProperty so the assertion fails if a future
+      // refactor accidentally emits `customTitle: undefined` (which would
+      // pollute the wire shape — see spread-only-when-defined pattern in
+      // reducer.ts).
+      const s = tree.sessions[0]!;
+      expect(Object.prototype.hasOwnProperty.call(s, "customTitle")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(s, "gitBranch")).toBe(false);
+    });
+
+    it("both fields populated → SessionTree carries both verbatim", () => {
+      const session = makeSession();
+      const tree = buildAgentTree(
+        [session],
+        [
+          {
+            sessionId: session.sessionId,
+            agents: [],
+            title: "AI-generated",
+            customTitle: "Sponsor rename",
+            gitBranch: "main",
+          },
+        ],
+        new Map(),
+        new Map(),
+        [],
+        NOW_MS,
+      );
+      const s = tree.sessions[0]!;
+      expect(s.title).toBe("AI-generated");
+      expect(s.customTitle).toBe("Sponsor rename");
+      expect(s.gitBranch).toBe("main");
+    });
+  });
+
   // ---------------------------------------------------------------- NIT #1 — parse-error model fallback (M3-04 follow-up)
   describe("parse-error model fallback (NIT #1 — M3-04 follow-up)", () => {
     // Source: sponsor screenshot 2026-05-24 — Sage tile showed

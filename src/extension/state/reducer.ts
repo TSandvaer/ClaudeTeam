@@ -76,6 +76,21 @@ export interface SessionAgentData {
   agents: AgentMetaEntry[];
   /** Optional human-readable session title from the `ai-title` JSONL record. */
   title?: string;
+  /**
+   * Optional sponsor-authored rename from the `custom-title` JSONL record
+   * (86ca03nww). The host parser scans backward from EOF and picks the FIRST
+   * match (i.e. the most recent customTitle write). Absent when no rename
+   * has ever been performed on this session. Empty / whitespace-only values
+   * are normalized to undefined by the parser.
+   */
+  customTitle?: string;
+  /**
+   * Optional active git branch (86ca03nww). The host parser walks the JSONL
+   * forward and keeps the LAST occurrence of a top-level `gitBranch` field
+   * across `attachment` / `user` / `assistant` / `system` records. Absent
+   * when no record in the file carries the field.
+   */
+  gitBranch?: string;
 }
 
 /**
@@ -138,6 +153,12 @@ export function buildAgentTree(
     const data = agentDataBySession.get(session.sessionId);
     const agents = data?.agents ?? [];
     const title = data?.title ?? "(no title yet)";
+    // 86ca03nww: pass-through projections of the two new label-surface
+    // fields. The parser normalizes empty / whitespace-only values to
+    // undefined; we only omit the field when truly absent so the wire shape
+    // stays back-compat (pre-86ca03nww SessionTrees have neither field).
+    const customTitle = data?.customTitle;
+    const gitBranch = data?.gitBranch;
 
     // Build tile + background lists.
     const rosterTiles = new Map<string, AgentTile[]>();
@@ -285,6 +306,12 @@ export function buildAgentTree(
       isAlive: session.isAlive,
       cwd: session.cwd,
       title,
+      // 86ca03nww: spread-only-when-defined keeps the pre-86ca03nww wire
+      // shape intact when neither field is present (e.g. CLI driver session
+      // with no rename + no recorded gitBranch — the SessionTree carries
+      // exactly the M3 shape, no extra keys).
+      ...(customTitle !== undefined ? { customTitle } : {}),
+      ...(gitBranch !== undefined ? { gitBranch } : {}),
       rosterTiles: rosterTilesWithGroups,
       teamOrder,
       background,

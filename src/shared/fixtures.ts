@@ -122,6 +122,11 @@ const FIXTURE_PRIMARY_SESSION: SessionTree = {
   isAlive: true,
   cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
   title: "ClaudeTeam M2-05 webview build",
+  // 86ca03nww: exercise the customTitle + gitBranch surfaces in browser dev
+  // mode and component tests. Sponsor-authored rename takes display priority
+  // over `title`; gitBranch renders as a small chip near the title.
+  customTitle: "claude team",
+  gitBranch: "main",
   rosterTiles: new Map([[TEAM_CLAUDETEAM_ALPHA, FIXTURE_TILES]]),
   teamOrder: [TEAM_CLAUDETEAM_ALPHA],
   background: [

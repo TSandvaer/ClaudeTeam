@@ -494,8 +494,12 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     // § Segment 3). readSessionMetadata fuses both extractions into one
     // pass — same defensive error-swallowing behavior, same return
     // contracts.
-    const { title: rawTitle, finishedIds: finishedToolUseIds } =
-      readSessionMetadata(parentJsonlPath);
+    const {
+      title: rawTitle,
+      finishedIds: finishedToolUseIds,
+      customTitle,
+      gitBranch,
+    } = readSessionMetadata(parentJsonlPath);
     const title = rawTitle ?? "(no title yet)";
 
     const agents = collectAgentMetas(subagentsDir);
@@ -528,7 +532,16 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
       }),
     );
 
-    agentData.push({ sessionId: session.sessionId, agents, title });
+    agentData.push({
+      sessionId: session.sessionId,
+      agents,
+      title,
+      // 86ca03nww: spread-only-when-defined keeps the SessionAgentData entry
+      // (and the resulting SessionTree) back-compat when the parser found
+      // no customTitle / gitBranch on disk.
+      ...(customTitle !== undefined ? { customTitle } : {}),
+      ...(gitBranch !== undefined ? { gitBranch } : {}),
+    });
   }
 
   const rosterResult = loadRoster(
@@ -636,6 +649,12 @@ export function hashState(state: DashboardState): string {
     pid: s.pid,
     isAlive: s.isAlive,
     title: s.title,
+    // 86ca03nww: include the new label-surface fields so a sponsor rename
+    // (customTitle change) or branch switch (gitBranch change) triggers a
+    // fresh state emission even when no tile changed. Missing → null on
+    // the hash so a transition from undefined → "main" is observable.
+    customTitle: s.customTitle ?? null,
+    gitBranch: s.gitBranch ?? null,
     teamOrder: s.teamOrder,
     rosterTiles: Object.fromEntries(s.rosterTiles),
     background: s.background,
@@ -723,24 +742,58 @@ export function hashState(state: DashboardState): string {
  * do NOT carry a `toolUseResult.isAsync` field; they're real completions
  * and remain in the finished map.
  *
+ * ## Custom-title extraction (86ca03nww)
+ *
+ * Returns the LAST non-empty `customTitle` field on a record with
+ * `type: "custom-title"` — sponsor-authored renames append a new record each
+ * time, and Claude Code itself uses the most-recent value (extension.js
+ * `renameSession` writes `{type,sessionId,customTitle}` then updates the
+ * in-memory map, and the parser reads the final value). Functionally
+ * equivalent to "scan backward from EOF, first match wins" (NIT 1 from PR #104
+ * review) — implemented as last-write-wins to avoid reversing a multi-MB
+ * array. Whitespace-only values normalize to undefined so the resolver's
+ * priority chain falls through.
+ *
+ * Key-order tolerance (NIT 2 from PR #104 review): records on disk appear
+ * in BOTH `{type,sessionId,customTitle}` and `{type,customTitle,sessionId}`
+ * orderings within the same file (verified on session
+ * `07e66f5e-7263-4a6d-853b-e66747a38f3a.jsonl`). The parser uses `JSON.parse`
+ * + named-field access — NEVER regex on key sequence.
+ *
+ * ## Git-branch extraction (86ca03nww)
+ *
+ * Returns the LAST `gitBranch` value found across `attachment`, `user`,
+ * `assistant`, `system` records (top-level field — broader than Bram's
+ * original `attachment`-only framing per Felix PR #104 NIT 4, verified
+ * against ClaudeTeam session 07e66f5e: 620 records carrying the field across
+ * the four types). Last-write-wins matches Claude Code's own behavior
+ * (extension.js `ba` function: `Y7(K,"gitBranch")||VW(x,"gitBranch")||void 0`
+ * reads the most recent occurrence in the JSONL tail).
+ *
  * ## Defensive contracts (preserved)
  *
- * - Read error (missing/unreadable file) → `{ title: null, finishedIds: empty }`.
+ * - Read error (missing/unreadable file) → `{ title: null, finishedIds:
+ *   empty, customTitle: undefined, gitBranch: undefined }`.
  * - JSON.parse failure on a single line → skip that line, keep going.
- * - First valid title wins; do NOT short-circuit the scan when found —
- *   we still need the rest of the file for the finished-ids map.
+ * - First valid `ai-title` wins; do NOT short-circuit the scan when found —
+ *   we still need the rest of the file for the finished-ids map, customTitle
+ *   updates, and gitBranch updates.
  */
 function readSessionMetadata(jsonlPath: string): {
   title: string | null;
   finishedIds: Map<string, number>;
+  customTitle: string | undefined;
+  gitBranch: string | undefined;
 } {
   const finishedIds = new Map<string, number>();
   let title: string | null = null;
+  let customTitle: string | undefined = undefined;
+  let gitBranch: string | undefined = undefined;
   let raw: string;
   try {
     raw = readFileSync(jsonlPath, "utf8");
   } catch {
-    return { title: null, finishedIds };
+    return { title: null, finishedIds, customTitle: undefined, gitBranch: undefined };
   }
   for (const line of raw.split("\n")) {
     if (line.trim().length === 0) continue;
@@ -752,12 +805,37 @@ function readSessionMetadata(jsonlPath: string): {
     }
     const recType = rec["type"];
 
+    // 86ca03nww: gitBranch is a top-level field on `attachment`, `user`,
+    // `assistant`, `system` records (NIT 4 from PR #104 review). Last-write
+    // -wins. Check before the type-specific branches because user records
+    // also flow into the finished-ids branch below — we want both extractions
+    // to coexist on the same record without one short-circuiting the other.
+    const gb = rec["gitBranch"];
+    if (typeof gb === "string") {
+      const trimmed = gb.trim();
+      if (trimmed.length > 0) gitBranch = trimmed;
+    }
+
     // Title branch — `type: "ai-title"`. Keep scanning the rest of the
     // file even after a title is found because finished-ids may still
     // appear in later records.
     if (recType === "ai-title" && title === null) {
       const t = rec["title"];
       if (typeof t === "string" && t.length > 0) title = t;
+      continue;
+    }
+
+    // Custom-title branch — `type: "custom-title"`. Last-write-wins
+    // (equivalent to scan-backward-from-EOF-first-match per NIT 1).
+    // JSON.parse + named-field access handles BOTH key orders seen on disk
+    // (`{type,sessionId,customTitle}` and `{type,customTitle,sessionId}`)
+    // per NIT 2.
+    if (recType === "custom-title") {
+      const ct = rec["customTitle"];
+      if (typeof ct === "string") {
+        const trimmed = ct.trim();
+        if (trimmed.length > 0) customTitle = trimmed;
+      }
       continue;
     }
 
@@ -798,7 +876,7 @@ function readSessionMetadata(jsonlPath: string): {
       }
     }
   }
-  return { title, finishedIds };
+  return { title, finishedIds, customTitle, gitBranch };
 }
 
 /**

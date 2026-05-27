@@ -288,4 +288,196 @@ describe("86c9zfmke: readSessionMetadata single-pass scan via runTick", () => {
 
     expect(state.sessions[0]!.title).toBe("First wins");
   });
+
+  // -------------------------------------------------------------------------
+  // 86ca03nww — custom-title + gitBranch extraction (PR #104 review NITs 1-4)
+  // -------------------------------------------------------------------------
+
+  it("single custom-title record → customTitle surfaces on SessionTree", async () => {
+    writeParentJsonl(root, CWD, SESSION_ID, {
+      title: "ai-title",
+      customTitles: ["claude team"],
+    });
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    const s = state.sessions[0]!;
+    expect(s.customTitle).toBe("claude team");
+    expect(s.title).toBe("ai-title"); // raw ai-title still on wire
+  });
+
+  it("multiple custom-title records → LAST one wins (sponsor renames sequence)", async () => {
+    // NIT 1 from PR #104 review: records are scattered through the file; the
+    // parser must converge on the latest rename. Implemented as last-write-
+    // wins (equivalent to scan-backward-from-EOF-first-match).
+    writeParentJsonl(root, CWD, SESSION_ID, {
+      title: "ai-title",
+      customTitles: ["first rename", "second rename", "final name"],
+    });
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    expect(state.sessions[0]!.customTitle).toBe("final name");
+  });
+
+  it("custom-title with both key orders (NIT 2) → JSON.parse handles either", async () => {
+    // Live data on disk shows BOTH key orders in the same file:
+    //   {"type":"custom-title","sessionId":"...","customTitle":"..."}
+    //   {"type":"custom-title","customTitle":"...","sessionId":"..."}
+    // The parser must use JSON.parse + named-field access, never regex on
+    // key sequence.
+    const slug = cwdToSlug(CWD);
+    const jsonlPath = join(root, "projects", slug, `${SESSION_ID}.jsonl`);
+    const lines = [
+      JSON.stringify({
+        type: "custom-title",
+        sessionId: SESSION_ID,
+        customTitle: "order A",
+      }),
+      JSON.stringify({
+        type: "custom-title",
+        customTitle: "order B",
+        sessionId: SESSION_ID,
+      }),
+    ];
+    writeFileSync(jsonlPath, lines.join("\n") + "\n", "utf8");
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    // Last-write-wins regardless of key order in either record.
+    expect(state.sessions[0]!.customTitle).toBe("order B");
+  });
+
+  it("whitespace-only customTitle → normalized to undefined (resolver fall-through)", async () => {
+    writeParentJsonl(root, CWD, SESSION_ID, {
+      title: "ai-title",
+      customTitles: ["   ", "\t\t"],
+    });
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    const s = state.sessions[0]!;
+    expect(s.customTitle).toBeUndefined();
+  });
+
+  it("attachment record with gitBranch → field surfaces on SessionTree", async () => {
+    writeParentJsonl(root, CWD, SESSION_ID, {
+      title: "ai-title",
+      gitBranch: "felix/86ca03nww-session-label-gitbranch",
+    });
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    expect(state.sessions[0]!.gitBranch).toBe(
+      "felix/86ca03nww-session-label-gitbranch",
+    );
+  });
+
+  it("gitBranch on multiple record types (NIT 4) → all accepted, last wins", async () => {
+    // NIT 4 from PR #104 review: gitBranch is a top-level field on
+    // attachment, user, assistant, AND system records — not attachment-only
+    // (verified against 07e66f5e ClaudeTeam JSONL — 620 records carrying
+    // the field across the four types). The parser walks forward; last
+    // occurrence wins.
+    const slug = cwdToSlug(CWD);
+    const jsonlPath = join(root, "projects", slug, `${SESSION_ID}.jsonl`);
+    const lines = [
+      JSON.stringify({
+        type: "attachment",
+        gitBranch: "main",
+        sessionId: SESSION_ID,
+        uuid: "attach-1",
+      }),
+      JSON.stringify({
+        type: "user",
+        gitBranch: "felix/wip",
+        sessionId: SESSION_ID,
+        uuid: "user-1",
+        message: { role: "user", content: [] },
+      }),
+      JSON.stringify({
+        type: "assistant",
+        gitBranch: "felix/wip",
+        sessionId: SESSION_ID,
+        uuid: "asst-1",
+        message: { role: "assistant", content: [] },
+      }),
+      JSON.stringify({
+        type: "system",
+        gitBranch: "felix/final-branch",
+        sessionId: SESSION_ID,
+        uuid: "sys-1",
+      }),
+    ];
+    writeFileSync(jsonlPath, lines.join("\n") + "\n", "utf8");
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    expect(state.sessions[0]!.gitBranch).toBe("felix/final-branch");
+  });
+
+  it("no custom-title and no gitBranch records → both fields omitted (back-compat)", async () => {
+    writeParentJsonl(root, CWD, SESSION_ID, { title: "Just ai-title" });
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    const s = state.sessions[0]!;
+    expect(s.title).toBe("Just ai-title");
+    // Both label-surface fields should be undefined (parser found nothing)
+    // AND the SessionTree should omit them entirely per the back-compat wire
+    // shape contract.
+    expect(s.customTitle).toBeUndefined();
+    expect(s.gitBranch).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(s, "customTitle")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(s, "gitBranch")).toBe(false);
+  });
+
+  it("missing parent JSONL → customTitle + gitBranch both undefined", async () => {
+    // The parser's defensive contract: read error → both fields undefined.
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    const s = state.sessions[0]!;
+    expect(s.customTitle).toBeUndefined();
+    expect(s.gitBranch).toBeUndefined();
+  });
+
+  it("all three label surfaces present + tool_result → one pass extracts everything", async () => {
+    // Coverage: customTitle, ai-title, gitBranch, AND a finished tool_result
+    // — all in one parent JSONL. Proves the fused scan extracts every axis
+    // in a single read+iteration.
+    writeParentJsonl(root, CWD, SESSION_ID, {
+      title: "AI title",
+      customTitles: ["sponsor renamed it"],
+      gitBranch: "felix/feature-x",
+      finishedToolUseIds: [TOOL_USE_ID],
+    });
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+    const s = state.sessions[0]!;
+    expect(s.title).toBe("AI title");
+    expect(s.customTitle).toBe("sponsor renamed it");
+    expect(s.gitBranch).toBe("felix/feature-x");
+    const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
+    expect(findTile(alphaTiles, "felix")!.state).toBe("finished");
+  });
 });

@@ -26,6 +26,7 @@
  */
 
 import type { SessionTree, WebviewSessionTree } from "../../shared/types.js";
+import { resolveSessionLabel } from "../../shared/types.js";
 import { renderTeamCard, teamFromId } from "./teamCard.js";
 import { renderBackgroundChip } from "./backgroundChip.js";
 import type { PostMessageFn } from "./agentTile.js";
@@ -124,7 +125,51 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
   cwdSpan.textContent = session.cwd;
   header.appendChild(cwdSpan);
 
-  appendSpan(header, "session-title", session.title);
+  // 86ca03nww: resolve display label via the host-shared priority chain
+  // (customTitle > aiTitle > workspace-folder fallback). `session.title`
+  // carries the raw `ai-title` value on the wire; `session.customTitle`
+  // carries the sponsor-authored rename when set. The resolver normalizes
+  // empty / whitespace-only customTitle and the `(no title yet)` sentinel
+  // so the fallback chain fires correctly.
+  const labelSpan = document.createElement("span");
+  labelSpan.className = "session-title";
+  labelSpan.textContent = resolveSessionLabel({
+    title: session.title,
+    customTitle: session.customTitle,
+    cwd: session.cwd,
+  });
+  // Tooltip surfaces the source so a glance hints which tier resolved.
+  // customTitle > ai-title > workspace-folder fallback — only the resolved
+  // source string appears (truth) so the sponsor can confirm a rename
+  // landed without opening the raw JSONL.
+  if (typeof session.customTitle === "string" && session.customTitle.trim().length > 0) {
+    labelSpan.setAttribute("title", "Sponsor rename (custom-title)");
+    labelSpan.dataset.labelSource = "custom-title";
+  } else if (
+    typeof session.title === "string" &&
+    session.title.trim().length > 0 &&
+    session.title !== "(no title yet)"
+  ) {
+    labelSpan.setAttribute("title", "AI-generated title (ai-title)");
+    labelSpan.dataset.labelSource = "ai-title";
+  } else {
+    labelSpan.setAttribute("title", "Workspace folder name (no title set)");
+    labelSpan.dataset.labelSource = "workspace-folder";
+  }
+  header.appendChild(labelSpan);
+
+  // 86ca03nww: gitBranch chip — small badge near the title surfacing the
+  // active branch at the latest JSONL record. Hidden when the parser found
+  // no gitBranch on disk (pre-86ca03nww emitters, sessions whose JSONL has
+  // no records carrying the field).
+  if (typeof session.gitBranch === "string" && session.gitBranch.length > 0) {
+    const branchChip = document.createElement("span");
+    branchChip.className = "session-git-branch";
+    branchChip.textContent = session.gitBranch;
+    branchChip.setAttribute("title", `git branch: ${session.gitBranch}`);
+    branchChip.dataset.gitBranch = session.gitBranch;
+    header.appendChild(branchChip);
+  }
 
   if (!session.isAlive) {
     const deadBadge = document.createElement("span");

@@ -86,6 +86,26 @@ let currentState: AgentTree = isVsCodeMode ? FIXTURE_EMPTY_STATE : FIXTURE_STATE
 
 **Test coverage:** `tests/unit/webview/bootBleed.test.ts` (4 jsdom tests, landed PR #41).
 
+## Session label resolution
+
+The session-card title text is the result of a **3-tier priority chain** resolved by the shared pure helper `resolveSessionLabel(rec)` in `src/shared/types.ts`. The webview's `sessionBlock` renders the resolved string in the `.session-title` span; the host wire emits the raw `ai-title` value (and the optional `customTitle`) so the resolver can fire client-side. Vocabulary contract LOCKED per sponsor approval 2026-05-27 (86ca03nww).
+
+```
+customTitle > ai-title > workspace-folder fallback (basename of cwd)
+```
+
+- **Tier 1 — `customTitle` (sponsor rename)** — wins when defined and non-empty after `.trim()`. Source: `type: "custom-title"` JSONL records (see `data-sources.md` §2 for parser semantics — last-write-wins, key-order tolerant).
+- **Tier 2 — `aiTitle` (the existing `SessionTree.title`)** — wins when the `ai-title` JSONL value is non-empty AND not the `(no title yet)` sentinel. Source: `type: "ai-title"` JSONL records (first-occurrence wins).
+- **Tier 3 — workspace folder name** — basename of `SessionTree.cwd`, portable across Windows backslash and POSIX forward-slash separators (single helper `workspaceFolderName(cwd)`, exported for direct test coverage). The "always-something" fallback so a session card never renders an empty title.
+
+**The raw `ai-title` value stays on the wire as `SessionTree.title`** for back-compat with the CLI presenter, diagnostic panel, and pre-86ca03nww tests. Only the dashboard webview's `.session-title` span uses the resolver. The resolver is pure (no filesystem, no VS Code API) and safe to call repeatedly during render — its inputs (`title`, `customTitle`, `cwd`) are JSON-safe scalars that survive the host→webview boundary.
+
+**`data-label-source` attribute** on the rendered span reflects which tier resolved (`"custom-title"` / `"ai-title"` / `"workspace-folder"`) — useful for diagnostic panel inspection and visual regression tests.
+
+**gitBranch chip** (`SessionTree.gitBranch`, optional) renders as a small monospaced badge (`.session-git-branch`) next to the title when defined. NOT part of the label-resolution chain — it's a complementary surface, hidden when absent. Source: top-level `gitBranch` field on `attachment` / `user` / `assistant` / `system` JSONL records; last-occurrence wins (see `data-sources.md` §2).
+
+**Test coverage:** `tests/unit/sessionLabel.test.ts` (23 unit tests — resolver priority + `workspaceFolderName` edge cases), `tests/unit/webview/sessionBlock.test.ts` (11 component tests — DOM wiring + chip rendering), `tests/integration/readSessionMetadata.test.ts` (9 new integration tests for parser + wire round-trip).
+
 ## Session-tile identity and DEAD prune semantics
 
 **Session-tile identity is (sessionId, pid), not sessionId alone.** The sessions directory (`~/.claude/sessions/`) holds one `{pid}.json` per Claude Code process. When a VS Code window reloads, the old process file may not be immediately cleaned up, so the dashboard can briefly show two (or more) tiles for the same `sessionId` with different PIDs — both correctly marked DEAD. This is the expected audit-trail shape: each tile represents a PID-scoped process snapshot. The tiles disappear on the next poll tick after Claude Code's process cleanup removes the stale file(s) from `sessions/`. No deduplication by `sessionId` is applied.
