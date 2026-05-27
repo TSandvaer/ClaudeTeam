@@ -571,7 +571,58 @@ describe("renderTeamCard — wrapper / bare-tile routing", () => {
       postMessage: vi.fn(),
     });
     expect(card.querySelector(".team-count")?.textContent).toBe(
-      "(2 rostered)",
+      "(2 visible)",
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // 86c9zfj2g — chip-label rename `rostered` → `visible`
+  //
+  // The label reflects what is currently on-screen for this team in this
+  // session (i.e. tiles.length after any host-side hide-finished projection),
+  // NOT the YAML-declared roster member count. These two snapshots pin the
+  // label across the two states the sponsor sees most often:
+  //   - filter OFF — every matched persona is in `tiles[]`.
+  //   - filter ON  — finished personas have been dropped upstream; the
+  //                  surviving subset is what arrives.
+  // The component is filter-agnostic; the host has already projected. We just
+  // confirm the label renders `({tiles.length} visible)` in both shapes.
+  // ---------------------------------------------------------------------------
+
+  it("chip label reads `({N} visible)` with the filter OFF (all rostered tiles present)", () => {
+    // Filter OFF — host sends all 3 matched personas, one bare tile each.
+    const card = renderTeamCard({
+      team: TEAM_ALPHA,
+      tiles: [
+        makeTile({ memberId: "felix", display: "Felix", agentId: "a-felix" }),
+        makeTile({ memberId: "maya", display: "Maya", agentId: "a-maya" }),
+        makeTile({ memberId: "bram", display: "Bram", agentId: "a-bram" }),
+      ],
+      sessionId: "sess-filter-off",
+      postMessage: vi.fn(),
+    });
+    expect(card.querySelector(".team-count")?.textContent).toBe("(3 visible)");
+    // Regression guard — the old `rostered` label must NOT come back.
+    expect(card.querySelector(".team-count")?.textContent).not.toContain(
+      "rostered",
+    );
+  });
+
+  it("chip label reads `({N} visible)` with the filter ON (subset reaches the card)", () => {
+    // Filter ON — host's hideFinishedFilter dropped Felix + Bram (all
+    // instances finished); only Maya survives. The card sees exactly the
+    // surviving subset; the label reflects on-screen count, not YAML size.
+    const card = renderTeamCard({
+      team: TEAM_ALPHA,
+      tiles: [
+        makeTile({ memberId: "maya", display: "Maya", agentId: "a-maya" }),
+      ],
+      sessionId: "sess-filter-on",
+      postMessage: vi.fn(),
+    });
+    expect(card.querySelector(".team-count")?.textContent).toBe("(1 visible)");
+    expect(card.querySelector(".team-count")?.textContent).not.toContain(
+      "rostered",
     );
   });
 });

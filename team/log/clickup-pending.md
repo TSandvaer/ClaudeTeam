@@ -402,6 +402,7 @@ ENTRY-2026-05-27T08:09:00Z: 86c9zmp5g -> in review (Felix PR #90 opened — fix(
 ENTRY-2026-05-27T06:45:00Z: 86c9zn7vw -> in progress (Felix accepted dispatch — diagnostic output channel: verbose per-tick state-delta logging)
 ENTRY-2026-05-27T08:58:00Z: 86c9zmqa8 -> in progress (Maya accepted dispatch — uniform-cluster polish impl per Iris spec Option A+B+A.1)
 ENTRY-2026-05-27T09:00:00Z: 86c9zmqa8 -> in review (Maya PR #93 opened — polish(webview): auto-collapse uniform clusters + compact rows + status hint)
+ENTRY-2026-05-27T09:20:00Z: 86c9zfj2g -> in progress (Maya accepted dispatch — chip-label rename `rostered` → `visible` per sponsor decision)
 ```
 ENTRY-2026-05-26T23:00:00Z: 86c9zfmhp -> in progress (Maya accepted dispatch — fix(webview): humanize finished elapsed-time format (Obs 11))
 ENTRY-2026-05-26T23:10:00Z: 86c9zfmhp -> in review (Maya PR #88 opened — fix(webview): humanize finished elapsed-time format (Obs 11) — sponsor approval requested on format choice)
