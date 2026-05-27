@@ -16,6 +16,7 @@
  */
 
 import { matchAgent } from "../roster/matcher.js";
+import { formatFreshness } from "../../shared/freshness.js";
 import type {
   AgentMeta,
   AgentState,
@@ -216,6 +217,17 @@ export function buildAgentTree(
         state,
         agentId,
         toolUseId: meta.toolUseId,
+        // 86c9zfmhp (Obs 11): expose the host-authoritative finish timestamp
+        // so the webview can build a precise-ISO tooltip on the activity row.
+        // Only carried for finished tiles with a parsed timestamp; omitted
+        // (undefined) otherwise so back-compat consumers see an absent field.
+        // `0` is treated as "missing" here even though `buildActivity`'s gate
+        // is `!== undefined` — a `0` epoch ms is the parser sentinel for an
+        // unparseable timestamp; surfacing it as a tooltip would render
+        // "Finished at 1970-01-01T00:00:00Z" which is misleading.
+        ...(finishedAtMs !== undefined && finishedAtMs > 0
+          ? { finishedAtMs }
+          : {}),
       };
 
       if (!rosterTiles.has(teamId)) {
@@ -506,16 +518,28 @@ export function buildActivity(
       // tests that don't supply it), fall back to bare "finished" —
       // preserves back-compat.
       //
+      // 86c9zfmhp (Obs 11): the suffix is now humanized via the shared
+      // `formatFreshness` helper — produces "Xs / Xm / Xh / Xd" instead of
+      // raw seconds. The pre-Obs-11 behavior surfaced `"finished 19289s"`
+      // for an agent finished 5.4h ago (sponsor V1 dogfood screenshot);
+      // raw seconds at large N are unreadable at a glance. Humanizing at
+      // the reducer (rather than the webview) means the CLI presenter
+      // inherits the readability fix automatically, and the host stays
+      // the single source of truth for the activity string — eliminating
+      // the parallel-clock UX bug the webview introduced when it appended
+      // its own `formatFreshness(now - first-seen)` suffix on top of the
+      // host's raw seconds.
+      //
       // The gate is `!== undefined`, not `> 0`, because elapsed=0 ("just
       // finished") is a meaningful display — bare `"finished"` would hide
       // the freshness signal sponsor noticed missing in V1 dogfood Obs 6.
       // Production JSONL timestamps are always parseable ISO-8601 strings
       // written by Claude Code; the unparseable-timestamp edge case
-      // (parser returns 0 sentinel) would render `"finished <huge>s"`
-      // which is acceptable for an irrecoverable diagnostic case.
+      // (parser returns 0 sentinel) would render `"finished <large>d"`
+      // (since the elapsed is huge), which is acceptable for an
+      // irrecoverable diagnostic case.
       if (finishedAtMs !== undefined) {
-        const elapsedS = Math.max(0, Math.round((nowMs - finishedAtMs) / 1000));
-        return `finished ${elapsedS}s`;
+        return `finished ${formatFreshness(nowMs - finishedAtMs)}`;
       }
       return "finished";
     }

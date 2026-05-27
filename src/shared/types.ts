@@ -276,12 +276,14 @@ export interface AgentTile {
    * Full string here — truncation is the presenter's job (spec §5 divergence #2).
    *   running  → "tool:<toolName> <firstArg>"
    *   idle     → "idle <Ns>"
-   *   finished → "finished" (no elapsed) or "finished Xs" (with elapsed-since-
-   *              `tool_result.timestamp` suffix per 86c9yxv94 / PR #69 —
-   *              reducer's `buildActivity` emits the suffix when `FinishedMap`
-   *              carries a non-zero `finishedAtMs` for the agentId; bare
-   *              "finished" remains the fallback when timestamp is absent or
-   *              the 0 sentinel)
+   *   finished → "finished" (no elapsed) or "finished Xs/Xm/Xh/Xd"
+   *              (humanized elapsed-since-`tool_result.timestamp` suffix per
+   *              86c9yxv94 → 86c9zfmhp — reducer's `buildActivity` calls
+   *              `formatFreshness` when `FinishedMap` carries a `finishedAtMs`
+   *              for the agentId; bare "finished" remains the fallback when
+   *              timestamp is absent. Pre-86c9zfmhp the host emitted raw
+   *              seconds `"finished 19289s"`; humanization moved to the host
+   *              so the webview no longer appends a parallel second clock.)
    *   error    → "error: <reason>"
    */
   activity: string;
@@ -299,6 +301,23 @@ export interface AgentTile {
    * null on v2.1.119 schema (no toolUseId).
    */
   toolUseId: string | null;
+  /**
+   * Epoch ms when this agent finished (parent JSONL `tool_result.timestamp`).
+   * Populated on finished tiles when the parser successfully extracted the
+   * timestamp; absent otherwise. JSON-safe primitive — survives the
+   * `serializeState` round-trip across the host↔webview boundary.
+   *
+   * Used by the webview tile renderer to:
+   *   (a) build the precise-ISO tooltip on the activity row
+   *       (`title="Finished at 2026-05-26T16:42:08Z"`).
+   *   (b) reconcile webview-local first-seen tracking with host-authoritative
+   *       wall-clock truth across webview reloads — host-supplied wins.
+   *
+   * Added 86c9zfmhp (Obs 11) — the humanized `tile.activity` (`finished 5h`)
+   * is the primary skim signal; the tooltip exposes precise time-of-completion
+   * for the audit case.
+   */
+  finishedAtMs?: number;
 }
 
 /**
