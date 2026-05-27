@@ -266,16 +266,32 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   // the row wrapper so the tooltip only appears when hovering the text
   // itself — overlapping the row's existing drill-in `title` (on the article)
   // would be confusing.
-  const activityRow = document.createElement("div");
-  activityRow.className = "tile-row tile-row--activity";
-  const activitySpan = document.createElement("span");
-  activitySpan.className = "agent-activity";
-  activitySpan.textContent = activityText;
-  if (activityTitle !== undefined) {
-    activitySpan.setAttribute("title", activityTitle);
+  //
+  // 86ca03ym7 — hide the activity row entirely when the host emits the
+  // `"tool:?"` sentinel (running state + null `lastTool` — fresh spawns or
+  // between-tool-call moments where the subagent JSONL has no `tool_use`
+  // entry yet). Sponsor dogfood observation: `tool: ?` on the dashboard
+  // reads as noise rather than information; the tile is more honest with
+  // the row absent than with a `?` placeholder. Sponsor decision LOCKED:
+  // hide entirely, NOT em-dash, NOT state-aware label.
+  //
+  // The fix lives in the webview because the wire-shape `tile.activity`
+  // remains the host's source of truth (CLI presenter still receives the
+  // raw sentinel; only the dashboard renders the visual absence). OOS:
+  // changing the reducer's `buildActivity` — the sentinel is load-bearing
+  // for non-webview consumers.
+  if (activityText !== "tool:?") {
+    const activityRow = document.createElement("div");
+    activityRow.className = "tile-row tile-row--activity";
+    const activitySpan = document.createElement("span");
+    activitySpan.className = "agent-activity";
+    activitySpan.textContent = activityText;
+    if (activityTitle !== undefined) {
+      activitySpan.setAttribute("title", activityTitle);
+    }
+    activityRow.appendChild(activitySpan);
+    article.appendChild(activityRow);
   }
-  activityRow.appendChild(activitySpan);
-  article.appendChild(activityRow);
 
   // Row 4 — model.
   article.appendChild(

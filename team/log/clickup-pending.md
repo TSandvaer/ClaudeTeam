@@ -411,3 +411,5 @@ ENTRY 2026-05-27T1430-iris-86c9zmyef-todo-to-inprogress: 86c9zmyef -> in progres
 ENTRY 2026-05-27T1445-iris-86c9zmyef-inprogress-to-inreview: 86c9zmyef -> in review (PR opening)
 ENTRY-2026-05-27T10:00:00Z: 86c9zn7tm -> in progress (Maya accepted dispatch — diagnostic panel: interactive companion to Output channel)
 ENTRY-2026-05-27T10:25:00Z: 86c9zn7tm -> in review (Maya PR opened — feat(ext): diagnostic webview panel — tick history + current state breakdown)
+ENTRY-2026-05-27T15:48:00Z: 86ca03ym7 -> in progress (Maya accepted dispatch — hide tool: row entirely when no current tool)
+ENTRY-2026-05-27T15:58:00Z: 86ca03ym7 -> in review (Maya PR #106 opened — fix(webview): hide tool: row when no current tool — Self-Test Report posted)
