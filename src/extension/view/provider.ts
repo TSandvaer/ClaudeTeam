@@ -255,9 +255,14 @@ export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
     const p = (raw as { payload?: unknown }).payload;
     if (typeof p !== "object" || p === null) return false;
     const { key, value } = p as { key?: unknown; value?: unknown };
-    // M5: only `hideFinishedAgents` is currently valid (spec §7.3). Future
-    // keys (`hideIdleAgents` per §8 Q1 follow-up) extend this literal union.
-    return key === "hideFinishedAgents" && typeof value === "boolean";
+    // M5 + 86c9zq9vm (spec 86c9zmyef §7.1): valid keys are the two
+    // dashboard-toggleable config scalars. Extending the union requires
+    // adding the literal here AND in `SetConfigMessage.payload.key`
+    // (src/shared/messages.ts) AND in `handleSetConfig` (src/extension/main.ts).
+    return (
+      (key === "hideFinishedAgents" || key === "hideIdleAgents") &&
+      typeof value === "boolean"
+    );
   }
   return false;
 }

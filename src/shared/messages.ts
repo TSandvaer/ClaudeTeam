@@ -91,6 +91,18 @@ export interface SerializedDashboardState {
    */
   hiddenFinishedCount?: number;
   /**
+   * Count of rostered agent tiles suppressed this tick because their state
+   * was "idle" AND `claudeteam.hideIdleAgents === true` (spec 86c9zmyef).
+   * Used by the webview header chip + per-team row to render
+   * "N idle hidden — show" / "Hide idle".
+   *
+   * Optional + defaults to 0 — back-compat with pre-86c9zq9vm consumers
+   * and with the filter-off case (no count to render). Webview MUST treat
+   * `undefined` as 0. See `86c9zmyef-running-focused-dashboard-spec.md`
+   * §3.5 Field A + §7.1.
+   */
+  hiddenIdleCount?: number;
+  /**
    * Mirror of `claudeteam.*` config scalars relevant to the webview's
    * rendering (M5). Lets the chip boot with its toggle reflecting the truth
    * stored in VS Code Settings (no roundtrip required for initial render).
@@ -111,6 +123,12 @@ export interface SerializedDashboardState {
      * `undefined` as `false`.
      */
     autoCollapseUniformClusters?: boolean;
+    /**
+     * Mirror of `claudeteam.hideIdleAgents` (spec 86c9zmyef). See
+     * `AgentTree.config.hideIdleAgents` for semantics. Optional for
+     * back-compat — webview MUST treat `undefined` as `false`.
+     */
+    hideIdleAgents?: boolean;
   };
 }
 
@@ -250,19 +268,19 @@ export type RefreshMessage = {
  * User toggled a config-backed dashboard setting (chip / command path).
  *
  * Generic-by-design (M5 §4.5): the `{ key, value }` shape admits future
- * setting toggles (e.g. post-V1 `hideIdleAgents`) without proliferating
- * message types. The host handler validates `key` against the literal-union
- * and routes to `vscode.workspace.getConfiguration("claudeteam").update(
- * key, value, vscode.ConfigurationTarget.Global)` (sponsor confirmed Global
- * per spec §8 Q3).
+ * setting toggles without proliferating message types. The host handler
+ * validates `key` against the literal-union and routes to
+ * `vscode.workspace.getConfiguration("claudeteam").update(key, value,
+ * vscode.ConfigurationTarget.Global)` (sponsor confirmed Global per spec §8 Q3).
  *
- * Extending the `key` union is the post-V1 follow-up surface (spec §8 Q1,
- * ClickUp 86c9yyw7a) — adds new literal members, not new messages.
+ * Extending the `key` union adds new literal members, not new messages. Spec
+ * 86c9zmyef §7.1 added `hideIdleAgents` to the union for the running-focused
+ * dashboard's idle-filter chip.
  */
 export type SetConfigMessage = {
   type: "ui:set-config";
   payload: {
-    key: "hideFinishedAgents";
+    key: "hideFinishedAgents" | "hideIdleAgents";
     value: boolean;
   };
 };

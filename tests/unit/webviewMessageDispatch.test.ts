@@ -241,11 +241,30 @@ describe("isWebviewMessage — ui:set-config (M5)", () => {
     expect(isWebviewMessage({ type: "ui:set-config" })).toBe(false);
   });
 
-  it("rejects ui:set-config with unknown key", () => {
+  // 86c9zq9vm (spec 86c9zmyef): `hideIdleAgents` joined the literal union.
+  it("accepts ui:set-config with valid hideIdleAgents payload (true)", () => {
     expect(
       isWebviewMessage({
         type: "ui:set-config",
         payload: { key: "hideIdleAgents", value: true },
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts ui:set-config with valid hideIdleAgents payload (false)", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:set-config",
+        payload: { key: "hideIdleAgents", value: false },
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects ui:set-config with unknown key", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:set-config",
+        payload: { key: "someFutureKey", value: true },
       }),
     ).toBe(false);
   });
@@ -255,6 +274,15 @@ describe("isWebviewMessage — ui:set-config (M5)", () => {
       isWebviewMessage({
         type: "ui:set-config",
         payload: { key: "hideFinishedAgents", value: "true" },
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects ui:set-config with non-boolean value on hideIdleAgents", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:set-config",
+        payload: { key: "hideIdleAgents", value: 1 },
       }),
     ).toBe(false);
   });

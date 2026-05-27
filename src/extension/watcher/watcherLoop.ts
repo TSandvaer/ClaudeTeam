@@ -49,6 +49,7 @@ import {
 import { loadRoster } from "../roster/loader.js";
 import { buildAgentTree } from "../state/reducer.js";
 import { applyHideFinishedFilter } from "../state/hideFinishedFilter.js";
+import { applyHideIdleFilter } from "../state/hideIdleFilter.js";
 import type {
   ActivityMap,
   AgentMetaEntry,
@@ -142,6 +143,15 @@ export interface WatcherOptions {
    * cluster polish ON — same default as the package.json config schema).
    */
   getAutoCollapseUniformClusters?: () => boolean;
+
+  /**
+   * Optional resolver for the `claudeteam.hideIdleAgents` setting
+   * (86c9zq9vm — running-focused dashboard spec 86c9zmyef). Read fresh
+   * every tick so toggling the setting applies on the next tick without
+   * restart. When omitted, treated as `true` (filter ON — V1 default per
+   * sponsor Q1; matches the package.json config schema default).
+   */
+  getHideIdleAgents?: () => boolean;
 
   /** Optional logger; defaults to a no-op so silent in production. */
   logger?: { warn: (msg: string) => void };
@@ -275,6 +285,10 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // can read it from state.config.
         autoCollapseUniformClusters:
           opts.getAutoCollapseUniformClusters?.() ?? true,
+        // 86c9zq9vm (spec 86c9zmyef): read-fresh-every-tick pattern for the
+        // hide-idle toggle. Default true (filter ON) matches package.json
+        // — V1 ships running-focused-by-default per sponsor Q1.
+        hideIdleAgents: opts.getHideIdleAgents?.() ?? true,
         logger,
       });
       // Always update lastState — even on hash-skip — so host lookups against
@@ -408,6 +422,14 @@ export interface RunTickOptions {
    * the webview's collapsedPersonaTile renderer can read it from state.
    */
   autoCollapseUniformClusters?: boolean;
+  /**
+   * Value of `claudeteam.hideIdleAgents` (86c9zq9vm — spec 86c9zmyef).
+   * Defaults to `true` (filter ON — V1 default per sponsor Q1; matches
+   * package.json config default). When `true`, the post-reducer filter
+   * suppresses idle tiles and `hiddenIdleCount` is stamped onto the
+   * produced tree.
+   */
+  hideIdleAgents?: boolean;
   logger?: { warn: (msg: string) => void };
 }
 
@@ -535,9 +557,19 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
   // filter the same way it owns filterApplied / roster errors. See
   // `src/extension/state/hideFinishedFilter.ts` for the contract.
   const hideFinished = opts.hideFinishedAgents === true;
-  const { tree: filteredTree, hiddenFinishedCount } = applyHideFinishedFilter(
+  const { tree: afterFinished, hiddenFinishedCount } = applyHideFinishedFilter(
     tree,
     hideFinished,
+  );
+  // 86c9zq9vm (spec 86c9zmyef §3 + §9.1): sibling hide-idle projection,
+  // applied AFTER hide-finished on its result. `finished` and `idle` are
+  // disjoint states so the order is symmetric, but a deterministic sequence
+  // (finished → idle) avoids surprise. Default true (V1 ships
+  // running-focused-by-default per sponsor Q1).
+  const hideIdle = opts.hideIdleAgents !== false;
+  const { tree: filteredTree, hiddenIdleCount } = applyHideIdleFilter(
+    afterFinished,
+    hideIdle,
   );
   // 86c9zmqa8: webview-only uniform-cluster auto-collapse. Default true when
   // omitted to match the package.json schema default. Stamped onto the
@@ -560,10 +592,18 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     rosterErrors: rosterResult.errors,
     rosterWarnings: rosterResult.warnings,
     hiddenFinishedCount,
+    // 86c9zq9vm: hide-idle wire surface. Mirrors hiddenFinishedCount + the
+    // config-block scalar so the webview can render the "N idle hidden" chip
+    // and boot its filter toggle from authoritative state without re-reading
+    // VS Code Settings.
+    hiddenIdleCount,
     config: {
       hideFinishedAgents: hideFinished,
       // 86c9zmqa8: pass-through scalar; webview-only behavior.
       autoCollapseUniformClusters,
+      // 86c9zq9vm: pass-through scalar; webview chip reads to set its initial
+      // toggle state without a roundtrip.
+      hideIdleAgents: hideIdle,
     },
   };
 }
@@ -619,6 +659,13 @@ export function hashState(state: DashboardState): string {
     // emissions would leave the dashboard stale.
     autoCollapseUniformClusters:
       state.config?.autoCollapseUniformClusters !== false,
+    // 86c9zq9vm: same rationale — when the user toggles hideIdleAgents and
+    // the visible tile set happens to be unchanged (e.g. no idle tiles to
+    // suppress at the moment), the chip's label / count still needs to
+    // update. Including the count + config mirror in the hash ensures
+    // emission.
+    hiddenIdleCount: state.hiddenIdleCount ?? 0,
+    hideIdleAgents: state.config?.hideIdleAgents === true,
   });
 }
 

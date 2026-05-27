@@ -109,7 +109,24 @@ export interface Member {
   display: string;
   /** Free-text role label. */
   role: string;
-  /** Optional hex color for the tile. Webview falls back to generated color when absent. */
+  /**
+   * Optional 6-digit lowercase hex color with leading `#` (e.g. `"#5d8aa8"`).
+   *
+   * Webview paints the RUNNING-state dot in this color when present (overrides
+   * the semantic `--ct-color-state-running` token). Idle / finished / error
+   * states IGNORE this field — they retain the M4-01 semantic state colors.
+   *
+   * Loader normalization (per `src/extension/roster/loader.ts`):
+   *   - 6-digit hex (`"#5d8aa8"`) → preserved (lowercased).
+   *   - 3-digit hex (`"#5da"`)    → expanded to 6-digit lowercase (`"#55ddaa"`).
+   *   - Invalid format             → dropped to `undefined` + a warning entry
+   *                                  on `RosterLoadResult.warnings`.
+   *
+   * When absent the webview falls back to the default semantic running color
+   * (NO auto-generation in V1 — sponsor-curated only per spec §2.3 Option A).
+   *
+   * Source: `team/iris-ux/86c9zmyef-running-focused-dashboard-spec.md` §2.
+   */
   color?: string;
   /** Ordered list of match rules. First hit (per agent meta) wins. */
   match: MatchRule[];
@@ -318,6 +335,26 @@ export interface AgentTile {
    * for the audit case.
    */
   finishedAtMs?: number;
+  /**
+   * Optional 6-digit lowercase hex color string from the matched roster
+   * `Member.color` (e.g. `"#5d8aa8"`). When defined, the webview paints the
+   * RUNNING-state dot in this color (overriding the semantic
+   * `--ct-color-state-running` token); idle / finished / error states IGNORE
+   * this field — they retain the M4-01 semantic state colors.
+   *
+   * Optional + back-compat — pre-86c9zq9vm wire emitters omit the field;
+   * webview defaults to the current semantic-color behavior. Absence is the
+   * "no personalization" signal — there is NO auto-generation fallback in V1
+   * (sponsor-curated only per spec §2.3 Option A).
+   *
+   * Format guarantees (enforced upstream by the roster loader — see
+   * `src/extension/roster/loader.ts`): 6-digit lowercase hex with leading `#`.
+   * 3-digit shorthand is expanded by the loader; invalid formats are dropped
+   * with a `RosterLoadResult.warnings` entry, never reach the wire.
+   *
+   * Source: `team/iris-ux/86c9zmyef-running-focused-dashboard-spec.md` §2.2.
+   */
+  memberColor?: string;
 }
 
 /**
@@ -522,6 +559,15 @@ export interface AgentTree {
    */
   hiddenFinishedCount?: number;
   /**
+   * Count of rostered agent tiles suppressed this tick because their state
+   * was "idle" AND `claudeteam.hideIdleAgents === true` (spec 86c9zmyef).
+   * Used by the webview header chip + per-team row to render
+   * "N idle hidden — show". Optional for back-compat with pre-86c9zq9vm
+   * consumers (CLI driver, older tests); absent → treated as 0. See
+   * `src/extension/state/hideIdleFilter.ts` for the producer.
+   */
+  hiddenIdleCount?: number;
+  /**
    * Mirror of `claudeteam.*` config scalars relevant to the webview's
    * rendering (M5). The watcher reads these once per tick and stamps them
    * onto the produced tree so `serializeState` can pass through to the wire
@@ -543,6 +589,16 @@ export interface AgentTree {
      * Source: team/iris-ux/86c9zmqa8-uniform-cluster-spec.md §8.1.
      */
     autoCollapseUniformClusters?: boolean;
+    /**
+     * Mirror of `claudeteam.hideIdleAgents` (spec 86c9zmyef). When true
+     * (V1 default — sponsor-confirmed Q1), the post-reducer filter
+     * suppresses idle tiles and the webview header chip renders
+     * "N idle hidden — show". Optional for back-compat with pre-86c9zq9vm
+     * consumers; absent → webview treats as `false`.
+     *
+     * Source: team/iris-ux/86c9zmyef-running-focused-dashboard-spec.md §3.
+     */
+    hideIdleAgents?: boolean;
   };
 }
 
