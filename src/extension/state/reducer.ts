@@ -289,17 +289,35 @@ export const IDLE_THRESHOLD_MS = 10_000;
  * Infer the agent's liveness state.
  *
  * Priority (highest first):
- *   1. finishedIds contains agentId → "finished"
- *   2. meta parse failed            → "error" (handled in caller before reaching here)
- *   3. session is dead              → "idle" (PID gone but session JSON still on disk —
- *      the session itself is the dead marker; individual agents aren't separately killed)
- *   4. JSONL mtime < 10s ago        → "running"
- *   5. Otherwise                    → "idle"
+ *   1. finishedIds contains agentId          → "finished" (parent-JSONL signal,
+ *      authoritative for foreground / synchronous Agent completions)
+ *   2. activity.isFinished === true          → "finished" (Obs 13 / 86c9zmp5g —
+ *      child-JSONL `stop_reason === "end_turn"` signal; required for
+ *      background dispatches whose parent JSONL never receives a real
+ *      tool_result, only an async-launched ack already skipped by
+ *      `readFinishedToolUseIds` since PR #82)
+ *   3. meta parse failed                     → "error" (handled in caller
+ *      before reaching here)
+ *   4. session is dead                       → "idle" (PID gone but session
+ *      JSON still on disk — the session itself is the dead marker;
+ *      individual agents aren't separately killed)
+ *   5. JSONL mtime < 10s ago                 → "running"
+ *   6. Otherwise                             → "idle"
+ *
+ * The Obs 13 check sits between the parent-signal check and the
+ * JSONL-mtime check intentionally:
+ *   - Above mtime → completed background agents transition to "finished"
+ *     even when their final flush is very recent (would otherwise flicker
+ *     as "running" for ~10s post-completion before going idle forever).
+ *   - Below finishedIds → foreground completions still win, preserving
+ *     the elapsed-time `finishedAtMs` precision from the parent JSONL's
+ *     authoritative timestamp.
  *
  * Error state from spec §2.5:
  *   - meta.json parse failure (handled in caller)
- *   - JSONL missing entirely for a non-finished spawn (mtimeMs === 0 AND not finished
- *     AND meta exists — means the spawn registered but the child never wrote)
+ *   - JSONL missing entirely for a non-finished spawn (mtimeMs === 0 AND
+ *     not finished AND meta exists — means the spawn registered but the
+ *     child never wrote)
  *   - (roster warning for this agent — not applicable at reducer level in V1)
  */
 function inferState(
@@ -310,7 +328,19 @@ function inferState(
   nowMs: number,
 ): AgentState {
   // Finished: parent transcript signal (per data-sources.md §3 closing semantics).
+  // This wins over the child-JSONL signal so foreground completions keep
+  // their authoritative `finishedAtMs` from the parent's tool_result timestamp.
   if (finishedIds.has(agentId)) {
+    return "finished";
+  }
+
+  // Obs 13 (86c9zmp5g): child-JSONL closing signal. Background dispatches
+  // never reach finishedIds (parent JSONL writes only the async-launched
+  // ack), so `activity.isFinished === true` is the ONLY available
+  // completion signal. Checked BEFORE the JSONL-mtime running/idle gate so
+  // a freshly-completed background agent doesn't briefly flicker as
+  // "running" before going stale and getting stuck at "idle" forever.
+  if (activity?.isFinished === true) {
     return "finished";
   }
 

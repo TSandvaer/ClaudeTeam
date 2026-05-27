@@ -281,6 +281,7 @@ describe("fixture pre-check (AC3)", () => {
     "subagent-running.jsonl",
     "subagent-finished.jsonl",
     "subagent-malformed.jsonl",
+    "subagent-background-finished.jsonl",
     "session-alive.json",
     "session-dead-pid.json",
     "teams-valid.yaml",
@@ -658,6 +659,101 @@ describe("AC2.4b: Obs 9 — async_launched dispatch ack is not a finished signal
     } finally {
       realCleanup();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC2.4c — Obs 13 (86c9zmp5g): background sub-agent transitions to "finished"
+// via child-JSONL stop_reason=end_turn signal
+// ---------------------------------------------------------------------------
+
+describe("AC2.4c: Obs 13 — background sub-agent finishes via child JSONL stop_reason=end_turn", () => {
+  let root: string;
+  let cleanup: () => void;
+  let rosterPath: string;
+
+  // Bram's persona-named meta — agentType:"bram", toolUseId matches the
+  // Round-3 dispatch in the async-launched ack fixture. teams-valid.yaml
+  // has `agentType_equals: "bram"` under claudeteam-alpha. The toolUseId
+  // discriminator (`toolu_01MMAeiEPr44os17jq9mJ8UY`) is wired through the
+  // fixture pair — meta-bram-async-launched.json + parent-jsonl-async-launched.jsonl —
+  // so the collected `finishedIds` map must be empty (ack is skipped).
+  const REAL_AGENT = "ad8ae64968850a339"; // matches fixture's agentId
+  const REAL_SESSION = "baf09ef7-b940-458e-9693-da28b7fb6439";
+
+  beforeEach(() => {
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    writeSessionFile(root, { pid: DEAD_PID_1, sessionId: REAL_SESSION, cwd: CWD_A });
+    // Parent JSONL carries ONLY the async-launched ack — exactly the on-disk
+    // shape Bram's Obs 13 triage proved against (no real tool_result ever
+    // lands, even after completion).
+    writeParentJsonlFromFixture(
+      root,
+      CWD_A,
+      REAL_SESSION,
+      "parent-jsonl-async-launched.jsonl",
+    );
+    // Bram's meta — toolUseId matches the parent ack.
+    writeMetaJson(root, CWD_A, REAL_SESSION, REAL_AGENT, "meta-bram-async-launched.json");
+  });
+
+  afterEach(() => cleanup());
+
+  it("child JSONL ends in stop_reason=end_turn → state becomes finished (no parent tool_result needed)", async () => {
+    // Critical setup: child JSONL is the new fixture whose LAST assistant
+    // record carries stop_reason=end_turn (real-shape capture pattern).
+    writeSubagentJsonl(root, CWD_A, REAL_SESSION, REAL_AGENT, "subagent-background-finished.jsonl");
+
+    const { roster } = loadRoster(rosterPath);
+    const { sessions, agentData, activities, finishedIds } = await collectFromTempdir(root);
+
+    // The parent JSONL has ONLY the async ack — finishedIds must be empty
+    // (the ack is skipped by readFinishedToolUseIds' isAsync discriminator).
+    expect(finishedIds.has(REAL_AGENT)).toBe(false);
+    expect(finishedIds.size).toBe(0);
+
+    // The child JSONL's last assistant record has stop_reason=end_turn —
+    // the tailer must surface this via activity.isFinished.
+    const bramActivity = activities.get(REAL_AGENT);
+    expect(bramActivity).toBeDefined();
+    expect(bramActivity!.isFinished).toBe(true);
+
+    const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
+    const s = tree.sessions[0]!;
+    const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
+    const bramTile = findTile(alphaTiles, "bram");
+    expect(bramTile, "bram tile must be present (roster match on agentType)").toBeDefined();
+    // Obs 13 fix: state MUST be "finished" — pre-fix this was stuck at
+    // "idle" or "running" because no parent-side completion existed.
+    expect(bramTile!.state).toBe("finished");
+
+    // Negative path: activity must NOT be "idle Ns" — that was the
+    // pre-fix sponsor-observed symptom (`idle 162s+`, `idle 279s+`).
+    expect(bramTile!.activity).not.toMatch(/^idle /);
+    // No finishedAtMs threaded through the child-JSONL path, so the
+    // bare "finished" string is the expected render.
+    expect(bramTile!.activity).toBe("finished");
+  });
+
+  it("child JSONL still running (no stop_reason=end_turn) → state is NOT finished (regression guard)", async () => {
+    // Negative regression: an in-flight background agent (no end_turn yet)
+    // must NOT be mis-classified as finished. Use the existing
+    // subagent-running.jsonl fixture which ends mid-action.
+    writeSubagentJsonl(root, CWD_A, REAL_SESSION, REAL_AGENT, "subagent-running.jsonl");
+
+    const { roster } = loadRoster(rosterPath);
+    const { sessions, agentData, activities, finishedIds } = await collectFromTempdir(root);
+
+    expect(finishedIds.has(REAL_AGENT)).toBe(false);
+    const bramActivity = activities.get(REAL_AGENT);
+    expect(bramActivity!.isFinished).toBe(false);
+
+    const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
+    const s = tree.sessions[0]!;
+    const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
+    const bramTile = findTile(alphaTiles, "bram");
+    expect(bramTile!.state).not.toBe("finished");
   });
 });
 

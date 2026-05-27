@@ -139,10 +139,12 @@ export type MatchResult =
 
 /**
  * Snapshot of "what is this subagent currently doing" derived from tailing
- * its JSONL. Pure projection — no liveness / finished inference here; that's
- * the reducer's job (M1-09) which cross-references the parent transcript.
+ * its JSONL. Pure projection — no liveness inference here; that's the
+ * reducer's job (M1-09). The reducer cross-references the parent transcript
+ * (foreground tool_result) AND consults `isFinished` here (background
+ * completion signal, Obs 13).
  *
- * Field semantics (per M1-06 AC1):
+ * Field semantics (per M1-06 AC1, extended by Obs 13 / 86c9zmp5g):
  *   - model:         resolved model from the FIRST assistant message in the
  *                    file (e.g. "claude-opus-4-7"). Null when no assistant
  *                    message has been written yet (fresh spawn, metadata-only
@@ -151,24 +153,40 @@ export type MatchResult =
  *                    LAST `type: "assistant"` record (e.g. "Bash", "Read",
  *                    "Edit"). Null when the last assistant message has only
  *                    text content, or no assistant message exists yet.
- *                    NOTE: per Bram's M1-11 finding, a subagent JSONL NEVER
- *                    contains a closing assistant message — the file's last
- *                    record is always a `type: "user"` tool_result. The
- *                    "last assistant" we look at is the most recent one
- *                    walking backwards from the tail, which represents
- *                    whatever the agent was last doing.
+ *                    The "last assistant" is the most recent one walking
+ *                    backwards from the tail, representing whatever the
+ *                    agent was last doing.
  *   - lastTimestamp: epoch ms parsed from the LAST `type: "assistant"`
  *                    record's `timestamp` (ISO-8601 string). 0 sentinel when
  *                    no assistant record found OR timestamp is missing/
  *                    unparseable.
  *   - mtimeMs:       fs.stat mtime of the JSONL file. 0 sentinel when the
  *                    file is missing.
+ *   - isFinished:    true when the LAST `type: "assistant"` record has
+ *                    `message.stop_reason === "end_turn"` — Bram's Obs 13
+ *                    triage proved completed (background) sub-agents end
+ *                    their own JSONL on this record. The reducer treats
+ *                    this as a finished signal for background dispatches
+ *                    whose parent JSONL never receives a real tool_result.
+ *                    Optional for back-compat with callers / fixtures that
+ *                    pre-date the field — absent → treated as false.
+ *                    Verified on Claude Code v2.1.145 only (see
+ *                    `subagentTailer.ts` design note #4 caveat).
  */
 export interface SubagentActivity {
   model: string | null;
   lastTool: string | null;
   lastTimestamp: number;
   mtimeMs: number;
+  /**
+   * Obs 13 (86c9zmp5g): set true when the last assistant record in the
+   * sub-agent JSONL has `stop_reason === "end_turn"`. Background sub-agents'
+   * own JSONL is the only available completion signal because the parent
+   * JSONL never receives a real `tool_result` for background dispatches —
+   * only an `isAsync` ack (skipped by `readFinishedToolUseIds` since PR #82).
+   * Verified on Claude Code v2.1.145; pre-v2.1.145 behavior not confirmed.
+   */
+  isFinished?: boolean;
 }
 
 /**
