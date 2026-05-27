@@ -400,4 +400,6 @@ ENTRY-2026-05-26T21:11:30Z: 86c9zfrzt -> in review (Felix PR opened — chore(do
 ENTRY-2026-05-27T05:54:00Z: 86c9zmp5g -> in progress (Felix accepted dispatch — Obs 13 IMPL: stop_reason=end_turn → SubagentActivity.isFinished → finished state)
 ENTRY-2026-05-27T08:09:00Z: 86c9zmp5g -> in review (Felix PR #90 opened — fix(watcher): Obs 13 IMPL — stop_reason=end_turn → SubagentActivity.isFinished → finished state)
 ENTRY-2026-05-27T06:45:00Z: 86c9zn7vw -> in progress (Felix accepted dispatch — diagnostic output channel: verbose per-tick state-delta logging)
+ENTRY-2026-05-27T08:58:00Z: 86c9zmqa8 -> in progress (Maya accepted dispatch — uniform-cluster polish impl per Iris spec Option A+B+A.1)
+ENTRY-2026-05-27T09:00:00Z: 86c9zmqa8 -> in review (Maya PR #93 opened — polish(webview): auto-collapse uniform clusters + compact rows + status hint)
 ```
