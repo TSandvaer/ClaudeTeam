@@ -137,6 +137,27 @@ export interface WatcherOptions {
 
   /** Optional logger; defaults to a no-op so silent in production. */
   logger?: { warn: (msg: string) => void };
+
+  /**
+   * Optional per-tick completion hook (86c9zn7vw — diagnostic Output channel).
+   * Called at the end of every tick AFTER the optional `onStateChange` emit
+   * (or after the hash-skip suppression). The hook receives the tick number
+   * (sequential, starting at 1), the wall-clock duration in ms, whether the
+   * tick actually emitted to the webview, and the produced state (so the
+   * diagnostic dispatcher can compute per-agent transitions).
+   *
+   * Errors thrown from this hook are caught and surfaced via `logger.warn` —
+   * a failing diagnostic must NEVER take down the watcher loop.
+   *
+   * When omitted, the watcher behaves as before — no tick numbering, no
+   * duration measurement, no diagnostic hook firing.
+   */
+  onTickComplete?: (info: {
+    tickNumber: number;
+    durationMs: number;
+    emitted: boolean;
+    state: DashboardState;
+  }) => void;
 }
 
 /** Floor on the poll interval. Anything below this is clamped. */
@@ -206,6 +227,11 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
   let priorStateHash: string | null = null;
   let lastState: DashboardState | null = null;
   let stopped = false;
+  // 86c9zn7vw: sequential tick counter for the diagnostic Output channel.
+  // Increments before each tick attempt so the number in the log matches
+  // a real attempt (even ticks that throw produce an `error` log line
+  // tagged with that number).
+  let tickNumber = 0;
 
   /**
    * One tick: read disk, reduce, emit if changed.
@@ -213,6 +239,10 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
    */
   const tick = async (): Promise<void> => {
     if (stopped) return;
+    tickNumber += 1;
+    const tickStart = Date.now();
+    let emitted = false;
+    let stateForHook: DashboardState | null = null;
     try {
       const state = await runTick({
         claudeHome: opts.claudeHome,
@@ -235,21 +265,44 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
       // Always update lastState — even on hash-skip — so host lookups against
       // the most recent reduction see fresh `cwd` values for `ui:open-transcript`.
       lastState = state;
+      stateForHook = state;
       const hash = hashState(state);
-      if (hash === priorStateHash) {
-        // Nothing changed — skip the webview update.
-        return;
-      }
-      priorStateHash = hash;
-      try {
-        opts.onStateChange(state);
-      } catch (err) {
-        logger.warn(
-          `watcherLoop: onStateChange handler threw: ${(err as Error).message}`,
-        );
+      if (hash !== priorStateHash) {
+        priorStateHash = hash;
+        try {
+          opts.onStateChange(state);
+          emitted = true;
+        } catch (err) {
+          logger.warn(
+            `watcherLoop: onStateChange handler threw: ${(err as Error).message}`,
+          );
+        }
       }
     } catch (err) {
       logger.warn(`watcherLoop: tick failed: ${(err as Error).message}`);
+    }
+    // 86c9zn7vw: fire the diagnostic hook AFTER the emit decision. Use
+    // `stateForHook` (the state produced this tick) when available, else
+    // the prior `lastState` (when runTick threw before assigning), else
+    // an empty placeholder so the hook signature stays stable. The hook
+    // itself is gated by the diagnostic-verbose config — when the setting
+    // is false the hook is a no-op fast path. Errors caught at the
+    // boundary so a broken diagnostic CANNOT take down the watcher loop.
+    if (opts.onTickComplete) {
+      const hookState =
+        stateForHook ?? lastState ?? { sessions: [] };
+      try {
+        opts.onTickComplete({
+          tickNumber,
+          durationMs: Date.now() - tickStart,
+          emitted,
+          state: hookState,
+        });
+      } catch (err) {
+        logger.warn(
+          `watcherLoop: onTickComplete handler threw: ${(err as Error).message}`,
+        );
+      }
     }
   };
 

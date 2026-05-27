@@ -102,6 +102,11 @@
           "type": "boolean",
           "default": false,
           "description": "Hide rostered agent tiles whose state is 'finished'. When true, the dashboard suppresses finished tiles and shows a count chip in the header (e.g. '3 finished hidden — show'). Background-noise rows are not affected — they collapse via the background chip instead. Toggle via Settings or the dashboard header chip."
+        },
+        "claudeteam.diagnostic.verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose per-tick diagnostic logging to the 'Claude Team — Diagnostics' Output channel. Emits one line per watcher tick (timestamp + duration + emitted flag), plus per-agent state-transition lines (running → idle → finished), roster reload events, and watcher errors. Default: false (silent). Toggle takes effect within one tick — no Reload Window required. Use for diagnosing why a tile is stuck in a given state or why an emit isn't reaching the webview."
         }
       }
     }
