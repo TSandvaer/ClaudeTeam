@@ -61,6 +61,11 @@
         "command": "claudeteam.toggleHideFinished",
         "title": "ClaudeTeam: Toggle Hide Finished Agents",
         "icon": "$(eye-closed)"
+      },
+      {
+        "command": "claudeteam.openDiagnosticPanel",
+        "title": "ClaudeTeam: Open Diagnostic Panel",
+        "icon": "$(pulse)"
       }
     ],
     "configuration": {

@@ -1,0 +1,512 @@
+/*
+ * panel.css — diagnostic panel styles (86c9zn7tm).
+ *
+ * Theme discipline:
+ *   - Every color flows through a --vscode-* CSS variable (or one of the
+ *     four semantic state hex values, shared with the dashboard).
+ *   - The panel reuses the dashboard's --ct-color-state-* hex codes so the
+ *     state badges read identically across surfaces.
+ *
+ * Layout intent:
+ *   - Editor-tab-wide layout — wide enough for a 6-column table without
+ *     wrapping at typical VS Code widths.
+ *   - Two main sections (Tick history + Current state), stacked vertically
+ *     with a single header block on top.
+ *   - The tick table is dense — single-row entries with no per-row chrome.
+ *   - The current-state section uses cards-per-session so a multi-session
+ *     dogfood scenario stays readable.
+ */
+
+:root {
+  /* Spacing scale — kept aligned with the dashboard for visual consistency. */
+  --ct-diag-space-xs: 4px;
+  --ct-diag-space-s: 8px;
+  --ct-diag-space-m: 12px;
+  --ct-diag-space-l: 16px;
+  --ct-diag-space-xl: 24px;
+
+  /* Theme-mapped colors — same fallback shape as dashboard.css */
+  --ct-diag-fg: var(--vscode-foreground, #cccccc);
+  --ct-diag-fg-muted: var(--vscode-descriptionForeground, #858585);
+  --ct-diag-bg-editor: var(--vscode-editor-background, #1e1e1e);
+  --ct-diag-bg-card: var(--vscode-editorWidget-background, var(--ct-diag-bg-editor));
+  --ct-diag-bg-hover: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.06));
+  --ct-diag-border: var(--vscode-panel-border, #444444);
+  --ct-diag-border-strong: var(--vscode-contrastBorder, transparent);
+  --ct-diag-focus: var(--vscode-focusBorder, #007fd4);
+
+  --ct-diag-button-bg: var(--vscode-button-background, #0e639c);
+  --ct-diag-button-fg: var(--vscode-button-foreground, #ffffff);
+  --ct-diag-button-hover: var(--vscode-button-hoverBackground, #1177bb);
+
+  --ct-diag-chip-bg: var(--vscode-badge-background, #4d4d4d);
+  --ct-diag-chip-fg: var(--vscode-badge-foreground, #ffffff);
+
+  /* Semantic state colors — HARDCODED hex (shared with dashboard). */
+  --ct-diag-state-running: #4caf50;
+  --ct-diag-state-idle: #ffa726;
+  --ct-diag-state-finished: #78909c;
+  --ct-diag-state-error: #ef5350;
+
+  /* Subtle row striping for the tick table */
+  --ct-diag-row-stripe: var(
+    --vscode-list-inactiveSelectionBackground,
+    rgba(255, 255, 255, 0.03)
+  );
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  font-weight: var(--vscode-font-weight);
+  color: var(--ct-diag-fg);
+  background-color: var(--ct-diag-bg-editor);
+}
+
+#root {
+  display: block;
+  padding: var(--ct-diag-space-l);
+}
+
+.diagnostic-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-diag-space-xl);
+}
+
+/* ===========================================================================
+ * Header
+ * =========================================================================== */
+
+.diagnostic-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-diag-space-m);
+  padding-bottom: var(--ct-diag-space-m);
+  border-bottom: 1px solid var(--ct-diag-border);
+}
+
+.diagnostic-title {
+  margin: 0;
+  font-size: 1.4em;
+  font-weight: 600;
+  color: var(--ct-diag-fg);
+}
+
+.diagnostic-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-diag-space-s);
+  align-items: center;
+}
+
+.diagnostic-chip {
+  display: inline-block;
+  padding: 2px var(--ct-diag-space-s);
+  border-radius: 999px;
+  font-size: smaller;
+  background-color: var(--ct-diag-chip-bg);
+  color: var(--ct-diag-chip-fg);
+  white-space: nowrap;
+}
+
+.diagnostic-chip--on {
+  /* Active recording — use the running-state green so it reads as "live". */
+  background-color: var(--ct-diag-state-running);
+  color: #0a1a0a;
+}
+
+.diagnostic-chip--off {
+  background-color: var(--ct-diag-chip-bg);
+  color: var(--ct-diag-chip-fg);
+  opacity: 0.85;
+}
+
+.diagnostic-chip--neutral {
+  background-color: transparent;
+  color: var(--ct-diag-fg-muted);
+  border: 1px solid var(--ct-diag-border);
+}
+
+.diagnostic-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-diag-space-s);
+}
+
+.diagnostic-button {
+  padding: var(--ct-diag-space-xs) var(--ct-diag-space-m);
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background-color: var(--ct-diag-button-bg);
+  color: var(--ct-diag-button-fg);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.diagnostic-button:hover {
+  background-color: var(--ct-diag-button-hover);
+}
+
+.diagnostic-button:focus-visible {
+  outline: 1px solid var(--ct-diag-focus);
+  outline-offset: 1px;
+}
+
+/* Pause/Resume visual distinction — when paused the button signals "frozen". */
+.diagnostic-button--paused {
+  /* Idle-state amber communicates "paused, not broken". */
+  background-color: var(--ct-diag-state-idle);
+  color: #1a1300;
+}
+
+.diagnostic-button--paused:hover {
+  background-color: #ffb74d;
+}
+
+/* ===========================================================================
+ * Empty boot state
+ * =========================================================================== */
+
+.diagnostic-empty {
+  padding: var(--ct-diag-space-xl);
+  text-align: center;
+  color: var(--ct-diag-fg-muted);
+}
+
+.diagnostic-empty-heading {
+  margin: 0 0 var(--ct-diag-space-s) 0;
+  font-size: 1.1em;
+  color: var(--ct-diag-fg);
+}
+
+.diagnostic-empty-hint {
+  margin: 0;
+}
+
+/* ===========================================================================
+ * Sections — common framing for ticks + state
+ * =========================================================================== */
+
+.diagnostic-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-diag-space-m);
+}
+
+.diagnostic-section-heading {
+  margin: 0;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--ct-diag-fg);
+  letter-spacing: 0.02em;
+}
+
+.diagnostic-table-empty {
+  padding: var(--ct-diag-space-m);
+  color: var(--ct-diag-fg-muted);
+  background-color: var(--ct-diag-bg-card);
+  border: 1px dashed var(--ct-diag-border);
+  border-radius: 4px;
+}
+
+/* ===========================================================================
+ * Tick history table
+ * =========================================================================== */
+
+.diagnostic-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--ct-diag-bg-card);
+  border: 1px solid var(--ct-diag-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.diagnostic-table th,
+.diagnostic-table td {
+  padding: var(--ct-diag-space-s) var(--ct-diag-space-m);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--ct-diag-border);
+}
+
+.diagnostic-table th {
+  color: var(--ct-diag-fg-muted);
+  font-weight: 600;
+  font-size: smaller;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: var(--ct-diag-bg-editor);
+}
+
+.diagnostic-table tbody tr:nth-child(even) {
+  background-color: var(--ct-diag-row-stripe);
+}
+
+.diagnostic-table tbody tr:hover {
+  background-color: var(--ct-diag-bg-hover);
+}
+
+.diagnostic-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.diagnostic-cell {
+  font-family: inherit;
+}
+
+.diagnostic-cell--time,
+.diagnostic-cell--num,
+.diagnostic-cell--duration,
+.diagnostic-cell--agentid,
+.diagnostic-cell--activity,
+.diagnostic-cell--model {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.diagnostic-cell--time {
+  white-space: nowrap;
+}
+
+.diagnostic-cell--num {
+  color: var(--ct-diag-fg-muted);
+  white-space: nowrap;
+}
+
+.diagnostic-cell--duration {
+  white-space: nowrap;
+}
+
+.diagnostic-cell--empty {
+  color: var(--ct-diag-fg-muted);
+}
+
+.diagnostic-cell--emitted {
+  text-transform: lowercase;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+}
+
+.diagnostic-tick-row--hash-skip .diagnostic-cell--emitted {
+  color: var(--ct-diag-fg-muted);
+}
+
+.diagnostic-tick-row--hash-skip {
+  /* Subtly de-emphasized — hash-skip rows are background noise during a
+     normal diagnosis; bold them only when something else flags interest. */
+  opacity: 0.78;
+}
+
+/* ===========================================================================
+ * Transitions sub-list inside the tick table
+ * =========================================================================== */
+
+.diagnostic-transitions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-diag-space-xs);
+}
+
+.diagnostic-transition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-diag-space-s);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+}
+
+.diagnostic-transition-ids {
+  color: var(--ct-diag-fg-muted);
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.diagnostic-transition-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ct-diag-space-xs);
+}
+
+.diagnostic-arrow-glyph {
+  color: var(--ct-diag-fg-muted);
+}
+
+/* ===========================================================================
+ * State badge — shared across the tick transitions and the agent rows
+ * =========================================================================== */
+
+.diagnostic-state-badge {
+  display: inline-block;
+  padding: 1px var(--ct-diag-space-s);
+  border-radius: 2px;
+  font-size: smaller;
+  font-family: var(--vscode-editor-font-family, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.diagnostic-state-badge[data-state="running"] {
+  background-color: var(--ct-diag-state-running);
+  color: #0a1a0a;
+}
+
+.diagnostic-state-badge[data-state="idle"] {
+  background-color: var(--ct-diag-state-idle);
+  color: #1a1300;
+}
+
+.diagnostic-state-badge[data-state="finished"] {
+  background-color: var(--ct-diag-state-finished);
+  color: #0e1417;
+}
+
+.diagnostic-state-badge[data-state="error"] {
+  background-color: var(--ct-diag-state-error);
+  color: #1a0707;
+}
+
+/* ===========================================================================
+ * Current-state — session cards
+ * =========================================================================== */
+
+.diagnostic-session {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-diag-space-s);
+  padding: var(--ct-diag-space-m);
+  background-color: var(--ct-diag-bg-card);
+  border: 1px solid var(--ct-diag-border);
+  border-radius: 4px;
+}
+
+.diagnostic-session--dead {
+  opacity: 0.6;
+}
+
+.diagnostic-session-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--ct-diag-space-s);
+}
+
+.diagnostic-session-shortid {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-weight: 600;
+  color: var(--ct-diag-fg);
+}
+
+.diagnostic-session-title {
+  font-style: italic;
+  color: var(--ct-diag-fg);
+}
+
+.diagnostic-session-meta {
+  font-size: smaller;
+  color: var(--ct-diag-fg-muted);
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.diagnostic-session-dead {
+  margin-left: auto;
+  padding: 0 var(--ct-diag-space-s);
+  border: 1px solid var(--ct-diag-fg-muted);
+  border-radius: 2px;
+  font-size: smaller;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.diagnostic-session-cwd {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+  color: var(--ct-diag-fg-muted);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.diagnostic-table--agents .diagnostic-cell--persona {
+  font-weight: 600;
+}
+
+.diagnostic-table--agents .diagnostic-cell--activity {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-background {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-diag-space-xs);
+  padding: var(--ct-diag-space-s);
+  background-color: var(--ct-diag-bg-editor);
+  border-left: 2px solid var(--ct-diag-border);
+}
+
+.diagnostic-background-heading {
+  font-size: smaller;
+  color: var(--ct-diag-fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.diagnostic-background-list {
+  margin: 0;
+  padding-left: var(--ct-diag-space-m);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+  color: var(--ct-diag-fg);
+}
+
+.diagnostic-background-text {
+  vertical-align: middle;
+}
+
+/* ===========================================================================
+ * Banners — roster errors / warnings
+ * =========================================================================== */
+
+.diagnostic-banner {
+  padding: var(--ct-diag-space-s) var(--ct-diag-space-m);
+  border-radius: 4px;
+  border-left-width: 3px;
+  border-left-style: solid;
+}
+
+.diagnostic-banner--error {
+  background-color: var(
+    --vscode-inputValidation-errorBackground,
+    rgba(239, 83, 80, 0.12)
+  );
+  border-left-color: var(--ct-diag-state-error);
+  color: var(--vscode-inputValidation-errorForeground, var(--ct-diag-fg));
+}
+
+.diagnostic-banner--warn {
+  background-color: var(
+    --vscode-inputValidation-warningBackground,
+    rgba(255, 167, 38, 0.12)
+  );
+  border-left-color: var(--ct-diag-state-idle);
+  color: var(--vscode-inputValidation-warningForeground, var(--ct-diag-fg));
+}
+
+.diagnostic-banner-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--ct-diag-space-xs);
+}
+
+.diagnostic-banner-list {
+  margin: 0;
+  padding-left: var(--ct-diag-space-m);
+}

@@ -26,6 +26,13 @@
  *        context. See vscode-extension-conventions.md "Open questions §ESM".
  *      - acquireVsCodeApi() is a webview global, not an npm module — no external.
  *
+ *   2b. Diagnostic panel webview (IIFE, no externals — 86c9zn7tm)
+ *      src/diagnostics/main.ts → dist/diagnostics/main.js
+ *      - Same IIFE + browser-target shape as the dashboard webview. The
+ *        diagnostic panel is its own VS Code WebviewPanel (editor tab),
+ *        independent from the activity-bar dashboard, so it ships its own
+ *        bundle + CSS.
+ *
  *   3. CLI             (ESM, Node)
  *      src/cli/agentTree.ts → dist/cli/agentTree.js
  *      - Retained from M1-09. Not affected by the extension targets.
@@ -91,6 +98,25 @@ const webviewCssTarget = {
   loader: { ".css": "css" },
 };
 
+/** Diagnostic panel webview bundle — IIFE, all deps bundled (86c9zn7tm). */
+const diagnosticsTarget = {
+  ...commonOptions,
+  entryPoints: ["src/diagnostics/main.ts"],
+  outfile: "dist/diagnostics/main.js",
+  platform: "browser",
+  target: "es2020",
+  format: "iife",
+  external: [],
+};
+
+/** Diagnostic panel CSS bundle — sibling of the JS, linked via <link rel> (86c9zn7tm). */
+const diagnosticsCssTarget = {
+  ...commonOptions,
+  entryPoints: ["src/diagnostics/panel.css"],
+  outfile: "dist/diagnostics/panel.css",
+  loader: { ".css": "css" },
+};
+
 /** CLI bundle — ESM, Node (retained from M1-09). */
 const cliTarget = {
   ...commonOptions,
@@ -109,17 +135,22 @@ const cliTarget = {
 if (isWatch) {
   // Watch mode — all targets run in parallel via esbuild contexts.
   // `npm run watch` passes --watch.
-  const [extCtx, webCtx, webCssCtx, cliCtx] = await Promise.all([
-    context(extensionHostTarget),
-    context(webviewTarget),
-    context(webviewCssTarget),
-    context(cliTarget),
-  ]);
+  const [extCtx, webCtx, webCssCtx, diagCtx, diagCssCtx, cliCtx] =
+    await Promise.all([
+      context(extensionHostTarget),
+      context(webviewTarget),
+      context(webviewCssTarget),
+      context(diagnosticsTarget),
+      context(diagnosticsCssTarget),
+      context(cliTarget),
+    ]);
 
   await Promise.all([
     extCtx.watch(),
     webCtx.watch(),
     webCssCtx.watch(),
+    diagCtx.watch(),
+    diagCssCtx.watch(),
     cliCtx.watch(),
   ]);
 
@@ -133,12 +164,16 @@ if (isWatch) {
     build(extensionHostTarget),
     build(webviewTarget),
     build(webviewCssTarget),
+    build(diagnosticsTarget),
+    build(diagnosticsCssTarget),
     build(cliTarget),
   ]);
 
   console.log("[esbuild.config] Build complete:");
-  console.log("  dist/extension/main.cjs    (extension host, CJS)");
-  console.log("  dist/webview/main.js       (webview JS, IIFE)");
-  console.log("  dist/webview/dashboard.css (webview CSS)");
-  console.log("  dist/cli/agentTree.js      (CLI, ESM)");
+  console.log("  dist/extension/main.cjs        (extension host, CJS)");
+  console.log("  dist/webview/main.js           (webview JS, IIFE)");
+  console.log("  dist/webview/dashboard.css     (webview CSS)");
+  console.log("  dist/diagnostics/main.js       (diagnostic panel JS, IIFE)");
+  console.log("  dist/diagnostics/panel.css     (diagnostic panel CSS)");
+  console.log("  dist/cli/agentTree.js          (CLI, ESM)");
 }
