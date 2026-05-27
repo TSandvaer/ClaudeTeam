@@ -18,6 +18,7 @@ import { describe, it, expect } from "vitest";
 import {
   NO_AI_TITLE_SENTINEL,
   resolveSessionLabel,
+  resolveSessionLabelWithSource,
   workspaceFolderName,
 } from "../../src/shared/types.js";
 
@@ -125,6 +126,48 @@ describe("resolveSessionLabel — priority chain (86ca03nww)", () => {
     const snapshot = { ...input };
     resolveSessionLabel(input);
     expect(input).toEqual(snapshot);
+  });
+});
+
+describe("resolveSessionLabelWithSource — source dispatch (86ca049xf)", () => {
+  // One source-of-truth test asserting label + source per tier so the
+  // webview's `data-label-source` decoration and tooltip can never drift
+  // from the resolved label string. Both come from the same call now —
+  // the test pins the contract.
+  it("emits the resolved label AND source per tier (3 cases + fall-through)", () => {
+    // Tier 1: customTitle wins → source is "custom-title".
+    expect(
+      resolveSessionLabelWithSource({
+        title: "AI-generated title",
+        customTitle: "claude team",
+        cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
+      }),
+    ).toEqual({ label: "claude team", source: "custom-title" });
+
+    // Tier 2: aiTitle wins when customTitle absent → source is "ai-title".
+    expect(
+      resolveSessionLabelWithSource({
+        title: "AI-generated title",
+        cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
+      }),
+    ).toEqual({ label: "AI-generated title", source: "ai-title" });
+
+    // Tier 3: both absent → source is "workspace-folder".
+    expect(
+      resolveSessionLabelWithSource({
+        title: NO_AI_TITLE_SENTINEL,
+        cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
+      }),
+    ).toEqual({ label: "ClaudeTeam", source: "workspace-folder" });
+
+    // Fall-through: whitespace customTitle + sentinel aiTitle → workspace.
+    expect(
+      resolveSessionLabelWithSource({
+        title: NO_AI_TITLE_SENTINEL,
+        customTitle: "   ",
+        cwd: "/home/user/projects/marian-tutor",
+      }),
+    ).toEqual({ label: "marian-tutor", source: "workspace-folder" });
   });
 });
 
