@@ -136,6 +136,62 @@ describe("renderAgentTile — state coverage", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Agent tile — hide activity row on `tool:?` sentinel (86ca03ym7)
+// ---------------------------------------------------------------------------
+
+describe("renderAgentTile — hide activity row when tool absent (86ca03ym7)", () => {
+  it("does NOT render .tile-row--activity when activity is the 'tool:?' sentinel", () => {
+    // Host stamps "tool:?" when state=running AND lastTool=null/undefined
+    // (fresh spawn or between-tool-call moments). Sponsor decision: hide the
+    // row entirely rather than render a `?` placeholder.
+    const el = renderAgentTile({
+      tile: makeTile({ state: "running", activity: "tool:?" }),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    expect(el.querySelector(".tile-row--activity")).toBeNull();
+    expect(el.querySelector(".agent-activity")).toBeNull();
+    // Other rows still render — only the activity row is suppressed.
+    expect(el.querySelector(".tile-row--primary")).not.toBeNull();
+    expect(el.querySelector(".tile-row--role")).not.toBeNull();
+    expect(el.querySelector(".tile-row--model")).not.toBeNull();
+  });
+
+  it("DOES render .tile-row--activity for a known tool (e.g. 'tool:Edit ...')", () => {
+    // Negative path — the hide rule must not trip on real activity strings.
+    const el = renderAgentTile({
+      tile: makeTile({ state: "running", activity: "tool:Edit src/foo.ts" }),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    expect(el.querySelector(".tile-row--activity")).not.toBeNull();
+    expect(el.querySelector(".agent-activity")?.textContent).toBe(
+      "tool:Edit src/foo.ts",
+    );
+  });
+
+  it("DOES render .tile-row--activity for idle/finished/error activity strings", () => {
+    // The sentinel is exclusive to `tool:?`. Other non-tool activity strings
+    // (`idle Xs`, `finished`, `finished Xm`, `error: ...`) must continue to
+    // render normally — sponsor's `tool: ?` observation was tool-specific.
+    for (const [state, activity] of [
+      ["idle", "idle 14s"],
+      ["finished", "finished"],
+      ["finished", "finished 5m"],
+      ["error", "error: agent state unavailable"],
+    ] as const) {
+      const el = renderAgentTile({
+        tile: makeTile({ state, activity }),
+        sessionId: "sess-1",
+        postMessage: vi.fn(),
+      });
+      expect(el.querySelector(".tile-row--activity")).not.toBeNull();
+      expect(el.querySelector(".agent-activity")?.textContent).toBe(activity);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Agent tile — member-color paint (86c9zqa75 / spec 86c9zmyef §2)
 // ---------------------------------------------------------------------------
 
