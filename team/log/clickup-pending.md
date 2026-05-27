@@ -396,4 +396,5 @@ ENTRY-2026-05-26T22:45:00Z: 86c9zfmh1 -> in review (Maya PR opened — fix(webvi
 ENTRY-2026-05-26T21:09:31Z: 86c9zfrzt -> in progress (Felix accepted dispatch — Obs 8 NITs follow-up: stale comment + M5 spec resync)
 ENTRY-2026-05-26T21:11:30Z: 86c9zfrzt -> in review (Felix PR opened — chore(docs): Obs 8 NITs follow-up — stale comment + M5 spec resync)
 ENTRY-2026-05-27T05:54:00Z: 86c9zmp5g -> in progress (Felix accepted dispatch — Obs 13 IMPL: stop_reason=end_turn → SubagentActivity.isFinished → finished state)
+ENTRY-2026-05-27T08:09:00Z: 86c9zmp5g -> in review (Felix PR #90 opened — fix(watcher): Obs 13 IMPL — stop_reason=end_turn → SubagentActivity.isFinished → finished state)
 ```
