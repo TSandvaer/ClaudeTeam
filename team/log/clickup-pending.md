@@ -112,6 +112,8 @@ ENTRY-2026-05-26T22:30:00Z: 86c9zfmgg -> in progress (Maya accepted dispatch —
 ENTRY-2026-05-26T22:31:00Z: 86c9zfmgg -> in review (PR #84 opened — fix(webview): hide-finished chip label state-aware; ON branch reads "Show finished — N hidden"; 464 unit + 2 skipped green; jsdom data-plane smoke output included in Self-Test Report)
 ENTRY-2026-05-27T00:00:00Z: 86c9zmqa8 -> in progress (Iris dispatched — polish spec for uniform-cluster expansion (auto-collapse vs compact-row); branch iris/86c9zmqa8-uniform-cluster-spec)
 ENTRY-2026-05-27T00:15:00Z: 86c9zmqa8 -> in review (PR #91 opened — Iris spec; four candidate shapes A/B/C/D + comparison matrix; recommend Option A+B+A.1; three sponsor questions reserved for confirmation)
+ENTRY-2026-05-28T00:00:00Z: 86ca10anf -> in progress (Felix dispatched — flip hideIdleAgents default true→false; whole team always displayed)
+ENTRY-2026-05-28T00:01:00Z: 86ca10anf -> in review (PR #108 opened https://github.com/TSandvaer/ClaudeTeam/pull/108 — feat(config): flip hideIdleAgents default true→false; Maya requested as reviewer; 730 unit + 111 integration green; vsce package clean; Self-Test Report posted)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
