@@ -23,6 +23,26 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-28 — Whole-team-always-visible dashboard: full-roster baseline tiles + hide/remove agent UX (EPIC 86ca11187)
+
+**Decided:** The dashboard's display model changes from "show detected live agents matched to the roster" to "seed a tile for the FULL roster as always-present baseline, with live state overlaid." Every teams.yaml member always renders (default idle/available) even if never dispatched; running/idle/finished/error overlays when detected. PLUS two explicit USER-driven culling actions (no auto-hide):
+- **Hide agent** (reversible in-UI): per-tile "hide" → member drops from default view; a "show hidden agents" toggle reveals hidden members; per-agent "show" un-hides. Persists across reloads. For decluttering long-unused members without losing them.
+- **Remove agent** (yaml-gated restore): per-tile "remove" → member fully suppressed (not even under "show hidden"); returns ONLY by re-adding to teams.yaml. More permanent than hide.
+
+This also folds in the previously-unfiled persona pixel-character → webview display integration (sprites + pose→state mapping + slow/dwell playback).
+
+**Context:** Sponsor 2026-05-28. After the `hideIdleAgents` flip (#108) + flipping their `hideFinishedAgents` user setting, the sponsor noticed Iris/Nora/Bram still weren't shown — because the reducer (src/extension/state/reducer.ts, verified) builds tiles ONLY from detected live agents, so never-dispatched members get no tile. Without full-roster baseline rendering, "show idle"/"show finished" only ever reveal members who happened to run. Sponsor explicitly wants the full team always present + user-controlled hide/remove (NOT auto-hide-by-inactivity).
+
+**Alternative considered:** auto-hide members after N days idle. REJECTED by sponsor — culling must be explicit user action (hide or remove), never automatic.
+
+**Implication:** Net-new display model + state. Sequenced AFTER the M01+F01 pose set finishes (sequencing pivot). Needs Iris design spec → Felix (host: roster-baseline seeding, never-run state, hidden/removed persisted filters) + Maya (webview: sprite rendering, pose→state animation, hide/show/remove UI) → Sage tests. Will break into sub-tickets off the Iris spec. Gates: package.json (extension-manifest), webview-smoke.
+
+**Reversibility:** Spec/feature work — reversible per-PR; epic not yet dispatched.
+
+**Pointers:** ClickUp EPIC **86ca11187** (https://app.clickup.com/t/86ca11187); memory [[dashboard-whole-team-always-visible-thesis]]; reducer.ts (current detected-agents-only model); persona doc; assets/sprites/ClaudeTeam-M01-Dev + -F01-Dev.
+
+---
+
 ## 2026-05-28 — Full team always displayed: flip `hideIdleAgents` default true → false
 
 **Decided:** The dashboard must ALWAYS show the full team — all rostered members, idle or not — by **default**. `claudeteam.hideIdleAgents` default flips **`true` → `false`**. The hide-idle toggle/chip stays as a capability; only the DEFAULT changes. Ticket filed on the ClickUp board (901523520912) and dispatched to a dev 2026-05-28.

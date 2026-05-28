@@ -10,6 +10,27 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
+## Current state — 2026-05-28 ~22:00 UTC (drain+save — building M01+F01 new idle-pose pool; 5/8 done; full-team SHIPPED; epic filed)
+
+**Resume next-action:** Building a larger idle-pose pool on BOTH M01 (`7282cc3d-f822-492c-a790-08b3b5d2b27e`) and F01 (`f8f5708f-1364-4908-838a-4ab200cb0aff`), 8 new poses approved by sponsor, gating EVERY render via AskUserQuestion (sponsor clicks approve/reject — one render at a time, no batching ahead). **On resume: gate the F01 idle_yawn MOTION** (state `8c7222d2-a503-4037-96b5-edad8cf5ff4c`, gesture was rendering at save) — sponsor views in PixelLab UI. Then continue the remaining poses.
+
+**New idle-pose progress (state UUIDs; NONE harvested to disk yet — PixelLab only):**
+- idle_think — DONE both: M01 `ec0293a9-e3e9-4545-8e21-b11391ac1d23`, F01 `32b6afd4-d669-439f-b003-766cd6d96e02` (F01's was best; M01 re-rolled to hand-glued-to-chin)
+- idle_arms_crossed — DONE both: M01 `351e29e6-9811-4a50-8c9f-bb8fefc99bc0`, F01 `96ce82b0-fb16-44b5-9e4c-6937f03a35ce` (full-sweep symmetric head-look fixed the center→right-only issue — generalizes the reading symmetry fix)
+- idle_pockets — DONE both: M01 `b30068bf-cb1d-492f-8b0f-948c0661b798`, F01 `88c4cc9b-63aa-40b5-b4ae-060f157eac40`
+- idle_neck_roll — DONE both: M01 `52d38a23-e5eb-446e-b04b-e119792a01b8`, F01 `dd0b4160-d0bd-4a09-8cd3-5e0bc44522d5`
+- idle_yawn — M01 DONE `e80413dd-9e8f-41da-8657-4247f0046606`; F01 motion AWAITING GATE on `8c7222d2-a503-4037-96b5-edad8cf5ff4c` (upright re-roll — first F01 yawn `0cd018a9` was deleted for hunched/wrong-angle; keep yawn UPRIGHT, no head-tilt-back)
+- **REMAINING (not built): idle_watch, idle_headphones, idle_wave** on both. Recipes drafted in prior wakeup prompts: idle_watch state "raising one forearm with the wrist turned up to read a wristwatch, head tilted down slightly" + residual head-glance; idle_headphones (prop=headphones, palette OFF) head-bob to music; idle_wave (gesture) friendly wave.
+- **THEN: consolidated harvest** — re-download M01 + F01 group ZIPs (now include all new states) to `assets/sprites/ClaudeTeam-M01-Dev/` + `ClaudeTeam-F01-Dev/`, prune any `(copy)` strays first, commit. (The new idle poses are NOT yet on disk — only the original 7 poses are in the committed harvests.)
+
+**Pose gotchas validated this arc:** symmetry full-sweep wording ("first turns clearly to the LEFT … all the way to the RIGHT … just as far left as right", fc=10) fixes center→right-only on ANY head-look pose; idle_think hand must be glued to chin (head+arm tilt together, no slide); yawn must stay UPRIGHT (tilt-back caused a hunched/foreshortened render on F01); feet planted for standing poses (lock legs to avoid walking).
+
+**EXTENSION — full-team flip SHIPPED:** PR #108 merged (`hideIdleAgents` default true→false), ticket 86ca10anf complete. This session also flipped the sponsor's VS Code USER setting `claudeteam.hideFinishedAgents` true→false (was hiding finished agents — that was why only Maya showed). Local `main` reconciled: rebased the 8 persona/orch commits onto origin/main (has #108); **8 ahead / 0 behind, UNPUSHED** (push only if sponsor asks). Sponsor still to: reload window (done) / rebuild .vsix from current main for a clean packaged default.
+
+**EPIC 86ca11187 filed (NOT dispatched):** whole-team-always-visible dashboard — full-roster baseline tiles (seed a tile per roster member; reducer currently only builds from detected agents → Iris/Nora/Bram absent) + persona pixel-char rendering + hide-agent (reversible) + remove-agent (yaml-gated). Sequenced AFTER the M01+F01 pose set. Open offer to sponsor: dispatch Iris's design spec in PARALLEL with remaining poses (Iris worktree free, no PixelLab conflict) — sponsor invoked drain before answering.
+
+---
+
 ## Current state — 2026-05-28 ~19:15 UTC (SEQUENCING PIVOT — M02 PAUSED; next = propose larger idle-pose set for M01+F01, then extension display)
 
 **Resume next-action:** **Sponsor pivoted to depth-first** (see [team/DECISIONS.md](DECISIONS.md) 2026-05-28 "Sequencing pivot" + memory [[dashboard-whole-team-always-visible-thesis]]): finish ONLY M01+F01 with a much larger idle-pose pool → build the extension to display them correctly → THEN more variants. **Immediate next action: orchestrator proposes a SET of new idle-pose ideas** (beyond coffee/snack/stretch/phone/hips) for sponsor to pick from, then build the approved ones on BOTH M01 (`7282cc3d-f822-492c-a790-08b3b5d2b27e`) and F01 (`f8f5708f-1364-4908-838a-4ab200cb0aff`). Reading recipe is SOLVED + persisted to persona doc + memory (book UP at chest + head bowed fully down + full-sweep anim prompt + fc=10).
