@@ -23,6 +23,38 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-28 — Full team always displayed: flip `hideIdleAgents` default true → false
+
+**Decided:** The dashboard must ALWAYS show the full team — all rostered members, idle or not — by **default**. `claudeteam.hideIdleAgents` default flips **`true` → `false`**. The hide-idle toggle/chip stays as a capability; only the DEFAULT changes. Ticket filed on the ClickUp board (901523520912) and dispatched to a dev 2026-05-28.
+
+**Context:** Sponsor, 2026-05-28 (verbatim): *"I always want the full team to be displayed (idle or not)."* This is the concrete code reversal of the M5 running-focused "hide-idle-by-default" (Iris spec `86c9zmyef`, PRs #97/#98). The whole-team-always-visible thesis (DECISIONS 2026-05-27) + the persona pixel-character idle-variety work are the design justification — idle members now have visual presence worth always showing.
+
+**Alternative considered:** Leave default `true`, rely on the sponsor flipping the chip per-session. Rejected — sponsor wants it as the standing default, not a per-session opt-in.
+
+**Implication:** Small code change (package.json contributes default + any code-level `?? true` fallback + integration tests asserting the old default). Touches `package.json` → extension-manifest gate (vsce package in Self-Test); behavior change → webview-smoke gate (manual reload). Does NOT remove the toggle, does NOT change `hideFinishedAgents`, does NOT include the persona-character display integration (separate future ticket).
+
+**Reversibility:** One-line default flip — trivially reversible by flipping back.
+
+**Pointers:** memory [[dashboard-whole-team-always-visible-thesis]]; package.json:126-129 (`claudeteam.hideIdleAgents`); `src/extension/state/hideIdleFilter.ts`; tests/integration/watcherLoop.test.ts (~635/646 assert old default); Iris spec `team/iris-ux/86c9zmyef-running-focused-dashboard-spec.md` §3.2.
+
+---
+
+## 2026-05-28 — Sequencing pivot: depth-first on M01+F01 (many idle poses) → extension display → THEN more variants
+
+**Decided:** Stop breadth-first roster expansion. The new sequence is: (1) **finish only M01-Dev + F01-Dev**, giving each a **much larger idle-pose pool** (well beyond the current coffee/snack/stretch/phone/hips set); (2) **build the extension** so it displays these characters and their pose-animations correctly (random idle-pool pick, working on tool≠Read, reading on tool==Read, slow+dwell render); (3) **only once the extension displays them correctly** does the roster expand to more character variants (M02-M05, F02-F05). **M02-Dev is PAUSED as a deferred variant** (4 poses approved: coffee/reading/snack/stretch; preserved on PixelLab, not finished).
+
+**Context:** Sponsor stated mid-M02-build (2026-05-28): *"I only want to finish M01 and F01, they will have a lot more idle poses before i want to try them out in the extension. then when the extension can display them and display them correctly then ill move on to create more variants."* Rationale: prove the end-to-end display path on two well-developed characters before investing gens in 8 more — de-risks the extension integration and avoids building a large roster that might need rework once the display reveals issues.
+
+**Alternative considered:** Finish the full 10-char roster first (the prior plan), then build the extension. Rejected by sponsor — too much asset investment ahead of a working display path.
+
+**Implication:** Next persona work = propose + build a larger idle-pose set on M01 + F01 (orchestrator proposes the set, sponsor picks). The webview-integration ticket (Maya) moves UP in priority — it's now the gate before any further characters. M02's remaining poses (phone/hips/working) + harvest/commit are deferred until variants resume; M02 state UUIDs are recorded in STATE.md for clean resume.
+
+**Reversibility:** Pure sequencing/priority change — fully reversible by resuming M02 / roster expansion at any time. M02's PixelLab states persist server-side.
+
+**Pointers:** STATE.md resume header (2026-05-28 ~19:xx UTC); memory [[project-claudeteam-overview]] + [[dashboard-whole-team-always-visible-thesis]]; persona doc `.claude/docs/persona-pixel-character-animation-prompts.md`.
+
+---
+
 ## 2026-05-28 — State-per-pose is the standard for persona character animations
 
 **Decided:** Every persona pose — idle (coffee), eating a snack, stretching, on the phone, hands-on-hips, working at a computer, reading — is built as its own PixelLab **character state** (`create_character_state`), NOT as an animation queued directly on the base character. Each state bakes the pose (and any prop) into the character's reference rotation; the animation on that state is then ONLY the small residual motion (throat swallow, jaw, typing fingers, head scan). A character is therefore a GROUP: the base standing character (roster portrait) + one state per pose, each state carrying exactly one residual-motion animation.
