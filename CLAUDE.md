@@ -58,6 +58,7 @@ All files below are auto-loaded into context at session start via the [`session-
 - [vscode-extension-conventions.md](.claude/docs/vscode-extension-conventions.md) — extension scaffold patterns, webview message protocol, activation events.
 - [testing-strategy.md](.claude/docs/testing-strategy.md) — unit / integration / manual layers.
 - [orchestration-overview.md](.claude/docs/orchestration-overview.md) — dispatch, worktrees, PR/merge protocol.
+- [persona-pixel-character-animation-prompts.md](.claude/docs/persona-pixel-character-animation-prompts.md) — v3 custom animation prompt-engineering rules + validated prompts for the persona-character feature; cross-refs RandomGame's general PixelLab pipeline doc.
 
 The [`maintain-docs`](.claude/skills/maintain-docs/SKILL.md) skill (auto-triggered after every turn via Stop hook) reviews each turn for non-obvious findings worth capturing here and updates this index when new doc files are created.
 

@@ -23,6 +23,44 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-28 — State-per-pose is the standard for persona character animations
+
+**Decided:** Every persona pose — idle (coffee), eating a snack, stretching, on the phone, hands-on-hips, working at a computer, reading — is built as its own PixelLab **character state** (`create_character_state`), NOT as an animation queued directly on the base character. Each state bakes the pose (and any prop) into the character's reference rotation; the animation on that state is then ONLY the small residual motion (throat swallow, jaw, typing fingers, head scan). A character is therefore a GROUP: the base standing character (roster portrait) + one state per pose, each state carrying exactly one residual-motion animation.
+
+**Context:** While fixing M01-Dev's `reading` animation 2026-05-28, the sponsor observed the book re-raising every loop. Root cause: a v3 loop cannot hold a one-time setup — the loop wrap re-runs any transition verb (raise book, raise cup, sit down) and the held pose collapses back to the arms-down standing reference between cycles. The two-entity fix (book-up state + head-only loop) worked, and the sponsor generalized it: "maybe all the poses ... should all be states?" The `working` pose independently confirmed it — animating "sitting at a desk" on the standing base made the desk rise out of the ground each loop ("the table is sucked up from the ground").
+
+**Alternative considered:** Keep animating poses on the base character with stricter "once at the start / stays still" prompt language. Rejected — it fights prompt-literalism per-pose, per-character, ten times over; the held pose still collapses to the reference between cycles; and it cannot reliably suppress setup verbs (book/cup/desk). State-per-pose removes the failure at the source.
+
+**Implication:**
+- ~190 gens for the full 10-char roster (10 base + 70 states + 70 anims + ~40 re-roll buffer) vs. the earlier ~115 estimate — still ~10% of Tier-1's 2000/mo. Re-roll churn should drop because the pose is locked.
+- M01-Dev's existing base-character anims (coffee idle approved + 5 pending idles + working) are being rebuilt as states. The bad first reading attempts (`reading` anim on base `7282cc3d`; state `7b6a974b`) are scheduled for deletion.
+- Identity-consistency watch-item: each state re-synthesizes the sprite, so appearance can drift slightly between a character's own poses. Mitigation: `use_color_palette_from_reference=true` for non-prop poses (stretch, hips, working); accept minor drift on prop poses at 68px.
+- Webview reverse-map must pull each pose's anim from its sibling state folder (keyed by `metadata.json` `group_id → states[]`), not from one folder.
+- `auto-pixellab` queue (built to animate one character) needs a `create_character_state` step added per row before it can batch state-per-pose; until then, drive manually.
+
+**Reversibility:** Architecture choice for asset generation only; no production code committed yet. Per-state gens are sunk but PixelLab retains everything. Reverting = animate poses on the base char instead (and accept the failure modes this avoids). ~0 code to undo.
+
+**Pointers:** [.claude/docs/persona-pixel-character-animation-prompts.md](../.claude/docs/persona-pixel-character-animation-prompts.md) (§ Architecture: state-per-pose, § Per-pose recipes — full state+residual prompts); supersedes the base-character animation approach in the 2026-05-27 entry below; sponsor messages 2026-05-28 (this orchestrator session); M01-Dev base `7282cc3d-f822-492c-a790-08b3b5d2b27e`, corrected reading state `7d32de45-e4a9-4f09-b603-694b9c65a927`.
+
+## 2026-05-27 — Persona pixel characters replace color dots + dashboard whole-team always-visible thesis
+
+**Decided:** Personas on the dashboard will be represented by **pixel characters with multiple idle animation variants**, not just a colored dot. Sponsor's design north star is **whole-team always-visible** — every persona renders on the dashboard regardless of working state. The hide-idle-by-default code behavior shipped in M5 (PRs #97 + #98) **narratively reverses** under this thesis (the code default stays `true` for now; sponsor toggles their personal `hideIdleAgents` setting OFF via the header chip). Idle variety per character — 3-5+ distinct idle poses such as coffee sip, eating a snack, stretching, scrolling phone, hands on hips — is the **mechanism** that justifies always-on display; a single repeated idle pose would feel dead against continuous visibility. Plan: 5 male + 5 female unique pixel characters (25-40-year-old IT office employees), random assignment initially, sponsor-selectable later. Per-char animations: idle pool (multiple variants for the always-visible context) + sit-at-computer (any tool ≠ Read) + reading-book (tool == Read). Source-of-truth pipeline: PixelLab MCP (orchestrator-only — sub-agents lack permission per [randomgame `pixellab-pipeline.md`](../../RandomGame/.claude/docs/pixellab-pipeline.md)), `low top-down` view at size 48 / 4 directions / standard mode (1 gen/char), v3 custom animations south-only (1 gen/anim) to conserve credits. Workflow: create character → sponsor approves → animations one-by-one → sponsor approves each → next character.
+
+**Context:** Sponsor initiated 2026-05-27 mid-session ("instead of representing personas with a color (dot) I want each persona to have a pixel character"). After approving M01-Dev and the first idle (coffee sip) variant, sponsor expanded scope: "i want two or three idle poses so the character doesnt drink coffee all the time" — followed by the foundational reasoning: "the reason why i want so many idle poses is because i want to display the whole team at all times (i know im going back on not show idle)." The thesis is what makes the variety load-bearing rather than gold-plating: variety is *required* for an always-visible tile.
+
+**Alternative considered:** (a) Static character portraits (no anims) — ruled out; defeats the always-alive intent. (b) Single idle anim per character — ruled out per sponsor reasoning above. (c) Keep color dots, add character avatars only on hover/tooltip — sponsor explicitly chose pixel characters as the primary visual.
+
+**Implication:**
+- New asset library at `assets/personas/<name>/` (path TBD when Maya wires the webview integration). Approx. 50-100+ PixelLab generations needed for full roster (10 chars × ~1 base + 5-7 anims south-only). Well within Tier 1's 2000/mo budget; ~1636 remaining at session start.
+- Webview integration (future ticket, likely Maya): persona-card tile renders the character sprite; selects an idle variant on a rotation/random basis; flips to `working` anim during tool use ≠ Read; flips to `reading` anim during Read tool use.
+- Sponsor-selectable character UI (post-V1): user assigns specific characters to specific personas.
+- Hide-idle code default likely flips to `false` when persona characters ship as the default rendering — track separately; do not unilaterally change.
+- Per [pixellab-pipeline.md](../../RandomGame/.claude/docs/pixellab-pipeline.md) constraints: hand-object continuity not preserved across animation frames (small inconsistencies in coffee cup / phone / snack hand position acceptable at tile scale); animation frames only exposed via ZIP download; standard `animate_character` is ~1 gen/direction.
+
+**Reversibility:** Asset generation cost is sunk per gen (~$0.005/gen at Tier 1) but PixelLab account retains everything. Webview integration is a future PR; reverting = revert that PR. Sponsor can opt back to color dots at any time without touching PixelLab assets.
+
+**Pointers:** `[[dashboard-whole-team-always-visible-thesis]]` (memory); sponsor messages 2026-05-27 mid-session (this orchestrator turn); first character `ClaudeTeam-M01-Dev` PixelLab ID `7282cc3d-f822-492c-a790-08b3b5d2b27e`; randomgame project's `pixellab-pipeline.md` for tool-use conventions; no ClickUp ticket yet (file once feature scope stabilizes).
+
 ## 2026-05-23 — M2 absorbs M3's roster-render (Option A); M3 renamed to "Roster config + live refresh"
 
 **Decided:** M2's "Extension scaffold" milestone consumes the already-merged M1-08 roster matcher in the webview render path. V1-PLAN.md's M3 milestone is narrowed from "Load `teams.yaml`, apply matchers, render named tiles vs background bucket" to "Roster config + live refresh" (interactive roster-config UI, live YAML watching, drill-in polish).
