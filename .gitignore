@@ -13,3 +13,6 @@ dist/
 .claude/*.state
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+
+# Per-PR orchestration review scratch (regenerable; not version-controlled)
+team/*/pr-*-review*.md

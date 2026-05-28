@@ -135,6 +135,8 @@ Refine the shapes as needed; the rule is: **add a new message type rather than o
 
 **JSON-serialization constraint (non-obvious — validated M2-04, PR #23).** VS Code `webview.postMessage` (host → webview) and `acquireVsCodeApi().postMessage` (webview → host) serialize payloads via **JSON.stringify**, not the browser's structured-clone algorithm. This means `Map`, `Set`, `Date`, `RegExp`, `Function`, `undefined`-valued properties, circular refs, and class instances do NOT survive the round-trip — `Map` arrives as `{}`, `Date` arrives as ISO string, etc. **Rule:** message payload types must be JSON-safe (plain objects, arrays, primitives, ISO date strings if you need dates). If a host-side data structure uses `Map` (e.g. roster tiles keyed by agent id), flatten to a plain object via `Object.fromEntries(map)` on send and rebuild via `new Map(Object.entries(obj))` on receive. M2-04 pattern: `src/extension/messageBus.ts` exports `serializeState(state)` that flattens the host-side `DashboardState` to a `SerializedDashboardState` shape; webview consumers use `Object.entries` on the flattened fields. Apply the same pattern to any new message type whose payload would naturally use a `Map`/`Set`/`Date`.
 
+**`webview.postMessage` is fire-and-forget — NOT buffered (non-obvious — validated PR #72, merge `72626b1`, ticket `86c9z0w56`).** Messages sent from the host to the webview via `webview.postMessage(...)` BEFORE the webview's `window.addEventListener("message", ...)` handler is registered are silently dropped — VS Code does not buffer them for later delivery. The host's `WebviewView.onDidResolveWebview` (`src/extension/view/provider.ts:126-135`) fires synchronously in the same Node.js call stack as the `webview.html` assignment (`provider.ts:113`), which sends the bundle to the Electron renderer asynchronously. Any host-side `postMessage` between those two events arrives at the renderer BEFORE the webview JavaScript IIFE has run and registered its `message` listener (e.g., via `initMessageReceiver` at `src/webview/messageReceiver.ts:119`). Result: silent message loss. **Pattern (load-bearing):** webview-initiated pull — the webview sends `{ type: "ui:refresh" }` to the host as the final statement in `boot()` (after `initMessageReceiver` returns), and the host's `onRefresh` handler pushes current state via the now-listening channel. A host-side push at `onResolved` time (e.g., PR #66's replay) is acceptable as a harmless secondary fast-path only — it may work in some VS Code configurations if postMessage happens to buffer, but cannot be relied on as the primary delivery mechanism. Symptom of getting this wrong: a freshly-resolved webview renders the boot/empty state and never receives the host's initial payload (PR #66's empty-state-on-pane-reopen bug, fully diagnosed in Bram's triage doc at `team/bram-research/86c9yteju-triage-2026-05-26.md` § "Observation 3 — PR #66 follow-up verification").
+
 ## Build & package
 
 - **Bundler:** `esbuild` for both host and webview. Speed matters during dev (reload-test loop).
@@ -143,6 +145,31 @@ Refine the shapes as needed; the rule is: **add a new message type rather than o
 - **Packaging:** `vsce package` produces a `.vsix`. Manifest-touching PRs must include the `vsce package` output in the Self-Test Report (catches malformed `contributes` early). After `vsce package`, optionally re-extract the `.vsix` and verify `node -e "require('./extension/dist/extension/main.cjs')"` exits 0 on Node 22+ — catches packaging-time regressions in the bundle-format chain.
 - **Dev-only TS scripts triple-edit pattern:** any new top-level dev-only TS directory (e.g. `scripts/measure-cadence.ts`) requires three coordinated edits — (1) the source file itself, (2) `tsconfig.json` `include` entry so `npm run typecheck` covers it, (3) `.vscodeignore` exclusion so `vsce package` doesn't ship it inside the `.vsix`. Missing any one creates a partial failure: skip (2) and typecheck doesn't enforce it; skip (3) and the `.vsix` balloons with dev tooling that has no business shipping to users. Codified after M4-04 PR #59 (`d9b1b49`) where the gap was caught in the `vsce package --no-yarn` Self-Test step.
 - **Pre-commit:** typecheck + lint + unit tests. No `--no-verify`.
+
+## Install and dogfood-verification workflow
+
+When the sponsor or a dev installs a freshly-packaged `.vsix` to dogfood a fix or feature, the workflow MUST start with `git pull --ff-only` and then VERIFY the resulting `HEAD` SHA matches the expected ship-SHA before declaring "the fix works / doesn't work." Building from stale local `main` is the documented failure mode that bit V1 dogfood-verify (2026-05-26, ticket `86c9z0w56`): sponsor built and installed from a 7-PR-behind local `main`, then reported that PR #66's Obs 3 fix didn't work — but PR #66 wasn't in the installed `.vsix` at all. Triage almost dispatched against a phantom regression in code the running extension didn't contain.
+
+**Canonical install / reinstall sequence:**
+
+```bash
+git -C <project-root> pull --ff-only origin main
+git -C <project-root> rev-parse HEAD      # verify expected SHA before building
+cd <project-root>
+npm run build
+npx vsce package --no-yarn
+code --install-extension claudeteam-0.0.1.vsix --force
+```
+
+If the working tree carries uncommitted coord-state (`.claude/away-queue.md`, `.claude/decisions-while-away.md`, `team/STATE.md`, `team/log/clickup-pending.md`), wrap the sequence with `git stash push -- <files>` before pull and `git stash pop` after install — and expect a log-only conflict on `team/log/clickup-pending.md`. Recovery for the conflict: `git checkout --ours team/log/clickup-pending.md && git add team/log/clickup-pending.md && git stash drop` (see `.claude/docs/orchestration-overview.md` § Common failure modes for the broader log-only-conflict pattern).
+
+**Symptom-to-check-first rule (dogfood triage):** when a "shipped fix doesn't work" report arrives:
+
+1. `git -C <project-root> rev-parse HEAD` — does local `main` match the expected ship-SHA?
+2. `git -C <project-root> fetch origin && git -C <project-root> log --oneline HEAD..origin/main` — is local missing any merged PRs?
+3. Only after both checks confirm the installed `.vsix` was built from the expected SHA, classify the report as a real regression and dispatch triage.
+
+The cost of these two `git` calls is one Bash dropdown. The cost of dispatching a triage against code that isn't running is 30–60 min of sub-agent time plus sponsor frustration.
 
 ## Testing
 
