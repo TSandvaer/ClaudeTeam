@@ -1,0 +1,309 @@
+{
+  "group_id": "6603010c-19e8-4b5a-a50a-2230e834dfc5",
+  "states": [
+    {
+      "character": {
+        "id": "f8f5708f-1364-4908-838a-4ab200cb0aff",
+        "name": "ClaudeTeam-F01-Dev",
+        "prompt": "late-20s female software developer at an IT company, friendly office worker, warm olive-green cardigan over a light t-shirt, dark slim trousers, shoulder-length dark curly hair, warm medium-brown skin tone, no glasses, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T10:31:33.971824+00:00"
+      },
+      "folder": "ClaudeTeam-F01-Dev",
+      "frames": {
+        "rotations": {
+          "south": "ClaudeTeam-F01-Dev/rotations/south.png",
+          "west": "ClaudeTeam-F01-Dev/rotations/west.png",
+          "east": "ClaudeTeam-F01-Dev/rotations/east.png",
+          "north": "ClaudeTeam-F01-Dev/rotations/north.png"
+        },
+        "animations": {}
+      }
+    },
+    {
+      "character": {
+        "id": "6c886bdf-867a-4d7a-a9eb-9318682e43ba",
+        "name": "holding a coffee cup",
+        "prompt": "late-20s female software developer at an IT company, friendly office worker, warm olive-green cardigan over a light t-shirt, dark slim trousers, shoulder-length dark curly hair, warm medium-brown skin tone, no glasses, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T10:36:13.069663+00:00"
+      },
+      "folder": "holding_a_coffee_cup",
+      "frames": {
+        "rotations": {
+          "south": "holding_a_coffee_cup/rotations/south.png",
+          "west": "holding_a_coffee_cup/rotations/west.png",
+          "east": "holding_a_coffee_cup/rotations/east.png",
+          "north": "holding_a_coffee_cup/rotations/north.png"
+        },
+        "animations": {
+          "the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90": {
+            "south": [
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_000.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_001.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_002.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_003.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_004.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_005.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_006.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_007.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-0a57ab90/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "03888559-ef62-44a3-9075-ec795f479229",
+        "name": "reading an open book",
+        "prompt": "late-20s female software developer at an IT company, friendly office worker, warm olive-green cardigan over a light t-shirt, dark slim trousers, shoulder-length dark curly hair, warm medium-brown skin tone, no glasses, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T11:36:49.937946+00:00"
+      },
+      "folder": "reading_an_open_book",
+      "frames": {
+        "rotations": {
+          "south": "reading_an_open_book/rotations/south.png",
+          "west": "reading_an_open_book/rotations/west.png",
+          "east": "reading_an_open_book/rotations/east.png",
+          "north": "reading_an_open_book/rotations/north.png"
+        },
+        "animations": {
+          "the_head_stays_bowed_down_looking_at_the_book_with-e956cfae": {
+            "south": [
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_000.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_001.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_002.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_003.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_004.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_005.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_006.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_007.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_008.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_009.png",
+              "reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_010.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "5f5ea225-61ce-4b7d-bb96-7b9f1a49e6a2",
+        "name": "holding a small snac",
+        "prompt": "late-20s female software developer at an IT company, friendly office worker, warm olive-green cardigan over a light t-shirt, dark slim trousers, shoulder-length dark curly hair, warm medium-brown skin tone, no glasses, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T11:51:21.475495+00:00"
+      },
+      "folder": "holding_a_small_snac",
+      "frames": {
+        "rotations": {
+          "south": "holding_a_small_snac/rotations/south.png",
+          "west": "holding_a_small_snac/rotations/west.png",
+          "east": "holding_a_small_snac/rotations/east.png",
+          "north": "holding_a_small_snac/rotations/north.png"
+        },
+        "animations": {
+          "the_hand_stays_at_the_mouth_completely_still_only-4e4abc92": {
+            "south": [
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_000.png",
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_001.png",
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_002.png",
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_003.png",
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_004.png",
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_005.png",
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_006.png",
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_007.png",
+              "holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_only-4e4abc92/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "73c5f915-112a-4af5-924f-7d348859bd8e",
+        "name": "a relaxed tired upwa",
+        "prompt": "late-20s female software developer at an IT company, friendly office worker, warm olive-green cardigan over a light t-shirt, dark slim trousers, shoulder-length dark curly hair, warm medium-brown skin tone, no glasses, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T12:09:32.01558+00:00"
+      },
+      "folder": "a_relaxed_tired_upwa",
+      "frames": {
+        "rotations": {
+          "south": "a_relaxed_tired_upwa/rotations/south.png",
+          "west": "a_relaxed_tired_upwa/rotations/west.png",
+          "east": "a_relaxed_tired_upwa/rotations/east.png",
+          "north": "a_relaxed_tired_upwa/rotations/north.png"
+        },
+        "animations": {
+          "a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d": {
+            "south": [
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_000.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_001.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_002.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_003.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_004.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_005.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_006.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_007.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_008.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_009.png",
+              "a_relaxed_tired_upwa/animations/a_gentle_tired_stretching_motion_the_arms_reach_a-bf631c2d/south/frame_010.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "c4354a33-e074-45e2-adb2-8dfd9c071e2e",
+        "name": "holding a phone in f",
+        "prompt": "late-20s female software developer at an IT company, friendly office worker, warm olive-green cardigan over a light t-shirt, dark slim trousers, shoulder-length dark curly hair, warm medium-brown skin tone, no glasses, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T12:17:28.791271+00:00"
+      },
+      "folder": "holding_a_phone_in_f",
+      "frames": {
+        "rotations": {
+          "south": "holding_a_phone_in_f/rotations/south.png",
+          "west": "holding_a_phone_in_f/rotations/west.png",
+          "east": "holding_a_phone_in_f/rotations/east.png",
+          "north": "holding_a_phone_in_f/rotations/north.png"
+        },
+        "animations": {
+          "the_phone_stays_held_completely_still_in_front_of-1cb3e041": {
+            "south": [
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_000.png",
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_001.png",
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_002.png",
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_003.png",
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_004.png",
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_005.png",
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_006.png",
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_007.png",
+              "holding_a_phone_in_f/animations/the_phone_stays_held_completely_still_in_front_of-1cb3e041/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "9df54d60-5fa3-4ab8-9453-39c84e883c22",
+        "name": "standing with both h",
+        "prompt": "late-20s female software developer at an IT company, friendly office worker, warm olive-green cardigan over a light t-shirt, dark slim trousers, shoulder-length dark curly hair, warm medium-brown skin tone, no glasses, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T12:23:21.83368+00:00"
+      },
+      "folder": "standing_with_both_h",
+      "frames": {
+        "rotations": {
+          "south": "standing_with_both_h/rotations/south.png",
+          "west": "standing_with_both_h/rotations/west.png",
+          "east": "standing_with_both_h/rotations/east.png",
+          "north": "standing_with_both_h/rotations/north.png"
+        },
+        "animations": {
+          "the_body_stays_completely_still_with_both_hands_re-2f2431fa": {
+            "south": [
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_000.png",
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_001.png",
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_002.png",
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_003.png",
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_004.png",
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_005.png",
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_006.png",
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_007.png",
+              "standing_with_both_h/animations/the_body_stays_completely_still_with_both_hands_re-2f2431fa/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "d69b8c32-ae00-4a7d-a35a-4ec70df7ab03",
+        "name": "sitting at a desk fa",
+        "prompt": "late-20s female software developer at an IT company, friendly office worker, warm olive-green cardigan over a light t-shirt, dark slim trousers, shoulder-length dark curly hair, warm medium-brown skin tone, no glasses, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T12:31:36.586338+00:00"
+      },
+      "folder": "sitting_at_a_desk_fa",
+      "frames": {
+        "rotations": {
+          "south": "sitting_at_a_desk_fa/rotations/south.png",
+          "west": "sitting_at_a_desk_fa/rotations/west.png",
+          "east": "sitting_at_a_desk_fa/rotations/east.png",
+          "north": "sitting_at_a_desk_fa/rotations/north.png"
+        },
+        "animations": {
+          "the_body_stays_seated_completely_still_at_the_desk-585f9b5e": {
+            "south": [
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_000.png",
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_001.png",
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_002.png",
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_003.png",
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_004.png",
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_005.png",
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_006.png",
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_007.png",
+              "sitting_at_a_desk_fa/animations/the_body_stays_seated_completely_still_at_the_desk-585f9b5e/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "export_version": "3.0",
+  "export_date": "2026-05-28T12:40:48.051945"
+}
