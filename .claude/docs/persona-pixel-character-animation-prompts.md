@@ -166,6 +166,8 @@ the head stays bowed down looking at the book with the chin low near the chest t
 
    ⚠️ **Harvest ONCE at the end, to a single canonical dir — do NOT harvest per-pose.** Because any member UUID's download returns the WHOLE group, harvesting after each pose creates redundant per-UUID dumps of the entire group (M01 accumulated **4 dirs / 362 PNGs** of mostly-overlapping content before this was caught). Skip per-pose harvests — sponsor inspects motion in the PixelLab web UI, not on disk. When all the character's poses are sponsor-approved, do ONE consolidated harvest into `assets/sprites/<CharName>/` (e.g. `assets/sprites/ClaudeTeam-M01-Dev/`), and delete any stray per-UUID dirs.
 
+   ⚠️ **Before harvesting, enumerate the group and prune stray `(copy)` states.** `mcp__pixellab__list_characters` shows every state with its group + anim count. A state whose name ends in **`(copy)`** is a **PixelLab web-UI duplicate** (browser right-click → Duplicate / Ctrl+D on a selected state) — NOT something the MCP produced: `create_character_state` always names a state after its `edit_description` verbatim and never appends a `(copy)` suffix. These copies are empty (0 anims) and harmless until harvest, where they'd add a redundant sibling. Delete them with `delete_character(confirm=true)` (verify 0 anims first). Seen 3× across M01 + F01 — assume one or two will appear per character and check the group count against your expected `base + N poses` before harvest.
+
 ---
 
 ## Naming convention
