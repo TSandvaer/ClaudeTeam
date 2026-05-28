@@ -212,15 +212,15 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.workspace
           .getConfiguration("claudeteam")
           .get<boolean>("autoCollapseUniformClusters") ?? true,
-      // 86c9zq9vm (spec 86c9zmyef): read-fresh-every-tick pattern for the
-      // hide-idle toggle. Default true (filter ON — V1 default per sponsor
-      // Q1) matches the package.json schema default. The host applies the
-      // post-reducer filter when ON; when OFF the dashboard restores the
-      // pre-86c9zq9vm "show everything" behavior.
+      // 86c9zq9vm / 86ca10anf: read-fresh-every-tick pattern for the
+      // hide-idle toggle. Default false (filter OFF — V1 ships the whole team
+      // always-visible) matches the package.json schema default. The host
+      // applies the post-reducer filter when ON; when OFF (default) the
+      // dashboard shows every tile including idle members.
       getHideIdleAgents: () =>
         vscode.workspace
           .getConfiguration("claudeteam")
-          .get<boolean>("hideIdleAgents") ?? true,
+          .get<boolean>("hideIdleAgents") ?? false,
       onStateChange: (state) => {
         void postState(webview, state);
       },
@@ -430,16 +430,16 @@ export function activate(context: vscode.ExtensionContext): void {
       diagnosticPanelManager.show();
     }),
 
-    // 86c9zq9vm (spec 86c9zmyef §7.1): toggle `claudeteam.hideIdleAgents`
-    // from the command palette or a user-bound keybinding. Default is ON
-    // (V1 ships running-focused — sponsor Q1) so the natural use is "flip
-    // OFF temporarily to see idle members". Same Global-scope write +
-    // instant-effect listener as toggleHideFinished.
+    // 86c9zq9vm / 86ca10anf (spec 86c9zmyef §7.1): toggle
+    // `claudeteam.hideIdleAgents` from the command palette or a user-bound
+    // keybinding. Default is OFF (V1 ships the whole team always-visible) so
+    // the natural use is "flip ON to focus on running members". Same
+    // Global-scope write + instant-effect listener as toggleHideFinished.
     vscode.commands.registerCommand("claudeteam.toggleHideIdle", () => {
       const current =
         vscode.workspace
           .getConfiguration("claudeteam")
-          .get<boolean>("hideIdleAgents") ?? true;
+          .get<boolean>("hideIdleAgents") ?? false;
       void handleSetConfig("hideIdleAgents", !current);
     }),
   );

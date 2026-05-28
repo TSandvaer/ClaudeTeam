@@ -146,10 +146,11 @@ export interface WatcherOptions {
 
   /**
    * Optional resolver for the `claudeteam.hideIdleAgents` setting
-   * (86c9zq9vm — running-focused dashboard spec 86c9zmyef). Read fresh
-   * every tick so toggling the setting applies on the next tick without
-   * restart. When omitted, treated as `true` (filter ON — V1 default per
-   * sponsor Q1; matches the package.json config schema default).
+   * (86c9zq9vm / 86ca10anf — running-focused dashboard spec 86c9zmyef).
+   * Read fresh every tick so toggling the setting applies on the next tick
+   * without restart. When omitted, treated as `false` (filter OFF — V1 ships
+   * the whole team always-visible; matches the package.json config schema
+   * default).
    */
   getHideIdleAgents?: () => boolean;
 
@@ -285,10 +286,10 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // can read it from state.config.
         autoCollapseUniformClusters:
           opts.getAutoCollapseUniformClusters?.() ?? true,
-        // 86c9zq9vm (spec 86c9zmyef): read-fresh-every-tick pattern for the
-        // hide-idle toggle. Default true (filter ON) matches package.json
-        // — V1 ships running-focused-by-default per sponsor Q1.
-        hideIdleAgents: opts.getHideIdleAgents?.() ?? true,
+        // 86c9zq9vm / 86ca10anf (spec 86c9zmyef): read-fresh-every-tick
+        // pattern for the hide-idle toggle. Default false (filter OFF)
+        // matches package.json — V1 ships the whole team always-visible.
+        hideIdleAgents: opts.getHideIdleAgents?.() ?? false,
         logger,
       });
       // Always update lastState — even on hash-skip — so host lookups against
@@ -580,12 +581,14 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     tree,
     hideFinished,
   );
-  // 86c9zq9vm (spec 86c9zmyef §3 + §9.1): sibling hide-idle projection,
-  // applied AFTER hide-finished on its result. `finished` and `idle` are
-  // disjoint states so the order is symmetric, but a deterministic sequence
-  // (finished → idle) avoids surprise. Default true (V1 ships
-  // running-focused-by-default per sponsor Q1).
-  const hideIdle = opts.hideIdleAgents !== false;
+  // 86c9zq9vm / 86ca10anf (spec 86c9zmyef §3 + §9.1): sibling hide-idle
+  // projection, applied AFTER hide-finished on its result. `finished` and
+  // `idle` are disjoint states so the order is symmetric, but a deterministic
+  // sequence (finished → idle) avoids surprise. Default false (V1 ships the
+  // whole team always-visible) — matches the `hideFinished === true` default
+  // above so absent/undefined → filter OFF (no split-brain with the wire
+  // serializer's `=== true` default).
+  const hideIdle = opts.hideIdleAgents === true;
   const { tree: filteredTree, hiddenIdleCount } = applyHideIdleFilter(
     afterFinished,
     hideIdle,

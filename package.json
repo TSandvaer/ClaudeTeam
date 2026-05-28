@@ -125,8 +125,8 @@
         },
         "claudeteam.hideIdleAgents": {
           "type": "boolean",
-          "default": true,
-          "description": "Hide rostered agent tiles whose state is 'idle'. When true (default — V1 ships running-focused), the dashboard suppresses idle tiles by default and running members are the foreground; a 'N idle hidden — show' chip in the header reveals the hidden tiles on click. Set false to restore the show-everything M5-baseline behavior. Background-noise rows are not affected — they collapse via the background chip instead."
+          "default": false,
+          "description": "Hide rostered agent tiles whose state is 'idle'. Default false — V1 ships the whole team always-visible (idle members stay on the dashboard). When set true, the dashboard suppresses idle tiles and a 'N idle hidden — show' chip in the header reveals the hidden tiles on click — useful for a running-focused view. Background-noise rows are not affected — they collapse via the background chip instead."
         }
       }
     }

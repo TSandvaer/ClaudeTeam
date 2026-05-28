@@ -620,7 +620,7 @@ describe("86c9zq9vm: runTick applies hideIdleAgents filter", () => {
     cleanup();
   });
 
-  it("filter on by default (V1): idle tile suppressed; hiddenIdleCount=1; config mirrored", async () => {
+  it("filter off by default (V1 86ca10anf): idle tile stays; hiddenIdleCount=0; config mirrored false", async () => {
     // Write the subagent JSONL then immediately age it past the 10s freshness
     // window so the reducer classifies the tile as idle.
     const jsonl = writeSubagentJsonl(
@@ -632,18 +632,19 @@ describe("86c9zq9vm: runTick applies hideIdleAgents filter", () => {
     );
     await ageJsonlToIdle(jsonl);
 
-    // Omit hideIdleAgents from the options — defaults to true per V1 ship
-    // contract (sponsor Q1).
+    // Omit hideIdleAgents from the options — defaults to false per the
+    // 86ca10anf ship contract (whole team always-visible). The idle tile
+    // must NOT be suppressed and the config mirror must be false.
     const state = await runTick({
       claudeHome: root,
       globalRosterPath: rosterPath,
     });
 
-    expect(
-      state.sessions[0]?.rosterTiles.get("claudeteam-alpha"),
-    ).toBeUndefined();
-    expect(state.hiddenIdleCount).toBe(1);
-    expect(state.config?.hideIdleAgents).toBe(true);
+    const entries = state.sessions[0]?.rosterTiles.get("claudeteam-alpha");
+    expect(entries).toBeDefined();
+    expect(entries!.length).toBeGreaterThan(0);
+    expect(state.hiddenIdleCount).toBe(0);
+    expect(state.config?.hideIdleAgents).toBe(false);
   });
 
   it("filter explicit off: idle tile stays; hiddenIdleCount=0", async () => {
