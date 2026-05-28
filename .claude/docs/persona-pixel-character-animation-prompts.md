@@ -109,8 +109,8 @@ The **canonical worked example** of state-per-pose — full recipe + gotchas imm
 **Step 1 — create a "reading pose" character state (book already raised).** `mcp__pixellab__create_character_state(source_character_id, edit_description=...)`. The state's BASE pose holds the book up, so the head-turn loop has nothing to re-raise.
 
 ```
-# reading-pose state edit_description — pending final sponsor approval (re-roll in progress 2026-05-28)
-reading an open book held up at chest height with both hands, head tilted downward looking at the book, the plain back cover of the book faces outward toward the viewer while the open pages face inward toward his own face
+# reading-pose state edit_description — BOW THE HEAD FULLY DOWN (this is what makes the anim work; see the head-bow gotcha)
+reading an open book held up at chest height with both hands, the head bowed fully down with the chin lowered toward the chest looking straight down at the book, the plain back cover of the book faces outward toward the viewer while the open pages face inward toward the character's own face, calm relaxed reading pose
 ```
 
 ⚠️ **Book-orientation gotcha (sponsor-caught 2026-05-28).** In the south/front view, a person reading toward himself must show the **plain back cover** of the book to the viewer — the open pages face HIS face, away from the camera. PixelLab's default renders the open white pages facing the camera (looks like he's *showing* the book to you, not reading it). The edit_description MUST say "back cover faces outward toward the viewer, open pages face inward toward his own face" or the pose is wrong. **This is baked into the STATE pose, not the animation — fixing it requires re-rolling the state, not the anim.**
@@ -120,11 +120,15 @@ reading an open book held up at chest height with both hands, head tilted downwa
 **Step 2 — animate head-only on the state.** `mcp__pixellab__animate_character(state_id, action_description=..., animation_name="reading", directions=["south"], frame_count=10)`.
 
 ```
-# reading head-turn loop action_description — pending final sponsor approval (re-roll in progress 2026-05-28)
-head stays tilted down looking at the book and turns only slightly to the left and right as if scanning lines across the page, the book and both hands stay completely still, the head never looks up or away
+# reading head-turn loop action_description — symmetric left-right scan on the bowed-down state, fc=10
+the head stays bowed down looking at the book with the chin low near the chest the entire time; starting from center, the face turns a little to the LEFT, then back to center, then a little to the RIGHT, then back to center — an even, gentle, symmetric left-and-right scan that covers both sides of the page equally; the head never lifts, never nods further down, never tips forward, and stays at the same distance from the book; the book and both hands are completely locked and never move; smooth continuous seamless loop that returns to its starting pose; only this symmetric left-right turn animates
 ```
 
-⚠️ **Head-motion constraint (sponsor-caught 2026-05-28).** The head must STAY tilted down at the book and turn only *slightly* left↔right (reading lines). A first attempt with "turns from left to right and back" made him look *away to the right* — too much rotation, wrong axis (looked like glancing around, not reading). Constrain explicitly: "stays tilted down looking at the book", "only slightly", "never looks up or away".
+⚠️ **Reading = ONLY a left-right head turn. THE FIX IS THE STATE, NOT THE PROMPT (sponsor-validated 2026-05-28 on M01 + F01).** Reading is the **most variance-prone pose** — the model wants to NOD the head down toward the page (pitch) instead of turning it side-to-side (yaw). On M01 a prompt got there; on **F01 the SAME M01 prompt — and 3 prompt rewordings (fc=10, fc=8, fc=6) — all kept nodding/diving into the book.** Prompt-tweaking has a ceiling.
+- **What actually worked (remember this): re-roll the STATE with the head BOWED FULLY DOWN (chin toward the chest), so there is no downward room left and the only motion freedom is yaw.** On the bowed-down state the head finally turned left-right instead of diving. **Budget a state re-roll for reading; don't burn 4 anim re-rolls first.**
+- **Symmetry:** the first bowed-down anim scanned only center→right (never left). Fix = explicit **"from center → a little LEFT → back to center → a little RIGHT → back to center"** framing naming LEFT first + "covers both sides equally", fc=10. A one-sided result means the L-R sequence wasn't explicit enough.
+- Other failure modes: "turns from left to right and back" → looked *away to the right* like glancing around (M01 early); too-high frame counts amplify whatever wrong motion the model picks.
+- Diagnostic for "it still nods": curl frames 0/3/6, Read them — a down-nod shows MORE top-of-head/hair at the mid-frame; a yaw shows the face turned to one side.
 
 **Step 3 — cleanup.** After the head-only loop is sponsor-approved, delete the stale single-loop `reading` anim from the BASE character (`delete_animation`), and delete any abandoned reading-pose states (`delete_character`). NOTE: `delete_character` may trip the auto-mode classifier (destructive, character not created "this session" from its view) — surface to the sponsor for authorization or have them delete in the UI.
 
