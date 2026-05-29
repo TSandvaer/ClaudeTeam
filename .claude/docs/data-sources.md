@@ -86,6 +86,8 @@ Each spawned subagent gets its own JSONL with full transcript. Schema is identic
 
 **Flush cadence:** JSONL files flush in discrete bursts, 2–56 seconds of staleness observed in practice. Polling cadence should be ≥2s; lower polling won't see anything new.
 
+> ⚠️ **Flush happens on tool-call completion, NOT during LLM generation (2026-05-29, idle-detection diagnosis `team/bram-research/idle-while-working-diagnosis.md`).** A subagent that is busy *generating text* (composing a long answer / spec / file content) writes NO JSONL record until its next tool call lands, so the file mtime goes stale even though the agent is fully alive and working. Measured gaps: 20–60s routinely, **202s once** while a subagent generated a design spec. This is why an mtime-based idle gate (`IDLE_THRESHOLD_MS`, see "running/idle" below) mis-flags actively-working agents as `idle` and the tile oscillates `running→idle→running` at the flush cadence. The mtime signal cannot distinguish "generating" from "stopped"; only a hook-event liveness tap (post-V1, `PreToolUse`/`SubagentStop`) can. Mitigation in V1 is purely a longer threshold (raised 10s→60s, ticket `86ca168j9`).
+
 ### Tool-argument limitation (M1-06 tailer — tracked, not yet resolved)
 
 The M1-06 subagent tailer (`src/extension/watcher/subagentTailer.ts`) extracts `lastTool` (the tool name from the last `tool_use` content entry) but does **not** preserve tool input arguments. The activity-line format spec (`iris-ux/m1-cli-output-spec.md` §1.4) calls for `tool:<tool-name> <one-line summary>` where the summary is the first argument or path from `tool_use.input`. M1-06 only delivers the first half (`tool:<tool-name>`); the argument summary is silently omitted.
@@ -207,7 +209,7 @@ A subagent is `finished` if (any of):
 - The sub-agent's own JSONL ends on a `type: "assistant"` record with `message.stop_reason === "end_turn"` (background completions — Obs 13 / `86c9zmp5g`; the only available signal because the parent JSONL never receives a real `tool_result` for `run_in_background: true` dispatches, only the async-launched ack skipped per "Background-dispatch acknowledgment" below).
 - OR a `SubagentStop` hook event was observed (post-V1, when the hook tap is online).
 
-Otherwise → `idle` (PID alive but JSONL stale > 10s).
+Otherwise → `idle` (PID alive but JSONL stale > threshold). **Threshold = `IDLE_THRESHOLD_MS` at `src/extension/state/reducer.ts:333`, being raised 10s→60s (ticket `86ca168j9`, pending merge) so normal generation gaps don't false-flag a working agent as idle — see the flush-cadence ⚠️ note above.**
 
 ### Finished timestamp source (86c9yxv94)
 
