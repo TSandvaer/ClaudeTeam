@@ -302,8 +302,332 @@
           }
         }
       }
+    },
+    {
+      "character": {
+        "id": "ec0293a9-e3e9-4545-8e21-b11391ac1d23",
+        "name": "standing in a relaxe",
+        "prompt": "mid-30s software developer at an IT company, friendly office worker, casual navy button-down shirt with sleeves rolled up to elbows, dark gray slim jeans, short tousled brown hair, rectangular dark-framed glasses, clean-shaven, light skin tone, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T18:03:25.967883+00:00"
+      },
+      "folder": "standing_in_a_relaxe",
+      "frames": {
+        "rotations": {
+          "south": "standing_in_a_relaxe/rotations/south.png",
+          "west": "standing_in_a_relaxe/rotations/west.png",
+          "east": "standing_in_a_relaxe/rotations/east.png",
+          "north": "standing_in_a_relaxe/rotations/north.png"
+        },
+        "animations": {
+          "the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387": {
+            "south": [
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_000.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_001.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_002.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_003.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_004.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_005.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_006.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_007.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "351e29e6-9811-4a50-8c9f-bb8fefc99bc0",
+        "name": "standing with both a",
+        "prompt": "mid-30s software developer at an IT company, friendly office worker, casual navy button-down shirt with sleeves rolled up to elbows, dark gray slim jeans, short tousled brown hair, rectangular dark-framed glasses, clean-shaven, light skin tone, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T18:18:02.411336+00:00"
+      },
+      "folder": "standing_with_both_a",
+      "frames": {
+        "rotations": {
+          "south": "standing_with_both_a/rotations/south.png",
+          "west": "standing_with_both_a/rotations/west.png",
+          "east": "standing_with_both_a/rotations/east.png",
+          "north": "standing_with_both_a/rotations/north.png"
+        },
+        "animations": {
+          "both_arms_stay_crossed_over_the_chest_and_the_body-c0893353": {
+            "south": [
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_000.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_001.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_002.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_003.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_004.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_005.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_006.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_007.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_008.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_009.png",
+              "standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_010.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "b30068bf-cb1d-492f-8b0f-948c0661b798",
+        "name": "standing relaxed wit",
+        "prompt": "mid-30s software developer at an IT company, friendly office worker, casual navy button-down shirt with sleeves rolled up to elbows, dark gray slim jeans, short tousled brown hair, rectangular dark-framed glasses, clean-shaven, light skin tone, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T18:35:53.325538+00:00"
+      },
+      "folder": "standing_relaxed_wit",
+      "frames": {
+        "rotations": {
+          "south": "standing_relaxed_wit/rotations/south.png",
+          "west": "standing_relaxed_wit/rotations/west.png",
+          "east": "standing_relaxed_wit/rotations/east.png",
+          "north": "standing_relaxed_wit/rotations/north.png"
+        },
+        "animations": {
+          "both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba": {
+            "south": [
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_000.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_001.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_002.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_003.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_004.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_005.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_006.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_007.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_008.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_009.png",
+              "standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_010.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "52d38a23-e5eb-446e-b04b-e119792a01b8",
+        "name": "standing relaxed wit",
+        "prompt": "mid-30s software developer at an IT company, friendly office worker, casual navy button-down shirt with sleeves rolled up to elbows, dark gray slim jeans, short tousled brown hair, rectangular dark-framed glasses, clean-shaven, light skin tone, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T19:07:56.379231+00:00"
+      },
+      "folder": "standing_relaxed_wit_2",
+      "frames": {
+        "rotations": {
+          "south": "standing_relaxed_wit_2/rotations/south.png",
+          "west": "standing_relaxed_wit_2/rotations/west.png",
+          "east": "standing_relaxed_wit_2/rotations/east.png",
+          "north": "standing_relaxed_wit_2/rotations/north.png"
+        },
+        "animations": {
+          "the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf": {
+            "south": [
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_000.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_001.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_002.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_003.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_004.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_005.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_006.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_007.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_008.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_009.png",
+              "standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_010.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "e80413dd-9e8f-41da-8657-4247f0046606",
+        "name": "standing relaxed, be",
+        "prompt": "mid-30s software developer at an IT company, friendly office worker, casual navy button-down shirt with sleeves rolled up to elbows, dark gray slim jeans, short tousled brown hair, rectangular dark-framed glasses, clean-shaven, light skin tone, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-28T19:33:43.718301+00:00"
+      },
+      "folder": "standing_relaxed_be",
+      "frames": {
+        "rotations": {
+          "south": "standing_relaxed_be/rotations/south.png",
+          "west": "standing_relaxed_be/rotations/west.png",
+          "east": "standing_relaxed_be/rotations/east.png",
+          "north": "standing_relaxed_be/rotations/north.png"
+        },
+        "animations": {
+          "a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d": {
+            "south": [
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_000.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_001.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_002.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_003.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_004.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_005.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_006.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_007.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_008.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_009.png",
+              "standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_010.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "b5733134-b45a-4676-908c-64d3075c8f59",
+        "name": "one forearm raised u",
+        "prompt": "mid-30s software developer at an IT company, friendly office worker, casual navy button-down shirt with sleeves rolled up to elbows, dark gray slim jeans, short tousled brown hair, rectangular dark-framed glasses, clean-shaven, light skin tone, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-29T05:47:05.274286+00:00"
+      },
+      "folder": "one_forearm_raised_u",
+      "frames": {
+        "rotations": {
+          "south": "one_forearm_raised_u/rotations/south.png",
+          "west": "one_forearm_raised_u/rotations/west.png",
+          "east": "one_forearm_raised_u/rotations/east.png",
+          "north": "one_forearm_raised_u/rotations/north.png"
+        },
+        "animations": {
+          "the_raised_forearm_and_wrist_stay_completely_still-a5a0317f": {
+            "south": [
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_000.png",
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_001.png",
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_002.png",
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_003.png",
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_004.png",
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_005.png",
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_006.png",
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_007.png",
+              "one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "c51568b2-57e7-47df-8d64-301d796ee7ce",
+        "name": "wearing over-ear hea",
+        "prompt": "mid-30s software developer at an IT company, friendly office worker, casual navy button-down shirt with sleeves rolled up to elbows, dark gray slim jeans, short tousled brown hair, rectangular dark-framed glasses, clean-shaven, light skin tone, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-29T06:35:31.578381+00:00"
+      },
+      "folder": "wearing_over-ear_hea",
+      "frames": {
+        "rotations": {
+          "south": "wearing_over-ear_hea/rotations/south.png",
+          "west": "wearing_over-ear_hea/rotations/west.png",
+          "east": "wearing_over-ear_hea/rotations/east.png",
+          "north": "wearing_over-ear_hea/rotations/north.png"
+        },
+        "animations": {
+          "the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896": {
+            "south": [
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_000.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_001.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_002.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_003.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_004.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_005.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_006.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_007.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_008.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_009.png",
+              "wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_010.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "0c06ad36-8b00-41e8-956a-a8e5e20a6f0f",
+        "name": "standing upright wit",
+        "prompt": "mid-30s software developer at an IT company, friendly office worker, casual navy button-down shirt with sleeves rolled up to elbows, dark gray slim jeans, short tousled brown hair, rectangular dark-framed glasses, clean-shaven, light skin tone, modern contemporary realistic style",
+        "size": {
+          "width": 68,
+          "height": 68
+        },
+        "template_id": "mannequin",
+        "directions": 4,
+        "view": "low top-down",
+        "created_at": "2026-05-29T06:59:02.202611+00:00"
+      },
+      "folder": "standing_upright_wit",
+      "frames": {
+        "rotations": {
+          "south": "standing_upright_wit/rotations/south.png",
+          "west": "standing_upright_wit/rotations/west.png",
+          "east": "standing_upright_wit/rotations/east.png",
+          "north": "standing_upright_wit/rotations/north.png"
+        },
+        "animations": {
+          "the_raised_open_hand_sways_gently_side_to_side_in-38411c09": {
+            "south": [
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_000.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_001.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_002.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_003.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_004.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_005.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_006.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_007.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_008.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_009.png",
+              "standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_010.png"
+            ]
+          }
+        }
+      }
     }
   ],
   "export_version": "3.0",
-  "export_date": "2026-05-28T10:26:50.994703"
+  "export_date": "2026-05-29T07:36:30.161208"
 }

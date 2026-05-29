@@ -175,16 +175,20 @@ the head stays bowed down looking at the book the entire time and does a full ev
 
 ---
 
-## Naming convention
+## Naming convention (canonical — sponsor-locked 2026-05-29)
+
+Two prefixed namespaces, no bare names. The webview trigger map keys on these canonical `animation_name`s.
 
 | Anim | Webview-side trigger |
 |---|---|
-| `idle` | Default idle pool member |
-| `idle_<descriptor>` (`idle_snack`, `idle_stretch`, `idle_phone`, `idle_hips`, ...) | Additional idle pool members; webview selects randomly from `idle*` pool |
-| `working` | Tool use where `tool != Read` |
-| `reading` | Tool use where `tool == Read` |
+| `idle_coffee` | Idle pool member (the original coffee-sip; NO bare `idle` — every idle carries a descriptor) |
+| `idle_<descriptor>` — `idle_snack`, `idle_stretch`, `idle_phone`, `idle_hips`, `idle_think`, `idle_arms_crossed`, `idle_pockets`, `idle_neck_roll`, `idle_yawn`, `idle_watch`, `idle_headphones`, `idle_wave` | Idle pool members; webview picks one at random from the `idle_*` pool |
+| `active_work` | Tool use where `tool != Read` (was `working`) |
+| `active_read` | Tool use where `tool == Read` (was `reading`) |
 
-PixelLab unpacks the ZIP with UUID-mangled folder names (e.g. `raises_an_open_book_up_to_chest_height_with_both_h-30cee282`). The `animation_name` you passed at dispatch is the semantic anchor — use the ZIP's root `metadata.json` for the authoritative `animation_name → folder_name` map when wiring webview rendering (see RandomGame's `pixellab-pipeline.md § Folder-rename + reverse-map` for the convention).
+⚠️ **Harvest-time rename normalization.** Early M01/F01 anims were generated on PixelLab with the legacy names `idle`, `working`, `reading`. The `animation_name` is baked into PixelLab at generation time and renaming there would cost re-gens (and risk re-rolling the hard-won `reading` anim). Instead, **normalize on disk at harvest** — after unzipping, rename the legacy folders + their `metadata.json` `animation_name` keys: `idle → idle_coffee`, `working → active_work`, `reading → active_read`. The PixelLab-side names may stay legacy; the harvested/committed artifacts are the canonical source the webview reads, so normalize there. All NEW characters (M02-M05, F02-F05) should be generated with the canonical names directly so no rename is needed.
+
+PixelLab unpacks the ZIP with UUID-mangled folder names (e.g. `raises_an_open_book_up_to_chest_height_with_both_h-30cee282`). The `animation_name` (the canonical name above, post-normalization) is the semantic anchor — use the ZIP's root `metadata.json` for the authoritative `animation_name → folder_name` map when wiring webview rendering (see RandomGame's `pixellab-pipeline.md § Folder-rename + reverse-map` for the convention).
 
 ---
 

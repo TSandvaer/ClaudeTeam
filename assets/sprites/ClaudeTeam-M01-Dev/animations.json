@@ -1,0 +1,45 @@
+{
+  "_note": "Canonical animation-name → state-folder map (sponsor-locked naming 2026-05-29). PixelLab does NOT export the semantic animation_name passed at generation; its metadata.json keys by an action-description slug + folder. This file is the authoritative name→folder map the webview trigger logic consumes. Each folder under _pixellab_anims/ holds rotations/<dir>.png plus exactly one animation at animations/<slug>/south/frame_*.png. Idle pool = all idle_* (webview picks at random); active_work fires on tool != Read, active_read on tool == Read.",
+  "character": "ClaudeTeam-M01-Dev",
+  "group_id": "ee57907c-dfa7-419f-bf77-071bc99e54fd",
+  "base_id": "7282cc3d-f822-492c-a790-08b3b5d2b27e",
+  "sprites_root": "_pixellab_anims",
+  "base_portrait_folder": "ClaudeTeam-M01-Dev",
+  "default_idle": "idle_coffee",
+  "idle_pool": [
+    "idle_coffee",
+    "idle_snack",
+    "idle_stretch",
+    "idle_phone",
+    "idle_hips",
+    "idle_think",
+    "idle_arms_crossed",
+    "idle_pockets",
+    "idle_neck_roll",
+    "idle_yawn",
+    "idle_watch",
+    "idle_headphones",
+    "idle_wave"
+  ],
+  "active": {
+    "active_work": "tool != Read",
+    "active_read": "tool == Read"
+  },
+  "animations": {
+    "idle_coffee": "holding_a_coffee_cup",
+    "idle_snack": "holding_a_small_snac",
+    "idle_stretch": "a_relaxed_tired_upwa",
+    "idle_phone": "holding_a_phone_in_f",
+    "idle_hips": "standing_with_both_h",
+    "idle_think": "standing_in_a_relaxe",
+    "idle_arms_crossed": "standing_with_both_a",
+    "idle_pockets": "standing_relaxed_wit",
+    "idle_neck_roll": "standing_relaxed_wit_2",
+    "idle_yawn": "standing_relaxed_be",
+    "idle_watch": "one_forearm_raised_u",
+    "idle_headphones": "wearing_over-ear_hea",
+    "idle_wave": "standing_upright_wit",
+    "active_work": "sitting_at_a_desk_fa",
+    "active_read": "reading_an_open_book"
+  }
+}
