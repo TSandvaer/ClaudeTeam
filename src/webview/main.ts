@@ -48,6 +48,7 @@ import {
 import { createFinishedTracker } from "./finishedTracker.js";
 import { createPrevStateTracker } from "./prevStateTracker.js";
 import { createExpandedGroupsTracker } from "./expandedGroupsTracker.js";
+import { createSpriteTracker } from "./spriteTracker.js";
 
 // =============================================================================
 // VS Code API shim
@@ -229,6 +230,20 @@ function boot(): void {
    * reload is a coarse user action).
    */
   const expandedGroupsTracker = createExpandedGroupsTracker();
+  /**
+   * Whole-team-display sprite playback tracker (idle-episode stickiness +
+   * frame-timer disposal). Single instance per webview boot, pruned each
+   * render. See spriteTracker.ts.
+   */
+  const spriteTracker = createSpriteTracker();
+  /**
+   * Host-injected sprite base URI — the host writes `data-sprite-base` on
+   * `#root` (provider.ts `_getHtml`) via `webview.asWebviewUri(dist/webview)`.
+   * Sprite frame paths (`sprites/<char>/...`) are resolved against it. Absent
+   * in browser-dev mode (no host) → tiles render text-only (AC5). Empty/missing
+   * attribute coerces to undefined so the renderer's optional-prop guards fire.
+   */
+  const spriteBaseUri = mount.dataset.spriteBase || undefined;
 
   // Browser dev mode → render FIXTURE_STATE immediately. VS Code mode →
   // render the empty state until the first `state:full` arrives from the
@@ -247,6 +262,8 @@ function boot(): void {
     finishedTracker,
     prevStateTracker,
     expandedGroupsTracker,
+    spriteTracker,
+    ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
   });
 
   renderFull(buildCtx(), currentState);
