@@ -66,6 +66,14 @@ The `package.json` `contributes` block needs (at minimum):
 - **State minimalism.** State that exists in the host should NOT be mirrored in the webview. The webview is a renderer; it owns ephemeral UI (hover, expansion, scroll), not domain data.
 - **Re-render discipline.** A state change in the host should not cause a full re-render in the webview — diff at the message-receiver level.
 
+## `[hidden]`-toggled flex/grid popovers need an explicit guard
+
+**Rule:** any webview element whose visibility is toggled via the `hidden` attribute (`el.hidden = true/false`) AND whose CSS rule declares `display: flex | grid` MUST also carry an explicit `.<class>[hidden] { display: none }` guard. An author `display` rule **overrides the UA `[hidden] { display: none }` default** (author beats UA), so `el.hidden = true` has no visual effect — the element renders OPEN.
+
+**Why it ships green:** jsdom (the unit-test DOM) applies **no author CSS**, so `expect(el.hidden).toBe(true)` passes even though the element is visually open in a real browser. Unit tests cannot catch this class; it only surfaces in a live VS Code reload. Hit twice in epic 86ca11187 — remove-confirm panel (PR #120→fix #122) and the show-hidden reveal list (`.ct-hidden-members-list`, fixed in #122 `2921f60`). Guarded popovers on main: `.collapsed-persona-instances[hidden]`, `.chip-detail-list[hidden]`, `.roster-error-chip-details[hidden]`, `.agent-tile-overflow-menu[hidden]`, `.agent-tile-remove-confirm[hidden]`, `.ct-hidden-members-list[hidden]` (see `src/webview/styles/dashboard.css`). Inline/`display:block` elements need no guard — the UA rule works for them.
+
+**Coverage discipline:** the guard test MUST be **source-derived, not a hardcoded allowlist.** Scan `src/webview/components/**` for every `hidden`-toggled class, resolve which ones declare `display:flex|grid` in `dashboard.css`, and assert each has a `[hidden]` guard (`tests/unit/webview/removeMember.test.ts:330` — "guards every hidden-toggled flex/grid popover … derived from source"). A hardcoded selector list silently misses the next new popover (that's exactly why #122's first attempt passed CI while `.ct-hidden-members-list` stayed broken). The derived test must be non-vacuous — stripping any guard makes it fail.
+
 ## Webview boot state — dev-fixture gating
 
 **Rule:** never initialize `currentState` from `FIXTURE_STATE` unconditionally. `FIXTURE_STATE` embeds `FIXTURE_DEAD_SESSION` (real dev-fixture values: `pid=99999`, `cwd=c:\Trunk\PRIVATE\Axelot-tutor`, `shortId=a91f3c20`) — these render in production for the window between webview mount and the first `state:full` arriving from the host.
