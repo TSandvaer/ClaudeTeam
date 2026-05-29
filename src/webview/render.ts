@@ -290,6 +290,33 @@ function readAutoCollapseUniformClusters(state: RenderableState): boolean {
 }
 
 /**
+ * Read `claudeteam.collapsePersonaTiles` off the rendered state's config block
+ * and translate it to the webview's `expandPersonaTiles` semantic (86ca1ej5c /
+ * spec §6 Q4). Under option A a rostered N≥2 member ALWAYS renders as one
+ * `MultiAgentPersonaTile`; the flag no longer toggles tile-vs-flat — it
+ * repurposes to "expand the instance list by default":
+ *
+ *   collapsePersonaTiles === false → expandPersonaTiles === true (expanded)
+ *   collapsePersonaTiles === true / absent → expandPersonaTiles === false (collapsed)
+ *
+ * Defensive cast through `Record<string, unknown>` so the renderer compiles
+ * whether or not the host stamps the scalar onto the wire `config` block
+ * (parallels `readAutoCollapseUniformClusters`). Default collapsed matches the
+ * LOCKED resting view (spec §3.3 "Default state: collapsed") — the host's
+ * package.json default is `collapsePersonaTiles: true`, so absence → collapsed
+ * is the correct fallback.
+ */
+function readExpandPersonaTiles(state: RenderableState): boolean {
+  const bag = state as unknown as {
+    config?: { collapsePersonaTiles?: unknown };
+  };
+  if (typeof bag.config?.collapsePersonaTiles === "boolean") {
+    return bag.config.collapsePersonaTiles === false;
+  }
+  return false;
+}
+
+/**
  * Extract the hidden-member reveal inputs (E-06b / EPIC 86ca11187 §7.2) from
  * the rendered state. `hiddenMemberKeys` is the persisted hidden set as
  * `` `${teamId}:${memberId}` `` strings (E-06a host vocab, PR #115) — the
@@ -603,6 +630,11 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   // The flag is webview-only — its host-side journey ends in `state.config`.
   const autoCollapseUniformClusters = readAutoCollapseUniformClusters(state);
 
+  // 86ca1ej5c — read the repurposed collapsePersonaTiles flag once and thread
+  // it down as `expandPersonaTiles` so multi-agent persona tiles render their
+  // instance list expanded-by-default when the sponsor opts in (spec §6 Q4).
+  const expandPersonaTiles = readExpandPersonaTiles(state);
+
   // 86c9zqa75 — thread the idle-filter state down to teamCard so each team
   // can render the per-team "N idle hidden — show" passive row when the
   // global filter is on AND tiles have been hidden. The host's
@@ -619,6 +651,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         session,
         postMessage,
         autoCollapseUniformClusters,
+        expandPersonaTiles,
         hideIdle,
         hiddenIdleCount,
         ...(finishedTracker ? { finishedTracker } : {}),
