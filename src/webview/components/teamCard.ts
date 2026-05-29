@@ -33,6 +33,7 @@ import {
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
+import type { SpriteTracker } from "../spriteTracker.js";
 
 // Em-dash (U+2014) — matches headerChip vocabulary contract per spec
 // 86c9zmyef §7.3.
@@ -111,6 +112,17 @@ export interface TeamCardProps {
   hiddenIdleCount?: number;
   /** Current wall-clock ms — defaults to Date.now() inside agentTile. */
   nowMs?: number;
+  /**
+   * Host-injected webview-base URI for resolving sprite frame paths. Threaded
+   * down to each bare `renderAgentTile` so rostered members with a bound
+   * sprite character render their persona pixel character. Absent → text-only
+   * tiles (AC5). Collapsed-persona wrapper instances do not yet render sprites
+   * (the wrapper is a count badge until expanded; sprites on expanded
+   * instances are deferred — flagged in the PR body).
+   */
+  spriteBaseUri?: string;
+  /** Webview-local sprite playback tracker (idle stickiness + timer disposal). */
+  spriteTracker?: SpriteTracker;
 }
 
 export function renderTeamCard(props: TeamCardProps): HTMLElement {
@@ -126,6 +138,8 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
     hideIdle,
     hiddenIdleCount,
     nowMs,
+    spriteBaseUri,
+    spriteTracker,
   } = props;
 
   const card = document.createElement("section");
@@ -204,6 +218,8 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
         postMessage,
         ...(finishedAtMs !== undefined ? { finishedAtMs } : {}),
         ...(prevState !== undefined ? { prevState } : {}),
+        ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(spriteTracker ? { spriteTracker } : {}),
         nowMs: now,
       }),
     );

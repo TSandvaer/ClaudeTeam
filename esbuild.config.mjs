@@ -45,8 +45,30 @@
  */
 
 const { build, context } = await import("esbuild");
+const { spawnSync } = await import("node:child_process");
 
 const isWatch = process.argv.includes("--watch");
+
+/**
+ * Generate the sprite manifest + copy PNG frames into dist/webview/sprites/.
+ * Run BEFORE the webview JS bundle so the freshly-generated
+ * `src/webview/sprites/generatedManifest.ts` is bundled in. Synchronous —
+ * the bundle import of the manifest is build-order-dependent.
+ *
+ * Source: scripts/build-sprite-manifest.mjs (whole-team-display 86ca191uy).
+ */
+function buildSpriteManifest() {
+  const res = spawnSync(
+    process.execPath,
+    ["scripts/build-sprite-manifest.mjs"],
+    { stdio: "inherit" },
+  );
+  if (res.status !== 0) {
+    throw new Error("[esbuild.config] sprite-manifest build failed");
+  }
+}
+
+buildSpriteManifest();
 
 // ---------------------------------------------------------------------------
 // Shared base options

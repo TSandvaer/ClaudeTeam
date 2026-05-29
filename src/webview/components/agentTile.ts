@@ -38,6 +38,9 @@ import type {
   WebviewMessage,
 } from "../../shared/messages.js";
 import { formatFreshness } from "../../shared/freshness.js";
+import { spriteForMember } from "../sprites/spriteManifest.js";
+import { createSpriteBox } from "../sprites/spritePlayer.js";
+import type { SpriteTracker } from "../spriteTracker.js";
 
 /** Human-readable label per state — used in aria-label and title tooltip. */
 const STATE_LABEL: Record<AgentState, string> = {
@@ -105,6 +108,35 @@ export interface AgentTileProps {
    */
   prevState?: AgentState;
   /**
+   * Host-injected webview-base URI for resolving sprite frame paths
+   * (`<base>/sprites/<char>/...`). When present AND the member has a bound
+   * sprite character (per `spriteForMember`), the tile renders a 68×68
+   * persona pixel character at its leading edge. When absent — or when the
+   * member has no sprite — the tile renders text-only exactly as before
+   * (AC5: graceful degrade, no broken image; monogram skin is E-05's scope).
+   *
+   * Source: team/iris-ux/whole-team-display-spec.md §3
+   */
+  spriteBaseUri?: string;
+  /**
+   * Webview-local sprite playback tracker — owns idle-episode stickiness +
+   * frame-timer disposal across the ~2s poll re-renders. Threaded from the
+   * boot closure (main.ts), like finishedTracker / prevStateTracker. Required
+   * alongside `spriteBaseUri` for the sprite to render; absent → text-only.
+   */
+  spriteTracker?: SpriteTracker;
+  /**
+   * Reduced-motion override for tests (AC4). Production reads
+   * `matchMedia("(prefers-reduced-motion: reduce)")` inside the player.
+   */
+  reducedMotion?: boolean;
+  /** Injected RNG for deterministic idle picks in tests. */
+  spriteRng?: () => number;
+  /** Frame-timer scheduler injection (tests). */
+  scheduleFrame?: (cb: () => void, ms: number) => number;
+  /** Frame-timer canceller injection (tests). */
+  cancelFrame?: (handle: number) => void;
+  /**
    * Schedule a one-shot callback for clearing the transition attribute.
    * Defaults to `setTimeout` in production; tests inject a synchronous
    * scheduler (or vitest fake timers) to assert the cleared-state path.
@@ -132,6 +164,12 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     nowMs,
     prevState,
     scheduleClearTransition,
+    spriteBaseUri,
+    spriteTracker,
+    reducedMotion,
+    spriteRng,
+    scheduleFrame,
+    cancelFrame,
   } = props;
 
   // 86c9zfmhp (Obs 11): the host is now the single authority for the
@@ -203,6 +241,44 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   // JSONL implementation detail ("Click to open JSONL"). Length kept
   // short — OS tooltip delays (~500-1000ms) make long tooltips feel laggy.
   article.setAttribute("title", "Open agent transcript");
+
+  // ── Persona pixel-character sprite (whole-team-display-spec §3) ──────────
+  // Render a 68×68 sprite at the leading edge ONLY when a base URI is wired
+  // AND the member has a bound sprite character with resolvable frames.
+  // Otherwise the tile stays text-only (AC5: no sprite box, no broken image —
+  // the monogram fallback skin is E-05's scope, not this ticket).
+  const char =
+    spriteBaseUri !== undefined ? spriteForMember(tile.memberId) : null;
+  if (char && spriteBaseUri !== undefined) {
+    article.dataset.hasSprite = "true";
+    const handle = createSpriteBox({
+      char,
+      state: tile.state,
+      activity: tile.activity,
+      spriteBaseUri,
+      ...(spriteTracker
+        ? {
+            priorIdlePick: spriteTracker.priorIdlePick(sessionId, tile.memberId),
+            priorWasActive: spriteTracker.priorWasActive(
+              sessionId,
+              tile.memberId,
+            ),
+          }
+        : {}),
+      ...(spriteRng ? { rng: spriteRng } : {}),
+      ...(reducedMotion !== undefined ? { reducedMotion } : {}),
+      ...(scheduleFrame ? { scheduleFrame } : {}),
+      ...(cancelFrame ? { cancelFrame } : {}),
+    });
+    article.appendChild(handle.element);
+    if (spriteTracker) {
+      spriteTracker.register(sessionId, tile.memberId, {
+        idlePick: handle.idlePick,
+        isActive: handle.isActive,
+        dispose: handle.dispose,
+      });
+    }
+  }
 
   // State-transition attribute (M4-01 §2.5).
   //

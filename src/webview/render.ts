@@ -59,6 +59,7 @@ import type {
   ExpandedGroupKey,
   ExpandedGroupsTracker,
 } from "./expandedGroupsTracker.js";
+import type { SpriteTracker } from "./spriteTracker.js";
 
 /** Persistent error state stored on the dashboard. */
 export interface DashboardErrorState {
@@ -136,6 +137,23 @@ export interface RenderContext {
    * pre-Obs-10 behavior.
    */
   expandedGroupsTracker?: ExpandedGroupsTracker;
+  /**
+   * Host-injected webview-base URI for resolving sprite frame paths
+   * (`<base>/sprites/<char>/...`). Set in VS Code mode from the `#root`
+   * `data-sprite-base` attribute (host writes it via `asWebviewUri`).
+   * Absent in browser-dev / component-test mode → tiles render text-only
+   * (AC5, graceful degrade). Threaded down to each tile.
+   *
+   * Source: team/iris-ux/whole-team-display-spec.md §3
+   */
+  spriteBaseUri?: string;
+  /**
+   * Webview-local sprite playback tracker — idle-episode stickiness + frame-
+   * timer disposal across the ~2s poll re-renders. Owned by the boot closure
+   * in `main.ts`; pruned each render alongside the other trackers. Optional —
+   * absent in component tests / fixture mode (tiles still render, no timers).
+   */
+  spriteTracker?: SpriteTracker;
 }
 
 /**
@@ -254,6 +272,8 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     nowMs,
     prevStateTracker,
     expandedGroupsTracker,
+    spriteBaseUri,
+    spriteTracker,
   } = ctx;
 
   // Prune the finished-, prev-state-, and expanded-groups-trackers BEFORE
@@ -276,10 +296,18 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   //
   // Single pass — all three trackers prune off the same walk to keep the
   // per-tick cost down.
-  if (finishedTracker || prevStateTracker || expandedGroupsTracker) {
+  if (
+    finishedTracker ||
+    prevStateTracker ||
+    expandedGroupsTracker ||
+    spriteTracker
+  ) {
     const currentFinishedKeys = new Set<`${string}:${string}`>();
     const currentAllKeys = new Set<`${string}:${string}`>();
     const currentGroupKeys = new Set<ExpandedGroupKey>();
+    // Sprite tracker is keyed by sessionId:memberId (NOT agentId) — a
+    // baseline `available` tile has agentId "" but a stable memberId.
+    const currentSpriteKeys = new Set<`${string}:${string}`>();
     for (const session of state.sessions) {
       if (!session.isAlive) continue;
       for (const [teamId, entries] of session.rosterTiles.entries()) {
@@ -312,6 +340,9 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
           if (entry.state === "finished") {
             currentFinishedKeys.add(key);
           }
+          currentSpriteKeys.add(
+            `${session.sessionId}:${entry.memberId}`,
+          );
         }
       }
     }
@@ -323,6 +354,9 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     }
     if (expandedGroupsTracker) {
       expandedGroupsTracker.prune(currentGroupKeys);
+    }
+    if (spriteTracker) {
+      spriteTracker.prune(currentSpriteKeys);
     }
   }
 
@@ -446,6 +480,8 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         ...(prevStateTracker ? { prevStateTracker } : {}),
         ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
+        ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(spriteTracker ? { spriteTracker } : {}),
       }),
     );
   }

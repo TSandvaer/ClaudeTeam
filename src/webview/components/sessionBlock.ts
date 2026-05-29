@@ -48,6 +48,7 @@ import type { PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
+import type { SpriteTracker } from "../spriteTracker.js";
 
 /**
  * Tooltip text shown on the `.session-title` span keyed by the resolution
@@ -115,6 +116,10 @@ export interface SessionBlockProps {
   hiddenIdleCount?: number;
   /** Current wall-clock ms — defaults to Date.now() downstream. */
   nowMs?: number;
+  /** Host-injected sprite base URI — threaded to each team card / tile. */
+  spriteBaseUri?: string;
+  /** Webview-local sprite playback tracker. */
+  spriteTracker?: SpriteTracker;
 }
 
 export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
@@ -128,6 +133,8 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
     hideIdle,
     hiddenIdleCount,
     nowMs,
+    spriteBaseUri,
+    spriteTracker,
   } = props;
 
   const block = document.createElement("section");
@@ -238,6 +245,8 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
         ...(hideIdle !== undefined ? { hideIdle } : {}),
         ...(hiddenIdleCount !== undefined ? { hiddenIdleCount } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
+        ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(spriteTracker ? { spriteTracker } : {}),
       }),
     );
   }

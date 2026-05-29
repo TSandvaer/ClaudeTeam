@@ -7,6 +7,11 @@ src/
 tests/
 scripts/
 
+# Sprite SOURCE tree — the build copies the needed PNG frames + bakes the
+# manifest into dist/webview/; the authoring source (animations.json +
+# _pixellab_anims rotations) is not needed at runtime (86ca191uy).
+assets/
+
 # Dev tooling
 .github/
 .claude/

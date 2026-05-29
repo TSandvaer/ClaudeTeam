@@ -183,6 +183,16 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
       ),
     );
 
+    // Sprite base URI (whole-team-display 86ca191uy): the webview resolves
+    // persona pixel-character frame paths (`sprites/<char>/...`) against this.
+    // Points at the dist/webview directory (where the build copies the sprite
+    // PNG tree) — already under localResourceRoots, so frames load under the
+    // same `${webview.cspSource}` origin the CSP's `img-src` permits. Passed
+    // as a `data-` attribute on #root (NOT an inline script — CSP-strict).
+    const spriteBaseUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, "dist", "webview"),
+    );
+
     // Content-Security-Policy:
     //   default-src 'none'               — deny everything by default
     //   img-src <cspSource>              — allow extension-local images
@@ -216,7 +226,7 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
   <title>ClaudeTeam</title>
 </head>
 <body>
-  <div id="root">ClaudeTeam loading…</div>
+  <div id="root" data-sprite-base="${spriteBaseUri}">ClaudeTeam loading…</div>
   <script src="${scriptUri}"></script>
 </body>
 </html>`;

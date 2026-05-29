@@ -59,6 +59,15 @@
   --ct-color-state-idle: #ffa726;
   --ct-color-state-finished: #78909c;
   --ct-color-state-error: #ef5350;
+
+  /* Persona pixel-character sprite (whole-team-display-spec §8.2, 86ca191uy).
+   * Frame/dwell timing tokens are render-contract values consumed by the
+   * sprite player (spritePlayer.ts FRAME_MS_DEFAULT / DWELL_MS_DEFAULT) — kept
+   * here as the single source of truth even though they parameterize JS, not
+   * CSS visuals. */
+  --ct-sprite-size: 68px;
+  --ct-anim-frame-ms-default: 160ms;
+  --ct-anim-dwell-ms-default: 400ms;
 }
 
 /* ===========================================================================
@@ -253,6 +262,54 @@ body {
 .agent-tile:focus-visible {
   background-color: var(--ct-color-bg-hover);
   outline: 1px solid var(--ct-color-focus);
+}
+
+/* ---------------------------------------------------------------------------
+ * Persona pixel-character sprite (whole-team-display-spec §3, 86ca191uy)
+ *
+ * When a tile carries a sprite (`data-has-sprite="true"`), lay it out as a
+ * 2-column grid: a fixed 68px sprite box at the leading (inline-start) edge,
+ * spanning all rows, with the text rows flowing in the second column. Tiles
+ * WITHOUT a sprite keep the original column flex layout untouched (AC5 — no
+ * layout difference for sprite-less members beyond the absent box).
+ * ------------------------------------------------------------------------- */
+.agent-tile[data-has-sprite="true"] {
+  display: grid;
+  grid-template-columns: var(--ct-sprite-size) 1fr;
+  align-items: center;
+  column-gap: var(--ct-space-s);
+}
+
+/* The sprite box is the first child element; pin it to column 1, all rows. */
+.agent-tile[data-has-sprite="true"] > .sprite-box {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: center;
+}
+
+/* Text rows flow into column 2, stacked. */
+.agent-tile[data-has-sprite="true"] > .tile-row {
+  grid-column: 2;
+}
+
+.sprite-box {
+  width: var(--ct-sprite-size);
+  height: var(--ct-sprite-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Sprite sits on transparent tile background; no frame/border (spec §3.1). */
+}
+
+.sprite-frame {
+  width: var(--ct-sprite-size);
+  height: var(--ct-sprite-size);
+  /* Pixel sprites — never smooth on scale (spec §3.1). */
+  image-rendering: pixelated;
+  /* Defensive: a broken/missing frame shows nothing rather than the broken-
+   * image glyph (AC5). The build copies the frames, so this should not fire
+   * in production. */
+  object-fit: contain;
 }
 
 .tile-row {
