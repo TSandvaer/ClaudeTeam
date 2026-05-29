@@ -24,6 +24,34 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
+// 86ca1nmcz — hermetic `node:os.homedir()`.
+//
+// ROOT CAUSE (Bram-verified, confirmed locally): `activate()` builds
+// `claudeHome = join(homedir(), ".claude")` (src/extension/main.ts:197) from
+// the REAL `homedir()`, NOT from `tempExt`. The design-intent comment further
+// down ("tempExt has no ~/.claude/sessions/, so listSessions returns []") is
+// therefore false under the current code: the watcher reads the real
+// `~/.claude/sessions/`, which on a developer box with live Claude Code
+// sessions makes the first async tick read real data and exceed the 50ms
+// settle window → intermittent false failure on this machine.
+//
+// FIX: mock `node:os` so `homedir()` returns `tempExt` (an empty dir), making
+// the watcher's first tick a genuine empty read as the test always intended.
+// `tmpdir` (used below to build `tempExt`) is preserved by re-exporting the
+// real implementation. `homedirHolder.value` is set in `beforeEach` after the
+// per-test `tempExt` is created (the mock factory is hoisted, so it reads from
+// the shared mutable holder rather than capturing `tempExt` directly).
+// ---------------------------------------------------------------------------
+const homedirHolder: { value: string } = { value: tmpdir() };
+vi.mock("node:os", async (importActual) => {
+  const actual = await importActual<typeof import("node:os")>();
+  return {
+    ...actual,
+    homedir: () => homedirHolder.value,
+  };
+});
+
+// ---------------------------------------------------------------------------
 // vscode mock — capture provider + the postMessage calls per-webview so the
 // test body can assert "synchronous replay arrived before the first tick".
 // ---------------------------------------------------------------------------
@@ -169,6 +197,11 @@ describe("86c9yxv6d — replay last-known state to remounted webview", () => {
   beforeEach(() => {
     (globalThis as { __CT_PROVIDER__?: unknown }).__CT_PROVIDER__ = undefined;
     tempExt = mkdtempSync(join(tmpdir(), "ct-86c9yxv6d-"));
+    // 86ca1nmcz: point the mocked homedir() at tempExt so activate()'s
+    // `claudeHome = join(homedir(), ".claude")` resolves under the empty temp
+    // dir — the watcher's first tick then reads an empty sessions folder
+    // (deterministic) instead of the real machine's live ~/.claude/sessions/.
+    homedirHolder.value = tempExt;
   });
 
   it("AC1+AC3: posts replay state synchronously on second resolveWebviewView, before tick fires", async () => {
@@ -223,6 +256,12 @@ describe("86c9yxv6d — replay last-known state to remounted webview", () => {
     expect(replayPost.payload).toBeDefined();
     const payload = replayPost.payload as SerializedDashboardState;
     expect(Array.isArray(payload.sessions)).toBe(true);
+    // 86ca1nmcz: with homedir() mocked to the empty tempExt, the watcher's
+    // first tick reads an empty ~/.claude/sessions/, so the replayed state has
+    // ZERO sessions deterministically. Before the mock this read the real
+    // machine home (live sessions) and this assertion would intermittently
+    // fail — it is the non-vacuous hermeticity guard.
+    expect(payload.sessions).toHaveLength(0);
 
     // First webview should NOT have received any additional state:full posts
     // from the second resolve — the replay targets the new webview, not the old.

@@ -265,6 +265,20 @@ export function buildAgentTree(
         // Absent on tiles whose matched member has no `color` set, preserving
         // the pre-86c9zq9vm wire shape for sponsors who haven't opted in.
         ...(member.color !== undefined ? { memberColor: member.color } : {}),
+        // 86ca1nzde: mirror the matched member's pixel-character binding onto
+        // the tile so the webview's `spriteForMember` renders the per-member
+        // sprite instead of the legacy gender fall-back. Stamp ONLY when the
+        // member carries a non-empty character id — `null` / `undefined` /
+        // empty-string all leave `tile.character` absent so the webview's
+        // gender-binding fall-back is preserved (AC: unset/empty → fall-back).
+        // The `undefined`-vs-`null` semantic from the type doc (null = explicit
+        // text tile) is intentionally collapsed to "fall back" here: the legacy
+        // roster never sets the field and the team-setup config seeds `null`,
+        // so treating both as fall-back matches the AC. `tile.character` is only
+        // ever a real CharacterSource id, never `null`, on the wire.
+        ...(typeof member.character === "string" && member.character.length > 0
+          ? { character: member.character }
+          : {}),
       };
 
       if (!rosterTiles.has(teamId)) {
@@ -327,6 +341,12 @@ export function buildAgentTree(
           // Member color is independent of liveness — carry it through so
           // E-05 can paint the leading-edge identity even on a baseline tile.
           ...(member.color !== undefined ? { memberColor: member.color } : {}),
+          // 86ca1nzde: character is independent of liveness too — a never-run
+          // member should still render its assigned sprite. Same stamp rule as
+          // the live-tile path: only a non-empty character id, else fall back.
+          ...(typeof member.character === "string" && member.character.length > 0
+            ? { character: member.character }
+            : {}),
         };
         if (!rosterTiles.has(team.id)) {
           rosterTiles.set(team.id, []);
@@ -614,6 +634,14 @@ export function groupTilesByPersona(
       ...(identity.memberColor !== undefined
         ? { memberColor: identity.memberColor }
         : {}),
+      // 86ca1nzde: mirror the character onto the wrapper (one sprite per
+      // persona regardless of N). Identity is invariant across the bucket, so
+      // the first tile's already-stamped `character` is the persona's binding.
+      // Only present when the live-tile stamp set it (non-empty id); absent
+      // otherwise → webview falls back to the gender binding for the wrapper.
+      ...(identity.character !== undefined
+        ? { character: identity.character }
+        : {}),
     };
     out.push(wrapper);
   }
@@ -644,7 +672,7 @@ export function groupTilesByPersona(
 export function rebuildMultiAgentTileFromInstances(
   identity: Pick<
     MultiAgentPersonaTile,
-    "memberId" | "teamId" | "display" | "role" | "memberColor"
+    "memberId" | "teamId" | "display" | "role" | "memberColor" | "character"
   >,
   survivors: AgentTile[],
 ): RosterTileEntry | null {
@@ -666,6 +694,12 @@ export function rebuildMultiAgentTileFromInstances(
     instances: ordered,
     ...(identity.memberColor !== undefined
       ? { memberColor: identity.memberColor }
+      : {}),
+    // 86ca1nzde: carry the character through a filter rebuild so a trimmed
+    // wrapper keeps its persona sprite. Sourced from the trimmed wrapper's
+    // own `character` (set by `groupTilesByPersona` from the live tiles).
+    ...(identity.character !== undefined
+      ? { character: identity.character }
       : {}),
   };
 }

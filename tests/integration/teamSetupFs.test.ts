@@ -85,6 +85,31 @@ describe("scanAgentsFolder (AC1)", () => {
     const ws = makeWorkspace({ "solo.md": "# Solo" });
     expect(scanAgentsFolder(resolveAgentsDir(ws))).toHaveLength(1);
   });
+
+  // 86ca1nvae — auto-resolve Member.role from the `.md` frontmatter description.
+  it("derives a role from the agent .md frontmatter description", () => {
+    const ws = makeWorkspace({
+      "felix.md":
+        "---\nname: felix\ndescription: Senior Developer #1 (extension host) on the ClaudeTeam project. Use for TS.\nmodel: opus\n---\n\nBody.",
+      "sage.md":
+        "---\nname: sage\ndescription: QA / Tester on the ClaudeTeam project. Use for test planning.\n---\n",
+    });
+    const scanned = scanAgentsFolder(resolveAgentsDir(ws));
+    const byName = new Map(scanned.map((a) => [a.agentName, a.role]));
+    expect(byName.get("felix")).toBe("Senior Developer #1");
+    expect(byName.get("sage")).toBe("QA / Tester");
+  });
+
+  it("omits role (undefined) when the .md has no description frontmatter", () => {
+    const ws = makeWorkspace({
+      "felix.md": "# Felix — no frontmatter at all",
+      "maya.md": "---\nname: maya\nmodel: opus\n---\nNo description key.",
+    });
+    const scanned = scanAgentsFolder(resolveAgentsDir(ws));
+    for (const a of scanned) {
+      expect(a.role).toBeUndefined();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -119,6 +144,47 @@ describe("claudeteam.yaml gen → write → read round-trip (AC3, AC4)", () => {
     const path = join(root, "fresh", "deep", ".claude", "claudeteam.yaml");
     expect(writeClaudeTeamConfig(path, cfg).ok).toBe(true);
     expect(existsSync(path)).toBe(true);
+  });
+
+  // 86ca1nvae — a user-edited role AND a deleted role (→ "") both persist
+  // through the normalized structured write + re-read. Empty role validates.
+  it("persists a user-edited role and a deleted (empty) role through write→read", () => {
+    const path = join(root, ".claude", "claudeteam.yaml");
+    // Seed with an auto-derived role for felix.
+    const seeded = generateStarterConfig(
+      ["felix", "maya"],
+      "Demo",
+      new Map([["felix", "Senior Developer #1"]]),
+    );
+    expect(writeClaudeTeamConfig(path, seeded).ok).toBe(true);
+
+    const first = readClaudeTeamConfig(path);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    // Simulate a panel edit: rename felix's role, and CLEAR maya's role to "".
+    const edited = {
+      ...first.config,
+      teams: first.config.teams.map((t) => ({
+        ...t,
+        members: t.members.map((m) =>
+          m.id === "felix"
+            ? { ...m, role: "Host & Data Lead" }
+            : m.id === "maya"
+              ? { ...m, role: "" }
+              : m,
+        ),
+      })),
+    };
+    expect(writeClaudeTeamConfig(path, edited).ok).toBe(true);
+
+    const second = readClaudeTeamConfig(path);
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    const members = new Map(
+      second.config.teams[0]!.members.map((m) => [m.id, m.role]),
+    );
+    expect(members.get("felix")).toBe("Host & Data Lead"); // edit persisted
+    expect(members.get("maya")).toBe(""); // delete persisted + validates
   });
 
   it("malformed YAML → ok:false with a schema/parse error (AC9 negative path)", () => {

@@ -70,7 +70,9 @@ export function slugifyTeamId(name: string): string {
  * included agent names (spec §3.2). Each included agent becomes a member with:
  *   - `id`        = the agent name (kebab, stable — equals the file stem).
  *   - `display`   = the agent name (seed; user renames in the panel).
- *   - `role`      = `""` (lean OPTIONAL — spec §7.3; renders "—").
+ *   - `role`      = auto-derived from the agent `.md` `description` when a role
+ *                   is supplied in `roles` (86ca1nvae); else `""` (lean OPTIONAL
+ *                   — spec §7.3; renders "—"). User-overridable in the panel.
  *   - `character` = `null` (text-tile fallback until the user picks one).
  *   - `status`    = `"live"`.
  *   - `match`     = `[{ agentType_equals: <agentName> }]` (IMMUTABLE seed —
@@ -83,22 +85,30 @@ export function slugifyTeamId(name: string): string {
  *
  * @param included list of `ScannedAgent.agentName`s the user kept checked.
  * @param teamName seed for the team display name (default `"My Team"`).
+ * @param roles    optional agentName → derived-role lookup (86ca1nvae). When a
+ *                 name has a non-empty entry, the member seeds with that role;
+ *                 absent / empty falls back to `""`. The host builds this from
+ *                 the scanner's {@link ScannedAgent.role}.
  *
  * Pure function — no filesystem. Exported for unit coverage.
  */
 export function generateStarterConfig(
   included: string[],
   teamName = "My Team",
+  roles?: ReadonlyMap<string, string>,
 ): ClaudeTeamConfig {
   const seen = new Set<string>();
   const members: Member[] = [];
   for (const agentName of included) {
     if (seen.has(agentName)) continue;
     seen.add(agentName);
+    const derived = roles?.get(agentName);
     members.push({
       id: agentName,
       display: agentName,
-      role: "",
+      // 86ca1nvae: seed the auto-derived role when present + non-empty; else
+      // keep the lean empty default (role is OPTIONAL and user-overridable).
+      role: derived !== undefined && derived.length > 0 ? derived : "",
       character: null,
       status: "live",
       match: [{ agentType_equals: agentName }],

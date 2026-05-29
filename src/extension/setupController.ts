@@ -150,7 +150,13 @@ export class SetupController {
     const teamName = this.opts.workspaceFolderPath
       ? workspaceFolderName(this.opts.workspaceFolderPath) || "My Team"
       : "My Team";
-    const config = generateStarterConfig(include, teamName);
+    // 86ca1nvae: build agentName → auto-derived-role lookup from the scan so
+    // generated members seed a non-blank role from the `.md` `description`.
+    const roles = new Map<string, string>();
+    for (const a of this.scan()) {
+      if (a.role !== undefined && a.role.length > 0) roles.set(a.agentName, a.role);
+    }
+    const config = generateStarterConfig(include, teamName, roles);
     const res = writeClaudeTeamConfig(path, config);
     this.opts.post.configSaved(res.ok, res.ok ? undefined : res.error);
     if (res.ok) this.emitDetection();

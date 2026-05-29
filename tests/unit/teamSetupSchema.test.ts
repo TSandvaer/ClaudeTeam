@@ -195,10 +195,11 @@ describe("Vocabulary-contract type shapes", () => {
     >();
   });
 
-  it("ScannedAgent carries agentName + filePath", () => {
+  it("ScannedAgent carries agentName + filePath + optional derived role (86ca1nvae)", () => {
     expectTypeOf<ScannedAgent>().toEqualTypeOf<{
       agentName: string;
       filePath: string;
+      role?: string;
     }>();
   });
 
