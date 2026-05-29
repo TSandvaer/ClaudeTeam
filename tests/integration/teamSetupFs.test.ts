@@ -357,6 +357,60 @@ describe("SetupController.reconcileDrift (AC6 — orphan flip persists)", () => 
     controller.dismissSuggestion();
     expect(controller.isSuggestionDismissed()).toBe(true);
   });
+
+  // TS-04 AC6 — the non-mutating-nudge contract. The orphan-flip tests above
+  // cover removal → orphaned and confirm-delete; this guards the OTHER half of
+  // Decision 3: a NEW agent appearing must NEVER auto-add a member. New agents
+  // are a nudge signal only; only the user (via ui:run-setup / the wizard) adds
+  // members. A reconcileDrift that silently grew the roster would be a serious
+  // bug class (a roster the sponsor never curated). NON-VACUOUS: the assertion
+  // pins the exact member set, so an auto-add would flip it.
+  it("AC6 non-mutating nudge: a NEW agent on disk never auto-adds a member", () => {
+    const ws = makeWorkspace({ "felix.md": "# F", "maya.md": "# M" });
+    const { controller } = makeController(ws);
+    controller.runSetup(["felix"]); // curate ONLY felix (maya deliberately excluded)
+    const cfgPath = join(ws, ".claude", "claudeteam.yaml");
+
+    // A brand-new agent file appears (iris.md) AND the previously-excluded maya
+    // is still on disk. reconcileDrift sees BOTH as "present" — but neither was
+    // curated, so neither may be added to the config.
+    writeFileSync(join(ws, ".claude", "agents", "iris.md"), "# I", "utf8");
+    controller.reconcileDrift(new Set(["felix", "maya", "iris"]));
+
+    const r = readClaudeTeamConfig(cfgPath);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Still EXACTLY the curated member — no iris, no maya auto-added.
+    expect(r.config.teams[0]!.members.map((m) => m.id)).toEqual(["felix"]);
+    expect(r.config.teams[0]!.members[0]!.status).toBe("live"); // felix stays live
+  });
+
+  // TS-04 AC6 — revive path: an orphaned member whose agent file RETURNS flips
+  // back to live (not deleted, not duplicated). Complements the removal flip.
+  it("AC6 orphan revive: a returning agent file flips its member back to live", () => {
+    const ws = makeWorkspace({ "felix.md": "# F", "maya.md": "# M" });
+    const { controller } = makeController(ws);
+    controller.runSetup(["felix", "maya"]);
+    const cfgPath = join(ws, ".claude", "claudeteam.yaml");
+
+    // maya.md removed → orphaned.
+    rmSync(join(ws, ".claude", "agents", "maya.md"));
+    controller.reconcileDrift(new Set(["felix"]));
+    let r = readClaudeTeamConfig(cfgPath);
+    expect(r.ok && r.config.teams[0]!.members.find((m) => m.id === "maya")!.status).toBe(
+      "orphaned",
+    );
+
+    // maya.md returns → revived to live, still a single maya member.
+    writeFileSync(join(ws, ".claude", "agents", "maya.md"), "# M", "utf8");
+    controller.reconcileDrift(new Set(["felix", "maya"]));
+    r = readClaudeTeamConfig(cfgPath);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const mayas = r.config.teams[0]!.members.filter((m) => m.id === "maya");
+    expect(mayas).toHaveLength(1); // not duplicated by the round-trip
+    expect(mayas[0]!.status).toBe("live");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -436,6 +436,7 @@ ENTRY-2026-05-29T16:00:00Z: 86ca1gdbp -> in progress (Felix accepted dispatch �
 ENTRY-2026-05-29T16:30:00Z: 86ca1gdbp -> in review (Felix PR opened — chore(webview+host): remove global hide-finished/hide-idle chips (superseded by whole-team-always-visible + per-member hide) — manifest gate vsce-packaged; suite green)
 ENTRY-2026-05-29T17:00:00Z: 86ca1fv2z -> in progress (Maya accepted dispatch — active Read uses read-at-screen desk pose; book-reading → idle pool; generator parses folder/slug form + regenerate manifest; branch maya/86ca1fv2z-read-at-screen-wire)
 ENTRY-2026-05-29T17:30:00Z: 86ca1fv2z -> in review (Maya PR #130 opened — feat(webview): active Read read-at-screen desk pose + book→idle pool; generator parses folder/slug form, manifest regenerated; 960 unit + 118 integration green; typecheck+lint+build clean; Self-Test Report posted; Felix reviewer)
+ENTRY-2026-05-29T19:58:08Z: 86ca1mw40 -> in review (Sage TS-04 QA PR opened — test(setup): QA across scanner/gen/resolution/matcher/orphan + Manage Team panel; test plan + 10 new integration tests; found HIGH-sev DEFECT: empty-role generated claudeteam.yaml dropped by matcher feed via rosterFileSchema role.min(1); pinned red-ready; reviewer Felix host-side)
 
 ## Team-setup EPIC — ticket-creation requests (Nora away-mode shaping 2026-05-29)
 
