@@ -50,6 +50,7 @@ import { loadRoster } from "../roster/loader.js";
 import { buildAgentTree } from "../state/reducer.js";
 import { applyHideFinishedFilter } from "../state/hideFinishedFilter.js";
 import { applyHideIdleFilter } from "../state/hideIdleFilter.js";
+import { applyHideMembersFilter } from "../state/hideMembersFilter.js";
 import type {
   ActivityMap,
   AgentMetaEntry,
@@ -57,7 +58,7 @@ import type {
   SessionAgentData,
 } from "../state/reducer.js";
 import { cwdToSlug } from "../../shared/slug.js";
-import type { DashboardState } from "../../shared/types.js";
+import type { DashboardState, HiddenMemberKey } from "../../shared/types.js";
 
 /**
  * Configuration accepted by `startWatcher`. Splitting these out keeps the
@@ -153,6 +154,16 @@ export interface WatcherOptions {
    * default).
    */
   getHideIdleAgents?: () => boolean;
+
+  /**
+   * Optional resolver for the persisted hidden-member set (E-06a / EPIC
+   * 86ca11187 §7.2). Read fresh every tick so an explicit hide/show/show-all
+   * user action applies on the next tick without restart — the resolver
+   * snapshots `HiddenMembersStore.keys()`, which only mutates via those
+   * explicit actions (NO auto-hide path — AC4). When omitted, treated as an
+   * empty set (filter OFF — every rostered tile visible).
+   */
+  getHiddenMemberKeys?: () => ReadonlySet<HiddenMemberKey>;
 
   /** Optional logger; defaults to a no-op so silent in production. */
   logger?: { warn: (msg: string) => void };
@@ -290,6 +301,10 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // pattern for the hide-idle toggle. Default false (filter OFF)
         // matches package.json — V1 ships the whole team always-visible.
         hideIdleAgents: opts.getHideIdleAgents?.() ?? false,
+        // E-06a (EPIC 86ca11187 §7.2): read-fresh-every-tick snapshot of the
+        // persisted hidden-member set so an explicit hide/show action applies
+        // on the next tick. Empty set when omitted (filter OFF).
+        hiddenMemberKeys: opts.getHiddenMemberKeys?.(),
         logger,
       });
       // Always update lastState — even on hash-skip — so host lookups against
@@ -437,6 +452,16 @@ export interface RunTickOptions {
    * produced tree.
    */
   hideIdleAgents?: boolean;
+  /**
+   * The persisted hidden-member set in effect this tick (E-06a / EPIC
+   * 86ca11187 §7.2). When omitted / empty, the hide-members filter is a
+   * passthrough. The filter only READS this set — there is no auto-hide path
+   * that adds to it (AC4). The set's `HiddenMemberKey` strings ALSO travel
+   * onto the wire as `hiddenMemberKeys` (the full persisted set, for E-06b's
+   * "show hidden" recovery surface) — distinct from `hiddenMemberCount` which
+   * counts only the tiles actually suppressed this tick.
+   */
+  hiddenMemberKeys?: ReadonlySet<HiddenMemberKey>;
   logger?: { warn: (msg: string) => void };
 }
 
@@ -589,9 +614,21 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
   // above so absent/undefined → filter OFF (no split-brain with the wire
   // serializer's `=== true` default).
   const hideIdle = opts.hideIdleAgents === true;
-  const { tree: filteredTree, hiddenIdleCount } = applyHideIdleFilter(
+  const { tree: afterIdle, hiddenIdleCount } = applyHideIdleFilter(
     afterFinished,
     hideIdle,
+  );
+  // E-06a (EPIC 86ca11187 §7.2): persisted hide-members projection, applied
+  // AFTER the state-driven filters. Predicate is set-membership by
+  // (teamId, memberId) — INDEPENDENT of tile state — so the order relative to
+  // the state filters is irrelevant; a deterministic last-in-chain placement
+  // avoids surprise. Empty set → identity transform. The set comes from the
+  // persisted store (workspaceState); the filter never mutates it (AC4).
+  const hiddenSet =
+    opts.hiddenMemberKeys ?? new Set<HiddenMemberKey>();
+  const { tree: filteredTree, hiddenMemberCount } = applyHideMembersFilter(
+    afterIdle,
+    hiddenSet,
   );
   // 86c9zmqa8: webview-only uniform-cluster auto-collapse. Default true when
   // omitted to match the package.json schema default. Stamped onto the
@@ -619,6 +656,14 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     // and boot its filter toggle from authoritative state without re-reading
     // VS Code Settings.
     hiddenIdleCount,
+    // E-06a (EPIC 86ca11187 §7.2): hide-members wire surface. `hiddenMemberCount`
+    // is the tiles suppressed THIS TICK; `hiddenMemberKeys` is the FULL persisted
+    // set (so E-06b's "show hidden" list is complete even for hidden members with
+    // no live tile this session). The webview's "N hidden — show" chip uses
+    // `hiddenMemberKeys.length` for the count; `hiddenMemberCount` is the
+    // tick-local diagnostic.
+    hiddenMemberCount,
+    hiddenMemberKeys: [...hiddenSet],
     config: {
       hideFinishedAgents: hideFinished,
       // 86c9zmqa8: pass-through scalar; webview-only behavior.
@@ -694,6 +739,14 @@ export function hashState(state: DashboardState): string {
     // emission.
     hiddenIdleCount: state.hiddenIdleCount ?? 0,
     hideIdleAgents: state.config?.hideIdleAgents === true,
+    // E-06a: include the hide-members surface so an explicit hide/show/show-all
+    // re-emits state even when the visible tile set happens to be unchanged
+    // (e.g. hiding a member who had no live tile this session still flips the
+    // chip count). hiddenMemberKeys is the persisted-set membership; sorting
+    // makes the hash order-insensitive (Set iteration order is insertion-based,
+    // but two equal sets must hash equal).
+    hiddenMemberCount: state.hiddenMemberCount ?? 0,
+    hiddenMemberKeys: [...(state.hiddenMemberKeys ?? [])].sort(),
   });
 }
 

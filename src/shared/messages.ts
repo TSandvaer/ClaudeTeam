@@ -17,6 +17,7 @@
 
 import type {
   AgentState,
+  HiddenMemberKey,
   RosterTileEntry,
   SessionTree,
   StateDelta,
@@ -102,6 +103,23 @@ export interface SerializedDashboardState {
    * §3.5 Field A + §7.1.
    */
   hiddenIdleCount?: number;
+  /**
+   * Count of rostered agent tiles suppressed this tick because their
+   * `(teamId, memberId)` is in the user's persisted hidden-member set
+   * (E-06a / EPIC 86ca11187 §7.2). Used by the webview header chip to render
+   * "N hidden — show". Optional + defaults to 0 — webview MUST treat
+   * `undefined` as 0. Mirror of `AgentTree.hiddenMemberCount`.
+   */
+  hiddenMemberCount?: number;
+  /**
+   * The persisted hidden-member set in effect this tick, as `HiddenMemberKey`
+   * strings (`` `${teamId}:${memberId}` ``). E-06b renders the "show hidden"
+   * recovery surface + unhide affordances from this list. Plain `string[]` —
+   * JSON-safe (a `Set` would serialize to `{}`). Optional + defaults to empty
+   * array — webview MUST treat `undefined` as `[]`. Mirror of
+   * `AgentTree.hiddenMemberKeys`.
+   */
+  hiddenMemberKeys?: HiddenMemberKey[];
   /**
    * Mirror of `claudeteam.*` config scalars relevant to the webview's
    * rendering (M5). Lets the chip boot with its toggle reflecting the truth
@@ -286,6 +304,50 @@ export type SetConfigMessage = {
 };
 
 /**
+ * User hid a rostered member from the default view (E-06a / EPIC 86ca11187
+ * §7.2 — reversible hide-agent). The host adds `(teamId, memberId)` to its
+ * persisted hidden-member set (`workspaceState`) and re-emits state on the
+ * next tick with the member's tile suppressed from the default tree + the
+ * "N hidden" count bumped.
+ *
+ * Distinct message type (NOT a `ui:set-config` overload) per the messages.ts
+ * "add a new type, don't overload" rule: the hidden set is a dynamic
+ * collection, not a scalar setting, and the action verb (add-one) is
+ * semantically distinct from the show/show-all verbs below.
+ *
+ * Payload carries the `(teamId, memberId)` PAIR — not the pre-joined
+ * `HiddenMemberKey` string — so the webview never has to know the key-join
+ * convention; the host builds the key via `hiddenMemberKey()`. JSON-safe
+ * scalars only.
+ */
+export type HideMemberMessage = {
+  type: "ui:hide-member";
+  payload: { teamId: string; memberId: string };
+};
+
+/**
+ * User un-hid a single rostered member (E-06a / EPIC 86ca11187 §7.2). The
+ * host removes `(teamId, memberId)` from its persisted hidden-member set and
+ * re-emits state — the member's tile returns to the default view on the next
+ * tick. Reversible counterpart to `ui:hide-member`; no YAML edit (that's the
+ * separate remove-agent flow, E-07).
+ */
+export type ShowMemberMessage = {
+  type: "ui:show-member";
+  payload: { teamId: string; memberId: string };
+};
+
+/**
+ * User clicked "show all" on the hidden-members recovery chip (E-06a / EPIC
+ * 86ca11187 §7.2). The host CLEARS its entire persisted hidden-member set and
+ * re-emits state — every previously-hidden member returns to the default view.
+ * No payload (the action targets the whole set).
+ */
+export type ShowAllHiddenMessage = {
+  type: "ui:show-all-hidden";
+};
+
+/**
  * Diagnostic panel asked the host to clear the in-memory tick ring buffer
  * (86c9zn7tm). Triggered by the panel's "Clear" button. Does NOT clear the
  * Output channel scrollback (that's a VS Code action on the channel
@@ -325,6 +387,9 @@ export type WebviewMessage =
   | OpenRosterMessage
   | RefreshMessage
   | SetConfigMessage
+  | HideMemberMessage
+  | ShowMemberMessage
+  | ShowAllHiddenMessage
   | DiagnosticClearMessage
   | DiagnosticPauseMessage
   | DiagnosticRefreshMessage;

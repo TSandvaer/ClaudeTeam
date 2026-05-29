@@ -223,6 +223,42 @@ describe("serializeState — Map → Record conversion", () => {
     ).toBe(false);
   });
 
+  // E-06a (EPIC 86ca11187 §7.2) — hide-members wire surface.
+  it("threads hiddenMemberCount + hiddenMemberKeys through to the wire (E-06a)", () => {
+    const tiles = new Map<string, AgentTile[]>([
+      ["claudeteam-alpha", [makeTile("maya")]],
+    ]);
+    const state: AgentTree = {
+      sessions: [makeSession("sid-hm", tiles)],
+      hiddenMemberCount: 1,
+      hiddenMemberKeys: ["claudeteam-alpha:felix"],
+    };
+
+    const serialized = serializeState(state);
+    expect(serialized.hiddenMemberCount).toBe(1);
+    expect(serialized.hiddenMemberKeys).toEqual(["claudeteam-alpha:felix"]);
+  });
+
+  it("defaults hiddenMemberCount to 0 and hiddenMemberKeys to [] when absent (E-06a)", () => {
+    const serialized = serializeState({ sessions: [] });
+    expect(serialized.hiddenMemberCount).toBe(0);
+    expect(serialized.hiddenMemberKeys).toEqual([]);
+  });
+
+  it("hiddenMemberKeys (string[]) round-trips through JSON.stringify (E-06a — not a Set)", () => {
+    const state: AgentTree = {
+      sessions: [],
+      hiddenMemberKeys: ["claudeteam-alpha:felix", "claudeteam-alpha:maya"],
+    };
+    const serialized = serializeState(state);
+    const wire = JSON.parse(JSON.stringify(serialized));
+    // A Set would serialize to {} — string[] survives intact.
+    expect(wire.hiddenMemberKeys).toEqual([
+      "claudeteam-alpha:felix",
+      "claudeteam-alpha:maya",
+    ]);
+  });
+
   it("serialized state round-trips through JSON.stringify without losing tiles", () => {
     // This is the failure mode `serializeState` exists to prevent.
     // Without the Map → Record conversion, JSON.stringify(map) emits "{}" and

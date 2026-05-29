@@ -622,6 +622,33 @@ export interface AgentTree {
    */
   hiddenIdleCount?: number;
   /**
+   * Count of rostered agent tiles suppressed this tick because their
+   * `(teamId, memberId)` is in the user's persisted hidden-member set
+   * (E-06a / EPIC 86ca11187 §7.2 — reversible hide-agent). Used by the
+   * webview header chip to render "N hidden — show". Optional for back-compat
+   * with consumers that don't supply or read it; absent → treated as 0. See
+   * `src/extension/state/hideMembersFilter.ts` for the producer.
+   *
+   * UNLIKE `hiddenIdleCount` / `hiddenFinishedCount` (state-driven, transient),
+   * this count is driven by an explicit, persisted user action — it does NOT
+   * change as agents transition between running/idle/finished. There is NO
+   * auto-hide-by-time path that feeds this count (sponsor REJECTED auto-hide,
+   * DECISIONS §36 — guarded by a regression test).
+   */
+  hiddenMemberCount?: number;
+  /**
+   * The persisted hidden-member set in effect this tick, as `HiddenMemberKey`
+   * strings (`` `${teamId}:${memberId}` ``). E-06b (webview) renders the
+   * "show hidden" recovery surface + per-member unhide affordance from this
+   * list. Plain `string[]` — JSON-safe across the host↔webview boundary (a
+   * `Set` would serialize to `{}`; see the wire-shape constraint in
+   * `.claude/docs/vscode-extension-conventions.md`). Optional for back-compat;
+   * absent → webview treats as empty array. Carries ALL hidden keys (even ones
+   * whose member has no live tile this session) so the webview's "show hidden"
+   * list is complete. Source: `src/extension/state/hideMembersFilter.ts`.
+   */
+  hiddenMemberKeys?: HiddenMemberKey[];
+  /**
    * Mirror of `claudeteam.*` config scalars relevant to the webview's
    * rendering (M5). The watcher reads these once per tick and stamps them
    * onto the produced tree so `serializeState` can pass through to the wire
@@ -654,6 +681,65 @@ export interface AgentTree {
      */
     hideIdleAgents?: boolean;
   };
+}
+
+// =============================================================================
+// Hidden-member set (E-06a / EPIC 86ca11187 §7.2 — reversible hide-agent).
+// =============================================================================
+
+/**
+ * Stable key identifying ONE rostered member for the hide-agent feature.
+ *
+ * Composed from `teamId` + `memberId` (NOT `memberId` alone) because two teams
+ * can declare a member with the same `id` (the roster loader already tolerates
+ * cross-team id collisions — see `roster-matching.md` § Loader edge cases). A
+ * member is identified for hide purposes by the (team, member) pair so hiding
+ * "Felix on team A" never silently hides "Felix on team B".
+ *
+ * **String form:** `` `${teamId}:${memberId}` `` — JSON-safe primitive. Built /
+ * parsed via `hiddenMemberKey()` / `parseHiddenMemberKey()` so the separator
+ * convention lives in exactly one place. The set persists as a `string[]` in
+ * VS Code `workspaceState` (host) and travels to the webview as a `string[]`
+ * (`SerializedDashboardState.hiddenMemberKeys`) — never as a `Set` (Sets do not
+ * round-trip JSON.stringify, per the wire-shape constraint in
+ * `.claude/docs/vscode-extension-conventions.md`).
+ *
+ * Hide is intentionally NOT keyed by `agentId` / `sessionId` — it is a view
+ * preference scoped to a roster member, applying wherever that member would
+ * render across sessions (spec §7.2 "Scope"). A re-dispatched member keeps the
+ * same (teamId, memberId), so the hide survives new agent ids.
+ */
+export type HiddenMemberKey = `${string}:${string}`;
+
+/**
+ * Build the canonical `HiddenMemberKey` string from a (teamId, memberId) pair.
+ *
+ * The separator is `:` — `teamId` and `memberId` are kebab-case roster ids
+ * (`roster-matching.md` § schema), so a literal `:` never appears inside
+ * either component and the split is unambiguous. Pure / cheap.
+ */
+export function hiddenMemberKey(
+  teamId: string,
+  memberId: string,
+): HiddenMemberKey {
+  return `${teamId}:${memberId}`;
+}
+
+/**
+ * Parse a `HiddenMemberKey` back into its `teamId` / `memberId` components.
+ * Splits on the FIRST `:` only (defensive — even though kebab-case ids never
+ * contain `:`, splitting on the first separator is robust if a future id
+ * convention does). Returns `null` when the string has no separator (malformed
+ * key — caller decides whether to skip it).
+ *
+ * Pure / cheap. Exported for the webview's unhide affordance (E-06b) and tests.
+ */
+export function parseHiddenMemberKey(
+  key: string,
+): { teamId: string; memberId: string } | null {
+  const idx = key.indexOf(":");
+  if (idx < 0) return null;
+  return { teamId: key.slice(0, idx), memberId: key.slice(idx + 1) };
 }
 
 /**

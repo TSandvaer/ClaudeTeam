@@ -73,6 +73,13 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
     // see spec 86c9zmyef §3.1). Default 0 when the host omits — back-compat
     // with CLI driver / pre-86c9zq9vm tests.
     hiddenIdleCount: state.hiddenIdleCount ?? 0,
+    // E-06a (EPIC 86ca11187 §7.2): hide-members wire surface. `hiddenMemberCount`
+    // = tiles suppressed this tick; `hiddenMemberKeys` = the FULL persisted set
+    // (string[] — JSON-safe; a Set would serialize to {}). Defaults to 0 / []
+    // when the host omits so the webview always sees real values (no
+    // `undefined` branch in the "show hidden" renderer). E-06b consumes both.
+    hiddenMemberCount: state.hiddenMemberCount ?? 0,
+    hiddenMemberKeys: state.hiddenMemberKeys ?? [],
     config: {
       hideFinishedAgents: state.config?.hideFinishedAgents === true,
       // 86c9zmqa8 (uniform-cluster polish): mirror the auto-collapse flag onto

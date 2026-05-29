@@ -99,12 +99,27 @@ function getRegisteredProvider(): RegisteredProvider | null {
 interface MockContext {
   extensionUri: { fsPath: string };
   subscriptions: Array<{ dispose: () => unknown }>;
+  // E-06a: activate() constructs HiddenMembersStore from context.workspaceState.
+  workspaceState: {
+    get<T>(key: string, defaultValue: T): T;
+    update(key: string, value: unknown): Thenable<void>;
+  };
 }
 
 function makeMockContext(extPath: string): MockContext {
+  const mem = new Map<string, unknown>();
   return {
     extensionUri: { fsPath: extPath },
     subscriptions: [],
+    workspaceState: {
+      get<T>(key: string, defaultValue: T): T {
+        return mem.has(key) ? (mem.get(key) as T) : defaultValue;
+      },
+      update(key: string, value: unknown): Thenable<void> {
+        mem.set(key, value);
+        return Promise.resolve();
+      },
+    },
   };
 }
 

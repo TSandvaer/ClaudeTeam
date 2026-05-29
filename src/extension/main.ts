@@ -43,6 +43,7 @@ import {
   type WebviewMessageHandlers,
 } from "./view/provider.js";
 import { startWatcher, type WatcherHandle } from "./watcher/watcherLoop.js";
+import { HiddenMembersStore } from "./state/hiddenMembersStore.js";
 import { startRosterWatcher } from "./roster/rosterWatcher.js";
 import {
   openRoster,
@@ -67,6 +68,14 @@ import {
  */
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new ClaudeTeamViewProvider(context.extensionUri);
+
+  // E-06a (EPIC 86ca11187 §7.2): persisted hidden-member set, backed by
+  // `workspaceState` so a hide survives webview reload AND window reload, and
+  // is scoped per-workspace (a hide in project A doesn't bleed into project B).
+  // Constructed once at activate; the watcher reads its live `keys()` snapshot
+  // every tick, and the three webview handlers below are the ONLY mutators
+  // (no auto-hide path — AC4).
+  const hiddenMembersStore = new HiddenMembersStore(context.workspaceState);
 
   // 86c9zn7vw: diagnostic Output channel. Constructed once at activate
   // time; survives `resolveWebviewView` remounts so the user's existing
@@ -222,6 +231,10 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.workspace
           .getConfiguration("claudeteam")
           .get<boolean>("hideIdleAgents") ?? false,
+      // E-06a: read-fresh-every-tick snapshot of the persisted hidden-member
+      // set. The store mutates only via the explicit hide/show/show-all
+      // handlers below; this resolver never adds to it (AC4).
+      getHiddenMemberKeys: () => hiddenMembersStore.keys(),
       onStateChange: (state) => {
         void postState(webview, state);
       },
@@ -374,6 +387,26 @@ export function activate(context: vscode.ExtensionContext): void {
       // existing onDidChangeConfiguration listener above fires the tick.
       onSetConfig: (msg) => {
         void handleSetConfig(msg.payload.key, msg.payload.value);
+      },
+      // E-06a (EPIC 86ca11187 §7.2): hide / show / show-all. Each mutates the
+      // persisted store then forces a re-emit so the dashboard updates within
+      // one tick. forceRefresh (not triggerTick) bypasses hash-skip — hiding a
+      // member who had no live tile this session still changes the wire shape
+      // (count + keys), but a defensive force avoids any edge where the hash
+      // happens to match. The store's persistence promise is fire-and-forget;
+      // the tick reads the in-memory Set synchronously (already updated), so
+      // the UI never lags the (async) workspaceState write.
+      onHideMember: (msg) => {
+        void hiddenMembersStore.hide(msg.payload.teamId, msg.payload.memberId);
+        watcherHandle?.forceRefresh();
+      },
+      onShowMember: (msg) => {
+        void hiddenMembersStore.show(msg.payload.teamId, msg.payload.memberId);
+        watcherHandle?.forceRefresh();
+      },
+      onShowAllHidden: () => {
+        void hiddenMembersStore.showAll();
+        watcherHandle?.forceRefresh();
       },
     };
     provider.setMessageHandlers(handlers);
