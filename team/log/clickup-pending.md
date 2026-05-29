@@ -415,3 +415,5 @@ ENTRY-2026-05-27T10:00:00Z: 86c9zn7tm -> in progress (Maya accepted dispatch —
 ENTRY-2026-05-27T10:25:00Z: 86c9zn7tm -> in review (Maya PR opened — feat(ext): diagnostic webview panel — tick history + current state breakdown)
 ENTRY-2026-05-27T15:48:00Z: 86ca03ym7 -> in progress (Maya accepted dispatch — hide tool: row entirely when no current tool)
 ENTRY-2026-05-27T15:58:00Z: 86ca03ym7 -> in review (Maya PR #106 opened — fix(webview): hide tool: row when no current tool — Self-Test Report posted)
+ENTRY-2026-05-29T00:00:00Z: 86ca19uk1 -> in progress (Maya accepted dispatch — E-05 baseline/available state skin per whole-team-display-spec §1)
+ENTRY-2026-05-29T00:30:00Z: 86ca19uk1 -> in review (Maya PR opened — feat(webview): skin the available/never-run baseline state (E-05) — Self-Test Report posted)

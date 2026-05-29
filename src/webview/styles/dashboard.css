@@ -60,6 +60,23 @@
   --ct-color-state-finished: #78909c;
   --ct-color-state-error: #ef5350;
 
+  /* Roster-baseline "available" / never-run state (whole-team-display-spec
+   * §8.2, E-05 / 86ca19uk1). `--ct-color-state-idle-quiet` is the dot color —
+   * a low-key Material Blue-Grey 300, deliberately distinct from idle's amber
+   * (a member that "was working, went quiet") and from finished's BG-400
+   * `#78909c`. It is a SEMANTIC state color → hardcoded hex (must not theme,
+   * same exemption as the four states above): never-run must read identically
+   * across light/dark so the sponsor learns the dot once. BG-300 is mid-
+   * saturation and passes contrast on both editor backgrounds (roster-
+   * matching.md theme-contrast note).
+   *
+   * `--ct-opacity-available` dims rows 2-4 to 0.6 — the middle rung of the
+   * 0.5 (dead) < 0.6 (available) < 0.78 (idle) < 1.0 (running/finished)
+   * legibility ramp (§2.3). Quieter than live-idle because this member isn't
+   * even alive this session. */
+  --ct-color-state-idle-quiet: #90a4ae;
+  --ct-opacity-available: 0.6;
+
   /* Persona pixel-character sprite (whole-team-display-spec §8.2, 86ca191uy).
    * Frame/dwell timing tokens are render-contract values consumed by the
    * sprite player (spritePlayer.ts FRAME_MS_DEFAULT / DWELL_MS_DEFAULT) — kept
@@ -404,6 +421,13 @@ body {
   background-color: var(--ct-color-state-error);
 }
 
+/* Roster-baseline never-run dot (E-05 / 86ca19uk1, spec §2.2/§2.3). A quiet
+ * blue-grey, static (no pulse, no check) — distinct from idle's amber so the
+ * sponsor can tell "never ran" from "was working, went quiet" at a glance. */
+.state-dot[data-state="available"] {
+  background-color: var(--ct-color-state-idle-quiet);
+}
+
 /* ---------------------------------------------------------------------------
  * Finished-state inner check mark (M4-01 §2.4).
  *
@@ -447,6 +471,22 @@ body {
 .agent-tile[data-state="idle"] .tile-row--activity,
 .agent-tile[data-state="idle"] .tile-row--model {
   opacity: 0.78;
+}
+
+/* ---------------------------------------------------------------------------
+ * Available (never-run) fade — E-05 / 86ca19uk1, spec §2.3.
+ *
+ * Rows 2-4 drop to `--ct-opacity-available` (0.6) — quieter than live-idle's
+ * 0.78 because this member isn't even alive this session, but louder than a
+ * dead session's 0.5. Row 1 (dot + display name) stays full opacity so the
+ * member is still identifiable while scanning. Same transition token as idle
+ * so reduced-motion elision is single-sourced.
+ * --------------------------------------------------------------------------- */
+
+.agent-tile[data-state="available"] .tile-row--role,
+.agent-tile[data-state="available"] .tile-row--activity,
+.agent-tile[data-state="available"] .tile-row--model {
+  opacity: var(--ct-opacity-available);
 }
 
 .tile-row--role,
