@@ -10,6 +10,48 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
+## Current state — 2026-05-29 ~16:25 UTC (DRAINED + SAVED — quiet; M01 read_at_screen PixelLab gate pending next session)
+
+**Resume next-action:** **IDLE — 0 agents, 0 open PRs, main = origin/main = `c123d75`, auto-status OFF, recurring crons cleared.** All GUI-test-round-2 dev work merged: #127 overflow-menu fix, #128 playback tuning, #129 hide-chips removal (tickets `86ca1fjqu`/`86ca1fntp`/`86ca1gdbp` complete).
+
+**TOP RESUME ITEM — M01 read_at_screen PixelLab gate (sponsor-gated, mid-iteration):**
+- A `read_at_screen` v3 animation is generating/generated on the M01 **working state `76d36df9`** (2nd anim beside `working` — option (b): same state = identical mouse/posture, no flip). Latest roll used the harder "hands frozen like a still photo, only head rotates, narrow full-sweep within the monitor" prompt. **On resume: `get_character(76d36df9, include_preview=true)`, present `read_at_screen` to sponsor to GATE.** ⚠️ [[feedback_pixellab_confirm_before_spend]] — confirm prompt before any re-roll; if hands STILL move it may be a v3 desk-pose limit (offer: accept slight motion / pro mode / different tactic — do NOT burn more v3 re-rolls blindly).
+- **F01 NOT started** — after M01 approved + sponsor go: mirror M01 final approach = animate `read_at_screen` on F01 **working state `d69b8c32`** (NOT a new state; harder prompt). Gate.
+- After both approved → harvest read_at_screen into each char's `sitting_at_a_desk_fa` folder (2nd anim) + add `read_at_screen` to animations.json + repurpose book→`idle_reading_book` in idle_pool → then dispatch Maya wire-up ticket **`86ca1fv2z`** (active_read→read_at_screen, book→idle pool).
+
+**DOC FIX (defer, do next session):** persona-doc caveat I added ("idle-hands-at-desk needs its OWN baked state") is WRONG — baking still hands did NOT stop v3 hand motion + introduced a mouse mismatch. Correct lesson: animate on the ORIGINAL working state (same mouse/posture); v3 hand-motion on desk poses is a prompt-fight (full-sweep "only head animates" wording), not a state-fix.
+
+**SPONSOR GUI reload pending:** rebuild .vsix + reload to confirm the merged fixes (overflow menu on ×N tiles, playback speeds/dwell, hide-chips gone). Load-bearing acceptance.
+
+**Open NITs (low-pri):** `86ca1hm8u` (#129 stale doc-comments), `86ca1ck2g` (#121), `86ca16gb7` (#111 docs), E-01 makeBaselineTile factory.
+
+---
+
+## Current state — 2026-05-29 ~15:33 UTC (GUI-test round 2 follow-ups — 2 PRs merged, 2 dispatched, PixelLab read_at_screen in flight)
+
+**Resume next-action:** main = origin/main = `e56e609`, auto-status OFF. **2 agents in flight + 1 PixelLab gen:**
+- **Maya playback DONE → PR #128** (`7fc24fd`, 1050 unit/124 integration green; PLAYBACK_OVERRIDES table). `86ca1fntp` → in review. **Felix review QUEUED behind his hide-chips PR** (one felix-wt). ⚠️ PR #128 touched persona doc — CONFLICTS with my doc commit `93003a3` (state-per-pose note); rebase #128 at merge, keep BOTH doc sections (playback table + state-per-pose note).
+- **Felix → hide-chips removal `86ca1gdbp`** · agentId `af06f9f3c30874872` · branch `felix/86ca1gdbp-remove-hide-chips`. Sponsor decided REMOVE global Hide-finished/Hide-idle chips (superseded by whole-team + per-member hide). Manifest gate (vsce). Reviewer Maya. KEEP hideMembersFilter/removeMembersFilter.
+- **PixelLab read_at_screen (orch-only, gated) — REVISED approach:** idle-hands proved impossible via animation on the working state (v3 keeps adding typing — 2 re-rolls failed; sponsor "wasting credits"). Sponsor approved: read_at_screen is ITS OWN state with resting hands BAKED in, derived FROM the working state so posture matches (head-only loop can't re-add typing — the proven book-reading pattern). **New still state `34557d27-6a7b-483c-968a-e58352b69053`** (from `76d36df9`, hands resting ON keyboard/mouse). Abandoned typing-hands version deleted from `76d36df9` (active_work now clean = just "working"). **Head-scan motion ALREADY sponsor-approved** ("head movement is good") — reuse that action_description head-only on `34557d27` AFTER the still gate. Doc-refine later: state-per-pose≠state-per-animation note needs caveat — share-the-state only works if the residual motion won't trigger unwanted base motion; desk poses need their own idle-hand state.
+  - (superseded) M01 head-scan on EXISTING state `76d36df9` — deleted; that approach can't suppress typing. ScheduleWakeup ~15:35 fetches it to GATE the M01 motion. **⚠️ CREDIT DISCIPLINE (sponsor 2026-05-29 [[feedback_pixellab_confirm_before_spend]]): do NOT auto-spend after the M01 gate. After sponsor approves M01 motion, STOP and get an explicit go (+ show the F01 action_description prompt) BEFORE animating F01 `d69b8c32-ae00-4a7d-a35a-4ec70df7ab03`. Same for any re-roll/harvest. Confirm METHOD + prompt before every generation.** Then harvest → add read_at_screen to animations.json (shares sitting_at_a_desk_fa folder, 2nd anim) + book→idle_reading_book. Then Maya wire-up `86ca1fv2z`.
+
+**MERGED this round:** PR #127 overflow-menu fix (`86ca1fjqu` complete, `e56e609`) — menu on ×N tiles + MenuOpenTracker survives poll re-render. Earlier: #122 remove-panel, #123/124/125/126 multi-agent tile feature.
+
+**KEY METHOD NOTE (don't repeat the error):** for a new behavior on an existing pose, ADD an animation onto the existing PixelLab STATE (find its id via list_characters — M01 group=group(+18), F01=group(+15)), do NOT create_character_state (that duplicates the posture → reintroduces flips). active_work states: M01 `76d36df9`, F01 `d69b8c32`.
+
+**QUEUED (Maya, after current — one maya-wt):**
+- `86ca1fv2z` read-pose webview wire (active_read→read_at_screen, book→idle_reading_book) — asset-gated on the read_at_screen harvest.
+
+**(prior) IDLE snapshot:** 0 agents, 0 open PRs, main `b648cf2`. Two GUI-test findings from the closed epic 86ca11187 are now both fixed + merged:
+- `86ca1d76j` remove-confirm + show-hidden hidden-by-default + model:? (PR #122/#120-fix) — complete.
+- `86ca1d7er` multi-agent member → single persona tile + ×N badge + expand (PRs #123 spec / #124 host / #125 webview / #126 QA) — complete, all children closed.
+
+**Awaiting:** sponsor FINAL reload (rebuild .vsix + Reload Window) — confirm Felix renders as ONE tile + ×2 badge (expandable), all popovers hidden, model:? gone. Load-bearing acceptance (sub-agent GUI gap).
+
+**Open (low-pri, not blocking):** NIT tickets `86ca1ck2g` (PR #121 comment), `86ca16gb7` (#111 docs), E-01 `makeBaselineTile` factory. maintain-docs candidates: Maya's collapsePersonaTiles defensive cast + expandByDefault first-paint-seed (capture if they clear the bar). Possible epic/arc retro.
+
+---
+
 ## Current state — 2026-05-29 (RESUME; sponsor walkthrough — dispatching E-07b + E-09)
 
 **Resume next-action (updated 2026-05-29 ~13:15 UTC — POST-GUI-TEST):** Epic 86ca11187 closed; sponsor ran the GUI test (rebuilt .vsix, reloaded). **Whole-team roster + persona sprites + baseline skin CONFIRMED WORKING.** Two findings → 2 agents dispatched:
