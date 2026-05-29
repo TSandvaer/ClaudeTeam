@@ -35,6 +35,7 @@ import { renderMultiAgentPersonaTile } from "./multiAgentPersonaTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
+import type { MenuOpenTracker } from "../menuOpenTracker.js";
 import type { SpriteTracker } from "../spriteTracker.js";
 
 // Em-dash (U+2014) — matches headerChip vocabulary contract per spec
@@ -88,6 +89,12 @@ export interface TeamCardProps {
    * tiles ignore it (nothing to expand at the leaf level).
    */
   expandedGroupsTracker?: ExpandedGroupsTracker;
+  /**
+   * Optional webview-local overflow-menu open-state tracker (86ca1fjqu BUG 2).
+   * Threaded through to `renderAgentTile` + `renderMultiAgentPersonaTile` so an
+   * open per-member "⋯" menu survives the next host-driven `renderFull`.
+   */
+  menuOpenTracker?: MenuOpenTracker;
   /**
    * 86c9zmqa8: when true, uniform CollapsedPersonaGroups render auto-
    * collapsed by default + use compact one-line instance rows on expand.
@@ -145,6 +152,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
     finishedTracker,
     prevStateTracker,
     expandedGroupsTracker,
+    menuOpenTracker,
     autoCollapseUniformClusters,
     expandPersonaTiles,
     hideIdle,
@@ -205,6 +213,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
             ? { expandByDefault: expandPersonaTiles }
             : {}),
           ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
+          ...(menuOpenTracker ? { menuOpenTracker } : {}),
           ...(finishedTracker ? { finishedTracker } : {}),
           ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
           ...(spriteTracker ? { spriteTracker } : {}),
@@ -265,6 +274,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
         ...(prevState !== undefined ? { prevState } : {}),
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
         ...(spriteTracker ? { spriteTracker } : {}),
+        ...(menuOpenTracker ? { menuOpenTracker } : {}),
         nowMs: now,
       }),
     );
