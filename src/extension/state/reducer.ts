@@ -326,11 +326,25 @@ export function buildAgentTree(
 // =============================================================================
 
 /**
- * Idle threshold in ms. Per data-sources.md "Liveness inference":
- * a subagent is idle when the session PID is alive but the JSONL mtime is
- * stale > 10s. This constant is exported for test assertions.
+ * Idle threshold in ms. A subagent is idle when the session PID is alive but
+ * the JSONL mtime is stale beyond this window.
+ *
+ * Set to 60s (sponsor decision 2026-05-29, ticket 86ca168j9; root-cause by Bram).
+ * RATIONALE: the only liveness signal is the sub-agent JSONL file mtime, and
+ * Claude Code flushes the JSONL only when a tool call completes — NOT during
+ * text generation. Measured generation gaps of 20s–202s therefore exceed the
+ * old 10s cutoff, so an actively-generating agent flickered to "idle" between
+ * tool calls. A 60s debounce absorbs the common generation gaps (the 20s–45s
+ * band) while still surfacing genuinely-stalled agents.
+ *
+ * KNOWN LIMITATION (deferred to M5): the rare 200s+ single-generation outlier
+ * still exceeds 60s and will read "idle" mid-generation. It is unfixable with
+ * mtime alone — it needs the M5 hooks liveness tap (PreToolUse / generation
+ * events). No "generating" sub-state is introduced here.
+ *
+ * Exported for test assertions.
  */
-export const IDLE_THRESHOLD_MS = 10_000;
+export const IDLE_THRESHOLD_MS = 60_000;
 
 /**
  * Infer the agent's liveness state.
@@ -348,7 +362,7 @@ export const IDLE_THRESHOLD_MS = 10_000;
  *   4. session is dead                       → "idle" (PID gone but session
  *      JSON still on disk — the session itself is the dead marker;
  *      individual agents aren't separately killed)
- *   5. JSONL mtime < 10s ago                 → "running"
+ *   5. JSONL mtime < IDLE_THRESHOLD_MS ago   → "running"
  *   6. Otherwise                             → "idle"
  *
  * The Obs 13 check sits between the parent-signal check and the
