@@ -52,7 +52,10 @@ import {
 } from "./components/errorChip.js";
 import { renderRosterErrorChip } from "./components/rosterErrorChip.js";
 import { renderHeaderChip } from "./components/headerChip.js";
+import { renderHiddenMembersChip } from "./components/hiddenMembersChip.js";
 import { isCollapsedPersonaGroup } from "./components/collapsedPersonaTile.js";
+import type { HiddenMemberKey } from "../shared/types.js";
+import type { MemberDirectory } from "./memberDirectory.js";
 import type { FinishedTracker } from "./finishedTracker.js";
 import type { PrevStateTracker } from "./prevStateTracker.js";
 import type {
@@ -154,6 +157,30 @@ export interface RenderContext {
    * absent in component tests / fixture mode (tiles still render, no timers).
    */
   spriteTracker?: SpriteTracker;
+  /**
+   * E-06b — webview-local roster directory that resolves a hidden member's
+   * display/role for the "show hidden agents" reveal list. Populated from
+   * every rostered tile observed across ticks (see `memberDirectory.ts`).
+   * Owned by the boot closure in `main.ts`. Optional — absent in component
+   * tests / fixture mode, in which case revealed-hidden rows fall back to the
+   * raw memberId.
+   *
+   * Source: team/iris-ux/whole-team-display-spec.md §7.2
+   */
+  memberDirectory?: MemberDirectory;
+  /**
+   * E-06b — current expansion state of the "N hidden agents" reveal panel.
+   * Webview-local ephemeral UI state owned by the boot closure so the panel
+   * doesn't snap shut every ~2s host-driven re-render. Defaults to collapsed.
+   */
+  hiddenMembersExpanded?: boolean;
+  /**
+   * E-06b — callback invoked when the user toggles the hidden-members reveal
+   * panel. The caller flips its tracked `hiddenMembersExpanded` flag and
+   * re-renders. Optional — absent in component tests (the chip toggles its
+   * own DOM optimistically without persistence).
+   */
+  onToggleHiddenMembers?: (nextExpanded: boolean) => void;
 }
 
 /**
@@ -261,6 +288,28 @@ function readAutoCollapseUniformClusters(state: RenderableState): boolean {
   return true;
 }
 
+/**
+ * Extract the hidden-member reveal inputs (E-06b / EPIC 86ca11187 §7.2) from
+ * the rendered state. `hiddenMemberKeys` is the persisted hidden set as
+ * `` `${teamId}:${memberId}` `` strings (E-06a host vocab, PR #115) — the
+ * chip's count is `.length`.
+ *
+ * Defensive cast through `Record<string, unknown>` so the renderer compiles
+ * against either branch state-shape (pre-E-06a: field absent → empty array;
+ * post-E-06a: present → consumed). Default `[]` per the wire contract
+ * (`SerializedDashboardState.hiddenMemberKeys` — webview MUST treat undefined
+ * as empty array). Filters to string entries defensively.
+ */
+function readHiddenMemberKeys(state: RenderableState): HiddenMemberKey[] {
+  const bag = state as unknown as { hiddenMemberKeys?: unknown };
+  if (!Array.isArray(bag.hiddenMemberKeys)) {
+    return [];
+  }
+  return bag.hiddenMemberKeys.filter(
+    (k): k is HiddenMemberKey => typeof k === "string" && k.includes(":"),
+  );
+}
+
 export function renderFull(ctx: RenderContext, state: RenderableState): void {
   const {
     mount,
@@ -274,7 +323,19 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     expandedGroupsTracker,
     spriteBaseUri,
     spriteTracker,
+    memberDirectory,
+    hiddenMembersExpanded,
+    onToggleHiddenMembers,
   } = ctx;
+
+  // E-06b — observe every rostered tile this tick so the member directory
+  // knows display/role for any member that later lands in hiddenMemberKeys.
+  // Runs BEFORE the chip mount below (and before tiles get filtered out, but
+  // here we observe the CURRENT tree — the directory is append-only across
+  // ticks, so a member observed while visible survives once it's hidden).
+  if (memberDirectory) {
+    memberDirectory.observeState(state);
+  }
 
   // Prune the finished-, prev-state-, and expanded-groups-trackers BEFORE
   // the render pass — any tile no longer present (or, for finishedTracker,
@@ -427,6 +488,31 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
       postMessage,
     }),
   );
+
+  // E-06b — "N hidden agents [show]" recovery chip (spec §7.2). Mounted
+  // alongside the state-filter chips so the reveal/unhide surface is
+  // discoverable wherever the filters are. Renders nothing (null) when the
+  // hidden set is empty — the chip only matters once the sponsor has hidden
+  // at least one member. Unlike the idle/finished filters (state-driven), this
+  // set is driven by explicit, persisted user hide actions (E-06a host).
+  const hiddenMemberKeys = readHiddenMemberKeys(state);
+  const hiddenMembersChip = renderHiddenMembersChip({
+    hiddenMemberKeys,
+    expanded: hiddenMembersExpanded ?? false,
+    postMessage,
+    ...(memberDirectory
+      ? {
+          resolveMember: (teamId: string, memberId: string) =>
+            memberDirectory.resolve(teamId, memberId),
+        }
+      : {}),
+    ...(onToggleHiddenMembers
+      ? { onToggle: onToggleHiddenMembers }
+      : {}),
+  });
+  if (hiddenMembersChip) {
+    mount.appendChild(hiddenMembersChip);
+  }
 
   const hasLiveSession = state.sessions.some((s) => s.isAlive);
   if (state.sessions.length === 0 || !hasLiveSession) {

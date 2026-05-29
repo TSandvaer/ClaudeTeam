@@ -1,0 +1,292 @@
+diff --git a/team/iris-ux/m1-cli-output-spec.md b/team/iris-ux/m1-cli-output-spec.md
+new file mode 100644
+index 0000000..4837a45
+--- /dev/null
++++ b/team/iris-ux/m1-cli-output-spec.md
+@@ -0,0 +1,269 @@
++# M1 CLI Output Spec — `npm run agent-tree`
++
++Spec for the M1 CLI's one-shot print of the live Claude Code agent tree. ASCII-only. Drives Felix's reducer / CLI driver in M1-09; informs the dashboard tile language in M3 (the divergence list at the end is what M3 should NOT inherit).
++
++- **Ticket:** [ClickUp 86c9y5c8m](https://app.clickup.com/t/86c9y5c8m) — `spec(cli): M1 CLI output layout + glyph spec`
++- **Owner:** Iris
++- **Peer reviewer:** Felix (data-shape implications)
++- **Source docs:** `docs/V1-PLAN.md`, `.claude/docs/architecture-overview.md`, `.claude/docs/roster-matching.md`, `.claude/docs/data-sources.md`
++
++---
++
++## 1. Layout language
++
++### 1.1 Top-level grouping — per session
++
++The outermost grouping is **per Claude Code session** (one `~/.claude/sessions/{pid}.json` entry). Within a session, the rostered team members are listed under their team card; unrostered subagents collapse to a single "background" chip per session.
++
++Rationale:
++- A session is what the user spawns and kills. PID = the unit of "this orchestrator is alive."
++- A team can span sessions (the same roster maps across every session whose `cwd` matches), but rendering teams as the outermost grouping would force us to either deduplicate the same agent across sessions or hide which session each agent belongs to. The CLI's one-shot print can't afford that ambiguity.
++- `cwd` and `ai-title` are session-level identifiers — they belong at the session header, not repeated per agent.
++
++Inside each session, agents are grouped by **team** (per roster entry order), then unrostered agents collapse into one **`+ N background agents`** chip at the bottom of the session block.
++
++### 1.2 Session header line format
++
++```
++SESSION <short-session-id>  [<entrypoint>]  pid=<pid>  v<version>  state=<alive|dead>
++  cwd:   <cwd>
++  title: <ai-title or "(no title yet)">
++```
++
++- `short-session-id` = first 8 chars of `sessionId` UUID (full id under truncation reads as noise, but keeping a stable prefix lets the user grep for it).
++- `state=dead` only renders when a `{pid}.json` exists but the OS process is gone (transient — the registry should sweep on the next pass, but the CLI is one-shot so this state is reachable). When `state=dead`, render the session header in lower-emphasis form (see Section 4, "What this implies for the dashboard tile").
++- Both `cwd:` and `title:` indented 2 spaces under the session header.
++
++### 1.3 Team card header
++
++Below the session header, each matched team gets a single header line:
++
++```
++  TEAM <team-display-name>  (<member-count> rostered, <background-count> background in this session)
++```
++
++- 2-space indent under the session.
++- If a team has zero matched members in this session, suppress the team card entirely. Don't render empty teams.
++
++### 1.4 Agent tile line — the unit
++
++Each rostered agent renders on **one line**:
++
++```
++    [<state>] <display>  <role-pad-15>  <activity-pad-30>  <model>
++```
++
++Concrete:
++
++```
++    [>]   Felix   Extension Host Dev   tool:Edit src/extension/...   sonnet-4-5
++    [.]   Maya    Webview UI Dev       idle 14s                       sonnet-4-5
++    [v]   Iris    UX Designer          finished                       opus-4-7
++    [!]   Felix   Extension Host Dev   error: meta parse failed       sonnet-4-5
++```
++
++Field rules:
++- **`[<state>]`** — 4 chars wide including brackets and a trailing space: `[>] ` / `[.] ` / `[v] ` / `[!] `. See Section 2 for the glyph table.
++- **`<display>`** — 7 chars left-padded (longest known persona name is `Felix`/`Maya`/`Sage`/`Iris`/`Bram`/`Nora` — 4–5 chars; pad to 7 for one of the rare longer custom personas).
++- **`<role-pad-15>`** — left-padded to 15 chars. Truncate with `..` if `role` is longer.
++- **`<activity-pad-30>`** — left-padded to 30 chars. Truncate with `..` if longer. Format depends on state:
++  - `running` → `tool:<tool-name> <one-line summary>` where the summary is the first argument or path from the `tool_use.input` (whichever is shortest non-empty). If both empty → just `tool:<tool-name>`.
++  - `idle` → `idle <Ns>` where N is the elapsed seconds since the JSONL mtime (1-decimal granularity unnecessary; whole seconds).
++  - `finished` → literal `finished`. (V1 has no completion-time arithmetic; we don't have a reliable "finished at" timestamp without the hook tap.)
++  - `error` → `error: <short reason>`. See Section 2.5 for what counts as error.
++- **`<model>`** — resolved model from the subagent's first assistant message in its JSONL. If unresolved (no assistant message yet) → `model:?`.
++
++**Two-space gap between fields** (single space inside `[<state>]`). The CLI uses spaces, not tabs — tabs render inconsistently across Windows terminals (cmd/PowerShell/Windows Terminal/Git Bash all interpret tab stops differently).
++
++### 1.5 Parent → child indentation
++
++Most M1-era subagents are spawned directly by the orchestrator (depth 1). A subagent CAN itself spawn another subagent (depth 2+), and the parent→child link is established via `meta.toolUseId` → parent's `content[].id`.
++
++Indent format inside a team card:
++
++```
++  TEAM ClaudeTeam Alpha  (2 rostered, 3 background in this session)
++    [>]   Felix   Extension Host Dev   tool:Edit src/extension/...   sonnet-4-5
++      \-- [>]   Bram    Internals Consultant   tool:Read ~/.claude/...    sonnet-4-5
++    [.]   Maya    Webview UI Dev       idle 14s                       sonnet-4-5
++```
++
++- Children use `\-- ` (4 chars) prefix and the line indents 2 more spaces relative to the parent (so the `[state]` glyph still aligns predictably at a 6-space depth from the team card).
++- Only one level of nesting is rendered in V1. Depth-3+ agents (rare) flatten to depth-2 with a `(nested)` suffix on the activity field. We don't expect to hit this in M1.
++
++### 1.6 Background-noise chip — per session
++
++Below the last team card in a session:
++
++```
++    + 3 background agents (this session)
++        - Explore         "Map MARIAN-TUTOR orchestration"   running   sonnet-4-5
++        - general-purpose "Agent A - data sources"           running   sonnet-4-5
++        - general-purpose "Agent B - limitations"            finished  sonnet-4-5
++```
++
++- The chip is **always rendered when the count is > 0**, never hidden. The whole point of the roster is to mute background noise — but the count must remain visible so the sponsor knows it's happening.
++- The detail list (the indented `-` lines) is always printed in the CLI. The dashboard collapses these on click (M3 concern); the CLI is one-shot, so it just prints.
++- Format per background line:
++  - `<agentType-pad-15>` (the engine type — `Explore`, `general-purpose`, `Plan`, etc., NOT the persona).
++  - `"<description-truncated-to-35>"` in quotes.
++  - `<state>` — `running` / `idle` / `finished` literal word, NOT the bracket glyph (background agents don't get tile treatment).
++  - `<model>` — same resolution rule as rostered tiles.
++- If background count = 0, the chip is suppressed (no `+ 0 background agents` line).
++
++### 1.7 Empty-state output
++
++```
++No live Claude Code sessions.
++```
++
++That's it. One line, no decoration. The CLI exits 0. If a `~/.claude/sessions/` directory doesn't exist at all, output the same line (the user has not yet run Claude Code on this machine — not an error condition for the CLI).
++
++If sessions exist but the roster file is missing / empty:
++
++```
++SESSION <id>  [interactive]  pid=<pid>  v2.1.145  state=alive
++  cwd:   c:\Trunk\PRIVATE\ClaudeTeam
++  title: ClaudeTeam build session
++  (no rostered teams matched; roster missing or empty)
++    + 5 background agents (this session)
++        - general-purpose "..."   running   sonnet-4-5
++        ...
++```
++
++The team cards are suppressed; the background chip carries the entire session.
++
++---
++
++## 2. Glyph table
++
++### 2.1 ASCII-only — verified on Windows terminals
++
++State indicators are **ASCII printable** characters only. No Unicode glyphs. Per V1-PLAN M1 and the AC3 contract: Unicode characters like `●` / `○` / `✓` mis-render in cmd.exe, in PowerShell with non-UTF-8 console code pages, and in pipe contexts where the consumer doesn't speak UTF-8. ASCII renders uniformly across cmd / PowerShell / Windows Terminal / Git Bash / VS Code's integrated terminal.
++
++| State | Glyph | Meaning | Chosen because |
++|---|---|---|---|
++| `running` | `[>]` | active, doing work | arrow shape suggests motion / forward progress |
++| `idle` | `[.]` | alive but JSONL stale > 10s | a "pause" / "dot" — quiet but present |
++| `finished` | `[v]` | completed | a check-mark approximation in ASCII (`v` reads as a tick when adjacent to brackets); avoided `[*]` and `[+]` because they suggest "warning" or "addition" in CLI conventions |
++| `error` | `[!]` | parse/load failure or detected fault | universal "warning" semantics; matches dispatch-template language |
++
++**Considered and rejected:**
++- `[X]` for finished — reads as "killed" or "rejected" rather than "done."
++- `[#]` for any state — too heavy visually, dominates the line.
++- `[O]` / `[o]` for idle — `[.]` reads quieter and aligns with the design intent of de-emphasizing idle state.
++- Lowercase letters for state (e.g., `[r]`, `[i]`) — readable but require the user to learn the mapping; symbols are universal across CLI tools.
++
++### 2.2 Width is locked to 3 chars
++
++Every glyph is exactly **3 characters wide** (`[`, one ASCII symbol, `]`). This is non-negotiable — variable-width state indicators would break column alignment and the line would jitter as state flips.
++
++### 2.3 Two states intentionally OMITTED from V1
++
++- `spawned-but-no-JSONL-yet` — collapsed into `running` until the first JSONL line arrives. Doesn't need its own glyph in V1; the gap is sub-3-second per file-watcher cadence.
++- `unknown / parsing` — collapsed into `error` with `error: <reason>` activity. Don't introduce a fifth state for "I couldn't figure it out" — that's the same UX signal as "broken."
++
++### 2.4 Color is out of scope (per AC OOS)
++
++The CLI emits no ANSI color codes. Terminal color rendering varies (PowerShell ISE vs Windows Terminal vs piping to a file), and the spec is one-shot text. Color is M3's job, on the dashboard, against `--vscode-*` theme variables.
++
++If a user demands color later, the wrapper is to add `--color=auto|always|never` per the GNU CLI convention — but that's post-M1.
++
++### 2.5 What counts as `error`
++
++A rostered agent goes to `error` state when:
++- `meta.json` exists but fails to parse (malformed JSON, schema validation rejection).
++- The subagent JSONL is missing entirely (but the meta.json exists and the parent transcript hasn't recorded the `tool_result` — meaning the spawn was registered but the child never wrote).
++- The roster matcher logged a warning specific to this agent (e.g., duplicate-id warning).
++
++NOT errors (these stay in normal states):
++- A single malformed JSONL line — the tailer skips and continues; agent remains `running` or whatever the prior valid line implied.
++- A subagent that's stale > 10s but had valid earlier lines — that's `idle`, not `error`.
++
++---
++
++## 3. Complete example output
++
++This is the canonical reference. Felix's CLI driver (M1-09) should produce output structurally identical to this for a comparable input. Sage's done-when test (M1-04) cites this as the spec target.
++
++```
++SESSION 7b53d0ee  [claude-vscode]  pid=68644  v2.1.145  state=alive
++  cwd:   c:\Trunk\PRIVATE\ClaudeTeam
++  title: ClaudeTeam M1 build session
++
++  TEAM ClaudeTeam Alpha  (4 rostered, 3 background in this session)
++    [>]   Felix   Extension Host Dev   tool:Edit src/extension/wat..   sonnet-4-5
++    [>]   Maya    Webview UI Dev       tool:Read src/webview/main.ts   sonnet-4-5
++    [.]   Iris    UX Designer          idle 47s                        opus-4-7
++    [v]   Sage    QA / Tester          finished                        sonnet-4-5
++
++    + 3 background agents (this session)
++        - Explore         "Map roster-matcher edge cases"     running   sonnet-4-5
++        - general-purpose "Agent A - schema drift survey"     running   sonnet-4-5
++        - general-purpose "Agent B - prior-art comparison"    finished  sonnet-4-5
++
++SESSION a91f3c20  [cli]  pid=71208  v2.1.119  state=alive
++  cwd:   c:\Users\538252\sideproject
++  title: (no title yet)
++
++  TEAM ClaudeTeam Alpha  (1 rostered, 0 background in this session)
++    [!]   Bram    Internals Consultant   error: meta parse failed       model:?
++
++SESSION 3c441900  [interactive]  pid=22119  v2.1.145  state=dead
++  cwd:   c:\Trunk\PRIVATE\ClaudeTeam
++  title: (no title yet)
++  (session marked dead; PID 22119 no longer alive)
++```
++
++Notes on what this example covers:
++- **All four states present** (AC2): `running` (`[>]`), `idle` (`[.]`), `finished` (`[v]`), `error` (`[!]`).
++- **Background chip with realistic agents** (AC2): three unrostered subagents under one session, one of them finished.
++- **Two sessions sharing a `cwd`** — the `c:\Trunk\PRIVATE\ClaudeTeam` session pair demonstrates how the registry handles multi-session same-project (the dead one renders, lower-emphasis).
++- **Schema drift** — session 2 is on v2.1.119, session 1 on v2.1.145; the renderer doesn't distinguish in output (the matcher handles the difference upstream).
++- **Empty title fallback** — `(no title yet)` is the literal string.
++- **Resolved-model unknown** — `model:?` on Bram's error tile (the JSONL was missing, so the model couldn't be resolved).
++- **Dead session** — session 3 has `state=dead` and a `(session marked dead; ...)` note; no team cards, no background chip (the renderer doesn't attempt to materialize agents for dead sessions in V1).
++
++---
++
++## 4. What this implies for the dashboard tile (M3 reuse)
++
++Three bullets — the language M3 inherits without re-deriving:
++
++1. **One tile = one rostered agent**, structured as `[state-indicator] | display | role | activity | model`. The CLI flattens to one line; the dashboard tile can stack `activity` and `model` vertically — but the **field set and the state vocabulary are identical**. M3 uses the same four states (`running` / `idle` / `finished` / `error`) and the same activity-line construction rules from Section 1.4.
++
++2. **The session header is the team-card boundary**, not a top-level filter. In the dashboard, each VS Code Claude Code session is its own collapsible block, with the team card(s) and background chip nested inside. The dashboard does NOT merge agents across sessions even if they share a `cwd` — same rule as the CLI in Section 3, second example.
++
++3. **The background-noise chip is always visible**, the detail list is the thing that collapses. The CLI prints both unconditionally (one-shot output, no interaction); the dashboard renders the chip with a count, and clicking it expands into the same `agentType "description" state model` rows. The count being visible is load-bearing — hiding background entirely defeats the V1 thesis ("accurate overview" means showing background exists, just muted).
++
++---
++
++## 5. Divergences — CLI is NOT the dashboard
++
++Felix and Maya should treat these as explicit guardrails so the CLI doesn't accumulate features that belong on the dashboard.
++
++1. **The CLI is one-shot; the dashboard is live.** The CLI runs, reads the current filesystem state, prints, exits. No polling, no refresh, no diff rendering. Felix's reducer (M1-09) doesn't need streaming — it's a pure function over a snapshot. The dashboard reuses the reducer but feeds it new snapshots from the file-watcher.
++
++2. **The CLI flattens; the dashboard wraps + drills.** CLI lines truncate with `..` at 30 chars for activity, 35 for description. The dashboard tile wraps long content and offers click-to-open-transcript drill-in. **Felix should not implement wrap logic in the reducer** — truncation lives in the CLI presenter, the reducer surfaces the full string and lets the consumer decide.
++
++3. **The CLI is monochrome; the dashboard is themed.** No ANSI color in the CLI (Section 2.4). The dashboard uses `--vscode-*` theme variables and semantic-color hex for state indicators (the M3 spec will set these — out of scope here). Felix's reducer output is color-agnostic; the presenter layer is what colors.
++
++4. **The CLI prints the full background detail list; the dashboard collapses it.** Section 1.6 — the CLI always prints the detail rows because there's no interaction. The dashboard renders the count chip and expands on click. This means the dashboard tile language has a state the CLI doesn't model: `background-chip-expanded` vs `background-chip-collapsed`. M3 handles that, not M1.
++
++5. **The CLI has no error UI for the runner itself; the dashboard does.** If the CLI fails to read `~/.claude/`, it prints `No live Claude Code sessions.` and exits 0 — the user sees the empty state and can investigate via terminal. The dashboard needs a visible error chip when the roster YAML is malformed or the file-watcher errors (per `roster-matching.md` "Loader edge cases"). That UI is M3.
++
++---
++
++## 6. Glossary (for Felix's reducer naming alignment)
++
++| Term | Definition | Source |
++|---|---|---|
++| `display` | the `members[].display` field from `teams.yaml` | roster-matching.md |
++| `role` | the `members[].role` field from `teams.yaml` | roster-matching.md |
++| `activity` | the rendered string for the activity field per Section 1.4 | this doc |
++| `model` | the resolved model string from the subagent JSONL's first assistant message | data-sources.md §3 |
++| `state` | one of `running` / `idle` / `finished` / `error` per liveness inference + this doc Section 2.5 | data-sources.md "Liveness inference" + this doc |
++| `background agent` | a subagent whose meta.json matches NO roster member | roster-matching.md |
++| `session` | one `~/.claude/sessions/{pid}.json` entry | data-sources.md §1 |
++
++Felix should name the reducer's output fields to match these terms (`AgentTile.display`, `.role`, `.activity`, `.model`, `.state`; `Session.id`, `.cwd`, `.title`, etc.). M3 inherits the names; renaming later costs a refactor across both surfaces.
+diff --git a/team/log/clickup-pending.md b/team/log/clickup-pending.md
+index 32d283d..d2a063b 100644
+--- a/team/log/clickup-pending.md
++++ b/team/log/clickup-pending.md
+@@ -38,3 +38,12 @@ Suggested ClickUp `markdown_description` for each ticket: copy the entire `## M1
+ The `mcp__clickup__clickup_create_task` tool was listed in Nora's persona file (`/.claude/agents/nora.md` line 4) but is NOT exposed to the Nora session at runtime in the current Claude Code harness version. The persona-file tool list is best-effort declarative — the runtime harness controls actual availability. **Until this is fixed, ClickUp ticket creation flows back through the orchestrator.** Nora drafts the tickets as backlog markdown; orchestrator creates them in ClickUp.
+ 
+ Logged this gap explicitly so future planning sessions don't repeat the surprise.
++
++## Status-flip queue (sub-agent dispatch fallback)
++
++Per `.claude/docs/orchestration-overview.md` "ClickUp as hard gate" — sub-agents append intended status transitions here; orchestrator flushes on each tick.
++
++```
++ENTRY 003: 86c9y5c8m -> in review
++```
++

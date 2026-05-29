@@ -377,6 +377,26 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     buildRow("tile-row--model", "agent-model", tile.model),
   );
 
+  // ── Overflow affordance ([⋯]) — hide-agent menu (E-06b / spec §7.1) ──────
+  // A trailing kebab button revealed on tile hover OR keyboard focus (CSS
+  // gates visibility; the element is always in the DOM for keyboard/AT
+  // reachability). Activating it opens a small menu whose only V1 entry is
+  // "Hide <display>" (Remove-from-roster is E-07 / OOS; Open-transcript stays
+  // the tile-body click). The menu is keyboard-navigable (Enter/Space/Esc)
+  // with focus returning to [⋯] on close.
+  //
+  // Baseline `available` tiles ARE hide-able (AC5 — the primary declutter
+  // case: a never-run member the sponsor wants out of the default view), so
+  // the affordance renders for every state including "available".
+  article.appendChild(
+    buildOverflowMenu({
+      teamId: tile.teamId,
+      memberId: tile.memberId,
+      display: tile.display,
+      postMessage,
+    }),
+  );
+
   // Click + keyboard handlers — both produce the same message. AC6 of M2-05.
   // tabindex="0" + role="button" makes Enter/Space the expected key activations.
   const fire = (): void => {
@@ -387,8 +407,23 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     postMessage(msg);
   };
 
-  article.addEventListener("click", fire);
+  // Drill-in fires only when the click did NOT originate inside the overflow
+  // menu (the menu's own handlers stopPropagation, but guard defensively so a
+  // stray bubble can't open the transcript when the user meant to hide).
+  article.addEventListener("click", (ev: MouseEvent) => {
+    const target = ev.target as HTMLElement | null;
+    if (target && target.closest(".agent-tile-overflow")) {
+      return;
+    }
+    fire();
+  });
   article.addEventListener("keydown", (ev: KeyboardEvent) => {
+    // Don't hijack Enter/Space when focus is inside the overflow control —
+    // the menu's own buttons handle those keys.
+    const target = ev.target as HTMLElement | null;
+    if (target && target.closest(".agent-tile-overflow")) {
+      return;
+    }
     if (ev.key === "Enter" || ev.key === " ") {
       ev.preventDefault();
       fire();
@@ -396,6 +431,120 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   });
 
   return article;
+}
+
+/**
+ * Build the per-tile overflow control ([⋯]) + its hide menu (E-06b / spec
+ * §7.1). Returns a wrapper element appended to the tile's primary surface.
+ *
+ * DOM shape:
+ *
+ *   <div class="agent-tile-overflow">
+ *     <button class="agent-tile-overflow-btn" aria-haspopup="menu"
+ *             aria-expanded="false" aria-label="agent actions">⋯</button>
+ *     <div class="agent-tile-overflow-menu" role="menu" hidden>
+ *       <button class="agent-tile-overflow-item" role="menuitem"
+ *               data-action="hide">Hide {display}</button>
+ *     </div>
+ *   </div>
+ *
+ * Interaction:
+ *   - Click / Enter / Space on [⋯] toggles the menu.
+ *   - Esc closes the menu and returns focus to [⋯].
+ *   - Clicking "Hide {display}" posts `ui:hide-member { teamId, memberId }`
+ *     (the PAIR, never the joined key) and closes the menu.
+ *   - Both the [⋯] button and the menu items `stopPropagation` so the tile's
+ *     drill-in click never fires for menu interactions.
+ */
+function buildOverflowMenu(opts: {
+  teamId: string;
+  memberId: string;
+  display: string;
+  postMessage: PostMessageFn;
+}): HTMLElement {
+  const { teamId, memberId, display, postMessage } = opts;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "agent-tile-overflow";
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "agent-tile-overflow-btn";
+  btn.setAttribute("aria-haspopup", "menu");
+  btn.setAttribute("aria-expanded", "false");
+  btn.setAttribute("aria-label", "agent actions");
+  // Horizontal-ellipsis glyph (U+22EF) — the kebab/more affordance.
+  btn.textContent = "⋯";
+
+  const menu = document.createElement("div");
+  menu.className = "agent-tile-overflow-menu";
+  menu.setAttribute("role", "menu");
+  menu.hidden = true;
+
+  const hideItem = document.createElement("button");
+  hideItem.type = "button";
+  hideItem.className = "agent-tile-overflow-item";
+  hideItem.setAttribute("role", "menuitem");
+  hideItem.dataset.action = "hide";
+  hideItem.textContent = `Hide ${display}`;
+
+  const closeMenu = (returnFocus: boolean): void => {
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    if (returnFocus) {
+      btn.focus();
+    }
+  };
+  const openMenu = (): void => {
+    menu.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    hideItem.focus();
+  };
+
+  btn.addEventListener("click", (ev: MouseEvent) => {
+    ev.stopPropagation();
+    if (menu.hidden) {
+      openMenu();
+    } else {
+      closeMenu(false);
+    }
+  });
+  btn.addEventListener("keydown", (ev: KeyboardEvent) => {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openMenu();
+    } else if (ev.key === "Escape" && !menu.hidden) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeMenu(true);
+    }
+  });
+
+  hideItem.addEventListener("click", (ev: MouseEvent) => {
+    ev.stopPropagation();
+    const msg: WebviewMessage = {
+      type: "ui:hide-member",
+      // Payload carries the (teamId, memberId) PAIR — host re-joins via
+      // hiddenMemberKey(). The webview never sends the pre-joined key.
+      payload: { teamId, memberId },
+    };
+    postMessage(msg);
+    closeMenu(true);
+  });
+  hideItem.addEventListener("keydown", (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeMenu(true);
+    }
+    // Enter/Space on a native <button> fire click — no extra handling needed.
+  });
+
+  menu.appendChild(hideItem);
+  wrapper.appendChild(btn);
+  wrapper.appendChild(menu);
+  return wrapper;
 }
 
 function buildRow(

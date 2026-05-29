@@ -45,6 +45,10 @@
   --ct-radius-chip: 2px;
   --ct-duration-state-transition: 200ms;
 
+  /* Hide-agent reveal opacity (E-06b — whole-team-display-spec §8.2). The
+   * dimmed treatment for revealed-hidden member rows under "show hidden". */
+  --ct-opacity-hidden-reveal: 0.55;
+
   /* Theme-mapped colors — promoted from M2 §10.1 table (≥2 use sites; M4-01 §1.2.1) */
   --ct-color-fg: var(--vscode-foreground, #cccccc);
   --ct-color-fg-muted: var(--vscode-descriptionForeground, #858585);
@@ -884,6 +888,201 @@ body {
 .ct-header-chip-count {
   /* Inline counter — rendered separately so it can hide via [hidden]. */
   font-variant-numeric: tabular-nums;
+}
+
+/* ===========================================================================
+ * Per-tile overflow affordance ([⋯] hide menu) — E-06b / spec §7.1
+ * =========================================================================== */
+
+/* Anchored to the tile's top-right; the tile is the positioning context. */
+.agent-tile {
+  position: relative;
+}
+
+.agent-tile-overflow {
+  position: absolute;
+  top: var(--ct-space-xs);
+  right: var(--ct-space-xs);
+}
+
+/* The kebab button is hidden at rest (low-noise resting tile per spec §7.1)
+ * and revealed on tile hover OR when any descendant has keyboard focus
+ * (focus-within keeps it reachable for keyboard / AT users). It stays in the
+ * DOM unconditionally so it's always focusable via Tab. */
+.agent-tile-overflow-btn {
+  opacity: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  background-color: transparent;
+  color: var(--ct-color-fg-muted);
+  border: 1px solid transparent;
+  border-radius: var(--ct-radius-chip);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  transition: opacity var(--ct-duration-state-transition) ease-out;
+}
+
+.agent-tile:hover .agent-tile-overflow-btn,
+.agent-tile:focus-within .agent-tile-overflow-btn {
+  opacity: 1;
+}
+
+.agent-tile-overflow-btn:hover {
+  background-color: var(--ct-color-bg-hover);
+  color: var(--ct-color-fg);
+}
+
+.agent-tile-overflow-btn:focus-visible {
+  outline: 1px solid var(--ct-color-focus);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+/* Small dropdown menu anchored under the kebab. */
+.agent-tile-overflow-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 2px;
+  min-width: 140px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  background-color: var(
+    --vscode-menu-background,
+    var(--ct-color-bg)
+  );
+  border: 1px solid var(
+    --vscode-menu-border,
+    var(--ct-color-border)
+  );
+  border-radius: var(--ct-radius-chip);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+}
+
+.agent-tile-overflow-item {
+  text-align: left;
+  padding: 6px 12px;
+  background-color: transparent;
+  color: var(--vscode-menu-foreground, var(--ct-color-fg));
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+.agent-tile-overflow-item:hover,
+.agent-tile-overflow-item:focus-visible {
+  background-color: var(
+    --vscode-menu-selectionBackground,
+    var(--ct-color-bg-hover)
+  );
+  color: var(--vscode-menu-selectionForeground, var(--ct-color-fg));
+  outline: none;
+}
+
+/* ===========================================================================
+ * "N hidden agents [show]" recovery chip — E-06b / spec §7.2
+ * =========================================================================== */
+
+.ct-hidden-members-chip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  padding: var(--ct-space-s) var(--ct-space-m);
+}
+
+.ct-hidden-members-toggle {
+  align-self: flex-start;
+  padding: 4px 10px;
+  background-color: transparent;
+  color: var(--ct-color-fg-muted);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-chip);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.2;
+}
+
+.ct-hidden-members-toggle:hover {
+  background-color: var(--ct-color-bg-hover);
+  color: var(--ct-color-fg);
+}
+
+.ct-hidden-members-toggle:focus-visible {
+  outline: 1px solid var(--ct-color-focus);
+  outline-offset: 1px;
+}
+
+.ct-hidden-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  padding-left: var(--ct-space-s);
+}
+
+/* Revealed-hidden rows render at the spec §8.2 dimmed opacity so they read as
+ * "set aside, recoverable" without competing with live tiles. */
+.ct-hidden-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-s);
+  opacity: var(--ct-opacity-hidden-reveal, 0.55);
+}
+
+.ct-hidden-member-identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ct-hidden-member-name {
+  color: var(--ct-color-fg);
+}
+
+.ct-hidden-member-role {
+  color: var(--ct-color-fg-muted);
+  font-size: 0.9em;
+}
+
+.ct-hidden-member-unhide,
+.ct-hidden-members-show-all {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  background-color: transparent;
+  color: var(--ct-color-fg-muted);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-chip);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.2;
+}
+
+.ct-hidden-members-show-all {
+  align-self: flex-start;
+  margin-top: var(--ct-space-xs);
+}
+
+.ct-hidden-member-unhide:hover,
+.ct-hidden-members-show-all:hover {
+  background-color: var(--ct-color-bg-hover);
+  color: var(--ct-color-fg);
+}
+
+.ct-hidden-member-unhide:focus-visible,
+.ct-hidden-members-show-all:focus-visible {
+  outline: 1px solid var(--ct-color-focus);
+  outline-offset: 1px;
 }
 
 /* ===========================================================================
