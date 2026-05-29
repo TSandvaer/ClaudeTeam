@@ -36,7 +36,7 @@ import {
   type FinishedMap,
   type SessionAgentData,
 } from "../extension/state/reducer.js";
-import type { AgentTree, SessionTree, AgentTile, BackgroundAgent, Team } from "../shared/types.js";
+import type { AgentState, AgentTree, SessionTree, AgentTile, BackgroundAgent, Team } from "../shared/types.js";
 import { isCollapsedPersonaGroup } from "../shared/types.js";
 
 // =============================================================================
@@ -338,12 +338,15 @@ async function collect(claudeHome: string): Promise<{
 // =============================================================================
 
 /** State glyph table per spec §2.1. Width is always 3 chars: [X]. */
-function stateGlyph(state: "running" | "idle" | "finished" | "error"): string {
+function stateGlyph(state: AgentState): string {
   switch (state) {
-    case "running": return "[>]";
-    case "idle":    return "[.]";
-    case "finished":return "[v]";
-    case "error":   return "[!]";
+    case "running":  return "[>]";
+    case "idle":     return "[.]";
+    case "finished": return "[v]";
+    case "error":    return "[!]";
+    // Roster-baseline never-run member (86ca18b9p). A quiet, empty-looking
+    // glyph distinct from idle's "[.]" — there is no live agent at all.
+    case "available":return "[ ]";
   }
 }
 

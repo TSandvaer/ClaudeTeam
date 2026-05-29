@@ -159,6 +159,29 @@ const ROSTER_ALPHA: Team[] = [
   },
 ];
 
+/**
+ * Felix-only roster — used by M3-10 grouping tests that assert exact tile
+ * counts for a single persona. With ROSTER_ALPHA (felix + maya) the
+ * 86ca18b9p baseline pass would seed an extra `available` maya tile that
+ * pollutes the count assertions; a single-member roster keeps the M3-10
+ * grouping behavior isolated (AC4 regression-guard: grouping logic is
+ * unchanged; only the surrounding roster differs).
+ */
+const ROSTER_FELIX_ONLY: Team[] = [
+  {
+    id: "alpha",
+    name: "ClaudeTeam Alpha",
+    members: [
+      {
+        id: "felix",
+        display: "Felix",
+        role: "Extension Host Dev",
+        match: [{ agentType_equals: "felix" }],
+      },
+    ],
+  },
+];
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -169,7 +192,10 @@ describe("buildAgentTree", () => {
     expect(tree.sessions).toHaveLength(0);
   });
 
-  it("returns a session with no agents when agentData is empty", () => {
+  it("returns a session with full-roster baseline tiles when agentData is empty (86ca18b9p)", () => {
+    // Post-86ca18b9p: a session with zero detected agents no longer produces
+    // an empty tree — every roster member is seeded as an `available`
+    // baseline tile. ROSTER_ALPHA has felix + maya, so both appear available.
     const session = makeSession();
     const tree = buildAgentTree(
       [session],
@@ -182,7 +208,18 @@ describe("buildAgentTree", () => {
     expect(tree.sessions).toHaveLength(1);
     const s = tree.sessions[0]!;
     expect(s.sessionId).toBe(session.sessionId);
-    expect(s.teamOrder).toHaveLength(0);
+    // Team card now present (seeded), tiles all available.
+    expect(s.teamOrder).toEqual(["alpha"]);
+    const tiles = s.rosterTiles.get("alpha") ?? [];
+    expect(tiles).toHaveLength(2);
+    expect(hasTileForMember(tiles, "felix")).toBe(true);
+    expect(hasTileForMember(tiles, "maya")).toBe(true);
+    for (const entry of tiles) {
+      const tile = expectTile(entry);
+      expect(tile.state).toBe("available");
+      expect(tile.activity).toBe("available");
+      expect(tile.agentId).toBe("");
+    }
     expect(s.background).toHaveLength(0);
   });
 
@@ -524,7 +561,15 @@ describe("buildAgentTree", () => {
       const s = tree.sessions[0]!;
       expect(s.background).toHaveLength(1);
       expect(s.background[0]!.agentType).toBe("general-purpose");
-      expect(s.teamOrder).toHaveLength(0);
+      // Post-86ca18b9p: an unmatched agent still buckets to background, but
+      // the roster's felix + maya are now seeded as available baseline tiles,
+      // so the team card is present (NOT empty as in the detected-only model).
+      expect(s.teamOrder).toEqual(["alpha"]);
+      const tiles = s.rosterTiles.get("alpha") ?? [];
+      expect(tiles).toHaveLength(2);
+      for (const entry of tiles) {
+        expect(expectTile(entry).state).toBe("available");
+      }
     });
 
     it("empty roster → all agents in background", () => {
@@ -631,14 +676,26 @@ describe("buildAgentTree", () => {
       expect(s1.sessionId).toBe(session1.sessionId);
       expect(s2.sessionId).toBe(session2.sessionId);
 
-      // S1 has felix; S2 has maya.
+      // S1 detected felix; S2 detected maya. Post-86ca18b9p both sessions
+      // ALSO carry a baseline `available` tile for the un-detected member
+      // (S1 has available maya; S2 has available felix). The non-merge
+      // guarantee is now expressed as "the DETECTED state lives only in the
+      // session that detected it" — S1's felix is live, S2's felix is only
+      // the baseline (and vice versa for maya).
       const s1Tiles = s1.rosterTiles.get("alpha") ?? [];
       const s2Tiles = s2.rosterTiles.get("alpha") ?? [];
-      expect(hasTileForMember(s1Tiles, "felix")).toBe(true);
-      expect(hasTileForMember(s2Tiles, "maya")).toBe(true);
-      // S1 does NOT have maya; S2 does NOT have felix.
-      expect(hasTileForMember(s1Tiles, "maya")).toBe(false);
-      expect(hasTileForMember(s2Tiles, "felix")).toBe(false);
+      const findTile = (tiles: RosterTileEntry[], memberId: string): AgentTile => {
+        const entry = tiles.find((e) =>
+          !isCollapsedPersonaGroup(e) && e.memberId === memberId,
+        );
+        return expectTile(entry);
+      };
+      // S1: felix detected (not available), maya baseline (available).
+      expect(findTile(s1Tiles, "felix").state).not.toBe("available");
+      expect(findTile(s1Tiles, "maya").state).toBe("available");
+      // S2: maya detected (not available), felix baseline (available).
+      expect(findTile(s2Tiles, "maya").state).not.toBe("available");
+      expect(findTile(s2Tiles, "felix").state).toBe("available");
     });
 
     it("dead session (isAlive:false) → session renders but tiles still included", () => {
@@ -828,7 +885,19 @@ describe("buildAgentTree", () => {
       );
 
       const s = tree.sessions[0]!;
-      expect(s.rosterTiles.get("alpha")).toHaveLength(1);
+      // Post-86ca18b9p: felix detected (running) + maya baseline (available)
+      // → 2 rostered tiles. The unrostered Explore agent still buckets to
+      // background (unchanged — §1.3 of the spec).
+      const tiles = s.rosterTiles.get("alpha") ?? [];
+      expect(tiles).toHaveLength(2);
+      const felixTile = expectTile(
+        tiles.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix"),
+      );
+      const mayaTile = expectTile(
+        tiles.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya"),
+      );
+      expect(felixTile.state).not.toBe("available"); // detected
+      expect(mayaTile.state).toBe("available"); // baseline
       expect(s.background).toHaveLength(1);
       expect(s.background[0]!.agentType).toBe("Explore");
     });
@@ -978,9 +1047,10 @@ describe("buildAgentTree", () => {
   });
 
   // ---------------------------------------------------------------- session with no agentData entry
-  it("session with no matching agentData entry → empty session tree", () => {
+  it("session with no matching agentData entry → baseline-only roster tree (86ca18b9p)", () => {
     const session = makeSession();
-    // Supply a different sessionId in agentData — no match for our session.
+    // Supply a different sessionId in agentData — no detected agents for our
+    // session. Post-86ca18b9p the roster baseline still seeds available tiles.
     const tree = buildAgentTree(
       [session],
       [makeSessionData("different-session-id", [])],
@@ -991,7 +1061,12 @@ describe("buildAgentTree", () => {
     );
 
     const s = tree.sessions[0]!;
-    expect(s.teamOrder).toHaveLength(0);
+    expect(s.teamOrder).toEqual(["alpha"]);
+    const tiles = s.rosterTiles.get("alpha") ?? [];
+    expect(tiles).toHaveLength(2);
+    for (const entry of tiles) {
+      expect(expectTile(entry).state).toBe("available");
+    }
     expect(s.background).toHaveLength(0);
     expect(s.title).toBe("(no title yet)");
   });
@@ -1451,7 +1526,7 @@ describe("buildAgentTree", () => {
         [data],
         activities,
         new Map(),
-        ROSTER_ALPHA,
+        ROSTER_FELIX_ONLY,
         NOW_MS,
         // Default options — collapse ON.
       );
@@ -1487,7 +1562,7 @@ describe("buildAgentTree", () => {
         [data],
         activities,
         new Map(),
-        ROSTER_ALPHA,
+        ROSTER_FELIX_ONLY,
         NOW_MS,
       );
 
@@ -1524,15 +1599,21 @@ describe("buildAgentTree", () => {
         [makeSessionData(session.sessionId, agents)],
         activities,
         new Map(),
-        ROSTER_ALPHA,
+        ROSTER_FELIX_ONLY,
         NOW_MS,
       );
 
       const s = tree.sessions[0]!;
       // Three background agents — flat list, no group wrapper.
       expect(s.background).toHaveLength(3);
-      // No rostered tiles at all → no CollapsedPersonaGroup anywhere.
-      expect(s.rosterTiles.size).toBe(0);
+      // Post-86ca18b9p: the roster's felix is seeded as an available baseline
+      // tile (AC4 regression-guard — grouping still bypasses background; the
+      // only rostered entry is the bare baseline, never a CollapsedPersonaGroup).
+      const entries = s.rosterTiles.get("alpha") ?? [];
+      expect(entries).toHaveLength(1);
+      const baseline = expectTile(entries[0]);
+      expect(baseline.memberId).toBe("felix");
+      expect(baseline.state).toBe("available");
     });
 
     // ---------- AC5 — config flag opt-out ----------
@@ -1548,7 +1629,7 @@ describe("buildAgentTree", () => {
         [data],
         activities,
         new Map(),
-        ROSTER_ALPHA,
+        ROSTER_FELIX_ONLY,
         NOW_MS,
         { collapsePersonaTiles: false },
       );
@@ -1574,7 +1655,7 @@ describe("buildAgentTree", () => {
         [data],
         activities,
         new Map(),
-        ROSTER_ALPHA,
+        ROSTER_FELIX_ONLY,
         NOW_MS,
         { collapsePersonaTiles: true },
       );
@@ -1597,7 +1678,7 @@ describe("buildAgentTree", () => {
         [data],
         activities,
         new Map(),
-        ROSTER_ALPHA,
+        ROSTER_FELIX_ONLY,
         NOW_MS,
         // Omit options entirely.
       );
@@ -1866,8 +1947,17 @@ describe("buildAgentTree", () => {
         NOW_MS,
       );
 
-      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      // Post-86ca18b9p: felix (with color) is seeded as an available baseline
+      // and sorts first by member-declaration order, so fetch maya by id
+      // rather than positionally.
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      const tile = expectTile(
+        entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya"),
+      );
       expect(tile!.memberId).toBe("maya");
+      // maya is the DETECTED tile (not the baseline) — color omitted because
+      // the roster member has no color set.
+      expect(tile!.state).not.toBe("available");
       expect(tile!.memberColor).toBeUndefined();
       // Absent in JSON shape — `"memberColor"` key not present at all.
       expect(Object.prototype.hasOwnProperty.call(tile, "memberColor")).toBe(
@@ -1923,6 +2013,239 @@ describe("buildAgentTree", () => {
       const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("idle");
       expect(tile!.memberColor).toBe("#5d8aa8");
+    });
+  });
+
+  // =========================================================================
+  // 86ca18b9p — roster-baseline tile seeding (EPIC 86ca11187).
+  //
+  // Every teams.yaml member ALWAYS gets a tile; un-detected members are
+  // seeded as `available` baselines; detected agents overlay their live state
+  // and win the slot (no dup per memberId). AC6: all-baseline / partial /
+  // overlay / empty-roster / member-order.
+  // =========================================================================
+  describe("baseline-tile seeding (86ca18b9p)", () => {
+    // Three-member, two-team roster to exercise member-order + multi-team.
+    const ROSTER_MULTI: Team[] = [
+      {
+        id: "alpha",
+        name: "ClaudeTeam Alpha",
+        members: [
+          { id: "felix", display: "Felix", role: "Host Dev", match: [{ agentType_equals: "felix" }] },
+          { id: "maya", display: "Maya", role: "Webview Dev", match: [{ agentType_equals: "maya" }] },
+          { id: "bram", display: "Bram", role: "Research", match: [{ agentType_equals: "bram" }] },
+        ],
+      },
+      {
+        id: "beta",
+        name: "ClaudeTeam Beta",
+        members: [
+          { id: "sage", display: "Sage", role: "QA", match: [{ agentType_equals: "sage" }] },
+        ],
+      },
+    ];
+
+    function tilesFor(team: string, session = 0) {
+      return (entry: ReturnType<typeof buildAgentTree>) =>
+        entry.sessions[session]!.rosterTiles.get(team) ?? [];
+    }
+
+    it("buildActivity('available') → literal 'available' (no tool line, no elapsed)", () => {
+      expect(buildActivity("available", undefined, NOW_MS)).toBe("available");
+      // Even if an activity object is somehow passed, available ignores it.
+      expect(buildActivity("available", makeActivity(), NOW_MS)).toBe("available");
+    });
+
+    it("AC6 all-baseline: zero detected agents → every roster member seeded available", () => {
+      const session = makeSession();
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [])],
+        new Map(),
+        new Map(),
+        ROSTER_MULTI,
+        NOW_MS,
+      );
+
+      const s = tree.sessions[0]!;
+      expect(s.teamOrder).toEqual(["alpha", "beta"]);
+      const alpha = tilesFor("alpha")(tree);
+      const beta = tilesFor("beta")(tree);
+      expect(alpha.map((e) => expectTile(e).memberId)).toEqual(["felix", "maya", "bram"]);
+      expect(beta.map((e) => expectTile(e).memberId)).toEqual(["sage"]);
+      for (const entry of [...alpha, ...beta]) {
+        const tile = expectTile(entry);
+        expect(tile.state).toBe("available");
+        expect(tile.activity).toBe("available");
+        expect(tile.model).toBe("model:?");
+        expect(tile.agentId).toBe("");
+        expect(tile.toolUseId).toBeNull();
+      }
+    });
+
+    it("AC6 partial: one detected member + two baselines in the same team", () => {
+      const session = makeSession();
+      const agentId = "agent-maya-live";
+      const meta = makeMeta({ agentType: "maya", description: "Maya live" });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_MULTI,
+        NOW_MS,
+      );
+
+      const alpha = tilesFor("alpha")(tree);
+      // Member-declaration order preserved even with one overlay (AC6 order).
+      expect(alpha.map((e) => expectTile(e).memberId)).toEqual(["felix", "maya", "bram"]);
+      const byId = (id: string) =>
+        expectTile(alpha.find((e) => expectTile(e).memberId === id));
+      expect(byId("felix").state).toBe("available"); // baseline
+      expect(byId("maya").state).toBe("running"); // detected overlay
+      expect(byId("maya").agentId).toBe(agentId);
+      expect(byId("bram").state).toBe("available"); // baseline
+      // Sage (beta) still seeded available.
+      expect(expectTile(tilesFor("beta")(tree)[0]).state).toBe("available");
+    });
+
+    it("AC6 overlay: detected agent wins the slot — no duplicate baseline per memberId", () => {
+      const session = makeSession();
+      const agentId = "agent-felix-live";
+      const meta = makeMeta({ agentType: "felix", description: "Felix live" });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_MULTI,
+        NOW_MS,
+      );
+
+      const alpha = tilesFor("alpha")(tree);
+      // Exactly one felix tile — the detected one, not a baseline + a live dup.
+      const felixTiles = alpha.filter((e) => expectTile(e).memberId === "felix");
+      expect(felixTiles).toHaveLength(1);
+      expect(expectTile(felixTiles[0]).state).toBe("running");
+      expect(expectTile(felixTiles[0]).agentId).toBe(agentId);
+      // Total alpha tiles = 3 (felix live + maya/bram baselines), not 4.
+      expect(alpha).toHaveLength(3);
+    });
+
+    it("AC6 overlay (N>1 collapsed): collapsed-persona group is NOT shadowed by a baseline", () => {
+      // When a member has N>1 detected tiles (CollapsedPersonaGroup), the
+      // baseline pass must still treat that member as detected → no baseline.
+      const session = makeSession();
+      const agents: AgentMetaEntry[] = [
+        makeAgentEntry("felix-a", makeMeta({ agentType: "felix", description: "A", toolUseId: "t1" })),
+        makeAgentEntry("felix-b", makeMeta({ agentType: "felix", description: "B", toolUseId: "t2" })),
+      ];
+      const activities: ActivityMap = new Map([
+        ["felix-a", makeActivity()],
+        ["felix-b", makeActivity({ lastTool: "Bash" })],
+      ]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, agents)],
+        activities,
+        new Map(),
+        ROSTER_MULTI,
+        NOW_MS,
+      );
+
+      const alpha = tilesFor("alpha")(tree);
+      // felix → one CollapsedPersonaGroup (count 2); maya + bram baselines.
+      const felixGroup = expectGroup(alpha[0]);
+      expect(felixGroup.personaName).toBe("Felix");
+      expect(felixGroup.count).toBe(2);
+      // No bare felix baseline tile alongside the group.
+      const bareFelix = alpha.filter(
+        (e) => !isCollapsedPersonaGroup(e) && (e as AgentTile).memberId === "felix",
+      );
+      expect(bareFelix).toHaveLength(0);
+      // maya + bram still seeded available.
+      expect(hasTileForMember(alpha, "maya")).toBe(true);
+      expect(hasTileForMember(alpha, "bram")).toBe(true);
+    });
+
+    it("AC6 empty roster: no baseline tiles seeded (nothing to seed)", () => {
+      const session = makeSession();
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [])],
+        new Map(),
+        new Map(),
+        [], // empty roster
+        NOW_MS,
+      );
+
+      const s = tree.sessions[0]!;
+      expect(s.teamOrder).toHaveLength(0);
+      expect(s.rosterTiles.size).toBe(0);
+      expect(s.background).toHaveLength(0);
+    });
+
+    it("AC6 member-order: baseline tiles sort in roster member-declaration order", () => {
+      // Reverse the declared order in the roster to prove the reducer sorts
+      // by declaration index, not by insertion/seed order.
+      const rosterReversed: Team[] = [
+        {
+          id: "alpha",
+          name: "Alpha",
+          members: [
+            { id: "zeta", display: "Zeta", role: "R", match: [{ agentType_equals: "zeta" }] },
+            { id: "alpha-m", display: "AlphaM", role: "R", match: [{ agentType_equals: "alpha-m" }] },
+            { id: "mid", display: "Mid", role: "R", match: [{ agentType_equals: "mid" }] },
+          ],
+        },
+      ];
+      const session = makeSession();
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [])],
+        new Map(),
+        new Map(),
+        rosterReversed,
+        NOW_MS,
+      );
+
+      const alpha = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      expect(alpha.map((e) => expectTile(e).memberId)).toEqual(["zeta", "alpha-m", "mid"]);
+    });
+
+    it("AC6 multi-session: each session seeds its own independent baseline set", () => {
+      const s1 = makeSession({ pid: 1, sessionId: "11111111-0000-0000-0000-000000000001" });
+      const s2 = makeSession({ pid: 2, sessionId: "22222222-0000-0000-0000-000000000002" });
+      // s1 detects felix; s2 detects nothing.
+      const agentId = "felix-s1";
+      const meta = makeMeta({ agentType: "felix", description: "Felix S1" });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [s1, s2],
+        [
+          makeSessionData(s1.sessionId, [makeAgentEntry(agentId, meta)]),
+          makeSessionData(s2.sessionId, []),
+        ],
+        activities,
+        new Map(),
+        ROSTER_MULTI,
+        NOW_MS,
+      );
+
+      const a1 = tilesFor("alpha", 0)(tree);
+      const a2 = tilesFor("alpha", 1)(tree);
+      // s1: felix detected, maya/bram baseline.
+      const f1 = expectTile(a1.find((e) => expectTile(e).memberId === "felix"));
+      expect(f1.state).toBe("running");
+      // s2: felix baseline (independent — s1's detection doesn't leak).
+      const f2 = expectTile(a2.find((e) => expectTile(e).memberId === "felix"));
+      expect(f2.state).toBe("available");
     });
   });
 });

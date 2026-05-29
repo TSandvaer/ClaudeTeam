@@ -266,6 +266,68 @@ export function buildAgentTree(
       rosterTiles.get(teamId)!.push(tile);
     }
 
+    // -----------------------------------------------------------------------
+    // Baseline-tile seed (EPIC 86ca11187 / 86ca18b9p — whole-team-always-visible).
+    //
+    // Every `teams.yaml` member ALWAYS gets a tile. The detected-agent loop
+    // above only minted tiles for members with a live/matched agent this
+    // session; members who never ran (Iris/Nora/Bram on a Felix-only session)
+    // had no tile at all. Seed a baseline `available` tile for each roster
+    // member that has ZERO detected tiles in its team.
+    //
+    // AC2 (overlay wins, no dup per memberId): we seed ONLY for members
+    // absent from `detectedMemberIds`. A detected agent's tile (any of
+    // running/idle/finished/error, and N>1 collapses are detected) takes
+    // precedence — the baseline is the fallback, never an addition on top of
+    // a live tile. Seeding happens BEFORE the sort + M3-10 grouping passes so
+    // baseline tiles interleave in roster member-declaration order (AC6) and
+    // flow through the existing render path (minimal/placeholder per OOS —
+    // E-05 re-skins the `available` visual).
+    //
+    // Scope note: baseline tiles live INSIDE each surfaced session block's
+    // team card (the EXISTING placement). A session-less "roster baseline"
+    // block for the zero-live-sessions case is sponsor open question Q1
+    // (spec §10) and OUT OF SCOPE here.
+    //
+    // The set of memberIds with a detected tile, per teamId.
+    const detectedMemberIds = new Map<string, Set<string>>();
+    for (const [teamId, tiles] of rosterTiles) {
+      detectedMemberIds.set(teamId, new Set(tiles.map((t) => t.memberId)));
+    }
+    for (const team of roster) {
+      const detected = detectedMemberIds.get(team.id) ?? new Set<string>();
+      for (const member of team.members) {
+        if (detected.has(member.id)) {
+          continue; // live tile already exists — overlay wins (AC2).
+        }
+        const baselineTile: AgentTile = {
+          memberId: member.id,
+          teamId: team.id,
+          display: member.display,
+          role: member.role,
+          activity: buildActivity("available", undefined, nowMs),
+          // No live agent ⇒ no resolved model. Use the existing "model:?"
+          // sentinel (same as an unresolved live tile) — the `available`
+          // state, not the model string, carries the never-run semantics.
+          model: "model:?",
+          state: "available",
+          // No agent id / toolUseId for a never-run member — synthetic empty
+          // string keeps the field non-undefined for the wire shape; the
+          // `available` state is the signal there is no underlying agent.
+          agentId: "",
+          toolUseId: null,
+          // Member color is independent of liveness — carry it through so
+          // E-05 can paint the leading-edge identity even on a baseline tile.
+          ...(member.color !== undefined ? { memberColor: member.color } : {}),
+        };
+        if (!rosterTiles.has(team.id)) {
+          rosterTiles.set(team.id, []);
+          teamOrder.push(team.id);
+        }
+        rosterTiles.get(team.id)!.push(baselineTile);
+      }
+    }
+
     // Sort tiles within each team in roster member-declaration order.
     for (const [teamId, tiles] of rosterTiles) {
       const team = roster.find((t) => t.id === teamId);
@@ -594,5 +656,10 @@ export function buildActivity(
     }
     case "error":
       return "error: agent state unavailable";
+    case "available":
+      // Roster-baseline never-run member (86ca18b9p). No tool line, no
+      // elapsed — the literal muted word per spec §2.2. E-05 renders the
+      // visual; the host emits the activity string.
+      return "available";
   }
 }
