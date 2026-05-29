@@ -112,21 +112,6 @@ export interface SessionBlockProps {
    * multiAgentPersonaTile. Optional; defaults to false (collapsed).
    */
   expandPersonaTiles?: boolean;
-  /**
-   * 86c9zqa75 — mirror of `state.config?.hideIdleAgents` threaded down to
-   * teamCard so each team can decide whether to render the per-team "N idle
-   * hidden — show" passive informational row. Optional / defaults to false
-   * for back-compat with pre-86c9zqa75 component tests.
-   */
-  hideIdle?: boolean;
-  /**
-   * 86c9zqa75 — mirror of `state.hiddenIdleCount` threaded down to teamCard
-   * for the per-team row label. Global (across all teams + sessions) per
-   * Felix's Pt 1 wire shape; per-team breakdown is V1 limitation flagged in
-   * the PR body. Defaults to 0; the row only renders when count > 0 AND
-   * `hideIdle === true`.
-   */
-  hiddenIdleCount?: number;
   /** Current wall-clock ms — defaults to Date.now() downstream. */
   nowMs?: number;
   /** Host-injected sprite base URI — threaded to each team card / tile. */
@@ -145,8 +130,6 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
     menuOpenTracker,
     autoCollapseUniformClusters,
     expandPersonaTiles,
-    hideIdle,
-    hiddenIdleCount,
     nowMs,
     spriteBaseUri,
     spriteTracker,
@@ -259,8 +242,6 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
           ? { autoCollapseUniformClusters }
           : {}),
         ...(expandPersonaTiles !== undefined ? { expandPersonaTiles } : {}),
-        ...(hideIdle !== undefined ? { hideIdle } : {}),
-        ...(hiddenIdleCount !== undefined ? { hiddenIdleCount } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
         ...(spriteTracker ? { spriteTracker } : {}),

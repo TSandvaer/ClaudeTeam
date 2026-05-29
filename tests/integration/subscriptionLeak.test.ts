@@ -180,14 +180,16 @@ describe("M2-06 AC7(e) — context.subscriptions.length is bounded across 3 reso
     // After activate: subscriptions should hold exactly:
     //   1. cleanup wrapper (registered once)
     //   2. registerWebviewViewProvider's disposable
-    //   3-9. seven command registrations (refresh, openRoster,
-    //        openAgentTranscript, toggleHideFinished — M5,
-    //        openDiagnosticPanel — 86c9zn7tm,
-    //        toggleHideIdle — 86c9zq9vm spec 86c9zmyef,
+    //   3-7. five command registrations (refresh, openRoster,
+    //        openAgentTranscript, openDiagnosticPanel — 86c9zn7tm,
     //        openSettings — 86ca16r2d settings gear)
-    // Total expected: 9 entries.
+    //
+    // 86ca1gdbp removed `toggleHideFinished` + `toggleHideIdle` (the global
+    // hide chips were superseded by the whole-team-always-visible default +
+    // per-member hide), dropping the count from 9 → 7.
+    // Total expected: 7 entries.
     const afterActivate = ctx.subscriptions.length;
-    expect(afterActivate).toBe(9);
+    expect(afterActivate).toBe(7);
 
     const provider = getRegisteredProvider();
     expect(provider).not.toBeNull();

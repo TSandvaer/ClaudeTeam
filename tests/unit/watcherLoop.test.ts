@@ -89,24 +89,4 @@ describe("M4-04: hashState is stable across identical inputs", () => {
     expect(a).not.toEqual(b);
   });
 
-  // 86c9zq9vm (spec 86c9zmyef §3) — hide-idle hash invariants: toggling the
-  // filter or its count MUST re-emit, even when the visible tile set didn't
-  // happen to change this tick.
-  it("hiddenIdleCount change flips the hash (86c9zq9vm)", () => {
-    const a = hashState({ ...emptyState, hiddenIdleCount: 0 });
-    const b = hashState({ ...emptyState, hiddenIdleCount: 5 });
-    expect(a).not.toEqual(b);
-  });
-
-  it("config.hideIdleAgents flip changes the hash (86c9zq9vm)", () => {
-    const a = hashState({
-      ...emptyState,
-      config: { hideIdleAgents: false },
-    });
-    const b = hashState({
-      ...emptyState,
-      config: { hideIdleAgents: true },
-    });
-    expect(a).not.toEqual(b);
-  });
 });

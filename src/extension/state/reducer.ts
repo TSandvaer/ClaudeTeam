@@ -623,9 +623,8 @@ export function groupTilesByPersona(
 /**
  * Rebuild a `RosterTileEntry` for a rostered member from a (possibly trimmed)
  * instance set — the shared helper the post-reducer filters
- * (`hideFinishedFilter`, `hideIdleFilter`, `hideMembersFilter`,
- * `removeMembersFilter`) use after dropping instances from a
- * `MultiAgentPersonaTile`.
+ * (`hideMembersFilter`, `removeMembersFilter`) use after dropping instances
+ * from a `MultiAgentPersonaTile`.
  *
  * Re-derives the aggregate state, headline activity/model, count, and
  * most-active-first ordering from the surviving instances so the wrapper stays

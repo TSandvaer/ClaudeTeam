@@ -217,13 +217,6 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.workspace
           .getConfiguration("claudeteam")
           .get<boolean>("collapsePersonaTiles") ?? true,
-      // M5: same read-fresh-every-tick pattern for the hide-finished toggle.
-      // Default false (filter OFF) matches the package.json schema default
-      // — first-install experience shows everything; the chip is the opt-in.
-      getHideFinishedAgents: () =>
-        vscode.workspace
-          .getConfiguration("claudeteam")
-          .get<boolean>("hideFinishedAgents") ?? false,
       // 86c9zmqa8: read-fresh-every-tick pattern for the uniform-cluster
       // auto-collapse toggle. Default true (polish ON) matches package.json.
       // Webview-only behavior; the host merely stamps it onto the wire.
@@ -231,15 +224,6 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.workspace
           .getConfiguration("claudeteam")
           .get<boolean>("autoCollapseUniformClusters") ?? true,
-      // 86c9zq9vm / 86ca10anf: read-fresh-every-tick pattern for the
-      // hide-idle toggle. Default false (filter OFF — V1 ships the whole team
-      // always-visible) matches the package.json schema default. The host
-      // applies the post-reducer filter when ON; when OFF (default) the
-      // dashboard shows every tile including idle members.
-      getHideIdleAgents: () =>
-        vscode.workspace
-          .getConfiguration("claudeteam")
-          .get<boolean>("hideIdleAgents") ?? false,
       // E-06a: read-fresh-every-tick snapshot of the persisted hidden-member
       // set. The store mutates only via the explicit hide/show/show-all
       // handlers below; this resolver never adds to it (AC4).
@@ -296,27 +280,11 @@ export function activate(context: vscode.ExtensionContext): void {
         if (e.affectsConfiguration("claudeteam.collapsePersonaTiles")) {
           watcherHandle?.triggerTick();
         }
-        // M5: same instant-effect pattern for hideFinishedAgents — toggling
-        // the setting (via Settings UI, command palette, or the dashboard
-        // header chip) re-renders within one tick. The chip's optimistic UI
-        // flips immediately on click; this listener confirms authoritatively
-        // on the next host tick.
-        if (e.affectsConfiguration("claudeteam.hideFinishedAgents")) {
-          watcherHandle?.triggerTick();
-        }
         // 86c9zmqa8: instant-effect pattern for the uniform-cluster polish
         // toggle. Toggling it from Settings re-renders within one tick (the
         // hashState change ensures the webview is notified even if the
         // visible tile set is unchanged).
         if (e.affectsConfiguration("claudeteam.autoCollapseUniformClusters")) {
-          watcherHandle?.triggerTick();
-        }
-        // 86c9zq9vm (spec 86c9zmyef): same instant-effect pattern for
-        // hideIdleAgents. Toggling via Settings UI, command palette, or the
-        // dashboard header chip re-renders within one tick. The chip's
-        // optimistic UI flips immediately on click; this listener confirms
-        // authoritatively on the next host tick.
-        if (e.affectsConfiguration("claudeteam.hideIdleAgents")) {
           watcherHandle?.triggerTick();
         }
       },
@@ -405,12 +373,6 @@ export function activate(context: vscode.ExtensionContext): void {
         // `team/bram-research/86c9yteju-triage-2026-05-26.md` § Round 2.
         watcherHandle?.forceRefresh();
       },
-      // M5: chip / command toggled a config-backed setting. Write to VS Code
-      // settings at Global scope (sponsor confirmed per spec §8 Q3); the
-      // existing onDidChangeConfiguration listener above fires the tick.
-      onSetConfig: (msg) => {
-        void handleSetConfig(msg.payload.key, msg.payload.value);
-      },
       // E-06a (EPIC 86ca11187 §7.2): hide / show / show-all. Each mutates the
       // persisted store then forces a re-emit so the dashboard updates within
       // one tick. forceRefresh (not triggerTick) bypasses hash-skip — hiding a
@@ -484,18 +446,6 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     ),
 
-    // M5: toggle `claudeteam.hideFinishedAgents` from the command palette or a
-    // user-bound keybinding. Reads current value, flips, writes back at Global
-    // scope (sponsor confirmed per spec §8 Q3). The onDidChangeConfiguration
-    // listener above fires the tick — chip + dashboard re-render together.
-    vscode.commands.registerCommand("claudeteam.toggleHideFinished", () => {
-      const current =
-        vscode.workspace
-          .getConfiguration("claudeteam")
-          .get<boolean>("hideFinishedAgents") ?? false;
-      void handleSetConfig("hideFinishedAgents", !current);
-    }),
-
     // 86c9zn7tm: open (or reveal) the diagnostic panel. Idempotent — the
     // manager itself handles "already open" via `panel.reveal()`. The
     // command palette entry doubles as the keybinding surface for users
@@ -503,41 +453,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("claudeteam.openDiagnosticPanel", () => {
       diagnosticPanelManager.show();
     }),
-
-    // 86c9zq9vm / 86ca10anf (spec 86c9zmyef §7.1): toggle
-    // `claudeteam.hideIdleAgents` from the command palette or a user-bound
-    // keybinding. Default is OFF (V1 ships the whole team always-visible) so
-    // the natural use is "flip ON to focus on running members". Same
-    // Global-scope write + instant-effect listener as toggleHideFinished.
-    vscode.commands.registerCommand("claudeteam.toggleHideIdle", () => {
-      const current =
-        vscode.workspace
-          .getConfiguration("claudeteam")
-          .get<boolean>("hideIdleAgents") ?? false;
-      void handleSetConfig("hideIdleAgents", !current);
-    }),
   );
-}
-
-/**
- * Apply a `ui:set-config` write — used by the webview chip handlers and the
- * `claudeteam.toggleHideFinished` / `claudeteam.toggleHideIdle` commands
- * (M5 + 86c9zq9vm). The key is validated by the provider's `isWebviewMessage`
- * guard before reaching this function; the literal-union covers every
- * dashboard-toggleable config scalar.
- *
- * Exported for unit-test coverage.
- *
- * @param key   Config key under the `claudeteam.*` namespace.
- * @param value New boolean value.
- */
-export function handleSetConfig(
-  key: "hideFinishedAgents" | "hideIdleAgents",
-  value: boolean,
-): Thenable<void> {
-  return vscode.workspace
-    .getConfiguration("claudeteam")
-    .update(key, value, vscode.ConfigurationTarget.Global);
 }
 
 /**
