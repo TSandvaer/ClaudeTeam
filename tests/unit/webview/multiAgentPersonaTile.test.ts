@@ -432,6 +432,109 @@ describe("AC4b — aggregateState skins the tile dot", () => {
 });
 
 // ---------------------------------------------------------------------------
+// AC4c — error aggregate stays COLLAPSED by default (Felix NIT 1 — LOCKED)
+//
+// Spec §3.3 Q3 (sponsor decision): an `error` aggregate does NOT auto-expand
+// the instance list. The error dot (row 1) + the error-state skin already
+// signal the failure; auto-expanding would fight option-A's "one clean tile
+// per member" resting view. This is the one explicit regression gap Felix
+// flagged at PR #125 review — no prior test pinned the no-auto-expand-on-error
+// behavior, so a future change adding `if (aggregateState === "error") expand`
+// would have shipped green.
+//
+// Bug-class assertion (not just the instance): for EVERY non-running aggregate
+// the resting tile is collapsed — so an error sibling can never silently pop
+// the list open. Plus the cross-check that the error IS still legible while
+// collapsed (dot + data-state), proving collapse isn't hiding the signal.
+// ---------------------------------------------------------------------------
+
+describe("AC4c — error aggregate stays collapsed by default (Felix NIT 1, LOCKED §3.3 Q3)", () => {
+  it("an error-aggregate multi-agent tile is COLLAPSED by default (no auto-expand on error)", () => {
+    // One instance errored, the other finished → aggregate is `error`
+    // (computeAggregateState: error > finished). The tile must render at rest.
+    const instances = [
+      makeInstance({ agentId: "errAAAA1", state: "error", activity: "error: spawn failed" }),
+      makeInstance({ agentId: "finBBBB2", state: "finished", activity: "finished 3m" }),
+    ];
+    const el = renderMultiAgentPersonaTile({
+      tile: makeMultiTile({ aggregateState: "error", instances, count: 2 }),
+      sessionId: "sess-A",
+      postMessage: vi.fn(),
+      // NOTE: no expandByDefault — this is the resting render.
+    });
+    const region = el.querySelector<HTMLElement>(".persona-instances")!;
+    // The load-bearing assertion: error does NOT pop the list open.
+    expect(region.hidden).toBe(true);
+    expect(
+      el.querySelector(".persona-count-badge")?.getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(el.querySelector(".persona-count-chevron")?.textContent).toBe("▸");
+  });
+
+  it("the error is still LEGIBLE while collapsed (error dot + data-state, no expand needed)", () => {
+    const instances = [
+      makeInstance({ agentId: "errAAAA1", state: "error", activity: "error: spawn failed" }),
+      makeInstance({ agentId: "finBBBB2", state: "finished", activity: "finished 3m" }),
+    ];
+    const el = renderMultiAgentPersonaTile({
+      tile: makeMultiTile({ aggregateState: "error", instances, count: 2 }),
+      sessionId: "sess-A",
+      postMessage: vi.fn(),
+    });
+    // Collapse is NOT hiding the signal: the tile + dot read `error` at rest.
+    expect(el.dataset.state).toBe("error");
+    expect(
+      el.querySelector<HTMLElement>(".tile-row--primary .state-dot")?.dataset
+        .state,
+    ).toBe("error");
+  });
+
+  it("bug-class: NO non-running aggregate auto-expands (error/idle/finished/available all collapsed at rest)", () => {
+    for (const s of [
+      "error",
+      "idle",
+      "finished",
+      "available",
+    ] as AgentState[]) {
+      const el = renderMultiAgentPersonaTile({
+        tile: makeMultiTile({ aggregateState: s }),
+        sessionId: "sess-A",
+        postMessage: vi.fn(),
+      });
+      const region = el.querySelector<HTMLElement>(".persona-instances")!;
+      expect(
+        region.hidden,
+        `aggregate="${s}" must render collapsed at rest (no auto-expand) — ` +
+          `only an explicit user toggle or expandByDefault opens the list.`,
+      ).toBe(true);
+    }
+  });
+
+  it("an error-aggregate tile DOES still expand on explicit user toggle (error isn't a lock)", () => {
+    // Guards the regression test against over-correcting into "error can't
+    // expand at all" — the user must still be able to open it to see which
+    // instance failed (spec §3.2 drill-in).
+    const instances = [
+      makeInstance({ agentId: "errAAAA1", state: "error", activity: "error: spawn failed" }),
+      makeInstance({ agentId: "finBBBB2", state: "finished", activity: "finished 3m" }),
+    ];
+    const el = renderMultiAgentPersonaTile({
+      tile: makeMultiTile({ aggregateState: "error", instances, count: 2 }),
+      sessionId: "sess-A",
+      postMessage: vi.fn(),
+    });
+    const badge = el.querySelector<HTMLButtonElement>(".persona-count-badge")!;
+    badge.click();
+    const region = el.querySelector<HTMLElement>(".persona-instances")!;
+    expect(region.hidden).toBe(false);
+    // The errored instance is now visible in the list (most-active-first: error
+    // outranks finished, so the error row leads).
+    const rows = el.querySelectorAll<HTMLElement>(".persona-instance-row");
+    expect(rows[0].dataset.state).toBe("error");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // AC5 — single-agent + zero-agent baseline tiles unaffected
 // ---------------------------------------------------------------------------
 
