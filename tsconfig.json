@@ -20,7 +20,7 @@
     "rootDir": ".",
     "types": ["node", "vscode"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "esbuild.config.mjs", "vitest.config.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "scripts/**/*.d.mts", "esbuild.config.mjs", "vitest.config.ts"],
   "exclude": [
     "node_modules",
     "dist",
