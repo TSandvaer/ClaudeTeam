@@ -13,6 +13,20 @@
  *   - final-frame dwell `--ct-anim-dwell-ms-default` (+400ms) before the loop
  *     restarts — applied to idle poses so short loops don't read repetitively.
  *
+ * Per-animation playback tuning (86ca1fntp):
+ *   - PLAYBACK_OVERRIDES maps a canonical anim name → optional tuning:
+ *       { speedMultiplier?, dwellFrameIndex?, dwellMs? }.
+ *   - `speedMultiplier` scales the per-frame duration. The manifest names the
+ *     SPEED as a fraction of the default RATE (50% speed = half the frame rate
+ *     = 2× the per-frame ms). So the effective per-frame ms is
+ *     `FRAME_MS_DEFAULT / speedMultiplier` (0.5 → 320ms/frame; 0.7 → ~229ms).
+ *   - `dwellFrameIndex` holds ONE mid-sequence "peak" frame longer (the apex of
+ *     the gesture — cup at mouth, hand at mouth, arms overhead, phone at face)
+ *     for `dwellMs` extra. This is distinct from the final-frame idle dwell and
+ *     composes with it (a peak that lands on the final frame adds both).
+ *   - Peak-frame indices are character-specific (M01 vs F01 frame sequences
+ *     differ) — see PLAYBACK_OVERRIDES per-character note.
+ *
  * AC2: pose chosen from (state, activity) via posePicker — active_read on
  *   tool==Read, active_work on tool!=Read, random idle_* otherwise/available.
  * AC4: when `prefers-reduced-motion: reduce`, NO timer runs — a single static
@@ -44,6 +58,133 @@ import {
 export const FRAME_MS_DEFAULT = 160;
 /** Default hold-final-frame dwell (ms) — mirrors --ct-anim-dwell-ms-default. */
 export const DWELL_MS_DEFAULT = 400;
+
+/** Default peak-frame dwell add-on (ms) for poses that name a `dwellFrameIndex`
+ *  but no explicit `dwellMs`. Long hold so the apex beat reads clearly. */
+export const PEAK_DWELL_MS_DEFAULT = 600;
+
+/**
+ * Per-animation playback override (86ca1fntp). All fields optional; an absent
+ * field means "use the default behavior". Keyed by canonical anim name.
+ */
+export interface PlaybackOverride {
+  /**
+   * Fraction of the DEFAULT FRAME RATE. 0.5 = half the rate = plays at half
+   * speed = 2× the per-frame ms. Effective per-frame ms is
+   * `FRAME_MS_DEFAULT / speedMultiplier`. Absent → 1.0 (default rate).
+   */
+  speedMultiplier?: number;
+  /**
+   * Index of the mid-sequence "peak" frame to hold longer (the gesture apex).
+   * Character-specific — see PLAYBACK_OVERRIDES per-character branch.
+   */
+  dwellFrameIndex?: number;
+  /** Extra ms to hold the peak frame. Absent → PEAK_DWELL_MS_DEFAULT. */
+  dwellMs?: number;
+}
+
+/** A per-character override table: canonical anim name → override. */
+export type PlaybackOverrideTable = Record<string, PlaybackOverride>;
+
+/**
+ * Speed-only override shared by BOTH characters (the brief's 50% / 70% list).
+ * Peak-frame dwell indices are layered per-character on top of these because
+ * the apex frame differs between M01 and F01 frame sequences.
+ *
+ * 50% speed (≈half the default rate): active_read, active_work + the listed
+ * idle poses. 70%: idle_headphones. idle_wave + any unlisted anim → unchanged.
+ */
+const SPEED_HALF: PlaybackOverride = { speedMultiplier: 0.5 };
+const SPEED_HALF_NAMES = [
+  "active_read",
+  "active_work",
+  "idle_coffee",
+  "idle_snack",
+  "idle_stretch",
+  "idle_phone",
+  "idle_hips",
+  "idle_think",
+  "idle_arms_crossed",
+  "idle_pockets",
+  "idle_neck_roll",
+  "idle_yawn",
+  "idle_watch",
+];
+
+function baseSpeedTable(): PlaybackOverrideTable {
+  const t: PlaybackOverrideTable = {};
+  for (const name of SPEED_HALF_NAMES) {
+    t[name] = { ...SPEED_HALF };
+  }
+  t["idle_headphones"] = { speedMultiplier: 0.7 };
+  // idle_wave: intentionally absent → unchanged (default rate, no dwell).
+  return t;
+}
+
+/**
+ * Merge a peak-frame `dwellFrameIndex` into a speed override for a pose.
+ * Keeps any existing speedMultiplier.
+ */
+function withPeak(
+  base: PlaybackOverride | undefined,
+  dwellFrameIndex: number,
+): PlaybackOverride {
+  return { ...(base ?? {}), dwellFrameIndex };
+}
+
+/**
+ * Per-character playback override tables (86ca1fntp).
+ *
+ * Speed multipliers are identical across characters (the brief's list applies
+ * to BOTH M01 + F01). Peak-frame dwell indices are character-specific because
+ * the two characters' frame sequences put the gesture apex at different
+ * indices (verified by inspecting the harvested south-view frames):
+ *
+ *   PEAK FRAMES (mid-sequence apex held longer):
+ *   - idle_coffee (cup at mouth)  — 9-frame loop, both → frame 4 (mid-loop hold)
+ *   - idle_snack  (hand at mouth) — 9-frame loop, both → frame 4
+ *   - idle_phone  (phone at face) — 9-frame loop, both → frame 4
+ *   - idle_stretch (arms fully up) — 11-frame loop:
+ *       · M01 sequence starts at the overhead peak (frame 0) and re-peaks
+ *         mid-sequence at frame 8 (overhead→lower→overhead). Hold frame 8 so
+ *         the loop reads "up → HOLD → relax → up", not exercise reps.
+ *       · F01 sequence is gentler (no full overhead); max arm-raise is at
+ *         frame 5. Hold frame 5.
+ *
+ * Sponsor visually tunes the exact feel on reload — these indices/ms are the
+ * starting point.
+ */
+export const PLAYBACK_OVERRIDES: Record<string, PlaybackOverrideTable> = (() => {
+  const m01 = baseSpeedTable();
+  m01["idle_coffee"] = withPeak(m01["idle_coffee"], 4);
+  m01["idle_snack"] = withPeak(m01["idle_snack"], 4);
+  m01["idle_phone"] = withPeak(m01["idle_phone"], 4);
+  m01["idle_stretch"] = withPeak(m01["idle_stretch"], 8);
+
+  const f01 = baseSpeedTable();
+  f01["idle_coffee"] = withPeak(f01["idle_coffee"], 4);
+  f01["idle_snack"] = withPeak(f01["idle_snack"], 4);
+  f01["idle_phone"] = withPeak(f01["idle_phone"], 4);
+  f01["idle_stretch"] = withPeak(f01["idle_stretch"], 5);
+
+  return {
+    "ClaudeTeam-M01-Dev": m01,
+    "ClaudeTeam-F01-Dev": f01,
+  };
+})();
+
+/**
+ * Resolve the playback override for (character, canonical anim name). Returns
+ * an empty override (default behavior) when the character or anim is unlisted.
+ * Exported for unit-test coverage.
+ */
+export function resolvePlayback(
+  characterName: string,
+  animName: string,
+  table: Record<string, PlaybackOverrideTable> = PLAYBACK_OVERRIDES,
+): PlaybackOverride {
+  return table[characterName]?.[animName] ?? {};
+}
 
 export interface SpriteBoxProps {
   char: SpriteCharacter;
@@ -185,22 +326,45 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   const cancel =
     cancelFrame ?? ((h: number) => window.clearTimeout(h));
 
+  // Per-animation playback tuning (86ca1fntp). The canonical anim name is the
+  // active pose name OR the idle pick; resolve the override for this character.
+  const canonicalName = isActive ? name : (idlePick ?? name);
+  const override = resolvePlayback(char.character, canonicalName);
+  const speedMultiplier =
+    typeof override.speedMultiplier === "number" && override.speedMultiplier > 0
+      ? override.speedMultiplier
+      : 1;
+  // 50% speed = half the RATE = 2× the per-frame ms.
+  const frameMs = FRAME_MS_DEFAULT / speedMultiplier;
+  const peakIndex = override.dwellFrameIndex;
+  const peakDwellMs =
+    typeof override.dwellMs === "number" ? override.dwellMs : PEAK_DWELL_MS_DEFAULT;
+
   let frameIdx = 0;
   let handle: number | null = null;
   let disposed = false;
 
   const lastIndex = frameUris.length - 1;
+  // Guard against an out-of-range peak index (frame counts differ M01 vs F01;
+  // a stale index must not break the loop).
+  const peakIsValid =
+    typeof peakIndex === "number" && peakIndex >= 0 && peakIndex <= lastIndex;
 
   const tick = (): void => {
     if (disposed) return;
     img.src = frameUris[frameIdx];
-    // Dwell on the final frame before wrapping (idle poses only — active
-    // poses loop at uniform slow cadence so typing/reading feels continuous).
-    const isFinal = frameIdx === lastIndex;
-    const ms =
-      isFinal && !isActive
-        ? FRAME_MS_DEFAULT + DWELL_MS_DEFAULT
-        : FRAME_MS_DEFAULT;
+    // Base per-frame duration (speed-scaled).
+    let ms = frameMs;
+    // Final-frame idle dwell before wrapping (idle poses only — active poses
+    // loop at uniform cadence so typing/reading feels continuous).
+    if (frameIdx === lastIndex && !isActive) {
+      ms += DWELL_MS_DEFAULT;
+    }
+    // Mid-sequence peak-frame dwell (hold the gesture apex). Composes with the
+    // final-frame dwell when the peak coincides with the last frame.
+    if (peakIsValid && frameIdx === peakIndex) {
+      ms += peakDwellMs;
+    }
     frameIdx = frameIdx === lastIndex ? 0 : frameIdx + 1;
     handle = sched(tick, ms);
   };

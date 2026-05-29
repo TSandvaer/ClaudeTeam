@@ -21,6 +21,7 @@ import { createSpriteTracker } from "../../../src/webview/spriteTracker.js";
 import {
   FRAME_MS_DEFAULT,
   DWELL_MS_DEFAULT,
+  PEAK_DWELL_MS_DEFAULT,
 } from "../../../src/webview/sprites/spritePlayer.js";
 import type { AgentTile, AgentState } from "../../../src/shared/types.js";
 
@@ -116,7 +117,12 @@ describe("sprite rendering — AC2 pose selection", () => {
 });
 
 describe("sprite rendering — AC3 slow playback + dwell", () => {
-  it("schedules the first frame at the SLOW default duration", () => {
+  // The default tile member is `maya` → ClaudeTeam-F01-Dev. active_work and
+  // idle_coffee are both in the 50%-speed list (86ca1fntp), so their base
+  // per-frame ms is FRAME_MS_DEFAULT / 0.5 = 2× the default.
+  const HALF_SPEED_MS = FRAME_MS_DEFAULT / 0.5;
+
+  it("schedules the first frame at the tuned (50% speed) duration", () => {
     const sched = recordingScheduler();
     renderAgentTile({
       tile: tile({ state: "running", activity: "tool:Edit x", agentId: "a4" }),
@@ -126,14 +132,15 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
       spriteTracker: createSpriteTracker(),
       scheduleFrame: sched.schedule,
     });
-    expect(sched.calls[0]).toBe(FRAME_MS_DEFAULT);
+    // active_work is a 50%-speed pose → first frame held at 2× the default.
+    expect(sched.calls[0]).toBe(HALF_SPEED_MS);
   });
 
   it("dwells on the final frame of an idle loop before restarting", () => {
     const sched = recordingScheduler();
-    // idle_coffee has 9 frames (indices 0..8). Stepping the scheduler advances
-    // frame-by-frame; the delay scheduled AFTER frame 8 (the last) must carry
-    // the dwell add-on.
+    // idle_coffee has 9 frames (indices 0..8). The delay scheduled AFTER the
+    // final frame (idx 8) carries the final-frame dwell, on top of the
+    // 50%-speed base ms.
     renderAgentTile({
       tile: tile({ state: "idle", activity: "idle 30s", agentId: "a5" }),
       sessionId: "s1",
@@ -147,16 +154,17 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
     for (let i = 0; i < 8; i++) {
       sched.step();
     }
-    // The most recent scheduled delay (set when showing the final frame)
-    // should include the dwell.
+    // Final frame (8) ≠ peak frame (4) for coffee, so only the final-frame
+    // dwell applies here, on the 50%-speed base.
     expect(sched.calls[sched.calls.length - 1]).toBe(
-      FRAME_MS_DEFAULT + DWELL_MS_DEFAULT,
+      HALF_SPEED_MS + DWELL_MS_DEFAULT,
     );
   });
 
   it("active poses loop at uniform cadence (NO dwell on final frame)", () => {
     const sched = recordingScheduler();
-    // active_work has 9 frames; step to the last and confirm uniform cadence.
+    // active_work has 9 frames; step to the last and confirm uniform (no
+    // final-frame dwell) cadence — at the tuned 50% speed.
     renderAgentTile({
       tile: tile({ state: "running", activity: "tool:Edit x", agentId: "a6" }),
       sessionId: "s1",
@@ -168,7 +176,31 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
     for (let i = 0; i < 8; i++) {
       sched.step();
     }
-    expect(sched.calls[sched.calls.length - 1]).toBe(FRAME_MS_DEFAULT);
+    expect(sched.calls[sched.calls.length - 1]).toBe(HALF_SPEED_MS);
+  });
+
+  it("holds the mid-sequence peak frame longer (idle_coffee → frame 4)", () => {
+    const sched = recordingScheduler();
+    // idle_coffee peak (cup-at-mouth hold) is frame 4 for both characters.
+    // The delay scheduled WHILE SHOWING frame 4 carries the peak dwell.
+    renderAgentTile({
+      tile: tile({ state: "idle", activity: "idle 30s", agentId: "a9" }),
+      sessionId: "s1",
+      postMessage: () => undefined,
+      spriteBaseUri: BASE,
+      spriteTracker: createSpriteTracker(),
+      spriteRng: () => 0, // idle_coffee
+      scheduleFrame: sched.schedule,
+    });
+    // Frame 0 shown immediately (calls[0]); each step advances one frame.
+    // After 4 steps we are showing frame 4 → calls[4] is the peak-dwell delay.
+    for (let i = 0; i < 4; i++) {
+      sched.step();
+    }
+    // Peak frame (4) is not the final frame (8) → base 50% speed + peak dwell.
+    expect(sched.calls[4]).toBe(HALF_SPEED_MS + PEAK_DWELL_MS_DEFAULT);
+    // And a non-peak, non-final idle frame (e.g. frame 1) is the plain base ms.
+    expect(sched.calls[1]).toBe(HALF_SPEED_MS);
   });
 });
 
