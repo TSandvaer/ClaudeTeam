@@ -264,6 +264,20 @@ export interface ScannedAgent {
   agentName: string;
   /** Path to the agent `.md` file (for disambiguation + drift detection). */
   filePath: string;
+  /**
+   * Short role title auto-derived from the agent `.md` frontmatter
+   * `description` (86ca1nvae). Persona files lead their `description` with the
+   * role ("Senior Developer", "Project Lead", "UX Designer", "QA / Tester");
+   * the scanner takes the first clause and trims it (see
+   * `deriveRoleFromDescription`). Used to SEED `Member.role` at config gen so a
+   * fresh roster isn't blank — the user can still override / clear it in the
+   * Manage Team panel (role stays OPTIONAL, empty still validates).
+   *
+   * ABSENT (undefined) when the `.md` has no parseable `description` frontmatter
+   * (or no frontmatter at all) → gen falls back to an empty role string.
+   * JSON-safe scalar.
+   */
+  role?: string;
 }
 
 /**

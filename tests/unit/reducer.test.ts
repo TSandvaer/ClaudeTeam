@@ -2237,6 +2237,233 @@ describe("buildAgentTree", () => {
   });
 
   // =========================================================================
+  // 86ca1nzde — character projection from roster Member.character onto the
+  // tile (single-agent, baseline, and multi-agent wrapper paths). The reducer
+  // is a pure projector: it stamps a NON-EMPTY character id onto the tile and
+  // omits the field for `null` / `undefined` / "" so the webview's gender
+  // fall-back is preserved. #136 persisted `Member.character` but never
+  // stamped `tile.character`; this fixes that gap.
+  // =========================================================================
+  describe("character projection (86ca1nzde)", () => {
+    const ROSTER_WITH_CHARS: Team[] = [
+      {
+        id: "alpha",
+        name: "ClaudeTeam Alpha",
+        members: [
+          {
+            id: "felix",
+            display: "Felix",
+            role: "Extension Host Dev",
+            character: "knight-m01",
+            match: [{ agentType_equals: "felix" }],
+          },
+          {
+            id: "maya",
+            display: "Maya",
+            role: "Webview UI Dev",
+            // character null → explicit "fall back" (text-tile per type doc);
+            // the AC collapses null to the gender fall-back (field omitted).
+            character: null,
+            match: [{ agentType_equals: "maya" }],
+          },
+          {
+            id: "bram",
+            display: "Bram",
+            role: "Research",
+            // No character key at all → undefined → fall back, field omitted.
+            match: [{ agentType_equals: "bram" }],
+          },
+        ],
+      },
+    ];
+
+    it("stamps character on a live tile when member.character is a non-empty id", () => {
+      const session = makeSession();
+      const agentId = "agent-felix-01";
+      const meta = makeMeta({ agentType: "felix", description: "Felix host" });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_WITH_CHARS,
+        NOW_MS,
+      );
+
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      const tile = expectTile(
+        entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix"),
+      );
+      expect(tile!.character).toBe("knight-m01");
+    });
+
+    it("omits character when member.character is null (fall-back preserved)", () => {
+      const session = makeSession();
+      const agentId = "agent-maya-01";
+      const meta = makeMeta({ agentType: "maya", description: "Maya webview" });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_WITH_CHARS,
+        NOW_MS,
+      );
+
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      const tile = expectTile(
+        entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya"),
+      );
+      expect(tile!.state).not.toBe("available");
+      expect(tile!.character).toBeUndefined();
+      // Field truly absent from the wire shape (not just undefined-valued).
+      expect(Object.prototype.hasOwnProperty.call(tile, "character")).toBe(
+        false,
+      );
+    });
+
+    it("omits character when member.character key is absent (fall-back preserved)", () => {
+      const session = makeSession();
+      const agentId = "agent-bram-01";
+      const meta = makeMeta({ agentType: "bram", description: "Bram research" });
+      const activities: ActivityMap = new Map([[agentId, makeActivity()]]);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_WITH_CHARS,
+        NOW_MS,
+      );
+
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      const tile = expectTile(
+        entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "bram"),
+      );
+      expect(tile!.character).toBeUndefined();
+      expect(Object.prototype.hasOwnProperty.call(tile, "character")).toBe(
+        false,
+      );
+    });
+
+    it("omits character for an empty-string id (treated as fall-back)", () => {
+      const roster: Team[] = [
+        {
+          id: "alpha",
+          name: "Alpha",
+          members: [
+            {
+              id: "felix",
+              display: "Felix",
+              role: "Host",
+              character: "",
+              match: [{ agentType_equals: "felix" }],
+            },
+          ],
+        },
+      ];
+      const session = makeSession();
+      const agentId = "agent-felix-empty";
+      const meta = makeMeta({ agentType: "felix", description: "Felix" });
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        new Map([[agentId, makeActivity()]]),
+        new Map(),
+        roster,
+        NOW_MS,
+      );
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.character).toBeUndefined();
+    });
+
+    it("stamps character on a never-run baseline tile", () => {
+      const session = makeSession();
+      // No detected agents → felix is seeded as an `available` baseline.
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [])],
+        new Map(),
+        new Map(),
+        ROSTER_WITH_CHARS,
+        NOW_MS,
+      );
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      const tile = expectTile(
+        entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix"),
+      );
+      expect(tile!.state).toBe("available");
+      expect(tile!.character).toBe("knight-m01");
+      // maya baseline (null) omits the field.
+      const mayaTile = expectTile(
+        entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya"),
+      );
+      expect(mayaTile!.character).toBeUndefined();
+    });
+
+    it("mirrors character onto a MultiAgentPersonaTile wrapper (N≥2)", () => {
+      const session = makeSession();
+      const agents: AgentMetaEntry[] = [
+        makeAgentEntry(
+          "felix-a",
+          makeMeta({ agentType: "felix", description: "Felix #1", toolUseId: "t1" }),
+        ),
+        makeAgentEntry(
+          "felix-b",
+          makeMeta({ agentType: "felix", description: "Felix #2", toolUseId: "t2" }),
+        ),
+      ];
+      const activities: ActivityMap = new Map([
+        ["felix-a", makeActivity()],
+        ["felix-b", makeActivity()],
+      ]);
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, agents)],
+        activities,
+        new Map(),
+        ROSTER_WITH_CHARS,
+        NOW_MS,
+      );
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      const group = expectGroup(
+        entries.find((e) => isMultiAgentPersonaTile(e) && e.memberId === "felix"),
+      );
+      expect(group.count).toBe(2);
+      expect(group.character).toBe("knight-m01");
+      // Each instance also carries the stamped character.
+      for (const inst of group.instances) {
+        expect(inst.character).toBe("knight-m01");
+      }
+    });
+
+    it("character survives JSON.stringify (wire-shape safe)", () => {
+      const session = makeSession();
+      const agentId = "agent-felix-wire";
+      const meta = makeMeta({ agentType: "felix", description: "Felix" });
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        new Map([[agentId, makeActivity()]]),
+        new Map(),
+        ROSTER_WITH_CHARS,
+        NOW_MS,
+      );
+      const entries = tree.sessions[0]!.rosterTiles.get("alpha") ?? [];
+      const tile = expectTile(
+        entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix"),
+      );
+      const wire = JSON.parse(JSON.stringify(tile)) as { character?: string };
+      expect(wire.character).toBe("knight-m01");
+    });
+  });
+
+  // =========================================================================
   // 86ca18b9p — roster-baseline tile seeding (EPIC 86ca11187).
   //
   // Every teams.yaml member ALWAYS gets a tile; un-detected members are

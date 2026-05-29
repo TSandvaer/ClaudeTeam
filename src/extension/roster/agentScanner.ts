@@ -42,7 +42,7 @@
  * folder / read error yields an empty list (the empty-state path is valid).
  */
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import type { ScannedAgent } from "../../shared/types.js";
@@ -85,6 +85,109 @@ export function isPersonaAgentFile(fileName: string): boolean {
 }
 
 /**
+ * Delimiters that end the role clause in a persona `.md` `description`
+ * (86ca1nvae). Persona files lead with the role then continue into context, e.g.
+ *   "Senior Developer #1 (extension host + data layer) on the ClaudeTeam ..."
+ *   "QA / Tester on the ClaudeTeam project ..."
+ *   "UX Designer on the ClaudeTeam project ..."
+ * The earliest occurrence of any of these markers ends the title. " on the " /
+ * " on " come before the project-context tail; " (" before a parenthetical;
+ * sentence/clause punctuation handles the rest. Ordered longest-first only for
+ * readability — the search takes the minimum index across all of them.
+ */
+const ROLE_CLAUSE_DELIMITERS: readonly string[] = [
+  " on the ",
+  " on ",
+  " (",
+  " — ",
+  "—",
+  ". ",
+  "; ",
+  ", ",
+  ": ",
+];
+
+/** Max length of a derived role title — defensive cap for a pathological description. */
+const MAX_DERIVED_ROLE_LEN = 60;
+
+/**
+ * Derive a short, obviously-overridable role title from a persona `.md`
+ * frontmatter `description` (86ca1nvae). Takes the first clause — the substring
+ * up to the earliest {@link ROLE_CLAUSE_DELIMITERS} marker — trims it, and caps
+ * the length. Returns `""` when `description` is undefined / empty / whitespace,
+ * so the caller can treat empty as "no role derived" (role stays OPTIONAL).
+ *
+ * Examples:
+ *   "Senior Developer #1 (extension host...) on the ClaudeTeam ..." → "Senior Developer #1"
+ *   "QA / Tester on the ClaudeTeam project ..."                     → "QA / Tester"
+ *   "Project Lead on the ClaudeTeam project ..."                    → "Project Lead"
+ *   undefined / "" / "   "                                          → ""
+ *
+ * Pure / cheap. Exported for unit coverage.
+ */
+export function deriveRoleFromDescription(
+  description: string | undefined,
+): string {
+  if (description === undefined) return "";
+  const trimmed = description.trim();
+  if (trimmed.length === 0) return "";
+  let cut = trimmed.length;
+  for (const delim of ROLE_CLAUSE_DELIMITERS) {
+    const idx = trimmed.indexOf(delim);
+    if (idx >= 0 && idx < cut) cut = idx;
+  }
+  const title = trimmed.slice(0, cut).trim();
+  // Defensive: a description with no delimiter in the first MAX chars (e.g. a
+  // single very long clause) gets capped so a fresh role isn't an essay.
+  return title.length > MAX_DERIVED_ROLE_LEN
+    ? title.slice(0, MAX_DERIVED_ROLE_LEN).trim()
+    : title;
+}
+
+/**
+ * Extract the `description` value from an agent `.md` file's YAML frontmatter
+ * (86ca1nvae). Lightweight line-scan rather than a full YAML parse: the persona
+ * files write `description:` as a single line (verified against the live
+ * corpus), and we only need the one field. Returns `undefined` when there is no
+ * frontmatter block or no `description:` key. Strips surrounding single/double
+ * quotes from the value.
+ *
+ * Never throws — a read error / missing file yields `undefined` (the role just
+ * stays empty; the scan must not fail because one `.md` couldn't be read).
+ *
+ * Exported for unit coverage.
+ */
+export function readAgentDescription(filePath: string): string | undefined {
+  let raw: string;
+  try {
+    raw = readFileSync(filePath, "utf8");
+  } catch {
+    return undefined;
+  }
+  // Frontmatter is a leading `---` ... `---` block. Bail if absent.
+  const lines = raw.split(/\r?\n/);
+  if (lines[0]?.trim() !== "---") return undefined;
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (line.trim() === "---") break; // end of frontmatter — no description.
+    const m = /^description:\s*(.*)$/.exec(line);
+    if (m) {
+      let value = m[1]!.trim();
+      // Strip a single layer of matching surrounding quotes.
+      if (
+        value.length >= 2 &&
+        ((value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'")))
+      ) {
+        value = value.slice(1, -1);
+      }
+      return value.length > 0 ? value : undefined;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Resolve the agents-folder path for a workspace folder. The host passes the
  * first workspace folder's fsPath (multi-root = first folder only, ratify
  * default — spec §7.4). Returns `<workspaceFolder>/.claude/agents`.
@@ -124,7 +227,16 @@ export function scanAgentsFolder(agentsDir: string): ScannedAgent[] {
   for (const fileName of entries) {
     if (!isPersonaAgentFile(fileName)) continue;
     const agentName = fileName.slice(0, fileName.length - ".md".length);
-    scanned.push({ agentName, filePath: join(agentsDir, fileName) });
+    const filePath = join(agentsDir, fileName);
+    // 86ca1nvae: auto-derive a short role title from the `.md` frontmatter
+    // `description`. Absent / empty derivation → omit the field (gen falls
+    // back to an empty role). Only stamp a non-empty title.
+    const role = deriveRoleFromDescription(readAgentDescription(filePath));
+    scanned.push({
+      agentName,
+      filePath,
+      ...(role.length > 0 ? { role } : {}),
+    });
   }
   scanned.sort((a, b) => a.agentName.localeCompare(b.agentName));
   return scanned;

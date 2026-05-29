@@ -14,7 +14,10 @@
 
 import { describe, it, expect } from "vitest";
 
-import { isPersonaAgentFile } from "../../src/extension/roster/agentScanner.js";
+import {
+  isPersonaAgentFile,
+  deriveRoleFromDescription,
+} from "../../src/extension/roster/agentScanner.js";
 import {
   computeDetectionState,
   detectFromScan,
@@ -131,6 +134,86 @@ describe("generateStarterConfig (AC3 fresh-member shape)", () => {
   it("empty include → a team with zero members (valid)", () => {
     const cfg = generateStarterConfig([]);
     expect(cfg.teams[0]!.members).toEqual([]);
+  });
+
+  // 86ca1nvae — auto-resolved role seeding from the scanner's derived role map.
+  it("seeds member.role from the roles lookup when present + non-empty", () => {
+    const roles = new Map<string, string>([
+      ["felix", "Senior Developer #1"],
+      ["sage", "QA / Tester"],
+    ]);
+    const cfg = generateStarterConfig(["felix", "sage"], "Demo", roles);
+    const [felix, sage] = cfg.teams[0]!.members;
+    expect(felix!.role).toBe("Senior Developer #1");
+    expect(sage!.role).toBe("QA / Tester");
+  });
+
+  it("falls back to empty role when the name has no roles entry", () => {
+    const roles = new Map<string, string>([["felix", "Senior Developer #1"]]);
+    const cfg = generateStarterConfig(["felix", "maya"], "Demo", roles);
+    const [felix, maya] = cfg.teams[0]!.members;
+    expect(felix!.role).toBe("Senior Developer #1");
+    expect(maya!.role).toBe(""); // no entry → blank (role OPTIONAL)
+  });
+
+  it("falls back to empty role for an empty-string roles entry", () => {
+    const roles = new Map<string, string>([["felix", ""]]);
+    const cfg = generateStarterConfig(["felix"], "Demo", roles);
+    expect(cfg.teams[0]!.members[0]!.role).toBe("");
+  });
+
+  it("omitting the roles arg keeps the lean empty-role default (back-compat)", () => {
+    const cfg = generateStarterConfig(["felix"], "Demo");
+    expect(cfg.teams[0]!.members[0]!.role).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 86ca1nvae — deriveRoleFromDescription (first-clause role title from the
+// agent `.md` frontmatter `description`).
+// ---------------------------------------------------------------------------
+
+describe("deriveRoleFromDescription (86ca1nvae)", () => {
+  it("cuts a parenthetical-then-context description at the paren", () => {
+    expect(
+      deriveRoleFromDescription(
+        "Senior Developer #1 (extension host + data layer) on the ClaudeTeam project (a VS Code extension).",
+      ),
+    ).toBe("Senior Developer #1");
+  });
+
+  it("cuts 'X on the <project>' at ' on the '", () => {
+    expect(
+      deriveRoleFromDescription("QA / Tester on the ClaudeTeam project. Use for test planning."),
+    ).toBe("QA / Tester");
+    expect(
+      deriveRoleFromDescription("UX Designer on the ClaudeTeam project (surfaces agent teams)."),
+    ).toBe("UX Designer");
+    expect(
+      deriveRoleFromDescription("Project Lead on the ClaudeTeam project. Use for planning."),
+    ).toBe("Project Lead");
+  });
+
+  it("cuts at sentence/clause punctuation when no project tail", () => {
+    expect(deriveRoleFromDescription("Backend Engineer. Owns the API.")).toBe(
+      "Backend Engineer",
+    );
+    expect(deriveRoleFromDescription("Reviewer, gate-keeper")).toBe("Reviewer");
+  });
+
+  it("returns the whole trimmed string when there is no delimiter", () => {
+    expect(deriveRoleFromDescription("  Lead Architect  ")).toBe("Lead Architect");
+  });
+
+  it("returns '' for undefined / empty / whitespace (no role derived)", () => {
+    expect(deriveRoleFromDescription(undefined)).toBe("");
+    expect(deriveRoleFromDescription("")).toBe("");
+    expect(deriveRoleFromDescription("   ")).toBe("");
+  });
+
+  it("caps a delimiter-less pathological description defensively", () => {
+    const long = "x".repeat(120);
+    expect(deriveRoleFromDescription(long).length).toBeLessThanOrEqual(60);
   });
 });
 
