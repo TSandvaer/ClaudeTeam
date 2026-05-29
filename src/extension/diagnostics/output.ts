@@ -49,7 +49,10 @@
 import type * as vscode from "vscode";
 
 import type { AgentState, DashboardState } from "../../shared/types.js";
-import { isCollapsedPersonaGroup } from "../../shared/types.js";
+import {
+  isCollapsedPersonaGroup,
+  isMultiAgentPersonaTile,
+} from "../../shared/types.js";
 
 /** Constant channel name — also referenced in the package.json description. */
 export const DIAGNOSTIC_CHANNEL_NAME = "Claude Team — Diagnostics";
@@ -344,7 +347,10 @@ export function createDiagnosticChannel(
     for (const session of state.sessions) {
       for (const [, entries] of session.rosterTiles) {
         for (const entry of entries) {
-          if (isCollapsedPersonaGroup(entry)) {
+          if (
+            isCollapsedPersonaGroup(entry) ||
+            isMultiAgentPersonaTile(entry)
+          ) {
             for (const tile of entry.instances) {
               visit(session.sessionId, tile.agentId, tile.state);
             }

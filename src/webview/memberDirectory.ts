@@ -30,7 +30,7 @@
  */
 
 import type { RenderableState } from "./render.js";
-import { hiddenMemberKey } from "../shared/types.js";
+import { hiddenMemberKey, isMultiAgentPersonaTile } from "../shared/types.js";
 import { isCollapsedPersonaGroup } from "./components/collapsedPersonaTile.js";
 
 /** Resolved display metadata for one roster member. */
@@ -60,6 +60,17 @@ export class MemberDirectory {
     for (const session of state.sessions) {
       for (const entries of session.rosterTiles.values()) {
         for (const entry of entries) {
+          if (isMultiAgentPersonaTile(entry)) {
+            // 86ca1dtr5 — the wrapper carries the member identity directly
+            // (and every instance shares it), so record once from the wrapper.
+            this.record(
+              entry.teamId,
+              entry.memberId,
+              entry.display,
+              entry.role,
+            );
+            continue;
+          }
           if (isCollapsedPersonaGroup(entry)) {
             for (const inst of entry.instances) {
               this.record(inst.teamId, inst.memberId, inst.display, inst.role);

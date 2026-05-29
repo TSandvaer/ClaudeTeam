@@ -37,7 +37,10 @@ import {
   type SessionAgentData,
 } from "../extension/state/reducer.js";
 import type { AgentState, AgentTree, SessionTree, AgentTile, BackgroundAgent, Team } from "../shared/types.js";
-import { isCollapsedPersonaGroup } from "../shared/types.js";
+import {
+  isCollapsedPersonaGroup,
+  isMultiAgentPersonaTile,
+} from "../shared/types.js";
 
 // =============================================================================
 // CLI argument parsing
@@ -453,14 +456,18 @@ function printSession(session: SessionTree, teamNameForId: Map<string, string>):
     const entries = session.rosterTiles.get(teamId) ?? [];
     if (entries.length === 0) continue;
 
-    // M3-10: flatten any CollapsedPersonaGroup wrappers back to per-spawn
-    // AgentTile rows for the CLI. The CLI is a per-spawn inspection tool; the
-    // dashboard (webview) is where the persona-name collapse is visually
-    // useful. CLI also invokes buildAgentTree with `{ collapsePersonaTiles:
-    // false }` below, so wrappers are not produced in practice — this flatten
-    // is defense in depth for the type contract.
+    // M3-10 / 86ca1dtr5: flatten any wrapper (CollapsedPersonaGroup or
+    // MultiAgentPersonaTile) back to per-spawn AgentTile rows for the CLI. The
+    // CLI is a per-spawn inspection tool; the dashboard (webview) is where the
+    // persona collapse is visually useful. CLI also invokes buildAgentTree with
+    // `{ collapsePersonaTiles: false }` below, so wrappers are not produced in
+    // practice — this flatten is defense in depth for the type contract. Both
+    // wrapper kinds carry `instances: AgentTile[]`, so the guard union covers
+    // both.
     const tiles: AgentTile[] = entries.flatMap((e) =>
-      isCollapsedPersonaGroup(e) ? e.instances : [e],
+      isCollapsedPersonaGroup(e) || isMultiAgentPersonaTile(e)
+        ? e.instances
+        : [e],
     );
 
     const teamName = teamNameForId.get(teamId) ?? teamId;

@@ -27,6 +27,7 @@ import type {
   AgentState,
   AgentTile,
   CollapsedPersonaGroup,
+  MultiAgentPersonaTile,
   RosterTileEntry,
 } from "../shared/types.js";
 
@@ -388,7 +389,7 @@ function renderSessionCard(session: SerializedSessionTree): HTMLElement {
   const flat: { teamId: string; tile: AgentTile }[] = [];
   for (const [teamId, entries] of Object.entries(session.rosterTiles)) {
     for (const entry of entries as RosterTileEntry[]) {
-      if (isCollapsedPersonaGroup(entry)) {
+      if (isCollapsedPersonaGroup(entry) || isMultiAgentPersonaTile(entry)) {
         for (const instance of entry.instances) {
           flat.push({ teamId, tile: instance });
         }
@@ -570,5 +571,22 @@ function isCollapsedPersonaGroup(
     entry !== null &&
     "kind" in entry &&
     (entry as { kind?: unknown }).kind === "collapsed-persona"
+  );
+}
+
+/**
+ * Webview-side mirror of `isMultiAgentPersonaTile` from
+ * `src/shared/types.ts` (86ca1dtr5). Sibling of the `isCollapsedPersonaGroup`
+ * mirror above — kept local so the panel renderer doesn't pull a value import
+ * across the host bundle boundary.
+ */
+function isMultiAgentPersonaTile(
+  entry: RosterTileEntry,
+): entry is MultiAgentPersonaTile {
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    "kind" in entry &&
+    (entry as { kind?: unknown }).kind === "multi-agent-persona"
   );
 }

@@ -40,7 +40,27 @@ import {
   MIN_POLL_MS,
 } from "../../src/extension/watcher/watcherLoop.js";
 import type { DashboardState } from "../../src/shared/types.js";
-import { isCollapsedPersonaGroup } from "../../src/shared/types.js";
+import {
+  isCollapsedPersonaGroup,
+  isMultiAgentPersonaTile,
+} from "../../src/shared/types.js";
+
+/**
+ * Read the representative state from any RosterTileEntry — bare tile, M3-10
+ * CollapsedPersonaGroup, or 86ca1dtr5 MultiAgentPersonaTile. For wrappers,
+ * returns the first instance's state (these tests assert single-agent paths,
+ * so a wrapper would be the first instance's state anyway).
+ */
+function entryRepresentativeState(
+  entry:
+    | import("../../src/shared/types.js").RosterTileEntry
+    | undefined,
+): string | undefined {
+  if (entry === undefined) return undefined;
+  if (isMultiAgentPersonaTile(entry)) return entry.instances[0]?.state;
+  if (isCollapsedPersonaGroup(entry)) return entry.instances[0]?.state;
+  return entry.state;
+}
 
 const DEAD_PID = 2_000_010;
 const SESSION_A = "aaaabbbb-0000-0000-0000-00000000aa01";
@@ -251,9 +271,7 @@ describe("M2-04 AC8: file mutation triggers onStateChange within 4 seconds", () 
             "claudeteam-alpha",
           )?.[0];
           if (entry === undefined) return false;
-          const state = isCollapsedPersonaGroup(entry)
-            ? entry.instances[0]?.state
-            : entry.state;
+          const state = entryRepresentativeState(entry);
           return (state ?? "missing") !== "finished";
         },
         2000,
@@ -270,9 +288,7 @@ describe("M2-04 AC8: file mutation triggers onStateChange within 4 seconds", () 
       const entry = latest.sessions[0]?.rosterTiles
         .get("claudeteam-alpha")?.[0];
       if (entry === undefined) return false;
-      const state = isCollapsedPersonaGroup(entry)
-        ? entry.instances[0]?.state
-        : entry.state;
+      const state = entryRepresentativeState(entry);
       return state === "finished";
     }, 4000);
     expect(ok).toBe(true);
@@ -543,7 +559,9 @@ describe("M5: runTick applies hideFinishedAgents filter", () => {
     const entries = state.sessions[0]?.rosterTiles.get("claudeteam-alpha");
     expect(entries).toBeDefined();
     const states = entries!.map((e) =>
-      isCollapsedPersonaGroup(e) ? "group" : e.state,
+      isCollapsedPersonaGroup(e) || isMultiAgentPersonaTile(e)
+        ? "group"
+        : e.state,
     );
     // No finished tile survived; the survivors are all available baselines.
     expect(states).not.toContain("finished");

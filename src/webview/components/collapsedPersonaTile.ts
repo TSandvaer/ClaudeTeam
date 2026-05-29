@@ -68,6 +68,7 @@ import type {
   AgentState,
   AgentTile,
   CollapsedPersonaGroup,
+  RosterTileEntry,
 } from "../../shared/types.js";
 import { renderAgentTile, type PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
@@ -650,10 +651,13 @@ function renderCompactInstanceRow(
 /**
  * Type-narrowing helper used by callers (teamCard) to route per-entry between
  * the collapsed-persona renderer and the bare-tile renderer. The wrapper has
- * a `kind` discriminator; an `AgentTile` does not.
+ * the `kind: "collapsed-persona"` discriminator; an `AgentTile` has no `kind`
+ * and a `MultiAgentPersonaTile` (86ca1dtr5) carries a different `kind` value,
+ * so the value check disambiguates all three. Accepts the full
+ * `RosterTileEntry` union so callers can pass any team-tile entry.
  */
 export function isCollapsedPersonaGroup(
-  entry: AgentTile | CollapsedPersonaGroup,
+  entry: RosterTileEntry,
 ): entry is CollapsedPersonaGroup {
   return (
     typeof entry === "object" &&

@@ -54,6 +54,7 @@ import { renderRosterErrorChip } from "./components/rosterErrorChip.js";
 import { renderHeaderChip } from "./components/headerChip.js";
 import { renderHiddenMembersChip } from "./components/hiddenMembersChip.js";
 import { isCollapsedPersonaGroup } from "./components/collapsedPersonaTile.js";
+import { isMultiAgentPersonaTile } from "../shared/types.js";
 import type { HiddenMemberKey, RemovedMemberKey } from "../shared/types.js";
 import type { MemberDirectory } from "./memberDirectory.js";
 import type { FinishedTracker } from "./finishedTracker.js";
@@ -397,6 +398,31 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
       if (!session.isAlive) continue;
       for (const [teamId, entries] of session.rosterTiles.entries()) {
         for (const entry of entries) {
+          // 86ca1dtr5 MultiAgentPersonaTile — walk instances for the
+          // finished/prevState trackers (keyed per-instance agentId) and
+          // register the wrapper's expansion key (keyed by memberId per spec
+          // §3.3). The sprite tracker keys by the wrapper's own memberId (one
+          // sprite per persona, regardless of N).
+          if (isMultiAgentPersonaTile(entry)) {
+            if (expandedGroupsTracker) {
+              currentGroupKeys.add(
+                expandedGroupsTracker.makeKey(
+                  session.sessionId,
+                  teamId,
+                  entry.memberId,
+                ),
+              );
+            }
+            for (const inst of entry.instances) {
+              const key: `${string}:${string}` = `${session.sessionId}:${inst.agentId}`;
+              currentAllKeys.add(key);
+              if (inst.state === "finished") {
+                currentFinishedKeys.add(key);
+              }
+            }
+            currentSpriteKeys.add(`${session.sessionId}:${entry.memberId}`);
+            continue;
+          }
           // Wrapper case — walk instances so tiles inside a collapsed
           // wrapper still keep their tracker entries, AND register the
           // wrapper's own key for the expansion tracker.

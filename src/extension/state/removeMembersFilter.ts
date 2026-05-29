@@ -41,6 +41,7 @@
 
 import {
   isCollapsedPersonaGroup,
+  isMultiAgentPersonaTile,
   removedMemberKey,
   type AgentTile,
   type AgentTree,
@@ -49,6 +50,7 @@ import {
   type RosterTileEntry,
   type SessionTree,
 } from "../../shared/types.js";
+import { rebuildMultiAgentTileFromInstances } from "./reducer.js";
 
 /**
  * Result of applying the remove-members filter to an `AgentTree`.
@@ -99,7 +101,23 @@ export function applyRemoveMembersFilter(
 
       const survivors: RosterTileEntry[] = [];
       for (const entry of entries) {
-        if (isCollapsedPersonaGroup(entry)) {
+        if (isMultiAgentPersonaTile(entry)) {
+          // 86ca1dtr5: every instance shares one memberId so the wrapper is
+          // all-or-none, but the per-instance walk keeps the contract robust.
+          const keptInstances: AgentTile[] = [];
+          for (const inst of entry.instances) {
+            if (removedSet.has(removedMemberKey(inst.teamId, inst.memberId))) {
+              removedMemberCount += 1;
+            } else {
+              keptInstances.push(inst);
+            }
+          }
+          const rebuilt = rebuildMultiAgentTileFromInstances(
+            entry,
+            keptInstances,
+          );
+          if (rebuilt !== null) survivors.push(rebuilt);
+        } else if (isCollapsedPersonaGroup(entry)) {
           // Walk instances; drop removed ones; rebuild wrapper. In practice
           // every instance shares one memberId so the wrapper is all-or-none,
           // but the per-instance walk keeps the contract robust.
