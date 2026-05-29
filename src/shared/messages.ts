@@ -17,10 +17,15 @@
 
 import type {
   AgentState,
+  CharacterSource,
+  ClaudeTeamConfig,
   HiddenMemberKey,
+  MemberCharacter,
   RemovedMemberKey,
   RosterTileEntry,
+  ScannedAgent,
   SessionTree,
+  SetupDetectionState,
   StateDelta,
   Team,
 } from "./types.js";
@@ -244,13 +249,67 @@ export type DiagnosticStateMessage = {
   };
 };
 
+// =============================================================================
+// Team-setup epic — host → webview (TS-02, LOCKED Vocabulary contract).
+// See team/nora-pl/team-setup-epic-backlog.md § "Message types" +
+// team/iris-ux/team-setup-spec.md. New types ADDED (never overload — messages.ts
+// rule); all payloads JSON-safe (no Map/Set/Date — validated M2-04).
+// =============================================================================
+
+/**
+ * Host-computed detection trichotomy + the scanned-agents list (Decision 2 /
+ * spec §2, §3.1). The webview switches the entire dashboard root on `state`
+ * and, in the `suggest-setup` card + the wizard's scan step, renders one row
+ * per `scanned` entry.
+ *
+ * `scanned` is ALWAYS the full agents-folder scan result (even in `configured`
+ * state — the Manage Team panel + drift nudge consume it). `scanned.length`
+ * drives the suggest-setup card's count line (never a hardcoded number).
+ */
+export type SetupDetectionMessage = {
+  type: "setup:detection";
+  payload: { state: SetupDetectionState; scanned: ScannedAgent[] };
+};
+
+/**
+ * The merged bundled + user-folder character list for the picker grid
+ * (Decision 7 / spec §5). Produced by the host's `resolveCharacterSources()`
+ * (Pt-2). `sources` may be empty (no bundled chars — should not happen
+ * post-build, but the webview defends per spec §5.2 empty-grid edge case).
+ */
+export type SetupCharactersMessage = {
+  type: "setup:characters";
+  payload: { sources: CharacterSource[] };
+};
+
+/**
+ * Ack for a config-mutating action — the `ui:run-setup` (wizard create) and
+ * `ui:save-team` (panel save) paths both resolve to this (spec §3.3, §4.3).
+ *
+ *   ok: true            → write succeeded; the webview transitions
+ *                         (wizard → edit layout / shows "Saved"). The host
+ *                         also emits a fresh `setup:detection` reflecting the
+ *                         now-`configured` state.
+ *   ok: false, error    → write failed; the webview surfaces "Couldn't save:
+ *                         <error>" inline and keeps the user's edits.
+ *
+ * `error` is a human-readable string (omitted on success). JSON-safe.
+ */
+export type SetupConfigSavedMessage = {
+  type: "setup:config-saved";
+  payload: { ok: boolean; error?: string };
+};
+
 /** Union of all host → webview messages. */
 export type HostMessage =
   | StateFullMessage
   | StateDeltaMessage
   | RosterLoadedMessage
   | RosterErrorMessage
-  | DiagnosticStateMessage;
+  | DiagnosticStateMessage
+  | SetupDetectionMessage
+  | SetupCharactersMessage
+  | SetupConfigSavedMessage;
 
 // =============================================================================
 // Webview → Host
@@ -377,6 +436,89 @@ export type DiagnosticRefreshMessage = {
   type: "ui:diagnostic-refresh";
 };
 
+// =============================================================================
+// Team-setup epic — webview → host (TS-02, LOCKED Vocabulary contract).
+// New types ADDED (never overload). All payloads JSON-safe.
+// =============================================================================
+
+/**
+ * User opened the Manage Team panel (spec §1, §4). The host decides which
+ * layout to serve based on whether `claudeteam.yaml` exists: wizard layout
+ * (no config) vs edit layout (config present). No payload — the host already
+ * knows the project + config state.
+ *
+ * Entry points: the suggest-setup card's "Set up team" CTA and the persistent
+ * title-bar "Manage Team" action (spec §1 navigation).
+ */
+export type OpenManageTeamMessage = {
+  type: "ui:open-manage-team";
+};
+
+/**
+ * User confirmed the setup wizard (spec §3.2 "Confirm & create"). `include`
+ * is the list of `ScannedAgent.agentName`s the user kept checked. The host
+ * generates a starter {@link ClaudeTeamConfig} from those agents (seeded
+ * match-keys, blank roles, null characters, `status: live`), writes
+ * `claudeteam.yaml`, and acks via `setup:config-saved` + a fresh
+ * `setup:detection`. JSON-safe `string[]`.
+ */
+export type RunSetupMessage = {
+  type: "ui:run-setup";
+  payload: { include: string[] };
+};
+
+/**
+ * User saved edits in the Manage Team panel (spec §4.3). The webview sends the
+ * FULL edited {@link ClaudeTeamConfig}; the host performs a structured,
+ * normalized write (NOT comment-preserving — Decision 5, panel owns the
+ * format) and acks via `setup:config-saved`. The `config` payload is JSON-safe
+ * (plain objects / arrays / scalars — `Member.character` is `string | null`).
+ */
+export type SaveTeamMessage = {
+  type: "ui:save-team";
+  payload: { config: ClaudeTeamConfig };
+};
+
+/**
+ * User assigned or cleared a member's character via the picker (spec §5.2).
+ * `character` is a {@link CharacterSource} id, or `null` to clear (revert to
+ * text tile). The host updates the member's `character` field + re-writes +
+ * acks via `setup:config-saved`. Payload carries the `memberId` + the chosen
+ * character id (or null). JSON-safe scalars.
+ *
+ * NOTE: scoped by `memberId` alone (not the `(teamId, memberId)` pair used by
+ * hide/remove) because the team-setup epic's `claudeteam.yaml` is single-team
+ * per project in V1; the host resolves the member within the sole team. If
+ * multi-team configs land later, this gains a `teamId` field (additive).
+ */
+export type AssignCharacterMessage = {
+  type: "ui:assign-character";
+  payload: { memberId: string; character: MemberCharacter };
+};
+
+/**
+ * User confirmed deletion of an ORPHANED member (spec §6.1). The host removes
+ * the member from `claudeteam.yaml`, re-writes, and acks via
+ * `setup:config-saved`; the orphaned tile disappears on the next
+ * `setup:detection` / state update. This is the ONLY delete path for a member
+ * (orphaned members are kept greyed until this explicit confirm — Decision 3).
+ * JSON-safe scalar payload.
+ */
+export type ConfirmOrphanDeleteMessage = {
+  type: "ui:confirm-orphan-delete";
+  payload: { memberId: string };
+};
+
+/**
+ * User dismissed the suggest-setup card (spec §2.2 ✕ / "Not now"). The host
+ * persists a remember-per-workspace dismiss flag (workspaceState — ratify
+ * proposal §7.2 Option A) so the card stays dismissed for that workspace until
+ * a config is created or the agent count materially changes. No payload.
+ */
+export type DismissSetupSuggestionMessage = {
+  type: "ui:dismiss-setup-suggestion";
+};
+
 /** Union of all webview → host messages. */
 export type WebviewMessage =
   | OpenTranscriptMessage
@@ -388,4 +530,10 @@ export type WebviewMessage =
   | RemoveMemberMessage
   | DiagnosticClearMessage
   | DiagnosticPauseMessage
-  | DiagnosticRefreshMessage;
+  | DiagnosticRefreshMessage
+  | OpenManageTeamMessage
+  | RunSetupMessage
+  | SaveTeamMessage
+  | AssignCharacterMessage
+  | ConfirmOrphanDeleteMessage
+  | DismissSetupSuggestionMessage;
