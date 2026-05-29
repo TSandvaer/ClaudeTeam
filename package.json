@@ -71,8 +71,22 @@
         "command": "claudeteam.toggleHideIdle",
         "title": "ClaudeTeam: Toggle Hide Idle Agents",
         "icon": "$(eye-closed)"
+      },
+      {
+        "command": "claudeteam.openSettings",
+        "title": "ClaudeTeam: Open Settings",
+        "icon": "$(gear)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudeteam.openSettings",
+          "when": "view == claudeteam.dashboard",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "ClaudeTeam",
       "properties": {

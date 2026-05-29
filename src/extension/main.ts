@@ -48,6 +48,7 @@ import {
   openRoster,
   registerOpenRosterCommand,
 } from "./commands/openRoster.js";
+import { registerOpenSettingsCommand } from "./commands/openSettings.js";
 import { postState } from "./messageBus.js";
 import { cwdToSlug } from "../shared/slug.js";
 import {
@@ -392,6 +393,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // {@link registerOpenRosterCommand} — it owns its own auto-create-on-
   // missing logic and does not need a closure over `watcherHandle`.
   registerOpenRosterCommand(context);
+
+  // `claudeteam.openSettings` (86ca16r2d) — gear icon in the Dashboard view
+  // title bar (contributes.menus → view/title). Routes to the native Settings
+  // UI filtered to ClaudeTeam's config via `@ext:claudeteam.claudeteam`. Like
+  // openRoster, it needs no closure over `watcherHandle`, so it self-registers.
+  registerOpenSettingsCommand(context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("claudeteam.refresh", () => {
