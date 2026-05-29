@@ -415,3 +415,29 @@ ENTRY-2026-05-27T10:00:00Z: 86c9zn7tm -> in progress (Maya accepted dispatch —
 ENTRY-2026-05-27T10:25:00Z: 86c9zn7tm -> in review (Maya PR opened — feat(ext): diagnostic webview panel — tick history + current state breakdown)
 ENTRY-2026-05-27T15:48:00Z: 86ca03ym7 -> in progress (Maya accepted dispatch — hide tool: row entirely when no current tool)
 ENTRY-2026-05-27T15:58:00Z: 86ca03ym7 -> in review (Maya PR #106 opened — fix(webview): hide tool: row when no current tool — Self-Test Report posted)
+
+---
+
+## EPIC 86ca11187 child-ticket creation (Nora — 2026-05-29)
+
+These 9 child tickets need to be CREATED by the orchestrator in list `901523520912`, all status `to do`, then flipped per dispatch. Nora's sub-agent runtime has NO `mcp__clickup__*` surfaced (harness filter — structural). Full bodies: `team/nora-pl/epic-86ca11187-backlog.md` § E-NN. Copy each `## E-NN — <title>` section as `markdown_description`. Append resulting ClickUp IDs back into the backlog next to each header. (Sub-tasks of epic 86ca11187 if the board supports parent linkage; else flat with "EPIC 86ca11187" in the body.)
+
+| # | Ticket | Name | Owner | Size | Pri | Dispatch-ready |
+|---|---|---|---|---|---|---|
+| E-01 | reducer baseline | `feat(reducer): seed full-roster baseline tiles for never-run members` | Felix | M | P0 | NOW (design-independent) |
+| E-02 | session-title | `fix(webview): elevate resolved session title over the SESSION-uuid line` | Maya | S | P1 | NOW (design-independent) |
+| E-03 | Iris spec | `spec(ux): whole-team-always-visible dashboard — baseline + persona + hide/remove + DEAD` | Iris | L | P0 | NOW (parallel — is the gate for Wave 1) |
+| E-04 | persona sprites | `feat(webview): render persona pixel-characters in roster tiles` | Maya | L | P1 | DESIGN-BLOCKED (E-03 §2 + sprites on disk) |
+| E-05 | baseline skin | `feat(webview): baseline / available tile skin` | Maya | S-M | P1 | DESIGN-BLOCKED (E-03 §1 + E-01 merged) |
+| E-06 | hide agent | `feat: hide agent (reversible, manual) — host filter + webview controls` | Felix+Maya | M | P1 | DESIGN-BLOCKED (E-03 §3) |
+| E-07 | remove agent | `feat: remove agent (yaml-gated restore) — host + webview` | Felix+Maya | S-M | P2 | DESIGN-BLOCKED (E-03 §3 + E-06) |
+| E-08 | DEAD toggle | `feat(webview): hide-dead-session toggle (PENDING SPONSOR IN/OUT)` | Maya | XS-S | P3 | SPONSOR-DECISION-BLOCKED (Nora recommends OUT/defer) |
+| E-09 | QA | `test(qa): whole-team-always-visible epic — test plan + QA pass` | Sage | M | P1 | plan-after-E-03; QA-after-impl |
+
+**Dispatch order (Nora's recommendation):**
+- Wave 0 (now, parallel): E-01 (Felix) + E-02 (Maya) + E-03 (Iris).
+- Wave 1 (after E-03 lands + E-01 merges): E-04 + E-05 + E-06 (Pattern A sequence E-01→E-05, E-06a→E-06b; or Vocabulary contract block).
+- Wave 2: E-07 + E-08 (if sponsor says IN).
+- Wave 3: E-09 QA → epic close.
+
+**Sponsor question to surface:** E-08 DEAD-card hide toggle IN or OUT? Nora recommends OUT/defer (transient window; file-driven prune already handles it).

@@ -23,6 +23,22 @@ Append below. Newest entries at the top.
 
 ---
 
+## 2026-05-29 — EPIC 86ca11187 sequencing: design-independent vs design-dependent waves
+
+**Decided:** EPIC 86ca11187 breaks into 9 child tickets (E-01..E-09; full bodies in `team/nora-pl/epic-86ca11187-backlog.md`). TWO are design-independent and dispatch-ready before Iris's spec lands: **E-01** (full-roster baseline tiles — reducer/host data-model change) and **E-02** (session-title prominence — self-contained webview hierarchy fix). The Iris spec **E-03** dispatches in PARALLEL with E-01/E-02 (Iris worktree free, no PixelLab conflict) and gates Wave 1 (E-04 persona sprites / E-05 baseline skin / E-06 hide). E-07 (remove) and E-08 (DEAD toggle, if sponsor IN) are Wave 2; E-09 (Sage QA) spans the epic. Recommended order: Wave 0 = E-01+E-02+E-03 parallel → Wave 1 → Wave 2 → Wave 3.
+
+**Context:** Orchestrator dispatched Nora to break the epic down and identify what can move before the design spier exists, to keep the team busy on independent lanes (project hard rule #7) while the design spec is in flight. Root cause verified at `src/extension/state/reducer.ts:152-266` (rosterTiles built from detected agents only). Session-title data is already on the wire via `resolveSessionLabel`; the dogfood complaint is visual hierarchy, not data — confirming E-02 is design-light.
+
+**Alternative considered:** hold ALL tickets until the Iris spec lands (single sequential wave). REJECTED — E-01 (reducer data model) and E-02 (CSS hierarchy) have no design dependency; gating them on the spec idles Felix + Maya for no reason. The baseline-tile VISUAL is design-dependent (E-05), but the wire shape is not.
+
+**Implication:** Orchestrator can dispatch a 3-agent Wave 0 immediately (Felix E-01 / Maya E-02 / Iris E-03). E-01 introduces a shared concept (baseline-tile liveness state/flag) consumed by E-05 → apply Pattern A (E-01 merges before E-05) or the Vocabulary contract block. E-06's hidden-set type is the second shared-concept surface.
+
+**Reversibility:** Planning artifact — reversible; no code shipped. Re-sequence by editing the backlog if the sponsor reprioritizes.
+
+**Pointers:** `team/nora-pl/epic-86ca11187-backlog.md`; `team/log/clickup-pending.md` § EPIC 86ca11187 child-ticket creation; EPIC 86ca11187; DECISIONS.md 2026-05-28 entry below.
+
+---
+
 ## 2026-05-28 — Whole-team-always-visible dashboard: full-roster baseline tiles + hide/remove agent UX (EPIC 86ca11187)
 
 **Decided:** The dashboard's display model changes from "show detected live agents matched to the roster" to "seed a tile for the FULL roster as always-present baseline, with live state overlaid." Every teams.yaml member always renders (default idle/available) even if never dispatched; running/idle/finished/error overlays when detected. PLUS two explicit USER-driven culling actions (no auto-hide):

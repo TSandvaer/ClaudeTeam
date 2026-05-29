@@ -10,6 +10,16 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
+## Current state — 2026-05-29 (Nora: EPIC 86ca11187 broken into 9 dispatch-ready child tickets; Wave 0 ready)
+
+**Resume next-action:** EPIC 86ca11187 is now broken down (`team/nora-pl/epic-86ca11187-backlog.md`, 9 tickets E-01..E-09). **Orchestrator next: CREATE the 9 ClickUp tickets** (list `901523520912`, bodies in the backlog, instructions in `team/log/clickup-pending.md` § EPIC 86ca11187) then **dispatch Wave 0 in parallel: E-01 (Felix, reducer baseline) + E-02 (Maya, session-title hierarchy) + E-03 (Iris, design spec)** — all three are dispatch-ready without further Nora input. E-01 + E-02 are DESIGN-INDEPENDENT; E-03 is the gate for Wave 1. **Sponsor question to surface:** E-08 DEAD-card hide toggle IN or OUT? (Nora recommends OUT/defer.) Sequencing call recorded in DECISIONS.md 2026-05-29.
+
+**Design-independent (NOW):** E-01 reducer full-roster baseline tiles (root cause `src/extension/state/reducer.ts:152-266` — tiles built from detected agents only), E-02 session-title prominence (data already on wire via `resolveSessionLabel`; hierarchy/CSS fix only). **Design-dependent (await Iris E-03 spec):** E-04 persona sprites, E-05 baseline skin, E-06 hide, E-07 remove, E-08 DEAD toggle, E-09 QA.
+
+**Persona-pose work status (carried from prior — separate track, NOT this task):** M01+F01 idle-pose pool was mid-build at last drain (5/8 done, remaining idle_watch/idle_headphones/idle_wave + F01 idle_yawn gate; nothing harvested to disk beyond original 7 poses). E-04 (persona sprite render) depends on those being harvested. NOT actioned in this Nora task.
+
+---
+
 ## Current state — 2026-05-28 ~22:00 UTC (drain+save — building M01+F01 new idle-pose pool; 5/8 done; full-team SHIPPED; epic filed)
 
 **Resume next-action:** Building a larger idle-pose pool on BOTH M01 (`7282cc3d-f822-492c-a790-08b3b5d2b27e`) and F01 (`f8f5708f-1364-4908-838a-4ab200cb0aff`), 8 new poses approved by sponsor, gating EVERY render via AskUserQuestion (sponsor clicks approve/reject — one render at a time, no batching ahead). **On resume: gate the F01 idle_yawn MOTION** (state `8c7222d2-a503-4037-96b5-edad8cf5ff4c`, gesture was rendering at save) — sponsor views in PixelLab UI. Then continue the remaining poses.
@@ -398,12 +408,21 @@ Felix's dispatch on M1-09 will start with `git -C <felix-wt> fetch origin && git
 
 ### Nora (Project Lead)
 
-- Last updated: 2026-05-25 (M4 backlog authored)
-- Status: in review (M4 backlog PR open)
+- Last updated: 2026-05-29 (EPIC 86ca11187 breakdown authored)
+- Status: in review (epic-breakdown PR open)
 - Working on: nothing in flight after PR open
-- Blocked on: nothing — M4-01 Iris dispatch is the next likely orch action (per sponsor's "Iris first, then parallel dev wave" sequencing)
+- Blocked on: nothing — orchestrator creates the 9 ClickUp tickets + dispatches Wave 0 (E-01/E-02/E-03)
 
 **Run log of substantive coordination-doc PRs (newest at top):**
+
+#### 2026-05-29 — EPIC 86ca11187 breakdown authored
+
+- Backlog: `team/nora-pl/epic-86ca11187-backlog.md` (9 tickets E-01..E-09, all dispatch-ready)
+- Sequencing call (DESIGN-INDEPENDENT E-01+E-02 dispatchable now; E-03 spec parallel + gates Wave 1) recorded in `team/DECISIONS.md` 2026-05-29
+- ClickUp create+flip requests appended to `team/log/clickup-pending.md` (Nora sub-agent has no `mcp__clickup__*` — orchestrator creates)
+- Verified root cause for E-01: `src/extension/state/reducer.ts:152-266` builds rosterTiles from detected agents only
+- Open sponsor question surfaced: E-08 DEAD-card hide toggle IN/OUT (Nora recommends OUT/defer)
+- Branch: `nora/86ca11187-epic-breakdown`
 
 #### 2026-05-25 — M4 backlog authored
 
