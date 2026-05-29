@@ -10,14 +10,14 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-29 ~08:05 UTC (AWAY-MODE; Epic 86ca11187 Wave 0 in flight; M01+F01 poses DONE+harvested)
+## Current state — 2026-05-29 ~08:33 UTC (AWAY-MODE; Epic 86ca11187 Wave 0 DONE, Wave 1 in flight)
 
-**Resume next-action:** Away-mode active (cron `dfa42db3`, 15m tick). EPIC 86ca11187 Wave 0 IN FLIGHT (dispatched ~08:05 UTC, expect PRs ~08:20–08:35):
-- **Felix → E-01** `86ca18b9p` roster baseline tiles · agentId `ab8c51b4902149e31` · branch `felix/86ca18b9p-roster-baseline-tiles`. Introduces NEW `AgentState` literal `"available"` (the vocabulary E-05 consumes).
-- **Maya → E-02** `86ca18bc2` session-title prominence · agentId `a0d8b25677c8670ae` · branch `maya/86ca18bc2-title-prominence`.
-On their PRs: Felix↔Maya cross-review (E-01→Maya, E-02→Felix), green CI, then admin-merge + ticket→complete. THEN Wave 1 (E-04 sprites + E-05 baseline skin + E-06 hide) — E-05 needs E-01 MERGED first (consumes `"available"`).
+**Resume next-action:** Away-mode active (cron `dfa42db3`, 15m tick). EPIC 86ca11187 **Wave 0 DONE** (E-01 #114 + E-02 #113 merged → complete; E-03 spec = #109 merged). **Wave 1 IN FLIGHT** (dispatched ~08:33 UTC):
+- **Maya → E-04** `86ca191uy` persona sprite rendering · agentId `a760aab80ec875b2f` · branch `maya/86ca191uy-persona-sprites`. Owns `agentTile.ts`; reviewer Felix.
+- **Felix → E-06a** `86ca191yz` hide-agent HOST (persisted hidden-set + filter + msg types) · agentId `a0d34a9c1ff0c6554` · branch `felix/86ca191yz-hide-host`. Authors vocabulary (`HiddenMemberKey`, `ui:hide-member`/`ui:show-member`/`ui:show-all-hidden`) for E-06b; reviewer Maya.
+On their PRs: Felix↔Maya cross-review, green CI, admin-merge + ticket→complete. **Webview serialization:** E-04 owns `agentTile.ts` → E-05 (baseline skin) + E-06b (hide controls) REBASE onto E-04 (don't parallel-dispatch a 2nd webview agentTile.ts task). Next after E-04 merges: E-05 (baseline skin), then E-06b (hide webview), then E-07 (remove), E-09 (Sage QA).
 
-**Still to do (away-mode):** merge open PR #110 (Nora backlog — STATE.md conflict vs #109; rebase nora branch / take-both); create remaining epic tickets E-04..E-09 on board (E-03 done via #109) as waves approach.
+**Still to do (away-mode):** merge/close open PR #110 (Nora backlog doc — STATE.md conflict vs merged #109; low value now, tickets created — consider closing); create remaining epic tickets E-05/E-07/E-09 (E-08 deferred/OUT) as waves approach. NITs: `86ca16gb7` (#111 docs) + #114 NITs (makeBaselineTile factory de-dup + AC5 prose) — fold into a reducer-touch.
 
 **SHIPPED this session:** idle-debounce 10s→60s (#111 / `86ca168j9`); settings gear (#112 / `86ca16r2d`); Iris epic design spec (#109); M01+F01 full 15-pose set harvested+committed+pushed (`51c2564`) + canonical `animations.json` naming (idle_* / active_work / active_read). NITs follow-up `86ca16gb7` (to do). PixelLab stray `70e39b6d` for sponsor to delete in UI (optional).
 
