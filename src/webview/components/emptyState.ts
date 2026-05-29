@@ -25,6 +25,15 @@
  *                                                M3-04 AC4 (consumption)
  */
 
+/**
+ * EXACT copy for the team-setup `empty` detection state (spec §2.3, LOCKED —
+ * quote verbatim: no trailing period, no rewording). Sage asserts an exact
+ * string match (TS-04 AC2). Exported so tests reference the constant rather
+ * than re-typing the literal.
+ */
+export const NO_ORCHESTRATION_SETUP_COPY =
+  "This project has no orchestration setup, nothing to show";
+
 export interface EmptyStateProps {
   /**
    * When true, render the M3-04 filtered-empty variant. When false / absent,
@@ -32,6 +41,37 @@ export interface EmptyStateProps {
    * based on `state.filterApplied`.
    */
   filtered?: boolean;
+}
+
+/**
+ * Render the team-setup `empty` detection-state card (spec §2.3): a centered,
+ * quiet card with the LOCKED EXACT copy and a muted icon. No "Set up team" CTA
+ * (with <2 agents there is nothing meaningful to roster — offering setup would
+ * mislead). All color via `--vscode-*` tokens (theme-aware, no hardcoded hex).
+ *
+ * Distinct from `renderEmptyState` (the "no live sessions" variants) — this is
+ * the detection-state card switched on by `SetupDetectionState === "empty"`.
+ */
+export function renderNoSetupState(): HTMLElement {
+  const container = document.createElement("div");
+  container.className = "empty-state ct-no-setup-state";
+  // role=status so AT announces the quiet state without it reading as an error.
+  container.setAttribute("role", "status");
+
+  const icon = document.createElement("span");
+  icon.className = "ct-no-setup-icon";
+  icon.setAttribute("aria-label", "no orchestration setup");
+  // Muted dots glyph — paired with the copy below (no icon-only).
+  icon.textContent = "( · · · )";
+  container.appendChild(icon);
+
+  const copy = document.createElement("p");
+  copy.className = "ct-no-setup-copy";
+  // LOCKED EXACT string — verbatim, no trailing period (spec §2.3).
+  copy.textContent = NO_ORCHESTRATION_SETUP_COPY;
+  container.appendChild(copy);
+
+  return container;
 }
 
 export function renderEmptyState(props: EmptyStateProps = {}): HTMLElement {

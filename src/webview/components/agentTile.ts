@@ -259,8 +259,14 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   // AND the member has a bound sprite character with resolvable frames.
   // Otherwise the tile stays text-only (AC5: no sprite box, no broken image —
   // the monogram fallback skin is E-05's scope, not this ticket).
+  // Per-member character (team-setup spec §5.3) drives the sprite: prefer the
+  // tile's `character` field (a CharacterSource id, or null = text tile) over
+  // the legacy gender binding. `undefined` (pre-team-setup roster) falls back
+  // to the gender binding inside `spriteForMember`.
   const char =
-    spriteBaseUri !== undefined ? spriteForMember(tile.memberId) : null;
+    spriteBaseUri !== undefined
+      ? spriteForMember(tile.memberId, tile.character)
+      : null;
   if (char && spriteBaseUri !== undefined) {
     article.dataset.hasSprite = "true";
     const handle = createSpriteBox({

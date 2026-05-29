@@ -1371,3 +1371,435 @@ body {
   /* Long setting names should wrap rather than overflow the sidebar. */
   overflow-wrap: anywhere;
 }
+
+/* ===========================================================================
+ * Team-setup epic (TS-03) — Manage Team panel, setup wizard, 3 dashboard
+ * states, character-picker grid, orphan controls.
+ *
+ * Theme-aware first: every color via --vscode-* or existing --ct-* tokens;
+ * NO new color/space tokens (spec §8). Semantic state hex unchanged.
+ *
+ * [hidden] guards: any flex/grid element toggled via the `hidden` attribute
+ * carries an explicit `.<class>[hidden] { display:none }` guard below (author
+ * `display` beats the UA default — conventions doc + PR #120->#122 precedent).
+ * The source-derived guard test (removeMember.test.ts) covers these.
+ * =========================================================================== */
+
+/* -- Shared button styling (reused across panel / wizard / cards) -- */
+.ct-btn {
+  font: inherit;
+  color: var(--vscode-button-secondaryForeground, var(--ct-color-fg));
+  background-color: var(--vscode-button-secondaryBackground, transparent);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-chip);
+  padding: var(--ct-space-xs) var(--ct-space-m);
+  cursor: pointer;
+}
+.ct-btn:hover {
+  background-color: var(--ct-color-bg-hover);
+}
+.ct-btn:focus-visible {
+  outline: 1px solid var(--ct-color-focus);
+  outline-offset: 1px;
+}
+.ct-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ct-btn--primary {
+  color: var(--vscode-button-foreground, #ffffff);
+  background-color: var(--vscode-button-background, #0e639c);
+  border-color: var(--vscode-button-background, #0e639c);
+}
+.ct-btn--primary:hover {
+  background-color: var(--vscode-button-hoverBackground, #1177bb);
+}
+.ct-btn--danger {
+  color: var(--vscode-inputValidation-errorForeground, #ffffff);
+  background-color: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+  border-color: var(--ct-color-state-error);
+}
+
+/* -- Monogram chip (text-tile fallback, §3.2/§4.1/§5.3) -- */
+.ct-monogram-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ct-color-fg);
+  background-color: var(--ct-color-bg-hover);
+  border-radius: var(--ct-radius-tile);
+  flex: 0 0 auto;
+}
+.ct-monogram-chip--muted {
+  opacity: var(--ct-opacity-available);
+  color: var(--ct-color-fg-muted);
+}
+
+/* -- empty (no-orchestration) detection state (§2.3) -- */
+.ct-no-setup-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ct-space-l);
+  padding: var(--ct-space-l);
+  min-height: 40vh;
+  text-align: center;
+}
+.ct-no-setup-icon {
+  color: var(--ct-color-fg-muted);
+  font-size: 1.4rem;
+  letter-spacing: 2px;
+}
+.ct-no-setup-copy {
+  margin: 0;
+  color: var(--ct-color-fg-muted);
+}
+
+/* -- suggest-setup card (§2.2) -- */
+.ct-suggest-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-m);
+  margin: var(--ct-space-l);
+  padding: var(--ct-space-l);
+  background-color: var(--ct-color-bg-sidebar);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-tile);
+  color: var(--ct-color-fg);
+}
+/* Card is mounted/unmounted by render.ts (not `hidden`-toggled) -> no [hidden]
+ * guard needed; noted so a future toggle-by-hidden refactor adds one. */
+.ct-suggest-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+}
+.ct-suggest-card-icon {
+  font-size: 1.1rem;
+}
+.ct-suggest-card-heading {
+  margin: 0;
+  font-size: 1rem;
+  flex: 1 1 auto;
+}
+.ct-suggest-card-dismiss,
+.ct-character-picker-close,
+.ct-manage-panel-close {
+  font: inherit;
+  color: var(--ct-color-fg-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: var(--ct-space-xs);
+  line-height: 1;
+}
+.ct-suggest-card-dismiss:hover,
+.ct-character-picker-close:hover,
+.ct-manage-panel-close:hover {
+  color: var(--ct-color-fg);
+}
+.ct-suggest-card-body {
+  margin: 0;
+  color: var(--ct-color-fg-muted);
+}
+.ct-suggest-card-actions {
+  display: flex;
+  gap: var(--ct-space-s);
+}
+
+/* -- Manage Team panel (§4) -- */
+.ct-manage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-m);
+  padding: var(--ct-space-l);
+  color: var(--ct-color-fg);
+}
+.ct-manage-panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+}
+.ct-manage-panel-title {
+  margin: 0;
+  font-size: 1.1rem;
+  flex: 1 1 auto;
+}
+.ct-setup-banner {
+  padding: var(--ct-space-s) var(--ct-space-m);
+  border-radius: var(--ct-radius-chip);
+  border: 1px solid var(--ct-color-border);
+}
+.ct-setup-banner--success {
+  color: var(--ct-color-fg);
+  background-color: var(--ct-color-bg-hover);
+  border-color: var(--ct-color-state-running);
+}
+.ct-setup-banner--error {
+  color: var(--vscode-inputValidation-errorForeground, var(--ct-color-fg));
+  background-color: var(--vscode-inputValidation-errorBackground, rgba(90, 29, 29, 0.4));
+  border-color: var(--ct-color-state-error);
+}
+.ct-manage-team-line,
+.ct-manage-match-help,
+.ct-manage-format-hint {
+  margin: 0;
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+}
+.ct-manage-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+}
+.ct-manage-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ct-space-m);
+  padding: var(--ct-space-s);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-tile);
+}
+.ct-manage-row--orphaned {
+  opacity: 0.6;
+}
+.ct-manage-row-chip {
+  flex: 0 0 auto;
+}
+.ct-manage-row-thumb {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+  border-radius: var(--ct-radius-tile);
+}
+.ct-manage-row-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ct-manage-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ct-manage-field-caption {
+  font-size: smaller;
+  color: var(--ct-color-fg-muted);
+}
+.ct-manage-input {
+  font: inherit;
+  color: var(--vscode-input-foreground, var(--ct-color-fg));
+  background-color: var(--vscode-input-background, var(--ct-color-bg-editor));
+  border: 1px solid var(--vscode-input-border, var(--ct-color-border));
+  border-radius: var(--ct-radius-chip);
+  padding: var(--ct-space-xs) var(--ct-space-s);
+}
+.ct-manage-input:focus-visible {
+  outline: 1px solid var(--ct-color-focus);
+}
+.ct-manage-row-controls {
+  flex: 0 0 auto;
+}
+.ct-manage-char-controls,
+.ct-manage-orphan-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  align-items: flex-start;
+}
+.ct-manage-char-status {
+  font-size: smaller;
+  color: var(--ct-color-fg-muted);
+}
+.ct-manage-orphan-badge {
+  font-size: smaller;
+  color: var(--ct-color-state-idle);
+}
+.ct-manage-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.ct-manage-save-error {
+  margin: 0;
+  color: var(--vscode-inputValidation-errorForeground, var(--ct-color-state-error));
+  font-size: smaller;
+}
+.ct-manage-picker-host {
+  position: relative;
+}
+
+/* Orphan confirm panel — flex + hidden-toggled -> MANDATORY [hidden] guard
+ * (mirrors .agent-tile-remove-confirm[hidden]). */
+.ct-manage-orphan-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+  margin-top: var(--ct-space-xs);
+  padding: var(--ct-space-s);
+  border: 1px solid var(--ct-color-state-error);
+  border-radius: var(--ct-radius-tile);
+  background-color: var(--ct-color-bg-sidebar);
+}
+.ct-manage-orphan-confirm[hidden] {
+  display: none;
+}
+.ct-manage-orphan-confirm-text {
+  margin: 0;
+  font-size: smaller;
+}
+.ct-manage-orphan-confirm-actions {
+  display: flex;
+  gap: var(--ct-space-s);
+  justify-content: flex-end;
+}
+
+/* -- Setup wizard (§3) -- */
+.ct-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-m);
+}
+.ct-wizard-heading {
+  margin: 0;
+  font-size: 1rem;
+}
+.ct-wizard-agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+}
+.ct-wizard-agent-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-space-s);
+}
+.ct-wizard-agent-name {
+  font-weight: 600;
+}
+.ct-wizard-agent-file {
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+}
+.ct-wizard-count {
+  margin: 0;
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+}
+.ct-wizard-actions {
+  display: flex;
+  gap: var(--ct-space-s);
+  justify-content: flex-end;
+}
+.ct-wizard-preview-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-tile);
+  padding: var(--ct-space-s);
+}
+.ct-wizard-preview-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+}
+.ct-wizard-preview-display {
+  font-weight: 600;
+}
+.ct-wizard-preview-role,
+.ct-wizard-preview-char,
+.ct-wizard-preview-hint,
+.ct-wizard-team-line {
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+}
+.ct-wizard-preview-hint {
+  margin: 0;
+}
+
+/* -- Character-picker grid (§5) -- */
+/* The picker root is a flex popover, mounted/unmounted by the panel (not
+ * `hidden`-toggled), but carries the [hidden] guard defensively per spec §5.2
+ * flag (so a future toggle-by-hidden refactor is safe). */
+.ct-character-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+  margin-top: var(--ct-space-xs);
+  padding: var(--ct-space-m);
+  background-color: var(--ct-color-bg-sidebar);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-tile);
+}
+.ct-character-picker[hidden] {
+  display: none;
+}
+.ct-character-picker-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+}
+.ct-character-picker-heading {
+  margin: 0;
+  font-size: 0.9rem;
+  flex: 1 1 auto;
+}
+.ct-character-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: var(--ct-space-s);
+}
+.ct-character-picker-grid[hidden] {
+  display: none;
+}
+.ct-character-picker-empty {
+  margin: 0;
+  grid-column: 1 / -1;
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+}
+.ct-character-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--ct-space-xs);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ct-radius-tile);
+  cursor: pointer;
+  color: var(--ct-color-fg);
+}
+.ct-character-cell:hover {
+  background-color: var(--ct-color-bg-hover);
+}
+.ct-character-cell:focus-visible {
+  outline: 1px solid var(--ct-color-focus);
+}
+.ct-character-cell--selected {
+  border-color: var(--ct-color-focus);
+}
+.ct-character-thumb {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+}
+.ct-character-label {
+  font-size: smaller;
+}
+.ct-character-origin {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ct-color-fg-muted);
+}
+.ct-character-origin--user {
+  color: var(--ct-color-state-idle);
+}

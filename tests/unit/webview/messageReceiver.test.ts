@@ -182,6 +182,52 @@ describe("initMessageReceiver — unknown / untyped messages", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Team-setup epic (TS-03) — setup:* dispatch
+// ---------------------------------------------------------------------------
+
+describe("initMessageReceiver — team-setup setup:* dispatch", () => {
+  it("routes setup:detection / setup:characters / setup:config-saved to their own handlers", () => {
+    const onSetupDetection = vi.fn();
+    const onSetupCharacters = vi.fn();
+    const onSetupConfigSaved = vi.fn();
+    const onStateFull = vi.fn();
+    const onUnknown = vi.fn();
+
+    const handle = initMessageReceiver({
+      onSetupDetection,
+      onSetupCharacters,
+      onSetupConfigSaved,
+      onStateFull,
+      onUnknown,
+    });
+
+    const detection: HostMessage = {
+      type: "setup:detection",
+      payload: { state: "suggest-setup", scanned: [] },
+    };
+    const characters: HostMessage = {
+      type: "setup:characters",
+      payload: { sources: [] },
+    };
+    const saved: HostMessage = {
+      type: "setup:config-saved",
+      payload: { ok: true },
+    };
+    postToWindow(detection);
+    postToWindow(characters);
+    postToWindow(saved);
+
+    expect(onSetupDetection).toHaveBeenCalledWith(detection);
+    expect(onSetupCharacters).toHaveBeenCalledWith(characters);
+    expect(onSetupConfigSaved).toHaveBeenCalledWith(saved);
+    expect(onStateFull).not.toHaveBeenCalled();
+    expect(onUnknown).not.toHaveBeenCalled();
+
+    handle.dispose();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Disposable
 // ---------------------------------------------------------------------------
 

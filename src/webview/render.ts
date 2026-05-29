@@ -40,12 +40,18 @@
 
 import type {
   AgentTree,
+  CharacterSource,
+  ClaudeTeamConfig,
+  ScannedAgent,
+  SetupDetectionState,
   StateDelta,
   WebviewAgentTree,
 } from "../shared/types.js";
 import type { WebviewMessage } from "../shared/messages.js";
 import { renderSessionBlock } from "./components/sessionBlock.js";
-import { renderEmptyState } from "./components/emptyState.js";
+import { renderEmptyState, renderNoSetupState } from "./components/emptyState.js";
+import { renderSuggestSetupCard } from "./components/suggestSetupCard.js";
+import { renderManageTeamPanel } from "./components/manageTeamPanel.js";
 import {
   renderErrorChip,
   type ErrorChipLevel,
@@ -198,6 +204,51 @@ export interface RenderContext {
    * own DOM optimistically without persistence).
    */
   onToggleHiddenMembers?: (nextExpanded: boolean) => void;
+  /**
+   * Team-setup epic (TS-03 / spec §2). The host-computed detection trichotomy
+   * + the scanned-agents list from the most recent `setup:detection` message.
+   * When present, `renderFull` switches the WHOLE dashboard root on
+   * `setup.state`:
+   *   - `"empty"`         → centered "no orchestration setup" card (§2.3).
+   *   - `"suggest-setup"` → dismissible "Orchestration detected" card (§2.2).
+   *   - `"configured"`    → the normal dashboard (sessions/tiles) below.
+   *
+   * Optional + back-compat: when absent (pre-team-setup host, or before the
+   * first `setup:detection` lands) `renderFull` falls through to the existing
+   * session/empty rendering — exactly the pre-TS-03 behavior.
+   */
+  setup?: {
+    state: SetupDetectionState;
+    scanned: ScannedAgent[];
+  };
+  /**
+   * Team-setup epic (spec §2.2). Whether the suggest-setup card was dismissed
+   * for this workspace. The host owns the durable flag (workspaceState); the
+   * webview mirrors it so a dismissed card doesn't re-appear within a session
+   * before the host re-emits. When true AND `setup.state === "suggest-setup"`,
+   * the card is suppressed and the dashboard shows live agents as today's
+   * collapsed noise (§2.2). Optional → treated as false.
+   */
+  setupSuggestionDismissed?: boolean;
+  /**
+   * Team-setup epic (spec §4). When true, the Manage Team panel is open and
+   * REPLACES the dashboard body (panel is a full-pane surface in V1 — Maya's
+   * layout call). Driven by `ui:open-manage-team` (webview-local open flag).
+   */
+  managePanelOpen?: boolean;
+  /**
+   * Parsed `claudeteam.yaml` config for the Manage Team panel's edit layout
+   * (spec §4). `null` → the panel serves the wizard layout (first run). Rides
+   * the existing roster channel (per the TS-03 channel note — edit-layout
+   * config travels on `state:full`/`roster:loaded`). Optional.
+   */
+  manageConfig?: ClaudeTeamConfig | null;
+  /** Merged bundled + user character sources for the picker (spec §5). */
+  characterSources?: CharacterSource[];
+  /** Workspace folder name seed for the wizard/preview "Team: <name>" line. */
+  teamNameSeed?: string;
+  /** Called when the user closes the Manage Team panel (caller flips the flag). */
+  onCloseManagePanel?: () => void;
 }
 
 /**
@@ -330,7 +381,64 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     memberDirectory,
     hiddenMembersExpanded,
     onToggleHiddenMembers,
+    setup,
+    setupSuggestionDismissed,
+    managePanelOpen,
+    manageConfig,
+    characterSources,
+    teamNameSeed,
+    onCloseManagePanel,
   } = ctx;
+
+  // ── Team-setup surface switch (spec §1, §2, §4) ─────────────────────────────
+  // These are full-pane surfaces that REPLACE the dashboard body. Handle them
+  // FIRST (before tracker work + the session/tile render) and return early.
+  //
+  // Precedence:
+  //   1. Manage Team panel open → the panel (wizard or edit layout).
+  //   2. detection === "empty"  → centered no-orchestration card.
+  //   3. detection === "suggest-setup" (and not dismissed) → suggest card.
+  //   4. otherwise → fall through to the normal dashboard (configured, OR a
+  //      pre-team-setup host with no `setup` at all).
+
+  // 1. Manage Team panel (explicit open — highest precedence).
+  if (managePanelOpen === true) {
+    mount.replaceChildren();
+    mount.appendChild(
+      renderManageTeamPanel({
+        config: manageConfig ?? null,
+        scanned: setup?.scanned ?? [],
+        characters: characterSources ?? [],
+        teamNameSeed: teamNameSeed ?? "",
+        ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        postMessage,
+        ...(onCloseManagePanel ? { onClose: onCloseManagePanel } : {}),
+      }),
+    );
+    return;
+  }
+
+  // 2. + 3. Detection-state full-pane cards.
+  if (setup !== undefined) {
+    if (setup.state === "empty") {
+      mount.replaceChildren();
+      mount.appendChild(renderNoSetupState());
+      return;
+    }
+    if (setup.state === "suggest-setup" && setupSuggestionDismissed !== true) {
+      mount.replaceChildren();
+      mount.appendChild(
+        renderSuggestSetupCard({
+          scannedCount: setup.scanned.length,
+          postMessage,
+        }),
+      );
+      return;
+    }
+    // suggest-setup + dismissed → fall through to the normal dashboard (live
+    // agents render as collapsed background noise, today's behavior, §2.2).
+    // configured → fall through to the normal dashboard.
+  }
 
   // E-06b — observe every rostered tile this tick so the member directory
   // knows display/role for any member that later lands in hiddenMemberKeys.

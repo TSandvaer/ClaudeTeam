@@ -562,6 +562,30 @@ export interface AgentTile {
    * Source: `team/iris-ux/86c9zmyef-running-focused-dashboard-spec.md` §2.2.
    */
   memberColor?: string;
+  /**
+   * Per-member pixel-character binding mirrored from the matched roster
+   * `Member.character` ({@link MemberCharacter}) — team-setup epic Decision 7
+   * / spec §5.3. A {@link CharacterSource} id selecting which character sprite
+   * the tile renders, or `null` for the text-tile (monogram) fallback.
+   *
+   * REPLACES the hardcoded gender→character binding (`MEMBER_SPRITE_BINDING`)
+   * as the per-tile character driver: the webview's `spriteForMember` prefers
+   * this field when present, resolving the manifest by character id; absence
+   * (`undefined`) falls back to the legacy gender binding for back-compat with
+   * the pre-team-setup roster.
+   *
+   * Optional + back-compat — ABSENT on the legacy global `teams.yaml` roster
+   * and pre-team-setup wire emitters; the host (TS-02 Pt-2) stamps it onto the
+   * tile when the matched `claudeteam.yaml` member carries a `character`.
+   * `null` is an explicit "text tile" signal (distinct from `undefined` =
+   * "no team-setup config → fall back to gender binding"). JSON-safe scalar —
+   * survives the `serializeState` host↔webview round-trip, mirroring
+   * `memberColor`.
+   *
+   * Source: `team/iris-ux/team-setup-spec.md` §5.3 (per-member character render
+   * REPLACES the gender binding).
+   */
+  character?: MemberCharacter;
 }
 
 /**
@@ -695,6 +719,16 @@ export interface MultiAgentPersonaTile {
    * Mirrors `AgentTile.memberColor`. Absent when the member has no color set.
    */
   memberColor?: string;
+  /**
+   * Per-member pixel-character binding mirrored from the matched roster
+   * `Member.character` ({@link MemberCharacter}) — team-setup epic Decision 7
+   * / spec §5.3. Drives the wrapper's single persona sprite (one character per
+   * persona, regardless of N). Same semantics as {@link AgentTile.character}:
+   * a {@link CharacterSource} id, `null` = text tile, `undefined` = fall back
+   * to the legacy gender binding. Optional + back-compat — stamped by the host
+   * (TS-02 Pt-2) when the matched member carries a character. JSON-safe scalar.
+   */
+  character?: MemberCharacter;
 }
 
 /**

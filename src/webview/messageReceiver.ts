@@ -28,6 +28,9 @@ import type {
   StateDeltaMessage,
   RosterLoadedMessage,
   RosterErrorMessage,
+  SetupDetectionMessage,
+  SetupCharactersMessage,
+  SetupConfigSavedMessage,
 } from "../shared/messages.js";
 
 /** One handler per HostMessage `type` discriminator. All optional. */
@@ -36,6 +39,24 @@ export interface HostMessageHandlers {
   onStateDelta?(msg: StateDeltaMessage): void;
   onRosterLoaded?(msg: RosterLoadedMessage): void;
   onRosterError?(msg: RosterErrorMessage): void;
+  /**
+   * Team-setup epic (TS-03 / spec §2, §3). Host emits the detection
+   * trichotomy + the scanned-agents list; the webview switches the dashboard
+   * root + feeds the wizard's scan step. `scanned` is always the full scan
+   * (even in `configured`) for the Manage Team panel.
+   */
+  onSetupDetection?(msg: SetupDetectionMessage): void;
+  /**
+   * Team-setup epic (spec §5). Host emits the merged bundled + user character
+   * sources for the picker grid.
+   */
+  onSetupCharacters?(msg: SetupCharactersMessage): void;
+  /**
+   * Team-setup epic (spec §3.3, §4.3). Ack for `ui:run-setup` / `ui:save-team`
+   * — drives the panel's single success/error banner (NIT 2) + the wizard →
+   * edit-layout transition.
+   */
+  onSetupConfigSaved?(msg: SetupConfigSavedMessage): void;
   /**
    * Called when the incoming message's `type` did not match any known
    * discriminator. Defaults to console.warn if not supplied; tests can override
@@ -74,7 +95,10 @@ function isHostMessage(raw: unknown): raw is HostMessage {
     t === "state:full" ||
     t === "state:delta" ||
     t === "roster:loaded" ||
-    t === "roster:error"
+    t === "roster:error" ||
+    t === "setup:detection" ||
+    t === "setup:characters" ||
+    t === "setup:config-saved"
   );
 }
 
@@ -112,6 +136,15 @@ export function initMessageReceiver(
         return;
       case "roster:error":
         handlers.onRosterError?.(data);
+        return;
+      case "setup:detection":
+        handlers.onSetupDetection?.(data);
+        return;
+      case "setup:characters":
+        handlers.onSetupCharacters?.(data);
+        return;
+      case "setup:config-saved":
+        handlers.onSetupConfigSaved?.(data);
         return;
     }
   };
