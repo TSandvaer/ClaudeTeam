@@ -194,9 +194,12 @@ describe("sprite rendering — AC4 reduced motion", () => {
 });
 
 describe("sprite rendering — AC5 graceful degrade", () => {
-  it("a sprite-less member renders NO sprite box and NO img", () => {
+  it("a sprite-less (unbound) member renders NO sprite box and NO img", () => {
+    // E-07b: all six ROSTER members are now bound by gender, so the graceful-
+    // degrade path is exercised with an id that is NOT in MEMBER_SPRITE_BINDING
+    // (an unrostered / unknown member id).
     const el = renderAgentTile({
-      tile: tile({ memberId: "sage", display: "Sage", state: "available" }),
+      tile: tile({ memberId: "ghost", display: "Ghost", state: "available" }),
       sessionId: "s1",
       postMessage: () => undefined,
       spriteBaseUri: BASE,
@@ -206,7 +209,7 @@ describe("sprite rendering — AC5 graceful degrade", () => {
     expect(el.querySelector("img")).toBeNull();
     expect(el.getAttribute("data-has-sprite")).toBeNull();
     // The text rows still render (text-only tile).
-    expect(el.querySelector(".agent-display")?.textContent).toBe("Sage");
+    expect(el.querySelector(".agent-display")?.textContent).toBe("Ghost");
   });
 
   it("no sprite box when spriteBaseUri is absent (browser-dev / test mode)", () => {

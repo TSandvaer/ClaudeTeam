@@ -54,7 +54,7 @@ import { renderRosterErrorChip } from "./components/rosterErrorChip.js";
 import { renderHeaderChip } from "./components/headerChip.js";
 import { renderHiddenMembersChip } from "./components/hiddenMembersChip.js";
 import { isCollapsedPersonaGroup } from "./components/collapsedPersonaTile.js";
-import type { HiddenMemberKey } from "../shared/types.js";
+import type { HiddenMemberKey, RemovedMemberKey } from "../shared/types.js";
 import type { MemberDirectory } from "./memberDirectory.js";
 import type { FinishedTracker } from "./finishedTracker.js";
 import type { PrevStateTracker } from "./prevStateTracker.js";
@@ -310,6 +310,30 @@ function readHiddenMemberKeys(state: RenderableState): HiddenMemberKey[] {
   );
 }
 
+/**
+ * Extract the removed-member set (E-07b / EPIC 86ca11187 §7.3) from the
+ * rendered state. `removedMemberKeys` is the persisted REMOVED set as
+ * `` `${teamId}:${memberId}` `` strings (E-07a host vocab, PR #119) — mirror
+ * of `readHiddenMemberKeys`, same defensive cast + string filter.
+ *
+ * Used to MASK removed members out of the "show hidden" reveal list: a removed
+ * member must NOT appear anywhere on the dashboard, NOT even under show-hidden
+ * (remove is more permanent than hide — restore is yaml-gated only, spec §7.3
+ * / `RemovedMemberKey` docstring). The host already excludes removed members
+ * from `hiddenMemberKeys`, but the webview applies the set-difference as
+ * defense-in-depth so a removed-AND-hidden member can never leak into the
+ * recovery surface regardless of host emit-order.
+ */
+function readRemovedMemberKeys(state: RenderableState): RemovedMemberKey[] {
+  const bag = state as unknown as { removedMemberKeys?: unknown };
+  if (!Array.isArray(bag.removedMemberKeys)) {
+    return [];
+  }
+  return bag.removedMemberKeys.filter(
+    (k): k is RemovedMemberKey => typeof k === "string" && k.includes(":"),
+  );
+}
+
 export function renderFull(ctx: RenderContext, state: RenderableState): void {
   const {
     mount,
@@ -495,7 +519,16 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   // hidden set is empty — the chip only matters once the sponsor has hidden
   // at least one member. Unlike the idle/finished filters (state-driven), this
   // set is driven by explicit, persisted user hide actions (E-06a host).
-  const hiddenMemberKeys = readHiddenMemberKeys(state);
+  //
+  // E-07b — MASK removed members out of the reveal list (spec §7.3). A removed
+  // member must never appear anywhere, NOT even under "show hidden" (remove is
+  // more permanent than hide). The host already excludes removed members from
+  // `hiddenMemberKeys`, but we apply the set-difference here as defense-in-
+  // depth so a removed-AND-hidden member can't leak into the recovery surface.
+  const removedKeySet = new Set<string>(readRemovedMemberKeys(state));
+  const hiddenMemberKeys = readHiddenMemberKeys(state).filter(
+    (k) => !removedKeySet.has(k),
+  );
   const hiddenMembersChip = renderHiddenMembersChip({
     hiddenMemberKeys,
     expanded: hiddenMembersExpanded ?? false,

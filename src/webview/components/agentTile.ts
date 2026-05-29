@@ -434,8 +434,9 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
 }
 
 /**
- * Build the per-tile overflow control ([⋯]) + its hide menu (E-06b / spec
- * §7.1). Returns a wrapper element appended to the tile's primary surface.
+ * Build the per-tile overflow control ([⋯]) + its hide / remove menu (E-06b
+ * hide + E-07b remove / spec §7.1 + §7.3). Returns a wrapper element appended
+ * to the tile's primary surface.
  *
  * DOM shape:
  *
@@ -445,16 +446,31 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
  *     <div class="agent-tile-overflow-menu" role="menu" hidden>
  *       <button class="agent-tile-overflow-item" role="menuitem"
  *               data-action="hide">Hide {display}</button>
+ *       <button class="agent-tile-overflow-item agent-tile-overflow-item--remove"
+ *               role="menuitem" data-action="remove">Remove from roster…</button>
+ *     </div>
+ *     <div class="agent-tile-remove-confirm" role="dialog" hidden>
+ *       … explanatory copy … [Cancel] [Remove]
  *     </div>
  *   </div>
  *
  * Interaction:
  *   - Click / Enter / Space on [⋯] toggles the menu.
- *   - Esc closes the menu and returns focus to [⋯].
- *   - Clicking "Hide {display}" posts `ui:hide-member { teamId, memberId }`
- *     (the PAIR, never the joined key) and closes the menu.
- *   - Both the [⋯] button and the menu items `stopPropagation` so the tile's
- *     drill-in click never fires for menu interactions.
+ *   - Esc closes the menu (or the confirm panel) and returns focus to [⋯].
+ *   - "Hide {display}" posts `ui:hide-member { teamId, memberId }` (the PAIR,
+ *     never the joined key) and closes.
+ *   - "Remove from roster…" (trailing … = confirm step, spec §7.3) swaps the
+ *     menu for an in-tile confirm panel explaining that remove edits the
+ *     roster (member disappears entirely — NOT even under "show hidden") and
+ *     returns only via teams.yaml. "Remove" posts
+ *     `ui:remove-member { teamId, memberId }`; "Cancel" returns to the menu.
+ *   - Both the [⋯] button and every interactive descendant `stopPropagation`
+ *     so the tile's drill-in click never fires for menu/confirm interactions.
+ *
+ * Remove vs. hide are visually + interactionally DISTINCT (spec §7.3 / E-07b):
+ * hide is a single-click reversible cull; remove is gated behind the confirm
+ * step + carries a destructive-leaning class (`--remove`) so the sponsor can't
+ * mistake one for the other.
  */
 function buildOverflowMenu(opts: {
   teamId: string;
@@ -488,22 +504,83 @@ function buildOverflowMenu(opts: {
   hideItem.dataset.action = "hide";
   hideItem.textContent = `Hide ${display}`;
 
+  // Remove menu entry — trailing ellipsis signals the confirm step (spec §7.3).
+  const removeItem = document.createElement("button");
+  removeItem.type = "button";
+  removeItem.className =
+    "agent-tile-overflow-item agent-tile-overflow-item--remove";
+  removeItem.setAttribute("role", "menuitem");
+  removeItem.dataset.action = "remove";
+  removeItem.textContent = "Remove from roster…";
+
+  // ── Confirm panel (in-tile, CSP-strict — no native modal) ───────────────
+  // Distinct surface from the menu (spec §7.3 requires a confirm step). Built
+  // up-front and toggled, so the focus + key handlers can be wired once.
+  const confirm = document.createElement("div");
+  confirm.className = "agent-tile-remove-confirm";
+  confirm.setAttribute("role", "dialog");
+  confirm.setAttribute("aria-label", `Remove ${display} from the roster?`);
+  confirm.hidden = true;
+
+  const confirmTitle = document.createElement("p");
+  confirmTitle.className = "agent-tile-remove-confirm-title";
+  confirmTitle.textContent = `Remove ${display} from the roster?`;
+  confirm.appendChild(confirmTitle);
+
+  const confirmBody = document.createElement("p");
+  confirmBody.className = "agent-tile-remove-confirm-body";
+  // Spec §7.3 copy: remove is more permanent than hide; not even under "show
+  // hidden"; restore is yaml-gated only.
+  confirmBody.textContent =
+    `${display} will no longer appear on the dashboard at all — not even ` +
+    `under “show hidden”. To bring ${display} back, re-add the member in ` +
+    `teams.yaml.`;
+  confirm.appendChild(confirmBody);
+
+  const confirmActions = document.createElement("div");
+  confirmActions.className = "agent-tile-remove-confirm-actions";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "agent-tile-remove-confirm-cancel";
+  cancelBtn.textContent = "Cancel";
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.type = "button";
+  confirmBtn.className = "agent-tile-remove-confirm-remove";
+  confirmBtn.dataset.action = "remove-confirm";
+  confirmBtn.textContent = "Remove";
+
+  confirmActions.appendChild(cancelBtn);
+  confirmActions.appendChild(confirmBtn);
+  confirm.appendChild(confirmActions);
+
   const closeMenu = (returnFocus: boolean): void => {
     menu.hidden = true;
+    confirm.hidden = true;
     btn.setAttribute("aria-expanded", "false");
     if (returnFocus) {
       btn.focus();
     }
   };
   const openMenu = (): void => {
+    confirm.hidden = true;
     menu.hidden = false;
     btn.setAttribute("aria-expanded", "true");
     hideItem.focus();
   };
+  // Swap the menu for the confirm panel (the second step of the remove flow).
+  const openConfirm = (): void => {
+    menu.hidden = true;
+    confirm.hidden = false;
+    // Focus the safe default (Cancel), not the destructive button — a stray
+    // Enter shouldn't remove the member.
+    cancelBtn.focus();
+  };
 
   btn.addEventListener("click", (ev: MouseEvent) => {
     ev.stopPropagation();
-    if (menu.hidden) {
+    if (menu.hidden && confirm.hidden) {
       openMenu();
     } else {
       closeMenu(false);
@@ -514,7 +591,7 @@ function buildOverflowMenu(opts: {
       ev.preventDefault();
       ev.stopPropagation();
       openMenu();
-    } else if (ev.key === "Escape" && !menu.hidden) {
+    } else if (ev.key === "Escape" && (!menu.hidden || !confirm.hidden)) {
       ev.preventDefault();
       ev.stopPropagation();
       closeMenu(true);
@@ -541,9 +618,56 @@ function buildOverflowMenu(opts: {
     // Enter/Space on a native <button> fire click — no extra handling needed.
   });
 
+  // Remove menu item → open the confirm panel (does NOT post yet).
+  removeItem.addEventListener("click", (ev: MouseEvent) => {
+    ev.stopPropagation();
+    openConfirm();
+  });
+  removeItem.addEventListener("keydown", (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeMenu(true);
+    }
+  });
+
+  // Cancel → back to the menu (reversible — nothing posted).
+  cancelBtn.addEventListener("click", (ev: MouseEvent) => {
+    ev.stopPropagation();
+    openMenu();
+  });
+  cancelBtn.addEventListener("keydown", (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeMenu(true);
+    }
+  });
+
+  // Confirm Remove → post ui:remove-member with the (teamId, memberId) PAIR.
+  confirmBtn.addEventListener("click", (ev: MouseEvent) => {
+    ev.stopPropagation();
+    const msg: WebviewMessage = {
+      type: "ui:remove-member",
+      // PAIR, never the joined key — host builds it via removedMemberKey().
+      payload: { teamId, memberId },
+    };
+    postMessage(msg);
+    closeMenu(true);
+  });
+  confirmBtn.addEventListener("keydown", (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeMenu(true);
+    }
+  });
+
   menu.appendChild(hideItem);
+  menu.appendChild(removeItem);
   wrapper.appendChild(btn);
   wrapper.appendChild(menu);
+  wrapper.appendChild(confirm);
   return wrapper;
 }
 
