@@ -27,7 +27,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import yaml from "js-yaml";
 
-import { rosterFileSchema } from "./schema.js";
+import { claudeTeamConfigSchema, rosterFileSchema } from "./schema.js";
 import type { MatchRule, Member, RosterLoadResult, Team } from "../../shared/types.js";
 
 interface ParseFileResult {
@@ -82,8 +82,75 @@ export function normalizeMemberColor(
 }
 
 /**
- * Parse a single teams.yaml file. Missing file → warning + empty result;
+ * Map a validated team object (from EITHER schema) onto the shared `Team` type.
+ *
+ * Both `rosterFileSchema` (legacy `teams.yaml`) and `claudeTeamConfigSchema`
+ * (new project `claudeteam.yaml`) produce structurally-compatible team/member
+ * shapes: id, name, optional description, members[] with id/display/role/
+ * optional color/match[]. The new schema ADDS optional `character` + `status`
+ * per member (absent on the legacy shape). This helper handles both — fields
+ * absent on the legacy shape come through as `undefined` and are spread only
+ * when present, preserving back-compat with the legacy roster.
+ */
+function mapValidatedTeam(
+  t: {
+    id: string;
+    name: string;
+    description?: string;
+    members: ReadonlyArray<{
+      id: string;
+      display: string;
+      role: string;
+      color?: string;
+      character?: string | null;
+      status?: "live" | "orphaned";
+      match: unknown;
+    }>;
+  },
+  warnings: string[],
+): Team {
+  return {
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    members: t.members.map((m): Member => ({
+      id: m.id,
+      display: m.display,
+      role: m.role,
+      // 86c9zq9vm (spec 86c9zmyef §2.6): validate + normalize the
+      // sponsor-supplied color to 6-digit lowercase hex with `#`. 3-digit
+      // shorthand expands; invalid formats drop the field and push a
+      // warning onto this file's warnings list (surfaced by the loader's
+      // RosterLoadResult and the M3-04 chip).
+      color: normalizeMemberColor(m.color, { teamId: t.id, memberId: m.id }, warnings),
+      // 86ca1p51e: carry the new claudeteam.yaml per-member fields through the
+      // matcher feed. Absent on the legacy teams.yaml shape (undefined) →
+      // spread-only-when-present keeps the Member back-compat (absence treated
+      // as null character / "live" status by downstream readers per types.ts).
+      ...(m.character !== undefined ? { character: m.character } : {}),
+      ...(m.status !== undefined ? { status: m.status } : {}),
+      match: m.match as unknown as MatchRule[],
+    })),
+  };
+}
+
+/**
+ * Parse a single roster file. Missing file → warning + empty result;
  * malformed YAML → error + empty result; schema rejection → error + empty.
+ *
+ * Schema selection by location (86ca1p51e):
+ *   - `"global"` → legacy `~/.claudeteam/teams.yaml` shape, validated with
+ *     `rosterFileSchema` (role required, no version field). Note: the global
+ *     path is DROPPED in the team-setup epic (Decision 1) — `loadRoster`'s
+ *     caller passes `globalPath: undefined` — but the branch is retained for
+ *     the legacy/back-compat + explicit-override paths.
+ *   - `"project"` → new project-scoped `claudeteam.yaml` shape, validated with
+ *     `claudeTeamConfigSchema` (role OPTIONAL / role-default-"", `version: 1`
+ *     discriminator, per-member `character` / `status`). This is the matcher
+ *     feed wired by main.ts:206 → watcherLoop loadRoster(undefined, project).
+ *     Validating the project file against the LEGACY `rosterFileSchema` was the
+ *     86ca1p51e defect: a wizard-default `role: ""` failed `role.min(1)` and the
+ *     ENTIRE file was dropped → zero tiles.
  */
 function parseFile(path: string | undefined, label: "global" | "project"): ParseFileResult {
   const result: ParseFileResult = { teams: null, warnings: [], errors: [] };
@@ -122,6 +189,23 @@ function parseFile(path: string | undefined, label: "global" | "project"): Parse
     return result;
   }
 
+  // Schema dispatch by location (86ca1p51e): the project file is the new
+  // `claudeteam.yaml` (role-optional, versioned); the global file is the legacy
+  // `teams.yaml` (role-required). Validating the project file against the legacy
+  // schema dropped wizard-default empty-role configs → zero tiles.
+  if (label === "project") {
+    const validated = claudeTeamConfigSchema.safeParse(parsed);
+    if (!validated.success) {
+      for (const issue of validated.error.issues) {
+        const where = issue.path.length > 0 ? issue.path.join(".") : "<root>";
+        result.errors.push(`${label} roster schema error at ${where}: ${issue.message}`);
+      }
+      return result;
+    }
+    result.teams = validated.data.teams.map((t) => mapValidatedTeam(t, result.warnings));
+    return result;
+  }
+
   const validated = rosterFileSchema.safeParse(parsed);
   if (!validated.success) {
     // Zod's error.issues has path + message — collapse to a single string per issue
@@ -142,30 +226,9 @@ function parseFile(path: string | undefined, label: "global" | "project"): Parse
   // with runtime refines for single-key + recognized-key + string value.
   // The refines guarantee the shape conforms to the MatchRule union, but
   // Zod's type inference doesn't carry the refinement into the static type.
-  // We narrow with `as` here because the runtime invariant is enforced above.
-  result.teams = validated.data.teams.map((t) => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    members: t.members.map(
-      (m): Member => ({
-        id: m.id,
-        display: m.display,
-        role: m.role,
-        // 86c9zq9vm (spec 86c9zmyef §2.6): validate + normalize the
-        // sponsor-supplied color to 6-digit lowercase hex with `#`. 3-digit
-        // shorthand expands; invalid formats drop the field and push a
-        // warning onto this file's warnings list (surfaced by the loader's
-        // RosterLoadResult and the M3-04 chip).
-        color: normalizeMemberColor(
-          m.color,
-          { teamId: t.id, memberId: m.id },
-          result.warnings,
-        ),
-        match: m.match as unknown as MatchRule[],
-      }),
-    ),
-  }));
+  // The shared `mapValidatedTeam` helper narrows with `as` because the runtime
+  // invariant is enforced above.
+  result.teams = validated.data.teams.map((t) => mapValidatedTeam(t, result.warnings));
   return result;
 }
 
@@ -258,8 +321,12 @@ function mergeRosters(
 /**
  * Load and merge the global + per-project roster YAML.
  *
- * @param globalPath  optional path to ~/.claudeteam/teams.yaml (or override)
- * @param projectPath optional path to <project>/.claude/teams.yaml
+ * @param globalPath  optional path to ~/.claudeteam/teams.yaml (legacy global,
+ *                    DROPPED per team-setup Decision 1 — caller passes undefined;
+ *                    validated with the legacy `rosterFileSchema` when present).
+ * @param projectPath optional path to <project>/.claude/claudeteam.yaml — the
+ *                    matcher feed. Validated with `claudeTeamConfigSchema`
+ *                    (role-optional, versioned) per 86ca1p51e.
  * @returns RosterLoadResult with merged roster, accumulated warnings, errors.
  *
  * Both args optional → returns `{ roster: [], warnings: ["no roster paths provided"], errors: [] }`.

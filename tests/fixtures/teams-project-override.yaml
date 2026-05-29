@@ -1,6 +1,11 @@
-# Per-project teams.yaml — overrides member rules from the global file.
+# Per-project claudeteam.yaml — overrides member rules from the global file.
 # Pair with teams-valid.yaml (used as the global) for the
 # project-override loader test.
+#
+# 86ca1p51e: the project path is now validated with `claudeTeamConfigSchema`,
+# which requires the `version: 1` discriminator. This fixture carries it so the
+# legacy merge-semantics test still exercises the loader's project-override path
+# against the current project schema.
 #
 # Override semantics tested:
 #   - team "claudeteam-alpha" exists in both files.
@@ -9,6 +14,7 @@
 #   - member "iris" is project-only — appended at the end of alpha.members.
 #   - global "maya" and "bram" stay intact (no project entry by id).
 #   - "claudeteam-gamma" is a project-only team — appended after global teams.
+version: 1
 teams:
   - id: claudeteam-alpha
     name: "ClaudeTeam Alpha (project)"

@@ -203,7 +203,9 @@ describe("loadRoster", () => {
     it("loads project only when global is missing (no error)", () => {
       const projectPath = writeTemp(
         "project.yaml",
-        `teams:
+        // 86ca1p51e: project path validates with claudeTeamConfigSchema → needs `version: 1`.
+        `version: 1
+teams:
   - id: project-only
     name: Project Only
     members:
@@ -223,7 +225,9 @@ describe("loadRoster", () => {
     it("treats undefined global as no-op (no warning, no error)", () => {
       const projectPath = writeTemp(
         "project.yaml",
-        `teams:
+        // 86ca1p51e: project path validates with claudeTeamConfigSchema → needs `version: 1`.
+        `version: 1
+teams:
   - id: project-only
     name: Project Only
     members:
