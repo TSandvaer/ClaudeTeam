@@ -10,9 +10,18 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
-## Current state — 2026-05-28 ~22:00 UTC (drain+save — building M01+F01 new idle-pose pool; 5/8 done; full-team SHIPPED; epic filed)
+## Current state — 2026-05-29 ~08:05 UTC (AWAY-MODE; Epic 86ca11187 Wave 0 in flight; M01+F01 poses DONE+harvested)
 
-**Resume next-action:** Building a larger idle-pose pool on BOTH M01 (`7282cc3d-f822-492c-a790-08b3b5d2b27e`) and F01 (`f8f5708f-1364-4908-838a-4ab200cb0aff`), 8 new poses approved by sponsor, gating EVERY render via AskUserQuestion (sponsor clicks approve/reject — one render at a time, no batching ahead). **On resume: gate the F01 idle_yawn MOTION** (state `8c7222d2-a503-4037-96b5-edad8cf5ff4c`, gesture was rendering at save) — sponsor views in PixelLab UI. Then continue the remaining poses.
+**Resume next-action:** Away-mode active (cron `dfa42db3`, 15m tick). EPIC 86ca11187 Wave 0 IN FLIGHT (dispatched ~08:05 UTC, expect PRs ~08:20–08:35):
+- **Felix → E-01** `86ca18b9p` roster baseline tiles · agentId `ab8c51b4902149e31` · branch `felix/86ca18b9p-roster-baseline-tiles`. Introduces NEW `AgentState` literal `"available"` (the vocabulary E-05 consumes).
+- **Maya → E-02** `86ca18bc2` session-title prominence · agentId `a0d8b25677c8670ae` · branch `maya/86ca18bc2-title-prominence`.
+On their PRs: Felix↔Maya cross-review (E-01→Maya, E-02→Felix), green CI, then admin-merge + ticket→complete. THEN Wave 1 (E-04 sprites + E-05 baseline skin + E-06 hide) — E-05 needs E-01 MERGED first (consumes `"available"`).
+
+**Still to do (away-mode):** merge open PR #110 (Nora backlog — STATE.md conflict vs #109; rebase nora branch / take-both); create remaining epic tickets E-04..E-09 on board (E-03 done via #109) as waves approach.
+
+**SHIPPED this session:** idle-debounce 10s→60s (#111 / `86ca168j9`); settings gear (#112 / `86ca16r2d`); Iris epic design spec (#109); M01+F01 full 15-pose set harvested+committed+pushed (`51c2564`) + canonical `animations.json` naming (idle_* / active_work / active_read). NITs follow-up `86ca16gb7` (to do). PixelLab stray `70e39b6d` for sponsor to delete in UI (optional).
+
+**QUEUED for sponsor (return):** GUI test once Wave 0/1 yields an installable `.vsix` rendering the always-visible roster + persona tiles (sub-agent GUI gap — only sponsor visually confirms). E-08 DEAD-toggle defaulted OUT/deferred. Two unbuilt code improvements on main (idle-60s + gear) need a rebuild+reinstall to see — batch with epic.
 
 **New idle-pose progress (state UUIDs; NONE harvested to disk yet — PixelLab only):**
 - idle_think — DONE both: M01 `ec0293a9-e3e9-4545-8e21-b11391ac1d23`, F01 `32b6afd4-d669-439f-b003-766cd6d96e02` (F01's was best; M01 re-rolled to hand-glued-to-chin)

@@ -177,7 +177,7 @@ the head stays bowed down looking at the book the entire time and does a full ev
 
 ## Naming convention (canonical — sponsor-locked 2026-05-29)
 
-Two prefixed namespaces, no bare names. The webview trigger map keys on these canonical `animation_name`s.
+Two prefixed namespaces, no bare names. The webview trigger map keys on these canonical names via the per-character `animations.json` manifest (see below — PixelLab does NOT export the semantic name).
 
 | Anim | Webview-side trigger |
 |---|---|
@@ -186,9 +186,13 @@ Two prefixed namespaces, no bare names. The webview trigger map keys on these ca
 | `active_work` | Tool use where `tool != Read` (was `working`) |
 | `active_read` | Tool use where `tool == Read` (was `reading`) |
 
-⚠️ **Harvest-time rename normalization.** Early M01/F01 anims were generated on PixelLab with the legacy names `idle`, `working`, `reading`. The `animation_name` is baked into PixelLab at generation time and renaming there would cost re-gens (and risk re-rolling the hard-won `reading` anim). Instead, **normalize on disk at harvest** — after unzipping, rename the legacy folders + their `metadata.json` `animation_name` keys: `idle → idle_coffee`, `working → active_work`, `reading → active_read`. The PixelLab-side names may stay legacy; the harvested/committed artifacts are the canonical source the webview reads, so normalize there. All NEW characters (M02-M05, F02-F05) should be generated with the canonical names directly so no rename is needed.
+⚠️ **PixelLab does NOT export the semantic `animation_name` — author an `animations.json` manifest (validated 2026-05-29 harvest).** The harvested `metadata.json` keys each state's animation by an auto-generated *action-description slug + hash* (e.g. `the_raised_open_hand_sways_gently_side_to_side_in-38411c09`), and the state folders are description-slugs (`standing_upright_wit`, `holding_a_coffee_cup`) — the `animation_name` you pass to `animate_character` (`idle_wave`, etc.) is NOT in the export anywhere. So the canonical naming cannot be "baked at generation" and cannot be normalized via metadata keys (there are none). Instead, **commit a hand-authored `assets/sprites/<Char>/animations.json` mapping canonical name → folder** (see `ClaudeTeam-M01-Dev/animations.json`): `{ "animations": { "idle_coffee": "holding_a_coffee_cup", "active_work": "sitting_at_a_desk_fa", ... }, "idle_pool": [...], ... }`. The webview trigger map reads THIS file, not `metadata.json`.
 
-PixelLab unpacks the ZIP with UUID-mangled folder names (e.g. `raises_an_open_book_up_to_chest_height_with_both_h-30cee282`). The `animation_name` (the canonical name above, post-normalization) is the semantic anchor — use the ZIP's root `metadata.json` for the authoritative `animation_name → folder_name` map when wiring webview rendering (see RandomGame's `pixellab-pipeline.md § Folder-rename + reverse-map` for the convention).
+- Do **NOT** rename the harvest folders to canonical names: it forces a re-rename on every future harvest/re-roll (PixelLab always re-exports slug folders) + large git churn. The manifest decouples cleanly and is re-harvest-safe. (Sponsor-confirmed 2026-05-29.)
+- For NEW characters (M02-M05, F02-F05): author `animations.json` the same way after harvest — PixelLab won't carry the semantic names regardless of what you pass to `animate_character`.
+- Map folder→canonical by the state UUID (recorded at create-state time) cross-checked against the metadata animation action-slug; prune any 0-anim `(copy)`/stray state's folder before commit.
+
+PixelLab unpacks the ZIP with description-slug folder names. For the authoritative canonical map use the committed `animations.json` (above); `metadata.json` remains useful for frame paths + provenance only (see RandomGame's `pixellab-pipeline.md § Folder-rename + reverse-map` for the general convention this supersedes for ClaudeTeam personas).
 
 ---
 
