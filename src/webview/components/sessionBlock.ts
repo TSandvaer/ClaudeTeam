@@ -100,6 +100,12 @@ export interface SessionBlockProps {
    */
   autoCollapseUniformClusters?: boolean;
   /**
+   * 86ca1ej5c — expand-by-default for multi-agent persona tiles (repurposed
+   * `collapsePersonaTiles` flag, spec §6 Q4). Threaded down to teamCard →
+   * multiAgentPersonaTile. Optional; defaults to false (collapsed).
+   */
+  expandPersonaTiles?: boolean;
+  /**
    * 86c9zqa75 — mirror of `state.config?.hideIdleAgents` threaded down to
    * teamCard so each team can decide whether to render the per-team "N idle
    * hidden — show" passive informational row. Optional / defaults to false
@@ -130,6 +136,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
     prevStateTracker,
     expandedGroupsTracker,
     autoCollapseUniformClusters,
+    expandPersonaTiles,
     hideIdle,
     hiddenIdleCount,
     nowMs,
@@ -242,6 +249,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
         ...(autoCollapseUniformClusters !== undefined
           ? { autoCollapseUniformClusters }
           : {}),
+        ...(expandPersonaTiles !== undefined ? { expandPersonaTiles } : {}),
         ...(hideIdle !== undefined ? { hideIdle } : {}),
         ...(hiddenIdleCount !== undefined ? { hiddenIdleCount } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),

@@ -31,6 +31,7 @@ import {
   renderCollapsedPersonaTile,
   isCollapsedPersonaGroup,
 } from "./collapsedPersonaTile.js";
+import { renderMultiAgentPersonaTile } from "./multiAgentPersonaTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
@@ -95,6 +96,15 @@ export interface TeamCardProps {
    */
   autoCollapseUniformClusters?: boolean;
   /**
+   * 86ca1ej5c — expand-by-default for `MultiAgentPersonaTile`s (the repurposed
+   * `claudeteam.collapsePersonaTiles` flag, spec §5.3 / §6 Q4:
+   * `collapsePersonaTiles=false` → expand multi-agent instance lists by
+   * default). Threaded through to `renderMultiAgentPersonaTile`. Bare tiles +
+   * legacy `CollapsedPersonaGroup` wrappers ignore it. Optional; defaults to
+   * `false` (collapsed — option A's "one clean tile per member" resting view).
+   */
+  expandPersonaTiles?: boolean;
+  /**
    * 86c9zqa75 — when true AND `hiddenIdleCount > 0`, the team card renders
    * a per-team "N idle hidden — show" passive row at the END of its tile
    * list (spec 86c9zmyef §3.4 Option A+B). The row's click fires the same
@@ -136,6 +146,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
     prevStateTracker,
     expandedGroupsTracker,
     autoCollapseUniformClusters,
+    expandPersonaTiles,
     hideIdle,
     hiddenIdleCount,
     nowMs,
@@ -170,40 +181,36 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
   const now = nowMs ?? Date.now();
   for (const entry of tiles) {
     if (isMultiAgentPersonaTile(entry)) {
-      // 86ca1dtr5 — the host now emits a MultiAgentPersonaTile for rostered
-      // members with N≥2 live agents. The dedicated single-tile + ×N badge +
-      // expand renderer is Maya's webview scope (Phase 2b,
-      // `multiAgentPersonaTile.ts`). Until that lands this interim branch
-      // flattens the wrapper to its per-instance bare tiles so NO data is
-      // dropped from the dashboard (every agent still renders, drill-in still
-      // works). Maya's PR replaces this block with `renderMultiAgentPersonaTile`.
-      for (const inst of entry.instances) {
-        const instFinishedAtMs =
-          inst.state === "finished" && finishedTracker
-            ? finishedTracker.observe(sessionId, inst.agentId, now)
-            : undefined;
-        const instPrevState = prevStateTracker?.previous(
+      // 86ca1ej5c — a rostered member with N≥2 live agents renders as ONE
+      // persona tile (option A) via `renderMultiAgentPersonaTile`: persona
+      // sprite (pose from aggregateState), name, role, headline activity/model,
+      // a `×N` badge that doubles as the expand toggle, and an inline instance
+      // list (rows keyed by agentId, drill-in per instance sessionId). The host
+      // owns the aggregate + headline + instance ordering; this is pure skin.
+      //
+      // The finished/prevState trackers are NOT threaded into the instance
+      // rows here — instance rows are sprite-less compact rows that don't carry
+      // the M4-05 transition flash or the freshness double-clock; the host
+      // already humanizes finished elapsed in `instance.activity` (86c9zfmhp).
+      // The finishedTracker IS threaded so the no-timestamp diagnostic suffix
+      // still works. The expansion key is memberId (spec §3.3), persisted via
+      // expandedGroupsTracker so a poll-tick re-render doesn't snap it shut.
+      card.appendChild(
+        renderMultiAgentPersonaTile({
+          tile: entry,
           sessionId,
-          inst.agentId,
-        );
-        card.appendChild(
-          renderAgentTile({
-            tile: inst,
-            sessionId,
-            postMessage,
-            ...(instFinishedAtMs !== undefined
-              ? { finishedAtMs: instFinishedAtMs }
-              : {}),
-            ...(instPrevState !== undefined ? { prevState: instPrevState } : {}),
-            ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
-            ...(spriteTracker ? { spriteTracker } : {}),
-            nowMs: now,
-          }),
-        );
-        if (prevStateTracker) {
-          prevStateTracker.record(sessionId, inst.agentId, inst.state);
-        }
-      }
+          teamId: team.id,
+          postMessage,
+          ...(expandPersonaTiles !== undefined
+            ? { expandByDefault: expandPersonaTiles }
+            : {}),
+          ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
+          ...(finishedTracker ? { finishedTracker } : {}),
+          ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+          ...(spriteTracker ? { spriteTracker } : {}),
+          nowMs: now,
+        }),
+      );
       continue;
     }
     if (isCollapsedPersonaGroup(entry)) {

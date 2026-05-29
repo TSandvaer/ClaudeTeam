@@ -635,6 +635,122 @@ body {
   display: none;
 }
 
+/* ===========================================================================
+ * Multi-agent persona tile — 86ca1ej5c (spec multiagent-persona-tile-spec.md
+ * §1, §2, §3). A rostered member with N≥2 live agents renders as ONE persona
+ * tile (option A) with the SAME chrome as the single tile — `.agent-tile`
+ * styling above applies verbatim — plus a `×N` count badge that doubles as the
+ * expand toggle and an inline `.persona-instances` list. The tile is gated by
+ * `data-count` (present + ≥2). All theme-aware; no hardcoded hex.
+ * =========================================================================== */
+
+/* ×N count badge — net-new chrome on the name row (spec §1.3). A real <button>
+ * (expand toggle) styled as a small muted pill. Carries COUNT, not state — the
+ * state dot already carries state, so the badge intentionally uses muted fg
+ * (not a state color) to keep count + state on separate visual channels. */
+.persona-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ct-space-xs);
+  margin-left: var(--ct-space-xs);
+  padding: 0 var(--ct-space-xs);
+  background-color: transparent;
+  border: 0;
+  border-radius: var(--ct-radius-chip);
+  color: var(--ct-color-fg-muted);
+  /* One step below the display name (which is the default body size at
+   * weight 600) — the badge is secondary chrome. */
+  font: inherit;
+  font-size: smaller;
+  cursor: pointer;
+  outline: 0 solid transparent;
+}
+
+.persona-count-badge:hover {
+  background-color: var(--ct-color-bg-hover);
+}
+
+.persona-count-badge:focus-visible {
+  outline: 1px solid var(--ct-color-focus);
+}
+
+.persona-count-chevron {
+  display: inline-block;
+  flex-shrink: 0;
+  color: var(--ct-color-fg-muted);
+}
+
+/* Row-4 "(N agents)" count hint — quiet multiplicity legibility before expand
+ * + for SR users skimming row 4 (spec §1.2 row-4). Muted, follows the model. */
+.persona-count-hint {
+  margin-left: var(--ct-space-xs);
+  color: var(--ct-color-fg-muted);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: smaller;
+}
+
+/* Inline instance list — grows the tile downward when expanded (spec §3.1).
+ * Indent matches the tile-row content indent (state-dot + gap) so rows line up
+ * under the persona name. `display:flex` here means the [hidden] guard below is
+ * MANDATORY — author display beats the UA `[hidden] { display:none }`, so
+ * `el.hidden = true` alone renders OPEN without it (jsdom can't catch this; the
+ * source-derived guard test does). */
+.persona-instances {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  padding-left: calc(var(--ct-state-dot-size) + var(--ct-state-dot-gap));
+  /* Height transition on expand/collapse — calm, no flash (spec §3.4). The
+   * height itself is content-driven (no fixed max-height to animate cleanly in
+   * pure CSS without measurement), so this transitions opacity for a soft
+   * reveal; the row reflow below it is the deliberate user action (spec §3.1). */
+  transition: opacity var(--ct-duration-state-transition) ease-out;
+}
+
+/* MANDATORY [hidden] guard — see .persona-instances comment above + the
+ * convention doc § "[hidden]-toggled flex/grid popovers need an explicit
+ * guard". Mirrors `.collapsed-persona-instances[hidden]` /
+ * `.agent-tile-overflow-menu[hidden]` / `.ct-hidden-members-list[hidden]`. */
+.persona-instances[hidden] {
+  display: none;
+}
+
+/* One compact instance row — sprite-less (spec §3.2: the sprite belongs to the
+ * persona tile, not per instance). Single horizontal flex line: state dot +
+ * short id + activity. Reuses the shared `.state-dot[data-state]` colors. */
+.persona-instance-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-state-dot-gap);
+  padding: var(--ct-space-xs) var(--ct-space-s);
+  border-radius: var(--ct-radius-tile);
+  cursor: pointer;
+  outline: 0 solid transparent;
+}
+
+.persona-instance-row:hover,
+.persona-instance-row:focus-visible {
+  background-color: var(--ct-color-bg-hover);
+  outline: 1px solid var(--ct-color-focus);
+}
+
+.persona-instance-id {
+  flex-shrink: 0;
+  color: var(--ct-color-fg-muted);
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.persona-instance-activity {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ct-color-fg);
+  font-family: var(--vscode-editor-font-family, monospace);
+  /* Truncate at the tile width with an ellipsis (spec §3.2). */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ---------------------------------------------------------------------------
  * Uniform-cluster polish (86c9zmqa8)
  *
