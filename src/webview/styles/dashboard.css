@@ -966,6 +966,17 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
 }
 
+/* The `display: flex` above is an author-stylesheet rule and therefore wins
+ * over the UA `[hidden] { display: none }` rule (author beats UA). Without
+ * this explicit guard the menu renders OPEN on initial load even though the
+ * DOM sets `menu.hidden = true`. Same default-collapsed bug class that shipped
+ * for `.agent-tile-remove-confirm` (86ca1d76j) — guarding both. Mirrors the
+ * established `.collapsed-persona-instances[hidden]` / `.chip-detail-list[hidden]`
+ * pattern. */
+.agent-tile-overflow-menu[hidden] {
+  display: none;
+}
+
 .agent-tile-overflow-item {
   text-align: left;
   padding: 6px 12px;
@@ -1014,6 +1025,15 @@ body {
   border-radius: var(--ct-radius-chip);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
   color: var(--vscode-menu-foreground, var(--ct-color-fg));
+}
+
+/* THE BUG (86ca1d76j): the `display: flex` above is an author-stylesheet rule
+ * that overrides the UA `[hidden] { display: none }` default, so every tile's
+ * confirm panel rendered OPEN on initial load / after reload despite the DOM
+ * setting `confirm.hidden = true`. This explicit guard restores collapse-by-
+ * default. Mirrors `.collapsed-persona-instances[hidden]`. */
+.agent-tile-remove-confirm[hidden] {
+  display: none;
 }
 
 .agent-tile-remove-confirm-title {
@@ -1118,6 +1138,16 @@ body {
   flex-direction: column;
   gap: var(--ct-space-xs);
   padding-left: var(--ct-space-s);
+}
+
+/* Same bug class as `.agent-tile-remove-confirm[hidden]` (86ca1d76j): the
+ * `display: flex` above is an author-stylesheet rule that overrides the UA
+ * `[hidden] { display: none }` default, so the show-hidden reveal list would
+ * render OPEN on initial load (`hiddenMembersChip.ts` defaults `expanded =
+ * false` → `list.hidden = true`). The guard restores the collapsed default.
+ * Mirrors `.collapsed-persona-instances[hidden]` / `.chip-detail-list[hidden]`. */
+.ct-hidden-members-list[hidden] {
+  display: none;
 }
 
 /* Revealed-hidden rows render at the spec §8.2 dimmed opacity so they read as

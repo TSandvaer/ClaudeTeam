@@ -25,6 +25,9 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { renderAgentTile } from "../../../src/webview/components/agentTile.js";
 import { renderFull } from "../../../src/webview/render.js";
 import type { WebviewMessage } from "../../../src/shared/messages.js";
@@ -232,6 +235,154 @@ describe("agentTile remove affordance — ui:remove-member (spec §7.3)", () => 
   });
 });
 
+// ===========================================================================
+// 86ca1d76j REGRESSION — default-collapsed state on INITIAL render
+//
+// Bug class (sponsor GUI test 2026-05-29): every tile's confirm panel rendered
+// OPEN on initial load — Cancel/Remove visible without any click. Root cause:
+// the `.agent-tile-remove-confirm` / `.agent-tile-overflow-menu` CSS rules set
+// `display: flex` (an author-stylesheet rule) which OVERRIDES the UA
+// `[hidden] { display: none }` default, so `confirm.hidden = true` in the DOM
+// had no visual effect. The pre-existing tests only checked POST-click
+// behavior + the `.hidden` *property* (always true in the DOM) — neither
+// catches an author-CSS rule that defeats the attribute. These two assertion
+// styles together catch the CLASS:
+//   (1) JS-level: at INITIAL render (no click), the affordance is present but
+//       the menu + confirm are `hidden` — guards against a future JS default
+//       regression.
+//   (2) CSS-level: dashboard.css carries an explicit `[hidden] { display:none }`
+//       guard for EVERY flex/grid-display popover affordance — guards against
+//       the actual shipped bug (a flex container without the guard).
+// ===========================================================================
+
+describe("86ca1d76j — confirm panel + menu are COLLAPSED on initial render", () => {
+  it("initial render shows the Remove affordance but NOT the confirm panel", () => {
+    const el = renderAgentTile({
+      tile: makeTile(),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    // The Remove affordance (kebab + menu entry) is present in the DOM…
+    expect(
+      el.querySelector(".agent-tile-overflow-btn"),
+    ).not.toBeNull();
+    expect(
+      el.querySelector(".agent-tile-overflow-item[data-action='remove']"),
+    ).not.toBeNull();
+    // …but BOTH popovers are hidden — nothing is opened without a click.
+    const menu = el.querySelector<HTMLElement>(".agent-tile-overflow-menu")!;
+    const confirm = el.querySelector<HTMLElement>(".agent-tile-remove-confirm")!;
+    expect(menu.hidden).toBe(true);
+    expect(confirm.hidden).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Class-coverage guard (86ca1d76j blocker 2 — DERIVED, not allowlisted).
+  //
+  // The bug class: an element that the webview toggles via the `hidden`
+  // attribute (`el.hidden = ...`) AND whose class carries `display: flex|grid`
+  // in dashboard.css renders OPEN on initial load, because the author
+  // `display` rule wins over the UA `[hidden] { display: none }` default. The
+  // fix is a paired `<class>[hidden] { display: none }` guard.
+  //
+  // The previous test was a hardcoded two-selector allowlist whose docstring
+  // claimed it covered "EVERY flex/grid popover" — which is exactly why
+  // `.ct-hidden-members-list` (the third instance) sailed through green CI.
+  // This version DERIVES the set from source so a new unguarded popover fails
+  // the test automatically:
+  //   1. Scan src/webview/components/** for every variable that is
+  //      `hidden`-toggled (`<var>.hidden = ...`) and resolve its
+  //      `<var>.className = "..."` assignment → the toggled class set.
+  //   2. For each toggled class, look up its rule block in dashboard.css. If
+  //      the block declares `display: flex|grid` (i.e. it CAN defeat the UA
+  //      `[hidden]` default), assert a matching `[hidden] { display: none }`
+  //      guard exists.
+  // Classes toggled but laid out as inline/block (e.g. `.ct-header-chip-count`,
+  // an inline span) are excluded by construction — the UA `[hidden]` works for
+  // them, so no guard is required.
+  // -------------------------------------------------------------------------
+
+  /** Resolve toggled classes from the webview component sources. */
+  function deriveHiddenToggledClasses(componentsDir: string): Set<string> {
+    const classes = new Set<string>();
+    const files = readdirSync(componentsDir).filter((f) => f.endsWith(".ts"));
+    for (const file of files) {
+      const src = readFileSync(join(componentsDir, file), "utf8");
+      // Variables that get the `hidden` attribute toggled.
+      const toggled = new Set<string>();
+      for (const m of src.matchAll(/(\w+)\.hidden\s*=/g)) {
+        toggled.add(m[1]);
+      }
+      // Map each toggled variable to its className assignment in the same file.
+      for (const v of toggled) {
+        const re = new RegExp(`\\b${v}\\.className\\s*=\\s*"([^"]+)"`);
+        const m = src.match(re);
+        if (m) {
+          // className may be space-separated; the first token is the rule key
+          // we toggle hidden on (the others are modifiers).
+          classes.add(m[1].split(/\s+/)[0]);
+        }
+      }
+    }
+    return classes;
+  }
+
+  it("dashboard.css guards every hidden-toggled flex/grid popover with a [hidden] override (derived from source)", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const root = join(here, "..", "..", "..");
+    const css = readFileSync(
+      join(root, "src", "webview", "styles", "dashboard.css"),
+      "utf8",
+    );
+    // Strip comments + collapse whitespace so the assertions are formatting-
+    // tolerant (a reformat of the rule body shouldn't break the test).
+    const normalized = css
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/\s+/g, " ");
+
+    const toggledClasses = deriveHiddenToggledClasses(
+      join(root, "src", "webview", "components"),
+    );
+
+    // Sanity: derivation found something (guards the test against a refactor
+    // that silently empties the set → vacuous pass).
+    expect(toggledClasses.size).toBeGreaterThan(0);
+
+    // The classes whose CSS rule declares display:flex|grid — only THESE need
+    // the guard. Built by reading each toggled class's rule block.
+    const flexGridToggled = [...toggledClasses].filter((cls) => {
+      const ruleBody = new RegExp(
+        `\\.${cls}\\s*\\{([^}]*)\\}`,
+      ).exec(normalized);
+      return (
+        ruleBody != null && /display:\s*(flex|grid)\b/.test(ruleBody[1])
+      );
+    });
+
+    // Sanity: at least the three known popovers are in scope (regression
+    // anchor — if this drops to 0 the derivation broke).
+    expect(flexGridToggled).toEqual(
+      expect.arrayContaining([
+        "agent-tile-overflow-menu",
+        "agent-tile-remove-confirm",
+        "ct-hidden-members-list",
+      ]),
+    );
+
+    for (const cls of flexGridToggled) {
+      const guard = new RegExp(
+        `\\.${cls}\\[hidden\\]\\s*\\{\\s*display:\\s*none`,
+      );
+      expect(
+        guard.test(normalized),
+        `.${cls} is hidden-toggled with display:flex|grid but has no ` +
+          `.${cls}[hidden] { display: none } guard in dashboard.css — ` +
+          `the hidden attribute will be silently defeated (the shipped bug class).`,
+      ).toBe(true);
+    }
+  });
+});
+
 describe("agentTile remove affordance renders across every state", () => {
   for (const state of [
     "running",
@@ -251,6 +402,40 @@ describe("agentTile remove affordance renders across every state", () => {
       ).not.toBeNull();
     });
   }
+});
+
+// ===========================================================================
+// 86ca1d76j AC4 — `model:?` sentinel renders no model row (clean placeholder)
+//
+// Available / never-run members (Iris/Nora/Bram in the sponsor screenshot)
+// carry `model: "model:?"` from the reducer baseline. The raw `model:?` reads
+// as noise on the tile; hide the row entirely (same treatment as the `tool:?`
+// activity sentinel). Finished members carry a real model and render unchanged.
+// ===========================================================================
+
+describe("86ca1d76j AC4 — model row omitted for the model:? sentinel", () => {
+  it("omits the model row when tile.model is the 'model:?' sentinel", () => {
+    const el = renderAgentTile({
+      tile: makeTile({ state: "available", model: "model:?" }),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    expect(el.querySelector(".tile-row--model")).toBeNull();
+    expect(el.querySelector(".agent-model")).toBeNull();
+    // No `?` placeholder leaks anywhere in the tile text.
+    expect(el.textContent).not.toContain("model:?");
+  });
+
+  it("renders the model row normally for a resolved model (finished member)", () => {
+    const el = renderAgentTile({
+      tile: makeTile({ state: "finished", model: "claude-opus-4-8" }),
+      sessionId: "sess-1",
+      postMessage: vi.fn(),
+    });
+    const modelSpan = el.querySelector<HTMLElement>(".agent-model");
+    expect(modelSpan).not.toBeNull();
+    expect(modelSpan!.textContent).toBe("claude-opus-4-8");
+  });
 });
 
 // ===========================================================================

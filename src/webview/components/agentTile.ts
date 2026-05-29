@@ -373,9 +373,24 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   }
 
   // Row 4 — model.
-  article.appendChild(
-    buildRow("tile-row--model", "agent-model", tile.model),
-  );
+  //
+  // 86ca1d76j (AC4): hide the model row entirely when the host emits the
+  // `"model:?"` sentinel (no resolved model — available/never-run baseline
+  // members like Iris/Nora/Bram, or a live agent whose first assistant
+  // message hasn't landed yet). Sponsor dogfood observation: `model:?` reads
+  // as noise rather than information; the tile is more honest with the row
+  // absent than with a `?` placeholder. Same treatment + rationale as the
+  // `tool:?` activity sentinel above (86ca03ym7). Finished members carry a
+  // real model (`claude-opus-4-8`) and render the row unchanged.
+  //
+  // The wire-shape `tile.model` stays the host's source of truth (CLI
+  // presenter / diagnostic panel still receive the raw sentinel); only the
+  // dashboard renders the visual absence. OOS: changing `resolveModel`.
+  if (tile.model !== "model:?") {
+    article.appendChild(
+      buildRow("tile-row--model", "agent-model", tile.model),
+    );
+  }
 
   // ── Overflow affordance ([⋯]) — hide-agent menu (E-06b / spec §7.1) ──────
   // A trailing kebab button revealed on tile hover OR keyboard focus (CSS
