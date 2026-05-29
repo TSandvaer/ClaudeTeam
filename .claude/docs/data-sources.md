@@ -211,6 +211,12 @@ A subagent is `finished` if (any of):
 
 Otherwise → `idle` (PID alive but JSONL stale > threshold). **Threshold = `IDLE_THRESHOLD_MS` at `src/extension/state/reducer.ts:333`, being raised 10s→60s (ticket `86ca168j9`, pending merge) so normal generation gaps don't false-flag a working agent as idle — see the flush-cadence ⚠️ note above.**
 
+### `available` — the roster-baseline state (NOT filesystem-derived) (86ca18b9p)
+
+`AgentState` has a fifth literal, `"available"`, added by the whole-team-always-visible epic (86ca11187). Unlike the four states above, `available` is **NOT inferred from any on-disk signal** — it is the *absence* of a detected agent. The reducer (`buildAgentTree`) seeds a baseline `available` `AgentTile` for every `teams.yaml` roster member that has NO matched/detected agent in a given session, so a never-run team member always renders a tile. A live detection overlays one of the four filesystem-derived states and wins the slot (no duplicate per `memberId`). Baseline tiles carry `agentId: ""`, `toolUseId: null`, `model: "model:?"`, `activity: "available"`.
+
+**Filter interaction (load-bearing):** `available` is a distinct state from `idle`, so the post-reducer `hideIdleFilter` / `hideFinishedFilter` (`src/extension/state/hide*Filter.ts`) — which drop tiles by `state === "idle"` / `state === "finished"` — do NOT suppress `available` baselines. A team card whose only live tile was finished-and-hidden therefore still renders its remaining available baselines instead of disappearing for going empty. E-05 consumes `"available"` for the never-run visual treatment.
+
 ### Finished timestamp source (86c9yxv94)
 
 The `tool_result` record's **top-level `timestamp` field** (ISO-8601 string, parseable via `Date.parse`) is the authoritative `finishedAtMs` for elapsed-time rendering on the finished tile. The reducer's input is `FinishedMap = Map<agentId, finishedAtMs>` (was `Set<string>` before 86c9yxv94); `buildActivity` uses the value to emit `"finished Xs"` when the timestamp is supplied and falls back to bare `"finished"` when omitted. Unparseable timestamps produce a `0` sentinel from the parser — `buildActivity`'s gate is `!== undefined`, so a `0` sentinel renders a very large elapsed value (diagnostic shape; production JSONL timestamps are always parseable).

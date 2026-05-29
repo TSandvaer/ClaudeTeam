@@ -85,6 +85,11 @@ const STATE_LABEL: Record<AgentState, string> = {
   idle: "Idle",
   finished: "Finished",
   error: "Error",
+  // Roster-baseline never-run member (86ca18b9p). Label only — never-run
+  // visual treatment is E-05's scope. Baseline tiles are always N=1, so they
+  // never form a CollapsedPersonaGroup; this entry exists for type
+  // completeness only.
+  available: "Available",
 };
 
 /**

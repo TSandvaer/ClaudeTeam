@@ -89,6 +89,28 @@ function findTile(
   return undefined;
 }
 
+/**
+ * 86ca18b9p helper: assert that every rostered tile across all of a session's
+ * teams is an `available` baseline (i.e. no agent was detected/matched into a
+ * live state). Used by negative-path tests where the only live agents are
+ * unrostered (background) — the roster members still seed baselines, so the
+ * old "teamOrder is empty" assertion no longer holds; the new invariant is
+ * "all rostered tiles are baselines."
+ */
+function expectAllRosteredAvailable(session: {
+  teamOrder: string[];
+  rosterTiles: Map<string, RosterTileEntry[]>;
+}): void {
+  for (const teamId of session.teamOrder) {
+    const entries = session.rosterTiles.get(teamId) ?? [];
+    for (const entry of entries) {
+      // Baseline tiles are always N=1 bare AgentTiles — never grouped.
+      expect(isCollapsedPersonaGroup(entry)).toBe(false);
+      expect((entry as AgentTile).state).toBe("available");
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Shared constants
 // ---------------------------------------------------------------------------
@@ -416,13 +438,25 @@ describe("AC2.3: subagent spawns (new meta.json + .jsonl → reducer adds it)", 
 
   afterEach(() => cleanup());
 
-  it("no subagent meta → session has no rostered tiles", async () => {
+  it("no subagent meta → session shows full-roster baseline tiles (86ca18b9p)", async () => {
     const { roster } = loadRoster(rosterPath);
     const { sessions, agentData, activities, finishedIds } = await collectFromTempdir(root);
     const tree = buildAgentTree(sessions, agentData, activities, finishedIds, roster, NOW_MS);
 
     const s = tree.sessions[0]!;
-    expect(s.teamOrder).toHaveLength(0);
+    // Post-86ca18b9p: with no detected agents, every roster member is seeded
+    // as an `available` baseline. teams-valid.yaml has alpha (felix/maya/bram)
+    // + beta (sage), so both team cards render with all-available tiles.
+    expect(s.teamOrder).toEqual(["claudeteam-alpha", "claudeteam-beta"]);
+    const alpha = s.rosterTiles.get("claudeteam-alpha") ?? [];
+    const beta = s.rosterTiles.get("claudeteam-beta") ?? [];
+    expect(alpha).toHaveLength(3); // felix, maya, bram
+    expect(beta).toHaveLength(1); // sage
+    for (const entry of [...alpha, ...beta]) {
+      const tile = entry as { state: string; activity: string };
+      expect(tile.state).toBe("available");
+      expect(tile.activity).toBe("available");
+    }
     expect(s.background).toHaveLength(0);
   });
 
@@ -814,14 +848,20 @@ describe("AC2.5: two sessions sharing the same cwd → both materialize separate
     expect(sA).toBeDefined();
     expect(sC).toBeDefined();
 
-    // SESSION_A has felix rostered; SESSION_C has a background agent.
+    // SESSION_A detected felix (running); SESSION_C has a background agent.
     const aAlpha = sA.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(findTile(aAlpha, "felix")).toBeDefined();
+    const aFelix = findTile(aAlpha, "felix");
+    expect(aFelix).toBeDefined();
+    expect(aFelix!.state).not.toBe("available"); // detected, live
     expect(sC.background.some((b) => b.agentType === "general-purpose")).toBe(true);
 
-    // Negative path: SESSION_C must NOT contain a felix rostered tile.
+    // Negative path (no cross-contamination): post-86ca18b9p, SESSION_C DOES
+    // carry a felix tile — but only as the `available` BASELINE. SESSION_A's
+    // detected/running state must NOT leak into SESSION_C's felix tile.
     const cAlpha = sC.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(findTile(cAlpha, "felix")).toBeUndefined();
+    const cFelix = findTile(cAlpha, "felix");
+    expect(cFelix).toBeDefined();
+    expect(cFelix!.state).toBe("available"); // baseline only — no leak
   });
 });
 
@@ -864,8 +904,11 @@ describe("AC2.6: schema drift — all three meta.json variants parse and match c
     const s = tree.sessions[0]!;
     expect(s.background.some((b) => b.agentType === "devon")).toBe(true);
 
-    // Negative: no roster tile for devon.
-    expect(s.teamOrder).toHaveLength(0);
+    // Negative: devon never produces a rostered tile. Post-86ca18b9p the
+    // roster's own members (felix/maya/bram/sage) ARE seeded as `available`
+    // baselines, so the team cards exist — but every rostered tile is a
+    // never-run baseline (no detected agent matched devon).
+    expectAllRosteredAvailable(s);
   });
 
   it("v2.1.145-general (engine type, no name) — meta-new-schema.json — goes to background", async () => {
@@ -888,7 +931,9 @@ describe("AC2.6: schema drift — all three meta.json variants parse and match c
     // general-purpose with no name and no matching description rule → background.
     const s = tree.sessions[0]!;
     expect(s.background.some((b) => b.agentType === "general-purpose")).toBe(true);
-    expect(s.teamOrder).toHaveLength(0);
+    // Post-86ca18b9p: roster baselines exist but all rostered tiles are
+    // `available` (the general-purpose agent matched nothing).
+    expectAllRosteredAvailable(s);
   });
 
   it("v2.1.145-persona (persona slug + toolUseId) — meta-new-schema-persona.json — rostered", async () => {
@@ -944,13 +989,15 @@ describe("AC2.6: schema drift — all three meta.json variants parse and match c
     const sA = tree.sessions.find((s) => s.sessionId === SESSION_A)!;
     const sB = tree.sessions.find((s) => s.sessionId === SESSION_B)!;
 
-    // Session A: devon in background.
+    // Session A: devon in background; all rostered tiles are available baselines.
     expect(sA.background.some((b) => b.agentType === "devon")).toBe(true);
-    expect(sA.teamOrder).toHaveLength(0);
+    expectAllRosteredAvailable(sA);
 
-    // Session B: felix rostered.
+    // Session B: felix detected (rostered, live), rest available baselines.
     const bAlpha = sB.rosterTiles.get("claudeteam-alpha") ?? [];
-    expect(findTile(bAlpha, "felix")).toBeDefined();
+    const bFelix = findTile(bAlpha, "felix");
+    expect(bFelix).toBeDefined();
+    expect(bFelix!.state).not.toBe("available"); // detected
     expect(sB.background).toHaveLength(0);
   });
 });

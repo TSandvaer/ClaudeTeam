@@ -267,13 +267,27 @@ export interface SessionRecord {
 /**
  * Agent state (liveness inference per data-sources.md "Liveness inference").
  *
- *   running  — session alive + JSONL mtime < 10s old
- *   idle     — session alive + JSONL mtime >= 10s old (but not finished/error)
- *   finished — parent transcript has tool_result matching meta.toolUseId
- *   error    — meta parse failed, JSONL missing for a non-finished spawn, or
- *              roster matcher emitted a warning for this agent
+ *   running   — session alive + JSONL mtime < 10s old
+ *   idle      — session alive + JSONL mtime >= 10s old (but not finished/error)
+ *   finished  — parent transcript has tool_result matching meta.toolUseId
+ *   error     — meta parse failed, JSONL missing for a non-finished spawn, or
+ *               roster matcher emitted a warning for this agent
+ *   available — roster-baseline state: a `teams.yaml` member that has NO
+ *               detected/matched agent this session ("never-run"). Seeded by
+ *               the reducer's baseline pass (EPIC 86ca11187 / 86ca18b9p) so
+ *               every roster member always has a tile; live detection overlays
+ *               one of the four states above. NOT inferred from filesystem —
+ *               it is the absence of any live agent for that member.
+ *               Consumed verbatim by E-05 (webview never-run treatment) and
+ *               the CLI presenter glyph. Distinct from `idle` (which means
+ *               "alive but quiet") — `available` means "no live agent at all".
  */
-export type AgentState = "running" | "idle" | "finished" | "error";
+export type AgentState =
+  | "running"
+  | "idle"
+  | "finished"
+  | "error"
+  | "available";
 
 /**
  * One rostered agent tile — the unit of display in the CLI / dashboard.

@@ -45,6 +45,9 @@ const STATE_LABEL: Record<AgentState, string> = {
   idle: "Idle",
   finished: "Finished",
   error: "Error",
+  // Roster-baseline never-run member (86ca18b9p). Label only — the never-run
+  // visual treatment (quiet dot, dim rows, sprite) is E-05's scope.
+  available: "Available",
 };
 
 /**

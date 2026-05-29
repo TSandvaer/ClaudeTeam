@@ -524,17 +524,37 @@ describe("M5: runTick applies hideFinishedAgents filter", () => {
     expect(state.config?.hideFinishedAgents).toBe(false);
   });
 
-  it("filter on: finished tile suppressed; hiddenFinishedCount=1; config mirrored", async () => {
+  it("filter on: finished tile suppressed; hiddenFinishedCount=1; config mirrored; available baselines survive (86ca18b9p AC5)", async () => {
     const state = await runTick({
       claudeHome: root,
       globalRosterPath: rosterPath,
       hideFinishedAgents: true,
     });
 
-    // Filter ON — finished felix tile dropped → empty team → team key removed.
-    expect(state.sessions[0]?.rosterTiles.get("claudeteam-alpha")).toBeUndefined();
+    // Filter ON — finished felix tile dropped. hiddenFinishedCount counts it.
     expect(state.hiddenFinishedCount).toBe(1);
     expect(state.config?.hideFinishedAgents).toBe(true);
+
+    // AC5 (86ca18b9p): the hide-finished filter drops ONLY `state==="finished"`
+    // tiles. The roster's other members (maya, bram) are seeded as `available`
+    // baselines and MUST survive the filter — so the team card persists rather
+    // than being removed for going empty (pre-86ca18b9p behavior). felix is
+    // gone (was finished, now hidden); maya + bram remain available.
+    const entries = state.sessions[0]?.rosterTiles.get("claudeteam-alpha");
+    expect(entries).toBeDefined();
+    const states = entries!.map((e) =>
+      isCollapsedPersonaGroup(e) ? "group" : e.state,
+    );
+    // No finished tile survived; the survivors are all available baselines.
+    expect(states).not.toContain("finished");
+    expect(states.every((s) => s === "available")).toBe(true);
+    // felix (finished) is not present; maya + bram baselines are.
+    const memberIds = entries!
+      .filter((e) => !isCollapsedPersonaGroup(e))
+      .map((e) => (e as { memberId: string }).memberId);
+    expect(memberIds).not.toContain("felix");
+    expect(memberIds).toContain("maya");
+    expect(memberIds).toContain("bram");
   });
 
   it("filter on with running agent: tile stays; hiddenFinishedCount=0", async () => {
