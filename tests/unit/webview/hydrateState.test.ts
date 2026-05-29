@@ -294,114 +294,61 @@ describe("hydrateState — back-compat top-level field handling (M3-09 NIT)", ()
 });
 
 // ===========================================================================
-// 86c9z5j3r — M5 wire-format fields (`hiddenFinishedCount`, `config.hideFinishedAgents`).
-// Both added by M5-EH (PR #71) + M5-WV (PR #70) on the host wire shape and
-// `AgentTree`, but `hydrateState` previously silently dropped them on the
-// boundary. The renderer's `readHeaderChipState` (`src/webview/render.ts`)
-// reads them off the rendered state to compute the header-chip filter mode
-// + hidden-count badge — when the hydrator strips them, the chip falls
-// back to defaults (off / 0) even when the host explicitly sent values.
+// config-block passthrough. The global hide-finished / hide-idle wire fields
+// (`hiddenFinishedCount` / `hiddenIdleCount` / `config.hide*Agents`) were
+// removed by 86ca1gdbp (chips superseded by whole-team-always-visible +
+// per-member hide). The surviving config scalar is
+// `config.autoCollapseUniformClusters`, which the hydrator threads verbatim.
 //
-// Symmetric to the M3-09 back-compat tests above: conditional spread
-// preserves "field present" vs "field absent" so back-compat consumers
-// (CLI driver, pre-M5 fixtures) still pass through cleanly.
-//
-// Source: src/webview/main.ts hydrateState M5 spread branches
-//         src/shared/messages.ts SerializedDashboardState M5 fields
-//         team/iris-ux/m5-hide-finished-spec.md §3.5 + §7.1 vocabulary contract
+// Source: src/webview/main.ts hydrateState config spread branch
+//         src/shared/messages.ts SerializedDashboardState config block
 // ===========================================================================
 
-describe("hydrateState — M5 hide-finished field handling (86c9z5j3r)", () => {
+describe("hydrateState — config block handling", () => {
   const EMPTY_WIRE: SerializedDashboardState = { sessions: [] };
 
-  it("absent hiddenFinishedCount / config → absent on output (back-compat with pre-M5 hosts)", () => {
+  it("absent config → absent on output (back-compat)", () => {
     const out = hydrateState(EMPTY_WIRE);
-    expect("hiddenFinishedCount" in out).toBe(false);
     expect("config" in out).toBe(false);
   });
 
-  it("hiddenFinishedCount=0 on wire → hiddenFinishedCount=0 on output (preserves explicit zero)", () => {
-    // Regression target: a truthiness-based gate would collapse `0` to
-    // "absent", losing the host's "filter ran but suppressed nothing" signal.
-    // The chip rendering distinguishes "0 hidden (filter on, nothing to hide)"
-    // from "field absent" — keep the explicit 0.
+  it("config.autoCollapseUniformClusters=true on wire → preserved on output", () => {
     const wire: SerializedDashboardState = {
       sessions: [],
-      hiddenFinishedCount: 0,
+      config: { autoCollapseUniformClusters: true },
     };
     const out = hydrateState(wire);
-    expect("hiddenFinishedCount" in out).toBe(true);
-    expect(out.hiddenFinishedCount).toBe(0);
+    expect(out.config?.autoCollapseUniformClusters).toBe(true);
   });
 
-  it("hiddenFinishedCount=N on wire → preserved verbatim on output", () => {
+  it("config.autoCollapseUniformClusters=false on wire → preserved (explicit false)", () => {
     const wire: SerializedDashboardState = {
       sessions: [],
-      hiddenFinishedCount: 3,
+      config: { autoCollapseUniformClusters: false },
     };
     const out = hydrateState(wire);
-    expect(out.hiddenFinishedCount).toBe(3);
-  });
-
-  it("config.hideFinishedAgents=true on wire → preserved on output", () => {
-    const wire: SerializedDashboardState = {
-      sessions: [],
-      config: { hideFinishedAgents: true },
-    };
-    const out = hydrateState(wire);
-    expect(out.config).toEqual({ hideFinishedAgents: true });
-    expect(out.config?.hideFinishedAgents).toBe(true);
-  });
-
-  it("config.hideFinishedAgents=false on wire → preserved on output (explicit false)", () => {
-    // Mirror of the M3-09 `filterApplied=false` test: when the host
-    // explicitly sends the chip's filter-off state, the hydrator must
-    // preserve it. The host stamps the mirror unconditionally on every
-    // tick (see `applyHideFinishedFilter` + watcherLoop), so `false`
-    // arriving on the wire is the steady-state case when the user has
-    // not enabled the toggle.
-    const wire: SerializedDashboardState = {
-      sessions: [],
-      config: { hideFinishedAgents: false },
-    };
-    const out = hydrateState(wire);
-    expect(out.config?.hideFinishedAgents).toBe(false);
+    expect(out.config?.autoCollapseUniformClusters).toBe(false);
   });
 
   it("config object passed by reference (no deep clone)", () => {
-    // Identity check matching the rosterErrors/rosterWarnings pattern —
-    // no reason to spend bytes deep-cloning; consumers treat as read-only.
-    const config = { hideFinishedAgents: true };
+    const config = { autoCollapseUniformClusters: true };
     const wire: SerializedDashboardState = { sessions: [], config };
     const out = hydrateState(wire);
     expect(out.config).toBe(config);
   });
 
-  it("M5 round-trip: both fields together → both preserved independently", () => {
-    const wire: SerializedDashboardState = {
-      sessions: [],
-      hiddenFinishedCount: 5,
-      config: { hideFinishedAgents: true },
-    };
-    const out = hydrateState(wire);
-    expect(out.hiddenFinishedCount).toBe(5);
-    expect(out.config?.hideFinishedAgents).toBe(true);
-  });
-
-  it("M5 fields compose with M3-09 fields (full back-compat top-level surface)", () => {
+  it("config composes with M3-09 top-level fields (back-compat surface)", () => {
     const wire: SerializedDashboardState = {
       sessions: [],
       filterApplied: true,
       rosterErrors: ["err A"],
       rosterWarnings: ["warn B"],
-      hiddenFinishedCount: 2,
-      config: { hideFinishedAgents: true },
+      config: { autoCollapseUniformClusters: true },
     };
     const out = hydrateState(wire);
     expect(out.filterApplied).toBe(true);
     expect(out.rosterErrors).toEqual(["err A"]);
     expect(out.rosterWarnings).toEqual(["warn B"]);
-    expect(out.hiddenFinishedCount).toBe(2);
-    expect(out.config?.hideFinishedAgents).toBe(true);
+    expect(out.config?.autoCollapseUniformClusters).toBe(true);
   });
 });

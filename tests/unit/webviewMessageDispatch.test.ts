@@ -195,23 +195,6 @@ describe("ClaudeTeamViewProvider._dispatchWebviewMessage — typed dispatch", ()
     expect(secondHandler).toHaveBeenCalledTimes(1);
   });
 
-  // M5: ui:set-config dispatch
-  it("routes ui:set-config with valid payload to onSetConfig", () => {
-    const provider = makeProvider();
-    const onSetConfig = vi.fn();
-    const onRefresh = vi.fn();
-    provider.setMessageHandlers({ onSetConfig, onRefresh });
-
-    const msg = {
-      type: "ui:set-config" as const,
-      payload: { key: "hideFinishedAgents" as const, value: true },
-    };
-    provider._dispatchWebviewMessage(msg);
-
-    expect(onSetConfig).toHaveBeenCalledTimes(1);
-    expect(onSetConfig).toHaveBeenCalledWith(msg);
-    expect(onRefresh).not.toHaveBeenCalled();
-  });
 
   // E-06a: hide / show / show-all dispatch
   it("routes ui:hide-member with valid payload to onHideMember only", () => {
@@ -357,74 +340,26 @@ describe("isWebviewMessage — E-07a remove-member message", () => {
 });
 
 // ---------------------------------------------------------------------------
-// M5 — ui:set-config type-guard coverage
+// 86ca1gdbp — `ui:set-config` was removed with the global hide-finished /
+// hide-idle chips (superseded by whole-team-always-visible + per-member hide).
+// The guard must now REJECT it so a stale webview can't drive a dead path.
 // ---------------------------------------------------------------------------
 
-describe("isWebviewMessage — ui:set-config (M5)", () => {
-  it("accepts ui:set-config with valid hideFinishedAgents payload (true)", () => {
+describe("isWebviewMessage — ui:set-config removed (86ca1gdbp)", () => {
+  it("rejects the removed ui:set-config message (hideFinishedAgents)", () => {
     expect(
       isWebviewMessage({
         type: "ui:set-config",
         payload: { key: "hideFinishedAgents", value: true },
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("accepts ui:set-config with valid hideFinishedAgents payload (false)", () => {
-    expect(
-      isWebviewMessage({
-        type: "ui:set-config",
-        payload: { key: "hideFinishedAgents", value: false },
-      }),
-    ).toBe(true);
-  });
-
-  it("rejects ui:set-config with no payload", () => {
-    expect(isWebviewMessage({ type: "ui:set-config" })).toBe(false);
-  });
-
-  // 86c9zq9vm (spec 86c9zmyef): `hideIdleAgents` joined the literal union.
-  it("accepts ui:set-config with valid hideIdleAgents payload (true)", () => {
-    expect(
-      isWebviewMessage({
-        type: "ui:set-config",
-        payload: { key: "hideIdleAgents", value: true },
-      }),
-    ).toBe(true);
-  });
-
-  it("accepts ui:set-config with valid hideIdleAgents payload (false)", () => {
+  it("rejects the removed ui:set-config message (hideIdleAgents)", () => {
     expect(
       isWebviewMessage({
         type: "ui:set-config",
         payload: { key: "hideIdleAgents", value: false },
-      }),
-    ).toBe(true);
-  });
-
-  it("rejects ui:set-config with unknown key", () => {
-    expect(
-      isWebviewMessage({
-        type: "ui:set-config",
-        payload: { key: "someFutureKey", value: true },
-      }),
-    ).toBe(false);
-  });
-
-  it("rejects ui:set-config with non-boolean value", () => {
-    expect(
-      isWebviewMessage({
-        type: "ui:set-config",
-        payload: { key: "hideFinishedAgents", value: "true" },
-      }),
-    ).toBe(false);
-  });
-
-  it("rejects ui:set-config with non-boolean value on hideIdleAgents", () => {
-    expect(
-      isWebviewMessage({
-        type: "ui:set-config",
-        payload: { key: "hideIdleAgents", value: 1 },
       }),
     ).toBe(false);
   });

@@ -83,28 +83,6 @@ export interface SerializedDashboardState {
    */
   rosterWarnings?: string[];
   /**
-   * Count of rostered agent tiles suppressed this tick because their state
-   * was "finished" AND `claudeteam.hideFinishedAgents === true` (M5). Used by
-   * the webview header chip to render "N finished hidden — show" / "hide".
-   *
-   * Optional + defaults to 0 — back-compat with pre-M5 consumers and with the
-   * filter-off case (no count to render). Webview MUST treat `undefined` as 0.
-   * See `m5-hide-finished-spec.md` §3.5 Field A + §7.1.
-   */
-  hiddenFinishedCount?: number;
-  /**
-   * Count of rostered agent tiles suppressed this tick because their state
-   * was "idle" AND `claudeteam.hideIdleAgents === true` (spec 86c9zmyef).
-   * Used by the webview header chip + per-team row to render
-   * "N idle hidden — show" / "Hide idle".
-   *
-   * Optional + defaults to 0 — back-compat with pre-86c9zq9vm consumers
-   * and with the filter-off case (no count to render). Webview MUST treat
-   * `undefined` as 0. See `86c9zmyef-running-focused-dashboard-spec.md`
-   * §3.5 Field A + §7.1.
-   */
-  hiddenIdleCount?: number;
-  /**
    * Count of rostered agent tiles suppressed this tick because their
    * `(teamId, memberId)` is in the user's persisted hidden-member set
    * (E-06a / EPIC 86ca11187 §7.2). Used by the webview header chip to render
@@ -152,7 +130,6 @@ export interface SerializedDashboardState {
    * polluting the top-level wire shape (per spec §3.5 rationale).
    */
   config?: {
-    hideFinishedAgents?: boolean;
     /**
      * Mirror of `claudeteam.autoCollapseUniformClusters` (uniform-cluster
      * polish ticket 86c9zmqa8). See `AgentTree.config.autoCollapseUniformClusters`
@@ -160,12 +137,6 @@ export interface SerializedDashboardState {
      * `undefined` as `false`.
      */
     autoCollapseUniformClusters?: boolean;
-    /**
-     * Mirror of `claudeteam.hideIdleAgents` (spec 86c9zmyef). See
-     * `AgentTree.config.hideIdleAgents` for semantics. Optional for
-     * back-compat — webview MUST treat `undefined` as `false`.
-     */
-    hideIdleAgents?: boolean;
   };
 }
 
@@ -302,37 +273,15 @@ export type RefreshMessage = {
 };
 
 /**
- * User toggled a config-backed dashboard setting (chip / command path).
- *
- * Generic-by-design (M5 §4.5): the `{ key, value }` shape admits future
- * setting toggles without proliferating message types. The host handler
- * validates `key` against the literal-union and routes to
- * `vscode.workspace.getConfiguration("claudeteam").update(key, value,
- * vscode.ConfigurationTarget.Global)` (sponsor confirmed Global per spec §8 Q3).
- *
- * Extending the `key` union adds new literal members, not new messages. Spec
- * 86c9zmyef §7.1 added `hideIdleAgents` to the union for the running-focused
- * dashboard's idle-filter chip.
- */
-export type SetConfigMessage = {
-  type: "ui:set-config";
-  payload: {
-    key: "hideFinishedAgents" | "hideIdleAgents";
-    value: boolean;
-  };
-};
-
-/**
  * User hid a rostered member from the default view (E-06a / EPIC 86ca11187
  * §7.2 — reversible hide-agent). The host adds `(teamId, memberId)` to its
  * persisted hidden-member set (`workspaceState`) and re-emits state on the
  * next tick with the member's tile suppressed from the default tree + the
  * "N hidden" count bumped.
  *
- * Distinct message type (NOT a `ui:set-config` overload) per the messages.ts
- * "add a new type, don't overload" rule: the hidden set is a dynamic
- * collection, not a scalar setting, and the action verb (add-one) is
- * semantically distinct from the show/show-all verbs below.
+ * Distinct message type per the messages.ts "add a new type, don't overload"
+ * rule: the hidden set is a dynamic collection, and the action verb (add-one)
+ * is semantically distinct from the show/show-all verbs below.
  *
  * Payload carries the `(teamId, memberId)` PAIR — not the pre-joined
  * `HiddenMemberKey` string — so the webview never has to know the key-join
@@ -433,7 +382,6 @@ export type WebviewMessage =
   | OpenTranscriptMessage
   | OpenRosterMessage
   | RefreshMessage
-  | SetConfigMessage
   | HideMemberMessage
   | ShowMemberMessage
   | ShowAllHiddenMessage

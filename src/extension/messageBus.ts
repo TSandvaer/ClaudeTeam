@@ -64,15 +64,6 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
     // webview always sees real arrays (no `undefined` branch in the renderer).
     rosterErrors: state.rosterErrors ?? [],
     rosterWarnings: state.rosterWarnings ?? [],
-    // M5: hide-finished filter wire surface. The watcher stamps these fields
-    // onto the in-memory tree (see `applyHideFinishedFilter` + watcherLoop
-    // integration); `serializeState` passes them through. Default 0 / explicit
-    // false so the webview always sees real values (no `undefined` branch).
-    hiddenFinishedCount: state.hiddenFinishedCount ?? 0,
-    // 86c9zq9vm: hide-idle filter wire surface (mirrors hidden-finished —
-    // see spec 86c9zmyef §3.1). Default 0 when the host omits — back-compat
-    // with CLI driver / pre-86c9zq9vm tests.
-    hiddenIdleCount: state.hiddenIdleCount ?? 0,
     // E-06a (EPIC 86ca11187 §7.2): hide-members wire surface. `hiddenMemberCount`
     // = tiles suppressed this tick; `hiddenMemberKeys` = the FULL persisted set
     // (string[] — JSON-safe; a Set would serialize to {}). Defaults to 0 / []
@@ -88,18 +79,12 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
     removedMemberCount: state.removedMemberCount ?? 0,
     removedMemberKeys: state.removedMemberKeys ?? [],
     config: {
-      hideFinishedAgents: state.config?.hideFinishedAgents === true,
       // 86c9zmqa8 (uniform-cluster polish): mirror the auto-collapse flag onto
       // the wire so the webview's collapsedPersonaTile renderer can read it
       // without re-reading VS Code Settings. Defaults to false here when the
       // host omits the field — back-compat with pre-86c9zmqa8 watchers.
       autoCollapseUniformClusters:
         state.config?.autoCollapseUniformClusters === true,
-      // 86c9zq9vm (spec 86c9zmyef §3.2): mirror the hide-idle scalar onto
-      // the wire so the webview chip boots with its toggle reflecting truth.
-      // Defaults to false here when the host omits — back-compat with
-      // pre-86c9zq9vm watchers (CLI driver, older tests).
-      hideIdleAgents: state.config?.hideIdleAgents === true,
     },
   };
 }

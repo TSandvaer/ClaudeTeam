@@ -48,8 +48,6 @@ import {
 } from "./sessionFilter.js";
 import { loadRoster } from "../roster/loader.js";
 import { buildAgentTree } from "../state/reducer.js";
-import { applyHideFinishedFilter } from "../state/hideFinishedFilter.js";
-import { applyHideIdleFilter } from "../state/hideIdleFilter.js";
 import { applyHideMembersFilter } from "../state/hideMembersFilter.js";
 import { applyRemoveMembersFilter } from "../state/removeMembersFilter.js";
 import type {
@@ -135,30 +133,12 @@ export interface WatcherOptions {
   getCollapsePersonaTiles?: () => boolean;
 
   /**
-   * Optional resolver for the `claudeteam.hideFinishedAgents` setting (M5).
-   * Read fresh every tick so toggling the setting applies on the next tick
-   * without restart. When omitted, treated as `false` (filter OFF — same
-   * default as the package.json config schema).
-   */
-  getHideFinishedAgents?: () => boolean;
-
-  /**
    * Optional resolver for the `claudeteam.autoCollapseUniformClusters`
    * setting (86c9zmqa8). Read fresh every tick so toggling applies on the
    * next tick without restart. When omitted, treated as `true` (uniform-
    * cluster polish ON — same default as the package.json config schema).
    */
   getAutoCollapseUniformClusters?: () => boolean;
-
-  /**
-   * Optional resolver for the `claudeteam.hideIdleAgents` setting
-   * (86c9zq9vm / 86ca10anf — running-focused dashboard spec 86c9zmyef).
-   * Read fresh every tick so toggling the setting applies on the next tick
-   * without restart. When omitted, treated as `false` (filter OFF — V1 ships
-   * the whole team always-visible; matches the package.json config schema
-   * default).
-   */
-  getHideIdleAgents?: () => boolean;
 
   /**
    * Optional resolver for the persisted hidden-member set (E-06a / EPIC
@@ -304,9 +284,6 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // collapse-persona-tiles toggle. Default true (grouping ON)
         // matches package.json config default.
         collapsePersonaTiles: opts.getCollapsePersonaTiles?.() ?? true,
-        // M5: read-fresh-every-tick pattern for the hide-finished toggle.
-        // Default false (filter OFF) matches package.json config default.
-        hideFinishedAgents: opts.getHideFinishedAgents?.() ?? false,
         // 86c9zmqa8: read-fresh-every-tick pattern for the uniform-cluster
         // polish toggle. Default true (auto-collapse ON) matches package.json
         // config default. The flag is webview-only behavior (no host code
@@ -314,10 +291,6 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // can read it from state.config.
         autoCollapseUniformClusters:
           opts.getAutoCollapseUniformClusters?.() ?? true,
-        // 86c9zq9vm / 86ca10anf (spec 86c9zmyef): read-fresh-every-tick
-        // pattern for the hide-idle toggle. Default false (filter OFF)
-        // matches package.json — V1 ships the whole team always-visible.
-        hideIdleAgents: opts.getHideIdleAgents?.() ?? false,
         // E-06a (EPIC 86ca11187 §7.2): read-fresh-every-tick snapshot of the
         // persisted hidden-member set so an explicit hide/show action applies
         // on the next tick. Empty set when omitted (filter OFF).
@@ -451,27 +424,12 @@ export interface RunTickOptions {
    */
   collapsePersonaTiles?: boolean;
   /**
-   * Value of `claudeteam.hideFinishedAgents` (M5). Defaults to `false`
-   * (filter OFF — every finished tile remains visible). When `true`, the
-   * post-reducer filter suppresses finished tiles and `hiddenFinishedCount`
-   * is stamped onto the produced tree.
-   */
-  hideFinishedAgents?: boolean;
-  /**
    * Value of `claudeteam.autoCollapseUniformClusters` (86c9zmqa8). Defaults
    * to `true`. Webview-only behavior — does NOT change the host reducer or
    * filter output; merely stamped onto the produced tree's `config` block so
    * the webview's collapsedPersonaTile renderer can read it from state.
    */
   autoCollapseUniformClusters?: boolean;
-  /**
-   * Value of `claudeteam.hideIdleAgents` (86c9zq9vm — spec 86c9zmyef).
-   * Defaults to `true` (filter ON — V1 default per sponsor Q1; matches
-   * package.json config default). When `true`, the post-reducer filter
-   * suppresses idle tiles and `hiddenIdleCount` is stamped onto the
-   * produced tree.
-   */
-  hideIdleAgents?: boolean;
   /**
    * The persisted hidden-member set in effect this tick (E-06a / EPIC
    * 86ca11187 §7.2). When omitted / empty, the hide-members filter is a
@@ -625,39 +583,17 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
       collapsePersonaTiles: opts.collapsePersonaTiles !== false,
     },
   );
-  // M5: post-reducer hide-finished projection. The filter is OFF by default
-  // (identity transform — returns the input ref + count 0); when ON, allocates
-  // a new tree with finished tiles suppressed and stamps `hiddenFinishedCount`
-  // for the chip. Reducer stays presentation-agnostic; this layer owns the
-  // filter the same way it owns filterApplied / roster errors. See
-  // `src/extension/state/hideFinishedFilter.ts` for the contract.
-  const hideFinished = opts.hideFinishedAgents === true;
-  const { tree: afterFinished, hiddenFinishedCount } = applyHideFinishedFilter(
-    tree,
-    hideFinished,
-  );
-  // 86c9zq9vm / 86ca10anf (spec 86c9zmyef §3 + §9.1): sibling hide-idle
-  // projection, applied AFTER hide-finished on its result. `finished` and
-  // `idle` are disjoint states so the order is symmetric, but a deterministic
-  // sequence (finished → idle) avoids surprise. Default false (V1 ships the
-  // whole team always-visible) — matches the `hideFinished === true` default
-  // above so absent/undefined → filter OFF (no split-brain with the wire
-  // serializer's `=== true` default).
-  const hideIdle = opts.hideIdleAgents === true;
-  const { tree: afterIdle, hiddenIdleCount } = applyHideIdleFilter(
-    afterFinished,
-    hideIdle,
-  );
-  // E-06a (EPIC 86ca11187 §7.2): persisted hide-members projection, applied
-  // AFTER the state-driven filters. Predicate is set-membership by
-  // (teamId, memberId) — INDEPENDENT of tile state — so the order relative to
-  // the state filters is irrelevant; a deterministic last-in-chain placement
-  // avoids surprise. Empty set → identity transform. The set comes from the
-  // persisted store (workspaceState); the filter never mutates it (AC4).
+  // E-06a (EPIC 86ca11187 §7.2): persisted hide-members projection — the
+  // first post-reducer filter (the global hide-finished / hide-idle state
+  // filters were removed by 86ca1gdbp, superseded by the whole-team-always-
+  // visible default + per-member hide). Predicate is set-membership by
+  // (teamId, memberId) — INDEPENDENT of tile state. Empty set → identity
+  // transform. The set comes from the persisted store (workspaceState); the
+  // filter never mutates it (AC4).
   const hiddenSet =
     opts.hiddenMemberKeys ?? new Set<HiddenMemberKey>();
   const { tree: afterHidden, hiddenMemberCount } = applyHideMembersFilter(
-    afterIdle,
+    tree,
     hiddenSet,
   );
   // E-07a (EPIC 86ca11187 §7.3): persisted REMOVE-members projection, applied
@@ -685,20 +621,11 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
   // the webview can render the error chip + warning subtype. Verbatim from
   // RosterLoadResult; reducer is roster-error-agnostic, so the watcher
   // layer owns this surfacing too (parallel to filterApplied).
-  // M5: stamp hiddenFinishedCount (post-filter count) AND the effective
-  // config block so `serializeState` can pass both through to the wire
-  // (per spec §3.5 wire-shape contract).
   return {
     ...filteredTree,
     filterApplied,
     rosterErrors: rosterResult.errors,
     rosterWarnings: rosterResult.warnings,
-    hiddenFinishedCount,
-    // 86c9zq9vm: hide-idle wire surface. Mirrors hiddenFinishedCount + the
-    // config-block scalar so the webview can render the "N idle hidden" chip
-    // and boot its filter toggle from authoritative state without re-reading
-    // VS Code Settings.
-    hiddenIdleCount,
     // E-06a (EPIC 86ca11187 §7.2): hide-members wire surface. `hiddenMemberCount`
     // is the tiles suppressed THIS TICK; `hiddenMemberKeys` is the FULL persisted
     // set (so E-06b's "show hidden" list is complete even for hidden members with
@@ -714,12 +641,8 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     removedMemberCount,
     removedMemberKeys: [...removedSet],
     config: {
-      hideFinishedAgents: hideFinished,
       // 86c9zmqa8: pass-through scalar; webview-only behavior.
       autoCollapseUniformClusters,
-      // 86c9zq9vm: pass-through scalar; webview chip reads to set its initial
-      // toggle state without a roundtrip.
-      hideIdleAgents: hideIdle,
     },
   };
 }
@@ -764,30 +687,17 @@ export function hashState(state: DashboardState): string {
   // breaks) a YAML and the visible tile set is unchanged, the chip must
   // appear/disappear within one tick. Excluding from the hash would skip
   // the emission.
-  // M5: include hiddenFinishedCount and the config mirror — when the user
-  // toggles `claudeteam.hideFinishedAgents`, the visible tile set changes
-  // (or the count chip changes from "0 hidden" to "N hidden"). Excluding
-  // these from the hash would skip the emission and the chip would lag.
   return JSON.stringify({
     sessions,
     filterApplied: state.filterApplied === true,
     rosterErrors: state.rosterErrors ?? [],
     rosterWarnings: state.rosterWarnings ?? [],
-    hiddenFinishedCount: state.hiddenFinishedCount ?? 0,
-    hideFinishedAgents: state.config?.hideFinishedAgents === true,
     // 86c9zmqa8: include the uniform-cluster auto-collapse flag so toggling
     // the VS Code setting re-emits state even when the visible tile set is
     // unchanged. The webview-side render branches off this flag, so missing
     // emissions would leave the dashboard stale.
     autoCollapseUniformClusters:
       state.config?.autoCollapseUniformClusters !== false,
-    // 86c9zq9vm: same rationale — when the user toggles hideIdleAgents and
-    // the visible tile set happens to be unchanged (e.g. no idle tiles to
-    // suppress at the moment), the chip's label / count still needs to
-    // update. Including the count + config mirror in the hash ensures
-    // emission.
-    hiddenIdleCount: state.hiddenIdleCount ?? 0,
-    hideIdleAgents: state.config?.hideIdleAgents === true,
     // E-06a: include the hide-members surface so an explicit hide/show/show-all
     // re-emits state even when the visible tile set happens to be unchanged
     // (e.g. hiding a member who had no live tile this session still flips the

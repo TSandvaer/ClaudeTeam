@@ -30,7 +30,6 @@ import type {
   OpenTranscriptMessage,
   RefreshMessage,
   RemoveMemberMessage,
-  SetConfigMessage,
   ShowAllHiddenMessage,
   ShowMemberMessage,
   WebviewMessage,
@@ -60,12 +59,6 @@ export interface WebviewMessageHandlers {
   onOpenTranscript?(msg: OpenTranscriptMessage): void;
   onOpenRoster?(msg: OpenRosterMessage): void;
   onRefresh?(msg: RefreshMessage): void;
-  /**
-   * Chip / command toggled a config-backed setting (M5 `ui:set-config`).
-   * Host writes the value via `vscode.workspace.getConfiguration("claudeteam")
-   * .update(key, value, vscode.ConfigurationTarget.Global)` per spec §8 Q3.
-   */
-  onSetConfig?(msg: SetConfigMessage): void;
   /**
    * User hid a rostered member (E-06a `ui:hide-member`). Host adds the
    * `(teamId, memberId)` pair to the persisted hidden-member set + triggers a
@@ -190,9 +183,6 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
       case "ui:refresh":
         this._messageHandlers.onRefresh?.(raw);
         return;
-      case "ui:set-config":
-        this._messageHandlers.onSetConfig?.(raw);
-        return;
       case "ui:hide-member":
         this._messageHandlers.onHideMember?.(raw);
         return;
@@ -300,19 +290,6 @@ export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
       agentId?: unknown;
     };
     return typeof sessionId === "string" && typeof agentId === "string";
-  }
-  if (t === "ui:set-config") {
-    const p = (raw as { payload?: unknown }).payload;
-    if (typeof p !== "object" || p === null) return false;
-    const { key, value } = p as { key?: unknown; value?: unknown };
-    // M5 + 86c9zq9vm (spec 86c9zmyef §7.1): valid keys are the two
-    // dashboard-toggleable config scalars. Extending the union requires
-    // adding the literal here AND in `SetConfigMessage.payload.key`
-    // (src/shared/messages.ts) AND in `handleSetConfig` (src/extension/main.ts).
-    return (
-      (key === "hideFinishedAgents" || key === "hideIdleAgents") &&
-      typeof value === "boolean"
-    );
   }
   // E-06a (EPIC 86ca11187 §7.2): hide / show a single member carry a
   // `{ teamId, memberId }` pair; show-all carries no payload.

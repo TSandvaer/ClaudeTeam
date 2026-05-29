@@ -332,8 +332,6 @@ describe("applyHideMembersFilter — invariants", () => {
       filterApplied: true,
       rosterErrors: ["err"],
       rosterWarnings: ["warn"],
-      hiddenFinishedCount: 1,
-      hiddenIdleCount: 2,
     };
 
     const result = applyHideMembersFilter(
@@ -344,8 +342,6 @@ describe("applyHideMembersFilter — invariants", () => {
     expect(result.tree.filterApplied).toBe(true);
     expect(result.tree.rosterErrors).toEqual(["err"]);
     expect(result.tree.rosterWarnings).toEqual(["warn"]);
-    expect(result.tree.hiddenFinishedCount).toBe(1);
-    expect(result.tree.hiddenIdleCount).toBe(2);
   });
 });
 

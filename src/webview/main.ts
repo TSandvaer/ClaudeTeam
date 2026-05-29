@@ -144,27 +144,6 @@ export function hydrateState(wire: SerializedDashboardState): WebviewAgentTree {
     ...(wire.rosterWarnings !== undefined
       ? { rosterWarnings: wire.rosterWarnings }
       : {}),
-    // M5 (86c9z5j3r): both fields originate in `applyHideFinishedFilter`
-    // and are stamped by the watcher tick onto every serialized state. The
-    // renderer's header chip reads them via `readHeaderChipState` in
-    // `src/webview/render.ts` — until this hydrator passes them through,
-    // the chip falls back to its defaults (off + 0) even when the host
-    // sent real values. Wire-shape source of truth: `SerializedDashboardState`
-    // fields `hiddenFinishedCount?: number` + `config?: { hideFinishedAgents?: boolean }`
-    // in `src/shared/messages.ts`.
-    ...(wire.hiddenFinishedCount !== undefined
-      ? { hiddenFinishedCount: wire.hiddenFinishedCount }
-      : {}),
-    // 86c9zqa75 (spec 86c9zmyef §3): `hiddenIdleCount` is the parallel
-    // surface for the new idle-filter chip. Same hydration contract as
-    // `hiddenFinishedCount` — pass through verbatim when defined; `readIdleChipState`
-    // in `src/webview/render.ts` defaults to 0 when absent. Without this
-    // passthrough the idle chip would always read 0 even when Felix's Pt 1
-    // wire delivered real counts. The `config` block already passes through
-    // verbatim below; `config.hideIdleAgents` rides through that path.
-    ...(wire.hiddenIdleCount !== undefined
-      ? { hiddenIdleCount: wire.hiddenIdleCount }
-      : {}),
     ...(wire.config !== undefined ? { config: wire.config } : {}),
   };
 }

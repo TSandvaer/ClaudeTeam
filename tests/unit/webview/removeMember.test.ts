@@ -297,9 +297,9 @@ describe("86ca1d76j — confirm panel + menu are COLLAPSED on initial render", (
   //      the block declares `display: flex|grid` (i.e. it CAN defeat the UA
   //      `[hidden]` default), assert a matching `[hidden] { display: none }`
   //      guard exists.
-  // Classes toggled but laid out as inline/block (e.g. `.ct-header-chip-count`,
-  // an inline span) are excluded by construction — the UA `[hidden]` works for
-  // them, so no guard is required.
+  // Classes toggled but laid out as inline/block (an inline span, a
+  // `display:block` element) are excluded by construction — the UA `[hidden]`
+  // works for them, so no guard is required.
   // -------------------------------------------------------------------------
 
   /** Resolve toggled classes from the webview component sources. */

@@ -565,11 +565,6 @@ body {
   .tile-row--model {
     transition: none;
   }
-  /* M5 spec §6.2 — elide the header-chip transition. Color/border end
-   * states still apply instantly; filter behavior unchanged. */
-  .ct-header-chip-toggle {
-    transition: none;
-  }
 }
 
 /* ===========================================================================
@@ -811,49 +806,6 @@ body {
 }
 
 /* ===========================================================================
- * Per-team idle-hidden hint row — 86c9zqa75 (spec 86c9zmyef §3.4 Option A+B)
- *
- * Passive informational row appended to each team card when the global
- * `hideIdleAgents` filter is on AND there are tiles currently hidden. The
- * row reads "N idle hidden — show"; clicking fires the SAME
- * `ui:set-config` message as the global header chip (no per-team scope).
- * Style intent: subtle, muted, smaller than agent tiles — readable as a
- * "secondary annotation" rather than a primary affordance.
- * =========================================================================== */
-
-.ct-team-idle-row {
-  display: flex;
-  align-items: center;
-  gap: var(--ct-state-dot-gap);
-  /* Indent matches `.tile-row--role/.tile-row--activity/.tile-row--model`
-   * so the hint sits visually under the tile rows above it. */
-  padding: var(--ct-space-xs)
-    calc(var(--ct-state-dot-size) + var(--ct-state-dot-gap) + var(--ct-space-s));
-  background-color: transparent;
-  color: var(--ct-color-fg-muted);
-  font-size: smaller;
-  font-style: italic;
-  border: 0;
-  /* The row is interactive — focus/hover affordance reuses the bg-hover
-   * pattern from agent tiles + chip headers for visual consistency. */
-  cursor: pointer;
-  outline: 0 solid transparent;
-  text-align: left;
-  /* Let the row consume the full width of the team card so the entire
-   * span (not just the text) is clickable. */
-  width: 100%;
-  font-family: inherit;
-}
-
-.ct-team-idle-row:hover,
-.ct-team-idle-row:focus-visible {
-  background-color: var(--ct-color-bg-hover);
-  outline: 1px solid var(--ct-color-focus);
-  border-radius: var(--ct-radius-chip);
-  color: var(--ct-color-fg);
-}
-
-/* ===========================================================================
  * Background chip (spec §7)
  * =========================================================================== */
 
@@ -939,71 +891,6 @@ body {
   color: var(--ct-color-fg-muted);
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: smaller;
-}
-
-/* ===========================================================================
- * Header chip — M5 hide-finished filter toggle (spec §6.1)
- *
- * Mounted at position 3 (top-to-bottom: rosterErrorChip → errorChip →
- * headerChip → session blocks / emptyState). Always rendered so the toggle
- * is discoverable even when the dashboard is empty (spec §4.6).
- *
- * Source: team/iris-ux/m5-hide-finished-spec.md §6
- * --------------------------------------------------------------------------- */
-
-.ct-header-chip {
-  display: flex;
-  justify-content: flex-end;
-  padding: var(--ct-space-s) var(--ct-space-m);
-  /* No border / background on the wrapper — the inner button carries chrome. */
-}
-
-.ct-header-chip-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ct-space-xs);
-  padding: 4px 10px;
-  background-color: transparent;
-  color: var(--ct-color-fg-muted);
-  border: 1px solid var(--ct-color-border);
-  border-radius: var(--ct-radius-chip);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: inherit;
-  line-height: 1.2;
-  transition:
-    background-color var(--ct-duration-state-transition) ease-out,
-    color var(--ct-duration-state-transition) ease-out,
-    border-color var(--ct-duration-state-transition) ease-out;
-}
-
-.ct-header-chip-toggle:hover {
-  background-color: var(--ct-color-bg-hover);
-  color: var(--ct-color-fg);
-}
-
-.ct-header-chip-toggle:focus-visible {
-  outline: 1px solid var(--ct-color-focus);
-  outline-offset: 1px;
-}
-
-/* ON state — filter active. Border + text shift to fg (not muted) plus a
- * subtle inset background to telegraph "pressed". */
-.ct-header-chip[data-hide-finished="true"] .ct-header-chip-toggle {
-  color: var(--ct-color-fg);
-  border-color: var(--ct-color-fg-muted);
-  background-color: var(--ct-color-bg-hover);
-}
-
-/* Disabled-looking when filter is on but nothing to hide (count=0). */
-.ct-header-chip[data-hidden-count="0"][data-hide-finished="true"]
-  .ct-header-chip-toggle {
-  opacity: 0.7;
-}
-
-.ct-header-chip-count {
-  /* Inline counter — rendered separately so it can hide via [hidden]. */
-  font-variant-numeric: tabular-nums;
 }
 
 /* ===========================================================================

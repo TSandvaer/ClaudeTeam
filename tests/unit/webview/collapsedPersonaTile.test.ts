@@ -608,10 +608,10 @@ describe("renderTeamCard — wrapper / bare-tile routing", () => {
     );
   });
 
-  it("chip label reads `({N} visible)` with the filter ON (subset reaches the card)", () => {
-    // Filter ON — host's hideFinishedFilter dropped Felix + Bram (all
-    // instances finished); only Maya survives. The card sees exactly the
-    // surviving subset; the label reflects on-screen count, not YAML size.
+  it("chip label reads `({N} visible)` when only a subset reaches the card", () => {
+    // A host-side filter (e.g. per-member hide) dropped Felix + Bram; only
+    // Maya survives. The card sees exactly the surviving subset; the label
+    // reflects on-screen count, not YAML size.
     const card = renderTeamCard({
       team: TEAM_ALPHA,
       tiles: [

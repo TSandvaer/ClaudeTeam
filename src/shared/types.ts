@@ -792,24 +792,6 @@ export interface AgentTree {
    */
   rosterWarnings?: string[];
   /**
-   * Count of rostered agent tiles suppressed this tick because their state
-   * was "finished" AND `claudeteam.hideFinishedAgents === true` (M5). Used
-   * by the webview header chip to render "N finished hidden". Optional for
-   * back-compat with pre-M5 consumers (CLI driver, older tests); absent →
-   * treated as 0. See `src/extension/state/hideFinishedFilter.ts` for the
-   * producer.
-   */
-  hiddenFinishedCount?: number;
-  /**
-   * Count of rostered agent tiles suppressed this tick because their state
-   * was "idle" AND `claudeteam.hideIdleAgents === true` (spec 86c9zmyef).
-   * Used by the webview header chip + per-team row to render
-   * "N idle hidden — show". Optional for back-compat with pre-86c9zq9vm
-   * consumers (CLI driver, older tests); absent → treated as 0. See
-   * `src/extension/state/hideIdleFilter.ts` for the producer.
-   */
-  hiddenIdleCount?: number;
-  /**
    * Count of rostered agent tiles suppressed this tick because their
    * `(teamId, memberId)` is in the user's persisted hidden-member set
    * (E-06a / EPIC 86ca11187 §7.2 — reversible hide-agent). Used by the
@@ -817,8 +799,7 @@ export interface AgentTree {
    * with consumers that don't supply or read it; absent → treated as 0. See
    * `src/extension/state/hideMembersFilter.ts` for the producer.
    *
-   * UNLIKE `hiddenIdleCount` / `hiddenFinishedCount` (state-driven, transient),
-   * this count is driven by an explicit, persisted user action — it does NOT
+   * This count is driven by an explicit, persisted user action — it does NOT
    * change as agents transition between running/idle/finished. There is NO
    * auto-hide-by-time path that feeds this count (sponsor REJECTED auto-hide,
    * DECISIONS §36 — guarded by a regression test).
@@ -868,7 +849,6 @@ export interface AgentTree {
    * See `team/iris-ux/m5-hide-finished-spec.md` §3.5 Field B.
    */
   config?: {
-    hideFinishedAgents?: boolean;
     /**
      * Mirror of `claudeteam.autoCollapseUniformClusters` (uniform-cluster
      * polish ticket 86c9zmqa8). When true, a CollapsedPersonaGroup whose
@@ -881,16 +861,6 @@ export interface AgentTree {
      * Source: team/iris-ux/86c9zmqa8-uniform-cluster-spec.md §8.1.
      */
     autoCollapseUniformClusters?: boolean;
-    /**
-     * Mirror of `claudeteam.hideIdleAgents` (spec 86c9zmyef). When true
-     * (V1 default — sponsor-confirmed Q1), the post-reducer filter
-     * suppresses idle tiles and the webview header chip renders
-     * "N idle hidden — show". Optional for back-compat with pre-86c9zq9vm
-     * consumers; absent → webview treats as `false`.
-     *
-     * Source: team/iris-ux/86c9zmyef-running-focused-dashboard-spec.md §3.
-     */
-    hideIdleAgents?: boolean;
   };
 }
 

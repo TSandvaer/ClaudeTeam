@@ -3,15 +3,19 @@
  * whose `(teamId, memberId)` is in the user's persisted hidden-member set
  * (E-06a / EPIC 86ca11187 §7.2 — reversible hide-agent).
  *
- * Sibling of `hideFinishedFilter.ts` / `hideIdleFilter.ts`. All three apply at
- * `buildAgentTree` exit / `serializeState` entry — NOT inside the reducer.
- * Keeping classification (reducer) and presentation (these filters) separate
- * means the filters can be flipped without invalidating the cached agent tree,
- * and each pass produces BOTH the filtered tree AND the wire count in one walk.
+ * Sibling of `removeMembersFilter.ts`. Both apply at `buildAgentTree` exit /
+ * `serializeState` entry — NOT inside the reducer. Keeping classification
+ * (reducer) and presentation (these filters) separate means the filters can be
+ * flipped without invalidating the cached agent tree, and each pass produces
+ * BOTH the filtered tree AND the wire count in one walk.
  *
- * ## Crucial difference from the state-driven siblings
+ * (The global state-driven `hideFinishedFilter` / `hideIdleFilter` siblings
+ * were removed by 86ca1gdbp — the global hide chips were superseded by the
+ * whole-team-always-visible default + this per-member hide.)
  *
- * `hideIdle` / `hideFinished` suppress by tile *state* (transient, recomputed
+ * ## Crucial difference from a state-driven filter
+ *
+ * A state-driven filter suppresses by tile *state* (transient, recomputed
  * every tick from filesystem signals). This filter suppresses by an EXPLICIT,
  * PERSISTED user decision keyed to a roster member — it is INDEPENDENT of the
  * tile's state. A hidden member stays hidden whether it is running, idle,
