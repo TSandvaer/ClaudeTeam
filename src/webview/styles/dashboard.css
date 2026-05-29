@@ -120,26 +120,56 @@ body {
   color: var(--ct-color-fg);
 }
 
-.session-id {
+/* 86ca18bc2 — corrected title hierarchy (spec §5.2). The resolved title is
+ * the PRIMARY header label: full foreground color, weight 600, largest text
+ * in the header. The `SESSION {shortId}` element is DEMOTED to a small muted
+ * trailing chip (rules below). Theme-aware throughout — all colors resolve
+ * from the `--ct-color-*` tokens, which themselves wrap `--vscode-*` theme
+ * variables (no hardcoded hex). */
+.session-title {
+  /* dominant: full fg, bold, slightly larger than the surrounding chips */
+  color: var(--ct-color-fg);
   font-weight: 600;
+  font-size: 1.08em;
+  /* keep a long title from shoving the trailing id chip off-screen */
+  overflow-wrap: anywhere;
 }
 
-.session-entrypoint,
-.session-pid,
-.session-cwd,
-.session-title {
+.session-entrypoint {
   color: var(--ct-color-fg-muted);
   font-size: smaller;
 }
 
-.session-cwd {
+/* DEMOTED session id — small muted monospace chip pushed to the trailing
+ * edge of the header. `margin-left: auto` floats it right of the title +
+ * chips (and right of the dead-badge, which also uses auto-margin: the badge
+ * keeps its own auto-margin so on a dead header the badge and the id chip sit
+ * together at the trailing edge in DOM order). */
+.session-id {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--ct-space-xs);
+  padding: 0 var(--ct-space-xs);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-chip);
   font-family: var(--vscode-editor-font-family, monospace);
-  overflow-wrap: anywhere;
-  word-break: break-all;
+  font-size: smaller;
+  color: var(--ct-color-fg-muted);
+  white-space: nowrap;
 }
 
-.session-title {
-  font-style: italic;
+/* When a dead-badge is present it takes the auto-margin slot; the id chip
+ * then sits immediately after it without grabbing its own auto-margin
+ * (otherwise the two would split to opposite ends). */
+.session-dead-badge ~ .session-id {
+  margin-left: 0;
+}
+
+.session-id-glyph {
+  /* the decorative info glyph — aria-hidden in the DOM; muted so the short
+   * id text stays the readable part of the chip */
+  opacity: 0.85;
 }
 
 /* 86ca03nww — gitBranch chip near the session title. Small monospaced badge

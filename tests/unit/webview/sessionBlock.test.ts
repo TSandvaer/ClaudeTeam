@@ -103,13 +103,75 @@ describe("sessionBlock — session label resolution (86ca03nww)", () => {
     expect(span?.getAttribute("data-label-source")).toBe("ai-title");
   });
 
-  it("label source tooltip surfaces resolution tier", () => {
+  it("label source tooltip surfaces resolution tier (cwd folded in — 86ca18bc2 §5.2)", () => {
     const block = renderSessionBlock({
-      session: makeSession({ customTitle: "team" }),
+      session: makeSession({
+        customTitle: "team",
+        cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
+      }),
       postMessage: vi.fn(),
     });
     const span = block.querySelector(".session-title");
-    expect(span?.getAttribute("title")).toBe("Sponsor rename (custom-title)");
+    // 86ca18bc2: cwd now folds into the title tooltip (§5.2 demotes the
+    // standalone .session-cwd span); the resolution-tier note is composed
+    // after it on a second line.
+    expect(span?.getAttribute("title")).toBe(
+      "c:\\Trunk\\PRIVATE\\ClaudeTeam\nSponsor rename (custom-title)",
+    );
+  });
+});
+
+describe("sessionBlock — corrected title hierarchy (86ca18bc2 §5)", () => {
+  it("resolved title leads the header in DOM order, UUID chip is demoted to the trailing edge", () => {
+    const block = renderSessionBlock({
+      session: makeSession({
+        customTitle: "claude team - continued",
+        gitBranch: "main",
+      }),
+      postMessage: vi.fn(),
+    });
+    const title = block.querySelector(".session-title");
+    const idChip = block.querySelector(".session-id");
+    expect(title?.textContent).toBe("claude team - continued");
+    expect(idChip).not.toBeNull();
+    // The title must precede the demoted UUID chip in document order — this
+    // is the load-bearing hierarchy assertion: the human label dominates and
+    // the `SESSION {shortId}` element is pushed to the trailing edge.
+    expect(
+      title!.compareDocumentPosition(idChip!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+  });
+
+  it("UUID chip keeps the short id visible (not tooltip-only) + folds pid into its tooltip", () => {
+    const block = renderSessionBlock({
+      session: makeSession({ shortId: "7b53d0ee", pid: 68644 }),
+      postMessage: vi.fn(),
+    });
+    const idChip = block.querySelector(".session-id");
+    // The short id stays in the visible chip text (load-bearing for grepping
+    // JSONLs/logs per §5.3) — the decorative glyph lives in an aria-hidden
+    // child, so the chip's textContent carries the glyph + the id.
+    expect(idChip?.textContent).toContain("7b53d0ee");
+    // pid is demoted from a standalone span into the chip's tooltip (§5.2).
+    expect(idChip?.getAttribute("title")).toBe(
+      "session id 7b53d0ee · pid=68644",
+    );
+    // aria-label text-pairs the chip for screen readers.
+    expect(idChip?.getAttribute("aria-label")).toBe("session id");
+    // The decorative glyph is hidden from the accessibility tree.
+    expect(
+      idChip?.querySelector(".session-id-glyph")?.getAttribute("aria-hidden"),
+    ).toBe("true");
+  });
+
+  it("no standalone .session-pid / .session-cwd spans remain (folded into tooltips)", () => {
+    const block = renderSessionBlock({
+      session: makeSession(),
+      postMessage: vi.fn(),
+    });
+    expect(block.querySelector(".session-pid")).toBeNull();
+    expect(block.querySelector(".session-cwd")).toBeNull();
   });
 });
 

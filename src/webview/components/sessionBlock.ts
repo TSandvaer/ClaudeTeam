@@ -1,28 +1,39 @@
 /**
- * sessionBlock — one block per SessionTree per Iris's spec §4.
+ * sessionBlock — one block per SessionTree per Iris's spec §4 + the corrected
+ * title hierarchy from whole-team-display-spec.md §5 (86ca18bc2).
  *
  *   <section class="session-block" data-session-id data-alive>
  *     <header class="session-header">
- *       <span class="session-id">SESSION {shortId}</span>
+ *       <span class="session-title">{resolved title}</span>     <!-- PRIMARY -->
  *       <span class="session-entrypoint">[{entrypoint}]</span>
- *       <span class="session-pid">pid={pid}</span>
- *       <span class="session-cwd" title="{cwd}">{cwd}</span>
- *       <span class="session-title">{title}</span>
- *       <span class="session-dead-badge">dead</span>   <!-- only when !isAlive -->
+ *       <span class="session-git-branch">{branch}</span>        <!-- when present -->
+ *       <span class="session-dead-badge">dead</span>            <!-- only when !isAlive -->
+ *       <span class="session-id" title="pid={pid}">ⓘ {shortId}</span>  <!-- DEMOTED, trailing -->
  *     </header>
  *     {team cards in teamOrder}
  *     {background chip if background.length > 0}
  *   </section>
  *
+ * §5 hierarchy correction (86ca18bc2): the resolved title (from
+ * `resolveSessionLabel`: customTitle > aiTitle > workspace-folder) is the
+ * dominant header label — first in DOM order, `--ct-color-fg`, weight 600,
+ * largest text. The `SESSION {shortId}` element is DEMOTED to a small muted
+ * monospace chip at the trailing edge with an info glyph + aria-label
+ * "session id" (kept visible per sponsor — UUID is load-bearing for grepping
+ * JSONLs/logs, just not dominant). `pid` folds into that chip's tooltip and
+ * `cwd` folds into the title's tooltip — both demoted from standalone spans
+ * (§5.2). The gitBranch chip + `data-label-source` attribute are unchanged.
+ *
  * Dead session treatment (§4): isAlive === false adds `session-block--dead`
  * class. CSS dims via opacity + --vscode-disabledForeground. No team cards or
- * chips render for dead sessions — header alone, so the sponsor sees the
- * session existed.
+ * chips render for dead sessions — header alone (with the §5 hierarchy applied
+ * at 0.5 opacity), so the sponsor sees which session existed.
  *
  * Empty team suppression: teams with zero tiles in this session are skipped
  * entirely (§6 — no empty cards rendered).
  *
- * Source: team/iris-ux/m2-dashboard-tile-spec.md §4
+ * Source: team/iris-ux/m2-dashboard-tile-spec.md §4 +
+ *         team/iris-ux/whole-team-display-spec.md §5 (86ca18bc2)
  */
 
 import type {
@@ -127,26 +138,19 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
   block.dataset.sessionId = session.sessionId;
   block.dataset.alive = String(session.isAlive);
 
-  // ----- Session header -----
+  // ----- Session header (86ca18bc2 corrected hierarchy, spec §5.2) -----
   const header = document.createElement("header");
   header.className = "session-header";
 
-  appendSpan(header, "session-id", `SESSION ${session.shortId}`);
-  appendSpan(header, "session-entrypoint", `[${session.entrypoint}]`);
-  appendSpan(header, "session-pid", `pid=${session.pid}`);
-
-  const cwdSpan = document.createElement("span");
-  cwdSpan.className = "session-cwd";
-  cwdSpan.setAttribute("title", session.cwd);
-  cwdSpan.textContent = session.cwd;
-  header.appendChild(cwdSpan);
-
+  // PRIMARY label — the resolved title leads the header in DOM order so it
+  // is visually dominant (CSS gives it weight 600 + the largest header text).
+  //
   // 86ca03nww: resolve display label AND its source in one pass via the
   // shared `resolveSessionLabelWithSource` helper. The helper centralizes
   // the priority chain (customTitle > aiTitle > workspace-folder fallback)
   // and normalization rules (empty/whitespace customTitle, `(no title yet)`
   // sentinel) so the label text and `data-label-source` attribute can never
-  // drift apart.
+  // drift apart. Unchanged by 86ca18bc2 — same resolver, same source attr.
   const labelSpan = document.createElement("span");
   labelSpan.className = "session-title";
   const resolved = resolveSessionLabelWithSource({
@@ -155,14 +159,24 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
     cwd: session.cwd,
   });
   labelSpan.textContent = resolved.label;
-  labelSpan.setAttribute("title", LABEL_SOURCE_TOOLTIPS[resolved.source]);
+  // §5.2: cwd folds into the title tooltip (workspace path is context, not a
+  // headline). Compose with the existing label-source tooltip so both facts
+  // are one hover away. cwd first (the more useful "where am I" answer),
+  // then the resolution-tier note.
+  labelSpan.setAttribute(
+    "title",
+    `${session.cwd}\n${LABEL_SOURCE_TOOLTIPS[resolved.source]}`,
+  );
   labelSpan.dataset.labelSource = resolved.source;
   header.appendChild(labelSpan);
+
+  // Entrypoint chip — small muted chip, unchanged (§5.2).
+  appendSpan(header, "session-entrypoint", `[${session.entrypoint}]`);
 
   // 86ca03nww: gitBranch chip — small badge near the title surfacing the
   // active branch at the latest JSONL record. Hidden when the parser found
   // no gitBranch on disk (pre-86ca03nww emitters, sessions whose JSONL has
-  // no records carrying the field).
+  // no records carrying the field). Unchanged by 86ca18bc2.
   if (typeof session.gitBranch === "string" && session.gitBranch.length > 0) {
     const branchChip = document.createElement("span");
     branchChip.className = "session-git-branch";
@@ -178,6 +192,25 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
     deadBadge.textContent = "dead";
     header.appendChild(deadBadge);
   }
+
+  // DEMOTED UUID chip — trailing edge, small muted monospace, info glyph +
+  // aria-label "session id" (§5.2). Kept visible (not tooltip-only) because
+  // the short id is load-bearing for grepping JSONLs / matching log lines
+  // (§5.3, sponsor-resolved). `pid` folds into this chip's tooltip — it's a
+  // debugging detail, demoted from a standalone span (§5.2). The glyph is in
+  // its own aria-hidden span so screen readers read the aria-label + id text
+  // without announcing the decorative "ⓘ".
+  const idChip = document.createElement("span");
+  idChip.className = "session-id";
+  idChip.setAttribute("aria-label", "session id");
+  idChip.setAttribute("title", `session id ${session.shortId} · pid=${session.pid}`);
+  const idGlyph = document.createElement("span");
+  idGlyph.className = "session-id-glyph";
+  idGlyph.setAttribute("aria-hidden", "true");
+  idGlyph.textContent = "ⓘ";
+  idChip.appendChild(idGlyph);
+  idChip.appendChild(document.createTextNode(` ${session.shortId}`));
+  header.appendChild(idChip);
 
   block.appendChild(header);
 
