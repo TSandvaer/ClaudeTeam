@@ -937,3 +937,12 @@ Sponsor authorized dispatching this ticket; result is "work already done" rather
 **Status:** pending review.
 
 **Pointers:** PR #107 https://github.com/TSandvaer/ClaudeTeam/pull/107; Maya APPROVE comment 4556933377; ticket `86ca049xf` (will flip → complete); Maya agent `a3ddb89cc2372ae03`; Felix agent `a9d17f05cd8f0fee0`.
+
+## 2026-05-29 1026 UTC — Auto-merge PR #120 (E-07b remove-agent webview + 6-member sprite binding)
+
+- **Decided:** Admin-squash-merge PR #120 (`feat(webview): remove-agent affordance + confirm-step + removed-mask on show-hidden + 6-member sprite binding (E-07b)`) at merge SHA `f6daa9d`. Flipped `86ca1agc5` (E-07) → complete. First committed+pushed the DECISIONS.md 2026-05-29 sprite-binding entry directly to main (`1bc92a5`) so PR #120's `spriteManifest.ts:11` cross-ref resolved (Felix's only NIT).
+- **Foundation:** rule 6.6 #1 (routine impl PR, CI green + peer APPROVE). Felix APPROVE_WITH_NITS at PR #120#issuecomment-4573857664 — all 6 scope items pass incl. vocabulary aligned with merged E-07a host (no divergence), no-auto-hide guard intact. CI authoritative: `typecheck + lint + unit` 2× COMPLETED SUCCESS. NIT was the dangling DECISIONS cite — resolved by the direct coord-doc commit (cross-ref-ordering lesson [[feedback_cross_ref_dependency_pr_ordering]]), no PR change needed.
+- **Alternative:** surface to sponsor. Rejected per sponsor-delegated merge authority.
+- **Reversibility:** `git revert f6daa9d` + admin-merge revert PR. ≤1 PR, ~10 min.
+- **Status:** pending review.
+- **Pointers:** PR #120 (`f6daa9d`); DECISIONS commit `1bc92a5`; Felix review agentId `a8376e75a1bf29ec6`; ticket `86ca1agc5` complete.
