@@ -151,6 +151,34 @@ the head stays bowed down looking at the book the entire time and does a full ev
 
 **Per-frame timing can be NON-UNIFORM — dwell on a key frame.** Beyond uniform-slow, the render can hold ONE frame far longer than the rest. `idle_stretch` (2026-05-28): the arms-overhead peak frame must be HELD a while before the loop continues, so it reads "stretch up → hold → relax → pause → repeat" instead of rhythmic exercise reps. `idle_phone` (2026-05-28): hold the LAST frames before the loop restarts (scroll → pause → scroll), plus slow playback. The dwell point varies per anim (stretch = overhead peak; phone = end-of-loop), but **a hold-before-restart is becoming the DEFAULT idle treatment** — without it, short idle loops read mechanically/repetitively. Capture per-anim **dwell frames** (which frame index + hold duration) as part of the render requirement — this also suits the sip-at-lips / nibble peaks. So the render integration needs: (a) per-anim default playback ms, AND (b) optional per-frame dwell overrides (default: hold the final frame(s) before restart).
 
+### Per-animation playback override table (webview render config — 86ca1fntp)
+
+The webview `spritePlayer` (`src/webview/sprites/spritePlayer.ts`) carries a per-character override table `PLAYBACK_OVERRIDES[characterName][canonicalAnimName] → { speedMultiplier?, dwellFrameIndex?, dwellMs? }`. Defaults: `FRAME_MS_DEFAULT = 160ms/frame`, `DWELL_MS_DEFAULT = 400ms` (final-frame idle dwell), `PEAK_DWELL_MS_DEFAULT = 600ms` (peak-frame hold when a `dwellFrameIndex` names no explicit `dwellMs`).
+
+- **`speedMultiplier` is a fraction of the default RATE.** 50% speed = half the rate = `FRAME_MS_DEFAULT / 0.5 = 320ms/frame`; 70% = `160 / 0.7 ≈ 229ms/frame`. Absent → 1.0 (160ms).
+- **`dwellFrameIndex` holds ONE mid-sequence apex frame** for `dwellMs` extra. Composes additively with the final-frame idle dwell when the apex coincides with the last frame. Out-of-range indices are ignored (frame counts differ M01 vs F01).
+- **Reduced-motion** still shows frame-0-only with no timer — overrides never run under `prefers-reduced-motion: reduce`.
+
+| Canonical anim | speedMultiplier | M01 peak frame | F01 peak frame | Notes |
+|---|---|---|---|---|
+| `active_read` | 0.5 | — | — | reading head-sweep, slowed |
+| `active_work` | 0.5 | — | — | typing, slowed; no final-frame dwell (active loops are continuous) |
+| `idle_coffee` | 0.5 | 4 | 4 | cup-at-mouth hold (9-frame loop, mid-loop) |
+| `idle_snack` | 0.5 | 4 | 4 | hand-at-mouth hold (9-frame loop) |
+| `idle_stretch` | 0.5 | 8 | 5 | arms-fully-up apex; M01 re-peaks overhead at frame 8, F01's gentler raise maxes at frame 5 |
+| `idle_phone` | 0.5 | 4 | 4 | phone-at-face hold (9-frame loop) |
+| `idle_hips` | 0.5 | — | — | |
+| `idle_think` | 0.5 | — | — | |
+| `idle_arms_crossed` | 0.5 | — | — | |
+| `idle_pockets` | 0.5 | — | — | |
+| `idle_neck_roll` | 0.5 | — | — | |
+| `idle_yawn` | 0.5 | — | — | |
+| `idle_watch` | 0.5 | — | — | |
+| `idle_headphones` | 0.7 | — | — | |
+| `idle_wave` | — (1.0) | — | — | unchanged |
+
+Peak indices were read off the harvested south-view frames (M01 stretch starts at the overhead peak and re-peaks overhead at frame 8; F01 stretch is a gentler raise maxing around frame 5). **The sponsor visually tunes the exact feel (speed + dwell ms + peak index) on reload** — this table is the starting point, all values are render-time-tunable with zero gens.
+
 ---
 
 ## Operational pipeline (orch-driven; sub-agents lack PixelLab MCP access)
