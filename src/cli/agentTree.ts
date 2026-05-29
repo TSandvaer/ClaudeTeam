@@ -6,8 +6,13 @@
  *   node dist/cli/agentTree.js [--claude-home <path>] [--roster <path>]
  *
  * Reads the live ~/.claude/ tree (or the path supplied via --claude-home),
- * loads the roster (default: ~/.claudeteam/teams.yaml or --roster override),
- * reduces via buildAgentTree, and prints per the M1-03 spec.
+ * loads the roster (default: <cwd>/.claude/claudeteam.yaml or --roster
+ * override), reduces via buildAgentTree, and prints per the M1-03 spec.
+ *
+ * TS-02 (team-setup epic, Decision 1): the global `~/.claudeteam/teams.yaml`
+ * default is DROPPED. The roster is project-scoped; the CLI defaults to the
+ * project `claudeteam.yaml` in the current working directory. Pass `--roster`
+ * to point at any roster file explicitly.
  *
  * Exit codes:
  *   0 — always (empty state, parse errors, missing roster are all soft faults
@@ -49,7 +54,9 @@ import {
 function parseArgs(argv: string[]): { claudeHome: string; rosterPath: string } {
   const args = argv.slice(2);
   let claudeHome = join(homedir(), ".claude");
-  let rosterPath = join(homedir(), ".claudeteam", "teams.yaml");
+  // TS-02 (Decision 1): global `~/.claudeteam/teams.yaml` dropped. Default to
+  // the project-scoped `<cwd>/.claude/claudeteam.yaml`; `--roster` overrides.
+  let rosterPath = join(process.cwd(), ".claude", "claudeteam.yaml");
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--claude-home" && i + 1 < args.length) {
@@ -499,8 +506,9 @@ function printSession(session: SessionTree, teamNameForId: Map<string, string>):
 async function main(): Promise<void> {
   const { claudeHome, rosterPath } = parseArgs(process.argv);
 
-  // Load roster.
-  const rosterResult = loadRoster(rosterPath);
+  // Load roster. TS-02 (Decision 1): pass the project path (2nd arg); the
+  // global (1st arg) is left undefined — the global file is dropped.
+  const rosterResult = loadRoster(undefined, rosterPath);
 
   // Emit roster warnings/errors to stderr (soft — still runs).
   for (const w of rosterResult.warnings) {

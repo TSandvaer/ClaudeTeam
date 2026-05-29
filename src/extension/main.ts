@@ -46,12 +46,15 @@ import { startWatcher, type WatcherHandle } from "./watcher/watcherLoop.js";
 import { HiddenMembersStore } from "./state/hiddenMembersStore.js";
 import { RemovedMembersStore } from "./state/removedMembersStore.js";
 import { startRosterWatcher } from "./roster/rosterWatcher.js";
-import {
-  openRoster,
-  registerOpenRosterCommand,
-} from "./commands/openRoster.js";
+import { startAgentWatcher } from "./roster/agentWatcher.js";
+import { SetupController } from "./setupController.js";
 import { registerOpenSettingsCommand } from "./commands/openSettings.js";
-import { postState } from "./messageBus.js";
+import {
+  postState,
+  postSetupConfigSaved,
+  postSetupCharacters,
+  postSetupDetection,
+} from "./messageBus.js";
 import { cwdToSlug } from "../shared/slug.js";
 import {
   createDiagnosticChannel,
@@ -124,14 +127,18 @@ export function activate(context: vscode.ExtensionContext): void {
    * tears it down on `deactivate()`.
    */
   let rosterWatcherDisposable: vscode.Disposable | null = null;
+  /**
+   * Agents-folder drift watcher (TS-02). Disposed-and-replaced on every webview
+   * resolve in lockstep with `watcherHandle`. Torn down on `deactivate()`.
+   */
+  let agentWatcherDisposable: vscode.Disposable | null = null;
 
-  // Note (M3-02): the `claudeteam.openRoster` command and the
-  // `ui:open-roster` webview message both delegate to
-  // {@link openRoster} from `./commands/openRoster.js`, which resolves the
-  // GLOBAL roster path via `claudeteam.rosterPath` config (or the
-  // documented default `~/.claudeteam/teams.yaml`). No `resolvedRosterPath`
-  // closure is needed on this side — `openRoster()` reads config fresh
-  // every invocation, so the most recent edited value always wins.
+  // TS-02 (team-setup epic, Decision 1): the `claudeteam.openRoster` command
+  // and its auto-create-of-the-global-file flow are DROPPED. The roster is now
+  // project-scoped at `<workspace>/.claude/claudeteam.yaml`, managed by the
+  // webview's Manage Team panel (TS-03) via `ui:open-manage-team` + the
+  // `setup:*` / `ui:*` message family. There is no global file to open and no
+  // command to register.
 
   // Cleanup wrapper registered ONCE on activation. It tracks the *current*
   // watcher reference at the time `deactivate()` runs — not a snapshot from
@@ -143,6 +150,8 @@ export function activate(context: vscode.ExtensionContext): void {
       watcherHandle = null;
       rosterWatcherDisposable?.dispose();
       rosterWatcherDisposable = null;
+      agentWatcherDisposable?.dispose();
+      agentWatcherDisposable = null;
       // 86c9zn7vw: dispose the diagnostic channel (only releases the
       // underlying vscode.OutputChannel if one was actually allocated).
       diagnosticChannel.dispose();
@@ -174,6 +183,8 @@ export function activate(context: vscode.ExtensionContext): void {
     watcherHandle?.dispose();
     rosterWatcherDisposable?.dispose();
     rosterWatcherDisposable = null;
+    agentWatcherDisposable?.dispose();
+    agentWatcherDisposable = null;
 
     const config = vscode.workspace.getConfiguration("claudeteam");
     const pollIntervalMs = config.get<number>("pollIntervalMs") ?? 2000;
@@ -184,19 +195,25 @@ export function activate(context: vscode.ExtensionContext): void {
       config.get<number>("rosterPollIntervalMs") ?? 0;
 
     const claudeHome = join(homedir(), ".claude");
-    const globalRosterPath =
+
+    // TS-02 (team-setup epic, Decision 1): the GLOBAL `~/.claudeteam/teams.yaml`
+    // is DROPPED. The roster is project-scoped at
+    // `<first-workspace-folder>/.claude/claudeteam.yaml`. The
+    // `claudeteam.rosterPath` setting, when set, still wins as an explicit
+    // override (absolute path to a roster file) — but the implicit default is
+    // now the project file, NOT the global path. No code path resolves the
+    // global location anymore (regression-guarded — TS-02 AC5).
+    const projectRosterPath =
       rosterPathOverride.length > 0
         ? rosterPathOverride
-        : join(homedir(), ".claudeteam", "teams.yaml");
-
-    // Project roster: <first workspace folder>/.claude/teams.yaml when a
-    // folder is open. Falls through to undefined (loader treats absent paths
-    // as "no project roster").
-    const projectRosterPath = resolveProjectRosterPath();
+        : resolveProjectRosterPath();
 
     watcherHandle = startWatcher({
       claudeHome,
-      globalRosterPath,
+      // globalRosterPath intentionally omitted (Decision 1 — global dropped).
+      // The watcher's `globalRosterPath` is optional; absent → loadRoster treats
+      // it as "no global roster", and only the project `claudeteam.yaml` feeds
+      // the matcher.
       projectRosterPath,
       pollIntervalMs,
       // M3-03: read both inputs fresh every tick so config / workspace
@@ -308,7 +325,8 @@ export function activate(context: vscode.ExtensionContext): void {
     // input as the previous valid roster (loadRoster already swallows
     // errors and reports them in `errors`); M3-04 renders the chip.
     rosterWatcherDisposable = startRosterWatcher({
-      globalPath: globalRosterPath,
+      // TS-02 (Decision 1): global path dropped — only the project
+      // `claudeteam.yaml` is watched for hot-reload.
       projectPath: projectRosterPath,
       pollIntervalMs: rosterPollIntervalMs,
       onRosterChange: (result) => {
@@ -341,8 +359,78 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     });
 
+    // TS-02 (team-setup epic): the setup controller owns detection compute,
+    // the agents scan, the starter-config gen/read/write, character-source
+    // resolution, and the `ui:*` setup handlers. Constructed per webview
+    // resolve so its `post` sink targets THIS webview. The bundled sprites root
+    // is `<extensionUri>/dist/webview/sprites` — the same tree the sprite
+    // manifest copies (86ca191uy); resolveCharacterSources reads it for the
+    // bundled half of the picker grid.
+    const workspaceFolderPath =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const bundledSpritesDir = vscode.Uri.joinPath(
+      context.extensionUri,
+      "dist",
+      "webview",
+      "sprites",
+    ).fsPath;
+    const setupController = new SetupController({
+      workspaceFolderPath,
+      bundledSpritesDir,
+      post: {
+        detection: (state, scanned) =>
+          void postSetupDetection(webview, state, scanned),
+        characters: (sources) => void postSetupCharacters(webview, sources),
+        configSaved: (ok, error) =>
+          void postSetupConfigSaved(webview, ok, error),
+      },
+      dismissStore: {
+        get: (key) => context.workspaceState.get<boolean>(key),
+        update: (key, value) => context.workspaceState.update(key, value),
+      },
+      logger: {
+        warn: (msg) => console.warn(`[claudeteam.setup] ${msg}`),
+        info: (msg) => console.info(`[claudeteam.setup] ${msg}`),
+      },
+    });
+    // Emit initial detection + the character list to the freshly-resolved
+    // webview so the dashboard root switches to the correct state immediately.
+    // (The webview also pulls via ui:open-manage-team / ui:refresh; this push
+    // is the fast-path. Per the fire-and-forget caveat, the webview's boot
+    // ui:refresh handler below also re-emits — see onRefresh.)
+    setupController.emitDetection();
+    setupController.emitCharacters();
+
+    // TS-02 (Decision 3 / spec §6): watch `.claude/agents/` for drift. New
+    // agents → a non-blocking nudge (logged; the webview re-renders the
+    // suggest count). Removed agents → flip the backing member to
+    // `status: orphaned` via the controller's reconcile (NEVER auto-deletes;
+    // NEVER auto-adds). The watcher only signals — the controller owns the
+    // (conditional) config write + re-emits detection so the orphan treatment
+    // renders.
+    agentWatcherDisposable = startAgentWatcher({
+      workspaceFolderPath,
+      pollIntervalMs: rosterPollIntervalMs,
+      onAgentsChange: (change) => {
+        if (change.added.length > 0) {
+          console.info(
+            `[claudeteam.setup] ${change.added.length} new agent(s) found: ${change.added.join(", ")} — review in Manage Team (no auto-add).`,
+          );
+        }
+        const present = new Set(change.scanned.map((a) => a.agentName));
+        setupController.reconcileDrift(present);
+        // A new agent can flip the trichotomy (empty→suggest) or change the
+        // matched roster; trigger a tick so the dashboard tiles reconcile too.
+        watcherHandle?.triggerTick();
+      },
+      logger: {
+        warn: (msg) => console.warn(`[claudeteam.agentWatcher] ${msg}`),
+        info: (msg) => console.info(`[claudeteam.agentWatcher] ${msg}`),
+      },
+    });
+
     // Wire webview → host message dispatch. Handlers close over the current
-    // watcherHandle / webview / resolvedRosterPath — replacing the handler
+    // watcherHandle / webview / setupController — replacing the handler
     // set on every resolve is intentional (the prior set referenced the
     // now-disposed watcher).
     const handlers: WebviewMessageHandlers = {
@@ -354,14 +442,6 @@ export function activate(context: vscode.ExtensionContext): void {
           () => watcherHandle?.getLastState() ?? null,
         );
       },
-      onOpenRoster: () => {
-        // M3-02 AC6: the webview "Edit Roster" button surfaces the same
-        // openRoster flow as the command palette — auto-creates the file
-        // if missing. Eliminates the NIT #3 (M3-01 PR #35 comment 4528643161)
-        // existsSync→createFileSystemWatcher race by guaranteeing the
-        // directory + file exist after this handler returns.
-        void openRoster();
-      },
       onRefresh: () => {
         // 86c9z5hyp: use forceRefresh (not triggerTick) so the boot-time
         // `ui:refresh` from the webview's `boot()` (PR #73) actually
@@ -372,6 +452,50 @@ export function activate(context: vscode.ExtensionContext): void {
         // stranded on empty-state. Bram's round-2 triage at
         // `team/bram-research/86c9yteju-triage-2026-05-26.md` § Round 2.
         watcherHandle?.forceRefresh();
+        // TS-02: the webview's boot `ui:refresh` is also our reliable
+        // (non-fire-and-forget) trigger to (re)emit the setup messages, since
+        // the host's resolve-time push can race the webview's listener
+        // registration (vscode-extension-conventions.md § fire-and-forget).
+        setupController.emitDetection();
+        setupController.emitCharacters();
+      },
+      // TS-02 (spec §1, §4): "Manage Team" / "Set up team" → the host re-emits
+      // detection + characters so the webview can open the panel in the right
+      // layout (wizard when no config, edit when configured). The webview
+      // decides which layout from the `setup:detection` state; the host does
+      // not own panel layout — it just supplies the data.
+      onOpenManageTeam: () => {
+        setupController.emitDetection();
+        setupController.emitCharacters();
+      },
+      // TS-02 (spec §3.2): wizard confirm → generate + write starter config.
+      onRunSetup: (msg) => {
+        setupController.runSetup(msg.payload.include);
+        // The new config changes the matched roster; force a tick so tiles
+        // reconcile alongside the detection flip to `configured`.
+        watcherHandle?.forceRefresh();
+      },
+      // TS-02 (spec §4.3): panel save → normalized structured write.
+      onSaveTeam: (msg) => {
+        setupController.saveTeam(msg.payload.config);
+        watcherHandle?.forceRefresh();
+      },
+      // TS-02 (spec §5.2): assign/clear a member's character.
+      onAssignCharacter: (msg) => {
+        setupController.assignCharacter(
+          msg.payload.memberId,
+          msg.payload.character,
+        );
+        watcherHandle?.forceRefresh();
+      },
+      // TS-02 (spec §6.1): the ONLY member-delete path — confirmed orphan delete.
+      onConfirmOrphanDelete: (msg) => {
+        setupController.confirmOrphanDelete(msg.payload.memberId);
+        watcherHandle?.forceRefresh();
+      },
+      // TS-02 (spec §7.2): remember-per-workspace dismiss of the suggest card.
+      onDismissSetupSuggestion: () => {
+        setupController.dismissSuggestion();
       },
       // E-06a (EPIC 86ca11187 §7.2): hide / show / show-all. Each mutates the
       // persisted store then forces a re-emit so the dashboard updates within
@@ -418,10 +542,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // These are thin shims that delegate to the webview message handlers so
   // the command palette and webview UI funnel through the same code paths.
   //
-  // `claudeteam.openRoster` is registered separately via
-  // {@link registerOpenRosterCommand} — it owns its own auto-create-on-
-  // missing logic and does not need a closure over `watcherHandle`.
-  registerOpenRosterCommand(context);
+  // TS-02 (Decision 1): `claudeteam.openRoster` is DROPPED — the global file
+  // it auto-created no longer exists, and roster editing moves to the webview's
+  // Manage Team panel (TS-03) via `ui:open-manage-team`.
 
   // `claudeteam.openSettings` (86ca16r2d) — gear icon in the Dashboard view
   // title bar (contributes.menus → view/title). Routes to the native Settings
@@ -470,16 +593,23 @@ export function deactivate(): void {
 // =============================================================================
 
 /**
- * Resolve project roster path from the first workspace folder, if any.
- * Returns undefined when no folder is open (extension running without a
- * workspace — still valid; only global roster applies).
+ * Resolve the project roster path from the first workspace folder, if any.
+ *
+ * TS-02 (team-setup epic, Decision 1): this now resolves the NEW project-scoped
+ * `<first-folder>/.claude/claudeteam.yaml` (renamed from the pre-TS-02
+ * `teams.yaml`). The global `~/.claudeteam/teams.yaml` is DROPPED — there is no
+ * global fallback. Returns `undefined` when no folder is open (extension
+ * running without a workspace — still valid; the dashboard shows the
+ * detection-driven empty/suggest state and no rostered tiles).
+ *
+ * Multi-root = first folder only (ratify default — spec §7.4).
  *
  * Exported for tests.
  */
 export function resolveProjectRosterPath(): string | undefined {
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) return undefined;
-  return join(folder.uri.fsPath, ".claude", "teams.yaml");
+  return join(folder.uri.fsPath, ".claude", "claudeteam.yaml");
 }
 
 /**

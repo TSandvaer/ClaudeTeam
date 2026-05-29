@@ -239,6 +239,21 @@ async function main() {
           path.join(DIST_SPRITES, name, "_pixellab_anims"),
         );
       }
+      // TS-02 (team-setup epic, AC7): also copy `animations.json` into the dist
+      // char folder so the BUNDLED character matches the valid-character shape
+      // (`animations.json` + `_pixellab_anims/`) that `resolveCharacterSources`
+      // validates. Without this, the picker grid sees zero bundled characters
+      // after a clean build (the webview frame-render path uses the baked
+      // generatedManifest.ts, but the character-SOURCE resolver reads the dist
+      // folder directly). Mirrors the spec §7.1 PixelLab-harvest signature.
+      const srcManifest = path.join(SPRITES_SRC, name, "animations.json");
+      if (existsSync(srcManifest)) {
+        await mkdir(path.join(DIST_SPRITES, name), { recursive: true });
+        await copyFile(
+          srcManifest,
+          path.join(DIST_SPRITES, name, "animations.json"),
+        );
+      }
     }
   }
 

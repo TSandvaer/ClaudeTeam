@@ -17,7 +17,12 @@
  */
 
 import type * as vscode from "vscode";
-import type { DashboardState } from "../shared/types.js";
+import type {
+  CharacterSource,
+  DashboardState,
+  ScannedAgent,
+  SetupDetectionState,
+} from "../shared/types.js";
 import type {
   HostMessage,
   SerializedDashboardState,
@@ -117,4 +122,77 @@ export function postState(
     );
     return Promise.resolve(false);
   }
+}
+
+// =============================================================================
+// Team-setup epic — host → webview posts (TS-02, LOCKED Vocabulary contract).
+// Each wraps the typed `HostMessage` + the same disposed-webview guard as
+// `postState`. Payloads are JSON-safe (ScannedAgent / CharacterSource are plain
+// objects; SetupDetectionState is a string literal).
+// =============================================================================
+
+/** Shared fire-and-forget post with the disposed-webview guard. */
+function safePost(
+  webview: vscode.Webview,
+  msg: HostMessage,
+  label: string,
+): Thenable<boolean> {
+  try {
+    return webview.postMessage(msg);
+  } catch (err) {
+    console.warn(
+      `[claudeteam.messageBus] ${label} failed: ${(err as Error).message}`,
+    );
+    return Promise.resolve(false);
+  }
+}
+
+/**
+ * Post `setup:detection` — the trichotomy + the full agents-folder scan
+ * (spec §2, §3.1). `scanned` is always the complete scan (the panel + drift
+ * nudge consume it even in `configured` state).
+ */
+export function postSetupDetection(
+  webview: vscode.Webview,
+  state: SetupDetectionState,
+  scanned: ScannedAgent[],
+): Thenable<boolean> {
+  return safePost(
+    webview,
+    { type: "setup:detection", payload: { state, scanned } },
+    "postSetupDetection",
+  );
+}
+
+/** Post `setup:characters` — the merged bundled + user character list (spec §5). */
+export function postSetupCharacters(
+  webview: vscode.Webview,
+  sources: CharacterSource[],
+): Thenable<boolean> {
+  return safePost(
+    webview,
+    { type: "setup:characters", payload: { sources } },
+    "postSetupCharacters",
+  );
+}
+
+/**
+ * Post `setup:config-saved` — ack for `ui:run-setup` / `ui:save-team` /
+ * `ui:assign-character` / `ui:confirm-orphan-delete` (spec §3.3, §4.3). On
+ * `ok: true` the webview transitions; on `ok: false` it surfaces the error
+ * inline and keeps the user's edits.
+ */
+export function postSetupConfigSaved(
+  webview: vscode.Webview,
+  ok: boolean,
+  error?: string,
+): Thenable<boolean> {
+  return safePost(
+    webview,
+    {
+      type: "setup:config-saved",
+      payload: error !== undefined ? { ok, error } : { ok },
+    },
+    "postSetupConfigSaved",
+  );
 }

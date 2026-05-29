@@ -48,11 +48,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "claudeteam.openRoster",
-        "title": "ClaudeTeam: Open Roster",
-        "icon": "$(list-unordered)"
-      },
-      {
         "command": "claudeteam.openAgentTranscript",
         "title": "ClaudeTeam: Open Agent Transcript",
         "icon": "$(book)"
@@ -83,7 +78,7 @@
         "claudeteam.rosterPath": {
           "type": "string",
           "default": "",
-          "description": "Override path to teams.yaml roster file. Empty string uses the default per-project location (<workspace>/.claude/teams.yaml), falling back to the global location (~/.claudeteam/teams.yaml) if no per-project roster is present."
+          "description": "Override path to the ClaudeTeam roster file. Empty string (default) uses the project-scoped location <workspace>/.claude/claudeteam.yaml, managed by the Manage Team panel. The legacy global ~/.claudeteam/teams.yaml location is no longer used."
         },
         "claudeteam.pollIntervalMs": {
           "type": "number",

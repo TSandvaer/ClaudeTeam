@@ -194,8 +194,15 @@ describe("86c9yxv6d — replay last-known state to remounted webview", () => {
     // Allow any setImmediate / queueMicrotask the watcher used to settle.
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(firstView.webview.posts.length).toBeGreaterThanOrEqual(1);
-    const firstViewPostsCount = firstView.webview.posts.length;
+    // TS-02 note: resolve now also synchronously emits `setup:detection` +
+    // `setup:characters`. The replay mechanism is about `state:full` ONLY, so
+    // these assertions count state:full posts specifically (the setup posts are
+    // a separate, additive resolve concern tested in the setup integration
+    // suite). `statefulPosts` filters to the replay's actual subject.
+    const statefulPosts = (v: typeof firstView) =>
+      v.webview.posts.filter((p) => p.type === "state:full");
+    expect(statefulPosts(firstView).length).toBeGreaterThanOrEqual(1);
+    const firstViewStatefulCount = statefulPosts(firstView).length;
 
     // Second resolve — simulates pane close + reopen. VS Code constructs a
     // fresh WebviewView and calls resolveWebviewView again. Per the fix,
@@ -205,21 +212,21 @@ describe("86c9yxv6d — replay last-known state to remounted webview", () => {
     const secondView = makeMockWebviewView();
     provider!.resolveWebviewView(secondView, {}, {});
 
-    // ASSERT (synchronous): the replay-post landed on the second webview
+    // ASSERT (synchronous): the replay state:full landed on the second webview
     // BEFORE we yielded to the event loop. The new watcher's first tick is
     // async and cannot have completed yet — postMessage was called from
     // the synchronous path in main.ts (`if (priorState !== null) { void
     // postState(webview, priorState); }`).
-    expect(secondView.webview.posts.length).toBe(1);
-    const replayPost = secondView.webview.posts[0]!;
+    expect(statefulPosts(secondView).length).toBe(1);
+    const replayPost = statefulPosts(secondView)[0]!;
     expect(replayPost.type).toBe("state:full");
     expect(replayPost.payload).toBeDefined();
     const payload = replayPost.payload as SerializedDashboardState;
     expect(Array.isArray(payload.sessions)).toBe(true);
 
-    // First webview should NOT have received any additional posts from the
-    // second resolve — the replay targets the new webview, not the old.
-    expect(firstView.webview.posts.length).toBe(firstViewPostsCount);
+    // First webview should NOT have received any additional state:full posts
+    // from the second resolve — the replay targets the new webview, not the old.
+    expect(statefulPosts(firstView).length).toBe(firstViewStatefulCount);
 
     // Cleanup — dispose subscriptions to stop the watcher.
     for (const d of ctx.subscriptions) {
@@ -245,10 +252,15 @@ describe("86c9yxv6d — replay last-known state to remounted webview", () => {
     const firstView = makeMockWebviewView();
     provider!.resolveWebviewView(firstView, {}, {});
 
-    // Synchronously: postMessage has NOT been called yet — the replay
-    // branch is skipped (priorState === null) and the first tick hasn't
-    // run yet.
-    expect(firstView.webview.posts.length).toBe(0);
+    // TS-02 note: resolve now synchronously emits `setup:detection` +
+    // `setup:characters`. The replay branch (state:full) is still skipped on
+    // first resolve (priorState === null). Count state:full posts specifically.
+    const firstStateful = () =>
+      firstView.webview.posts.filter((p) => p.type === "state:full");
+
+    // Synchronously: no state:full replay post — the replay branch is skipped
+    // (priorState === null) and the first async tick hasn't run yet.
+    expect(firstStateful().length).toBe(0);
 
     // After awaiting microtasks: the async tick completes and posts once.
     for (let i = 0; i < 10; i++) {
@@ -256,9 +268,9 @@ describe("86c9yxv6d — replay last-known state to remounted webview", () => {
     }
     await new Promise((r) => setTimeout(r, 50));
 
-    // Exactly one post — from the first tick, not from a replay.
-    expect(firstView.webview.posts.length).toBe(1);
-    expect(firstView.webview.posts[0]!.type).toBe("state:full");
+    // Exactly one state:full post — from the first tick, not from a replay.
+    expect(firstStateful().length).toBe(1);
+    expect(firstStateful()[0]!.type).toBe("state:full");
 
     for (const d of ctx.subscriptions) {
       try {
@@ -284,16 +296,18 @@ describe("86c9yxv6d — replay last-known state to remounted webview", () => {
       await Promise.resolve();
     }
     await new Promise((r) => setTimeout(r, 50));
-    expect(firstView.webview.posts.length).toBeGreaterThanOrEqual(1);
+    const statefulPosts = (v: typeof firstView) =>
+      v.webview.posts.filter((p) => p.type === "state:full");
+    expect(statefulPosts(firstView).length).toBeGreaterThanOrEqual(1);
 
-    // Second resolve — replay should fire synchronously (1 post), then the
-    // new watcher's first async tick fires and posts again (overwriting).
+    // Second resolve — replay should fire synchronously (1 state:full post),
+    // then the new watcher's first async tick fires and posts again.
     const secondView = makeMockWebviewView();
     provider!.resolveWebviewView(secondView, {}, {});
 
-    // Synchronous replay observed.
-    expect(secondView.webview.posts.length).toBe(1);
-    expect(secondView.webview.posts[0]!.type).toBe("state:full");
+    // Synchronous replay observed (state:full only — setup:* posts are separate).
+    expect(statefulPosts(secondView).length).toBe(1);
+    expect(statefulPosts(secondView)[0]!.type).toBe("state:full");
 
     // Wait for the new watcher's first tick to land. The reducer's output
     // is the same shape (empty sessions in tempExt) but goes through the
@@ -307,10 +321,10 @@ describe("86c9yxv6d — replay last-known state to remounted webview", () => {
     }
     await new Promise((r) => setTimeout(r, 50));
 
-    // At minimum, the synchronous replay-post survived. AC2 is "no
+    // At minimum, the synchronous replay (state:full) survived. AC2 is "no
     // regression on the watcher loop" — the new watcher continues to tick
     // (already validated by the AC5 test's single-post first-tick path).
-    expect(secondView.webview.posts.length).toBeGreaterThanOrEqual(1);
+    expect(statefulPosts(secondView).length).toBeGreaterThanOrEqual(1);
     expect(secondView.webview.posts[0]!.type).toBe("state:full");
 
     for (const d of ctx.subscriptions) {
