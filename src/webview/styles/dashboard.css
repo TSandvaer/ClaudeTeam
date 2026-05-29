@@ -988,6 +988,97 @@ body {
   outline: none;
 }
 
+/* Remove menu entry — visually DISTINCT from hide (E-07b / spec §7.3): a
+ * destructive-leaning tint so the sponsor can't mistake the permanent
+ * yaml-gated remove for the reversible hide. Uses the error foreground token
+ * (semantic) at rest; the menu's own selection treatment takes over on
+ * hover/focus so the highlighted row stays legible. */
+.agent-tile-overflow-item--remove {
+  color: var(--ct-color-state-error);
+}
+
+/* ── Remove confirm panel (in-tile dialog, E-07b / spec §7.3) ─────────────── */
+.agent-tile-remove-confirm {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 2px;
+  width: 230px;
+  z-index: 3;
+  padding: var(--ct-space-s) var(--ct-space-m);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+  background-color: var(--vscode-menu-background, var(--ct-color-bg));
+  border: 1px solid var(--vscode-menu-border, var(--ct-color-border));
+  border-radius: var(--ct-radius-chip);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+  color: var(--vscode-menu-foreground, var(--ct-color-fg));
+}
+
+.agent-tile-remove-confirm-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.agent-tile-remove-confirm-body {
+  margin: 0;
+  font-size: 0.92em;
+  color: var(--ct-color-fg-muted);
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.agent-tile-remove-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ct-space-xs);
+  margin-top: var(--ct-space-xs);
+}
+
+.agent-tile-remove-confirm-cancel,
+.agent-tile-remove-confirm-remove {
+  padding: 4px 12px;
+  border-radius: var(--ct-radius-chip);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Cancel = the safe default → VS Code secondary-button styling. */
+.agent-tile-remove-confirm-cancel {
+  background-color: var(
+    --vscode-button-secondaryBackground,
+    var(--ct-color-bg-hover)
+  );
+  color: var(--vscode-button-secondaryForeground, var(--ct-color-fg));
+  border: 1px solid var(--ct-color-border);
+}
+
+/* Remove = destructive primary → VS Code button styling. */
+.agent-tile-remove-confirm-remove {
+  background-color: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+  border: 1px solid transparent;
+}
+
+.agent-tile-remove-confirm-cancel:hover {
+  background-color: var(
+    --vscode-button-secondaryHoverBackground,
+    var(--ct-color-bg-hover)
+  );
+}
+
+.agent-tile-remove-confirm-remove:hover {
+  background-color: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.agent-tile-remove-confirm-cancel:focus-visible,
+.agent-tile-remove-confirm-remove:focus-visible {
+  outline: 1px solid var(--ct-color-focus);
+  outline-offset: 1px;
+}
+
 /* ===========================================================================
  * "N hidden agents [show]" recovery chip — E-06b / spec §7.2
  * =========================================================================== */

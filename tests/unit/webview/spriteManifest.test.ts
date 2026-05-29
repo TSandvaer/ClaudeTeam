@@ -2,10 +2,11 @@
  * Unit tests for sprite manifest lookup (spriteManifest.ts) + the committed
  * generated manifest (generatedManifest.ts).
  *
- * Covers AC6 (map from animations.json) + AC5 (sprite-less members resolve to
- * null so the caller degrades to a text tile):
- *   - bound members (felix/maya) resolve to a character with frames.
- *   - unbound members (sage/iris/nora/bram) resolve to null.
+ * Covers the E-07b 6-member GENDER binding (sponsor decision 2026-05-29) +
+ * AC6 (map from animations.json):
+ *   - ALL SIX roster members are bound by gender (felix/bram → M01-Dev;
+ *     maya/iris/nora/sage → F01-Dev) and resolve to a character with frames.
+ *   - no roster member falls back to the text tile anymore.
  *   - the generated manifest matches the committed animations.json data.
  *
  * Pure data — node environment.
@@ -19,8 +20,8 @@ import {
 } from "../../../src/webview/sprites/spriteManifest.js";
 import { GENERATED_SPRITE_MANIFEST } from "../../../src/webview/sprites/generatedManifest.js";
 
-describe("spriteForMember — AC5 / AC6", () => {
-  it("bound members resolve to a character with animations", () => {
+describe("spriteForMember — 6-member gender binding (E-07b) / AC6", () => {
+  it("every bound member resolves to a character with animations", () => {
     for (const memberId of Object.keys(MEMBER_SPRITE_BINDING)) {
       const char = spriteForMember(memberId);
       expect(char, `member ${memberId} should have a sprite`).not.toBeNull();
@@ -28,17 +29,29 @@ describe("spriteForMember — AC5 / AC6", () => {
     }
   });
 
-  it("felix/maya are the two bound members", () => {
-    expect(MEMBER_SPRITE_BINDING.felix).toBe("ClaudeTeam-F01-Dev");
-    expect(MEMBER_SPRITE_BINDING.maya).toBe("ClaudeTeam-M01-Dev");
+  it("binds all six roster members by gender (M01-Dev male, F01-Dev female)", () => {
+    // Male → M01-Dev (fixes the prior backwards provisional binding).
+    expect(MEMBER_SPRITE_BINDING.felix).toBe("ClaudeTeam-M01-Dev");
+    expect(MEMBER_SPRITE_BINDING.bram).toBe("ClaudeTeam-M01-Dev");
+    // Female → F01-Dev.
+    expect(MEMBER_SPRITE_BINDING.maya).toBe("ClaudeTeam-F01-Dev");
+    expect(MEMBER_SPRITE_BINDING.iris).toBe("ClaudeTeam-F01-Dev");
+    expect(MEMBER_SPRITE_BINDING.nora).toBe("ClaudeTeam-F01-Dev");
+    expect(MEMBER_SPRITE_BINDING.sage).toBe("ClaudeTeam-F01-Dev");
   });
 
-  it.each(["sage", "iris", "nora", "bram"])(
-    "unbound member %s resolves to null (text-tile fallback, AC5)",
-    (memberId) => {
-      expect(spriteForMember(memberId)).toBeNull();
-    },
-  );
+  it("all six roster members are bound (no text-fallback for any member now)", () => {
+    for (const memberId of ["felix", "bram", "maya", "iris", "nora", "sage"]) {
+      expect(
+        spriteForMember(memberId),
+        `member ${memberId} should resolve to a sprite, not text fallback`,
+      ).not.toBeNull();
+    }
+  });
+
+  it("an unrostered id still resolves to null (text-tile fallback)", () => {
+    expect(spriteForMember("not-a-roster-member")).toBeNull();
+  });
 
   it("returns null when a bound character is absent from the manifest", () => {
     const emptyManifest: GeneratedSpriteManifest = { characters: {} };
@@ -46,10 +59,11 @@ describe("spriteForMember — AC5 / AC6", () => {
   });
 
   it("returns null when the bound character has zero animations", () => {
+    // felix binds to M01-Dev under the gender map; the stub must match that.
     const zeroAnim: GeneratedSpriteManifest = {
       characters: {
-        "ClaudeTeam-F01-Dev": {
-          character: "ClaudeTeam-F01-Dev",
+        "ClaudeTeam-M01-Dev": {
+          character: "ClaudeTeam-M01-Dev",
           defaultIdle: null,
           idlePool: [],
           animations: {},

@@ -8,13 +8,18 @@
  *      degrades to the existing text tile (no sprite box, no broken image —
  *      AC5). The monogram / never-run skin is E-05's scope, not this ticket.
  *
- *      PROVISIONAL binding (flagged in the PR body for sponsor confirm):
- *      only two sprites exist today — the generic "Dev" characters
- *      `ClaudeTeam-M01-Dev` + `ClaudeTeam-F01-Dev`. The roster's two devs are
- *      Felix + Maya, so they get the dev sprites. There is NO sponsor-locked
- *      member→face mapping yet (DECISIONS 2026-05-28 confirms M01/F01 are
- *      generic dev characters, not bound to personas). When more characters
- *      land (M02-M05, F02-F05), extend this map.
+ *      GENDER binding (sponsor decision 2026-05-29 — see team/DECISIONS.md):
+ *      ALL SIX roster members are bound by gender to the two harvested "Dev"
+ *      characters. Only `ClaudeTeam-M01-Dev` + `ClaudeTeam-F01-Dev` sprite
+ *      folders exist on disk — that is expected; the six members share those
+ *      two by gender:
+ *        - male   → `ClaudeTeam-M01-Dev`: felix, bram
+ *        - female → `ClaudeTeam-F01-Dev`: maya, iris, nora, sage
+ *      This FIXES the earlier provisional binding (`felix → F01-Dev`,
+ *      `maya → M01-Dev`), which had the genders backwards. No roster member
+ *      resolves to the text fallback now — every member has a bound character.
+ *      When per-persona characters land (M02-M05, F02-F05), re-point each
+ *      member at its own character.
  *
  *   2. `GENERATED_SPRITE_MANIFEST` (imported) — per-character anim frame paths,
  *      baked at build time by scripts/build-sprite-manifest.mjs (PixelLab does
@@ -52,13 +57,26 @@ export interface GeneratedSpriteManifest {
   characters: Record<string, SpriteCharacter>;
 }
 
+/** Male "Dev" character folder. Bound to the male roster members by gender. */
+const MALE_DEV = "ClaudeTeam-M01-Dev";
+/** Female "Dev" character folder. Bound to the female roster members by gender. */
+const FEMALE_DEV = "ClaudeTeam-F01-Dev";
+
 /**
- * Roster member id → sprite character folder. See file header for the
- * PROVISIONAL nature of this binding.
+ * Roster member id → sprite character folder. Sponsor-decided GENDER binding
+ * (2026-05-29) — all six roster members share the two harvested "Dev"
+ * characters by gender. See the file header for the rule + the fix it applies
+ * (the earlier provisional binding had felix/maya genders swapped).
  */
 export const MEMBER_SPRITE_BINDING: Record<string, string> = {
-  felix: "ClaudeTeam-F01-Dev",
-  maya: "ClaudeTeam-M01-Dev",
+  // male → M01-Dev
+  felix: MALE_DEV,
+  bram: MALE_DEV,
+  // female → F01-Dev
+  maya: FEMALE_DEV,
+  iris: FEMALE_DEV,
+  nora: FEMALE_DEV,
+  sage: FEMALE_DEV,
 };
 
 /**
