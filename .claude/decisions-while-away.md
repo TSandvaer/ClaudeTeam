@@ -956,3 +956,13 @@ Sponsor authorized dispatching this ticket; result is "work already done" rather
 - **Reversibility:** `git revert 2fbd587` + admin-merge revert PR. ≤1 PR, ~10 min.
 - **Status:** pending review.
 - **Pointers:** PR #121 (`2fbd587`); Felix review agentId `a08fcc4401cf73138`; epic `86ca11187` complete; E-09 ticket `86ca1c1az` complete.
+
+## 2026-05-29 1503 UTC — Multi-agent persona tile feature CLOSED (86ca1d7er): merged PR #124/#125/#126
+
+- **Decided:** Admin-squash-merged the 3-PR feature arc + closed all tickets. (1) PR #124 host `MultiAgentPersonaTile`+`computeAggregateState`+reducer (`1e04797`, Maya APPROVE, Layer-3 red→green run 26636234298). (2) PR #125 webview `renderMultiAgentPersonaTile` ×N badge+expand (`c7e8630`, Felix APPROVE_WITH_NITS, `.persona-instances[hidden]` guard non-vacuous). (3) PR #126 Sage QA + AC4c error-collapsed regression (`163781a`, Maya APPROVE, test-only). Tickets `86ca1dtr5`+`86ca1ej5c`+`86ca1f83x`+parent `86ca1d7er` → complete.
+- **Foundation:** rule 6.6 #1 (routine impl, CI green + peer APPROVE) each merge. Sponsor-initiated feature (GUI-test option A) + spec-gated (Iris PR #123) + locked decisions (running-wins, no-auto-expand, MultiAgentPersonaTile vocab). Pattern A sequencing (host type first) prevented vocab divergence. Felix NIT 1 (error-collapsed assertion) folded into Sage QA.
+- **Origin:** sponsor GUI test of the closed epic 86ca11187 surfaced (a) remove-confirm panel open-on-load → fixed PR #122/#120-fix; (b) Felix-as-bare-collapse-group inconsistency → this feature.
+- **Alternative:** surface each merge to sponsor. Rejected per delegated merge authority.
+- **Reversibility:** `git revert` per PR, ≤1 PR each (~10 min). Test-only #126 trivially revertable.
+- **Status:** pending review.
+- **Pointers:** PRs #124/#125/#126; spec `team/iris-ux/multiagent-persona-tile-spec.md`; agent IDs a82cf98c0bd561bb2/a63101ecda8816b11/a353a67e66b4fee46 (impl) + reviews.

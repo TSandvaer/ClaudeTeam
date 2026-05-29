@@ -12,7 +12,37 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ## Current state — 2026-05-29 (RESUME; sponsor walkthrough — dispatching E-07b + E-09)
 
-**Resume next-action (updated 2026-05-29 ~12:45 UTC):** **EPIC 86ca11187 CLOSED.** All children complete: E-01/02/04/05/06/07 + E-09; E-08 deferred OUT. PR #120 (E-07b, `f6daa9d`) + PR #121 (E-09, `2fbd587`) both merged; tickets `86ca1agc5` + `86ca1c1az` + epic `86ca11187` → complete. main tip `2fbd587`, 0 agents in flight, 0 open PRs. auto-status OFF.
+**Resume next-action (updated 2026-05-29 ~13:15 UTC — POST-GUI-TEST):** Epic 86ca11187 closed; sponsor ran the GUI test (rebuilt .vsix, reloaded). **Whole-team roster + persona sprites + baseline skin CONFIRMED WORKING.** Two findings → 2 agents dispatched:
+- **Maya → `86ca1d76j`** (P2 defect) · agentId `a6cdf78b34fbad45e` · branch `maya/86ca1d76j-remove-panel-default-hidden`. Bug: remove-confirm panel renders OPEN on load for all tiles (must be hidden-by-default). + fold `model:?` placeholder cleanup for available members. Reviewer Felix.
+- **Iris → `86ca1d7er`** (P3 feat spec) · agentId `afef15294a8fc712e` · branch `iris/86ca1d7er-multiagent-persona-tile-spec`. Spec: rostered member w/ N agents → single persona tile + ×N badge + expand (sponsor option A; replaces M3-10 collapse for rostered members). After spec → Felix host + Maya webview + Sage tests. Reviewer Felix (spec edges).
+
+**Status 2026-05-29 ~13:30 — 2 in flight:**
+- **Maya re-fixing PR #122** (`86ca1d76j`) · agentId `aa51e5570b16192c5`. Felix REQUEST_CHANGES: (1) add `[hidden]` guard to `.ct-hidden-members-list` (same class bug, show-hidden list also open on load); (2) invert the class-coverage test to DERIVE all flex+hidden popovers from dashboard.css source (current test was a hardcoded 2-selector allowlist). Re-review Felix.
+- **Felix reviewing Iris spec PR #123** (`86ca1d7er`) · agentId `aa51cef35929e43e4`. Spec-edges/vocab-contract parallel-safety.
+
+**Spec decisions LOCKED for `86ca1d7er` impl wave (ticket comment posted):** Q1 running-wins precedence (running>error>idle>finished>available); Q3 no auto-expand on error (stay collapsed); type `MultiAgentPersonaTile`; instance id `agentId`; repurpose `collapsePersonaTiles`→expand-by-default.
+
+**Next:** Maya #122 re-fix → Felix re-review → merge → sponsor re-tests bug fix. NIT `86ca1ck2g` still open. main `15ee7ee`, auto-status OFF.
+
+**Update ~13:40 — spec PR #123 MERGED (`15ee7ee`), impl wave started:**
+- Spec `team/iris-ux/multiagent-persona-tile-spec.md` on main. Feature `86ca1d7er` → in progress (umbrella). Felix APPROVE_WITH_NITS (vocab parallel-safe; 2 NITs folded into host: pin `agentId` row-key, add per-instance `sessionId`).
+- **Felix → host child `86ca1dtr5`** · agentId `a82cf98c0bd561bb2` · branch `felix/86ca1dtr5-multiagent-host`. Pattern A: lands `MultiAgentPersonaTile` type + guard + `computeAggregateState` (running-wins) + reducer in types.ts FIRST. Reviewer Maya.
+- **Maya #122 re-fix DONE** (HEAD `04ee7a5`, agentId `aa51e5570b16192c5` complete, detached). Both blockers fixed: `.ct-hidden-members-list[hidden]` guard added; coverage test inverted to source-derived (verified non-vacuous — stripping any guard fails it). 936 unit/124 integration green local. **QUEUED: Felix re-review of #122 — fire AFTER Felix's host impl (`a82cf98c0bd561bb2`) completes + detaches** (single felix-wt; do NOT dispatch Felix twice). Maya-wt now free.
+- **Webview child (Phase 2b, Maya)** NOT yet created — file + dispatch AFTER Felix's host PR merges (Pattern A; types.ts is the shared file). Then Sage QA across the feature.
+- **Felix host DONE → PR #124** (`be10f45`, 961 unit/124 integration green; vocab matches §5.4; CI running). Ticket `86ca1dtr5` → in review. Note: Felix touched webview consumer files (render.ts/teamCard.ts/memberDirectory.ts/collapsedPersonaTile.ts) to compile against widened union — Maya's Phase 2b builds on that (sequential, Pattern A).
+- **PR #122 MERGED** at `2921f60` (Felix APPROVE re-review; both blockers resolved, derived test non-vacuous). `86ca1d76j` → complete. Sponsor reload checkpoint announced.
+- **Felix fixed PR #124** (re-pushed `e8e436e`, clean rebase onto `2921f60`): `flattenTiles` Layer-3 consumer migrated, swept tests/ (none else missed), `compile:vscode-integration` clean, 965 unit/124 integration local. **Maya re-reviewing → agentId `a9f9788f4d692b9be`.**
+- **PR #124 host MERGED** at `1e04797` (Maya APPROVE, Layer-3 red→green verified run `26636234298`). `86ca1dtr5` → complete.
+- **Maya Phase 2b DONE → PR #125** (`5530f43`, 996 unit/124 integration green; new `multiAgentPersonaTile.ts` + `renderMultiAgentPersonaTile`; [hidden] guard on expand list covered by derived test). Ticket `86ca1ej5c` → in review. **Felix reviewing → agentId `a9e49b5899247f331`.**
+- **PR #125 webview MERGED** at `c7e8630` (Felix APPROVE_WITH_NITS; `.persona-instances[hidden]` guard confirmed non-vacuous; CI+Layer-3 green). Ticket `86ca1ej5c` → complete.
+- **Sage QA PASS → PR #126** (test-only; 1000 unit/124 integration green; added AC4c error-aggregate-stays-collapsed regression, non-vacuity proven). QA ticket `86ca1f83x` created (in review), ID backfilled to PR #126. **Maya reviewing → agentId `a7a6992723c0f7c5c`.**
+- **Next (feature close):** Maya APPROVE #126 + CI green → merge → flip `86ca1f83x` + parent `86ca1d7er` → complete → **sponsor FINAL reload** (Felix = 1 tile + ×2 badge; all popovers hidden; model:? gone).
+- **Post-arc cleanup:** maintain-docs candidates (Maya's collapsePersonaTiles defensive cast + expandByDefault first-paint seed — capture if clear the bar); NIT tickets `86ca1ck2g` + `86ca16gb7` + E-01 factory still open. main `c7e8630`.
+- **Maya reviewed PR #124 → REQUEST_CHANGES** (detached, free). Vocab EXACT match §5.4; `computeAggregateState` correct + tested. ONE blocker: Felix missed migrating Layer-3 test consumer `tests/vscode-integration/suite/rosterHotReload.test.ts:102` (`flattenTiles`, TS2345) → Layer-3 CI red on `be10f45`. Fix: add `|| isMultiAgentPersonaTile(entry)` to the collapsed-group branch. **QUEUED: Felix fix of #124 — fire AFTER his #122 re-review completes** (single felix-wt).
+- Phase 2b note (Maya): Felix's interim `teamCard.ts` flattens wrapper→N bare `renderAgentTile` calls (no data lost), labeled for Maya to swap in `renderMultiAgentPersonaTile`; `render.ts` already wires per-instance trackers + expansion key by memberId + sprite key by memberId.
+- **Next:** Felix #122 re-review → APPROVE → merge #122 (sponsor reload checkpoint). THEN dispatch Felix #124 Layer-3 fix → Maya re-review #124 → merge → dispatch Maya Phase 2b webview → Sage QA → flip `86ca1d7er` complete. NIT `86ca1ck2g` open. main `15ee7ee`.
+
+**(superseded) Epic-close snapshot:** EPIC 86ca11187 CLOSED — E-01/02/04/05/06/07 + E-09 complete; E-08 deferred OUT. PR #120 (`f6daa9d`) + PR #121 (`2fbd587`) merged.
 
 **Remaining (non-epic, low priority):**
 - **SPONSOR GUI TEST (load-bearing, sponsor-only):** rebuild + reinstall `.vsix` and visually confirm on a real VS Code reload — always-visible roster + persona sprites (6-member gender binding) + baseline skin + hide/show + remove-confirm + idle-60s (#111) + gear (#112). This is the structural acceptance the AI team can't self-do.
