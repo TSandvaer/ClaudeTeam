@@ -63,6 +63,10 @@ import type {
   ExpandedGroupKey,
   ExpandedGroupsTracker,
 } from "./expandedGroupsTracker.js";
+import type {
+  MenuOpenKey,
+  MenuOpenTracker,
+} from "./menuOpenTracker.js";
 import type { SpriteTracker } from "./spriteTracker.js";
 
 /** Persistent error state stored on the dashboard. */
@@ -141,6 +145,19 @@ export interface RenderContext {
    * pre-Obs-10 behavior.
    */
   expandedGroupsTracker?: ExpandedGroupsTracker;
+  /**
+   * Webview-local overflow-menu open-state tracker (86ca1fjqu BUG 2). Threaded
+   * down to every `renderAgentTile` / `renderMultiAgentPersonaTile` so an open
+   * per-member "⋯" menu survives the next host-driven `renderFull` instead of
+   * snapping shut every ~2s poll tick. Owned by the boot closure in `main.ts`;
+   * the prune pass below evicts entries whose member/tile no longer exists.
+   * Keyed by `sessionId:teamId:memberId` (the member identity, since the menu
+   * acts on the whole tile). Optional — when omitted (component tests) menus
+   * always start closed and clicks don't persist beyond the current DOM.
+   *
+   * Source: ClickUp 86ca1fjqu (overflow-menu auto-close on poll re-render)
+   */
+  menuOpenTracker?: MenuOpenTracker;
   /**
    * Host-injected webview-base URI for resolving sprite frame paths
    * (`<base>/sprites/<char>/...`). Set in VS Code mode from the `#root`
@@ -373,6 +390,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     nowMs,
     prevStateTracker,
     expandedGroupsTracker,
+    menuOpenTracker,
     spriteBaseUri,
     spriteTracker,
     memberDirectory,
@@ -413,6 +431,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     finishedTracker ||
     prevStateTracker ||
     expandedGroupsTracker ||
+    menuOpenTracker ||
     spriteTracker
   ) {
     const currentFinishedKeys = new Set<`${string}:${string}`>();
@@ -421,6 +440,12 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     // Sprite tracker is keyed by sessionId:memberId (NOT agentId) — a
     // baseline `available` tile has agentId "" but a stable memberId.
     const currentSpriteKeys = new Set<`${string}:${string}`>();
+    // Menu-open tracker is keyed by sessionId:teamId:memberId (the member
+    // identity — the "⋯" menu acts on the whole tile). Only bare AgentTiles +
+    // MultiAgentPersonaTiles carry the overflow menu; legacy
+    // CollapsedPersonaGroup wrappers render a different component with no menu,
+    // so they contribute no menu keys (86ca1fjqu).
+    const currentMenuKeys = new Set<MenuOpenKey>();
     for (const session of state.sessions) {
       if (!session.isAlive) continue;
       for (const [teamId, entries] of session.rosterTiles.entries()) {
@@ -448,6 +473,15 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
               }
             }
             currentSpriteKeys.add(`${session.sessionId}:${entry.memberId}`);
+            if (menuOpenTracker) {
+              currentMenuKeys.add(
+                menuOpenTracker.makeKey(
+                  session.sessionId,
+                  teamId,
+                  entry.memberId,
+                ),
+              );
+            }
             continue;
           }
           // Wrapper case — walk instances so tiles inside a collapsed
@@ -481,6 +515,15 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
           currentSpriteKeys.add(
             `${session.sessionId}:${entry.memberId}`,
           );
+          if (menuOpenTracker) {
+            currentMenuKeys.add(
+              menuOpenTracker.makeKey(
+                session.sessionId,
+                teamId,
+                entry.memberId,
+              ),
+            );
+          }
         }
       }
     }
@@ -492,6 +535,9 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     }
     if (expandedGroupsTracker) {
       expandedGroupsTracker.prune(currentGroupKeys);
+    }
+    if (menuOpenTracker) {
+      menuOpenTracker.prune(currentMenuKeys);
     }
     if (spriteTracker) {
       spriteTracker.prune(currentSpriteKeys);
@@ -657,6 +703,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         ...(finishedTracker ? { finishedTracker } : {}),
         ...(prevStateTracker ? { prevStateTracker } : {}),
         ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
+        ...(menuOpenTracker ? { menuOpenTracker } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
         ...(spriteTracker ? { spriteTracker } : {}),

@@ -73,8 +73,9 @@ import { spriteForMember } from "../sprites/spriteManifest.js";
 import { createSpriteBox } from "../sprites/spritePlayer.js";
 import type { SpriteTracker } from "../spriteTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
+import type { MenuOpenTracker } from "../menuOpenTracker.js";
 import type { FinishedTracker } from "../finishedTracker.js";
-import type { PostMessageFn } from "./agentTile.js";
+import { buildOverflowMenu, type PostMessageFn } from "./agentTile.js";
 
 /** Human-readable label per state — mirrors agentTile.ts STATE_LABEL. */
 const STATE_LABEL: Record<AgentState, string> = {
@@ -115,6 +116,15 @@ export interface MultiAgentPersonaTileProps {
    * current DOM.
    */
   expandedGroupsTracker?: ExpandedGroupsTracker;
+  /**
+   * Webview-local overflow-menu open-state tracker (86ca1fjqu BUG 2). Threaded
+   * into the shared `buildOverflowMenu` so the per-member "⋯" menu the user
+   * opened survives the next host poll-tick re-render. Keyed by
+   * `sessionId:teamId:memberId`. When omitted (component tests) the menu starts
+   * closed and clicks don't persist beyond the current DOM. Mirrors the
+   * `expandedGroupsTracker` that persists the badge-expand list.
+   */
+  menuOpenTracker?: MenuOpenTracker;
   /** Team id — composes the expansion-tracker key with sessionId + memberId. */
   teamId?: string;
   /**
@@ -176,6 +186,7 @@ export function renderMultiAgentPersonaTile(
     postMessage,
     expandByDefault,
     expandedGroupsTracker,
+    menuOpenTracker,
     teamId,
     spriteBaseUri,
     spriteTracker,
@@ -364,6 +375,28 @@ export function renderMultiAgentPersonaTile(
   countHint.textContent = `(${count} agents)`;
   modelRow.appendChild(countHint);
   article.appendChild(modelRow);
+
+  // ── Overflow affordance ([⋯]) — hide / remove the rostered MEMBER ─────────
+  // 86ca1fjqu BUG 1: multi-agent ×N tiles were missing the "⋯" menu single
+  // tiles carry, so a multi-agent member (e.g. Felix ×8) could not be hidden or
+  // removed. Reuse the EXACT same `buildOverflowMenu` as `renderAgentTile` so
+  // the affordance, messages (`ui:hide-member` / `ui:remove-member` for THIS
+  // member), and a11y wiring are identical. The menu acts on the whole tile (the
+  // rostered member), not a single instance — the (teamId, memberId) PAIR is the
+  // member identity. `position: absolute` (dashboard.css) anchors it top-right;
+  // the badge button + instance rows stopPropagation their own clicks, and the
+  // menu's controls stopPropagation theirs, so the two surfaces never cross-fire.
+  // The menuOpenTracker (BUG 2) persists the open phase across poll re-renders.
+  article.appendChild(
+    buildOverflowMenu({
+      teamId: tile.teamId,
+      memberId: tile.memberId,
+      display: tile.display,
+      postMessage,
+      sessionId,
+      ...(menuOpenTracker ? { menuOpenTracker } : {}),
+    }),
+  );
 
   // ── Inline instance list (collapsed by default, §3.1) ─────────────────────
   // `.persona-instances` declares display:flex and toggles via `hidden` — the

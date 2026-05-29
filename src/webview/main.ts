@@ -48,6 +48,7 @@ import {
 import { createFinishedTracker } from "./finishedTracker.js";
 import { createPrevStateTracker } from "./prevStateTracker.js";
 import { createExpandedGroupsTracker } from "./expandedGroupsTracker.js";
+import { createMenuOpenTracker } from "./menuOpenTracker.js";
 import { createSpriteTracker } from "./spriteTracker.js";
 import { MemberDirectory } from "./memberDirectory.js";
 
@@ -232,6 +233,14 @@ function boot(): void {
    */
   const expandedGroupsTracker = createExpandedGroupsTracker();
   /**
+   * 86ca1fjqu BUG 2 — overflow-menu open-state tracker. Single instance per
+   * webview boot, pruned each render. Persists which per-member "⋯" menu (and
+   * its remove-confirm sub-panel) the user has open across the ~2s poll-tick
+   * re-renders, so the menu no longer vanishes mid-interaction. Same lifecycle
+   * + persistence scope as `expandedGroupsTracker` (reset on webview reload).
+   */
+  const menuOpenTracker = createMenuOpenTracker();
+  /**
    * Whole-team-display sprite playback tracker (idle-episode stickiness +
    * frame-timer disposal). Single instance per webview boot, pruned each
    * render. See spriteTracker.ts.
@@ -280,6 +289,7 @@ function boot(): void {
     finishedTracker,
     prevStateTracker,
     expandedGroupsTracker,
+    menuOpenTracker,
     spriteTracker,
     memberDirectory,
     hiddenMembersExpanded,

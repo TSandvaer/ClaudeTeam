@@ -41,6 +41,7 @@ import { formatFreshness } from "../../shared/freshness.js";
 import { spriteForMember } from "../sprites/spriteManifest.js";
 import { createSpriteBox } from "../sprites/spritePlayer.js";
 import type { SpriteTracker } from "../spriteTracker.js";
+import type { MenuOpenTracker } from "../menuOpenTracker.js";
 
 /** Human-readable label per state — used in aria-label and title tooltip. */
 const STATE_LABEL: Record<AgentState, string> = {
@@ -137,6 +138,16 @@ export interface AgentTileProps {
   /** Frame-timer canceller injection (tests). */
   cancelFrame?: (handle: number) => void;
   /**
+   * Webview-local overflow-menu open-state tracker (86ca1fjqu BUG 2). When
+   * provided alongside `teamId` (always present on `tile`), a menu the user
+   * opened survives the next host poll-tick re-render — without it, the ~2s
+   * `renderFull` rebuild constructs a fresh closed menu and the open menu
+   * vanishes mid-interaction. Keyed by `sessionId:teamId:memberId`. When
+   * omitted (component tests), the menu starts closed and clicks don't persist
+   * beyond the current DOM. Mirrors `expandedGroupsTracker` (Obs 10).
+   */
+  menuOpenTracker?: MenuOpenTracker;
+  /**
    * Schedule a one-shot callback for clearing the transition attribute.
    * Defaults to `setTimeout` in production; tests inject a synchronous
    * scheduler (or vitest fake timers) to assert the cleared-state path.
@@ -170,6 +181,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     spriteRng,
     scheduleFrame,
     cancelFrame,
+    menuOpenTracker,
   } = props;
 
   // 86c9zfmhp (Obs 11): the host is now the single authority for the
@@ -409,6 +421,8 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
       memberId: tile.memberId,
       display: tile.display,
       postMessage,
+      sessionId,
+      ...(menuOpenTracker ? { menuOpenTracker } : {}),
     }),
   );
 
@@ -486,14 +500,49 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
  * hide is a single-click reversible cull; remove is gated behind the confirm
  * step + carries a destructive-leaning class (`--remove`) so the sponsor can't
  * mistake one for the other.
+ *
+ * Open-state persistence (86ca1fjqu BUG 2): the menu's open phase (menu vs.
+ * confirm vs. closed) lives in `menuOpenTracker` keyed by
+ * `sessionId:teamId:memberId` when one is threaded in, so the ~2s poll re-render
+ * that rebuilds this DOM restores whatever the user had open instead of snapping
+ * it shut. Every open/close/confirm transition writes the tracker; the
+ * constructor reads it once to seed the initial phase. Without a tracker
+ * (component tests) the menu starts closed and clicks are DOM-local only.
+ *
+ * Exported (86ca1fjqu BUG 1) so `multiAgentPersonaTile` reuses the IDENTICAL
+ * affordance — the menu acts on the rostered MEMBER (the whole tile), posting
+ * `ui:hide-member` / `ui:remove-member` for that member, exactly as on a single
+ * tile. Sharing the builder guarantees the two tile types can never drift in
+ * behavior, messages, or accessibility wiring.
  */
-function buildOverflowMenu(opts: {
+export function buildOverflowMenu(opts: {
   teamId: string;
   memberId: string;
   display: string;
   postMessage: PostMessageFn;
+  /** Session id — composes the menu-open tracker key with teamId + memberId. */
+  sessionId?: string;
+  /** Optional open-state tracker (BUG 2). Survives poll-tick re-renders. */
+  menuOpenTracker?: MenuOpenTracker;
 }): HTMLElement {
-  const { teamId, memberId, display, postMessage } = opts;
+  const { teamId, memberId, display, postMessage, sessionId, menuOpenTracker } =
+    opts;
+
+  // Tracker key — only composable when a tracker + sessionId are present. When
+  // absent the menu has no cross-render memory (component-test path).
+  const trackerKey =
+    menuOpenTracker && sessionId !== undefined
+      ? menuOpenTracker.makeKey(sessionId, teamId, memberId)
+      : undefined;
+  const seededPhase =
+    trackerKey !== undefined && menuOpenTracker !== undefined
+      ? menuOpenTracker.phase(trackerKey)
+      : null;
+  const recordPhase = (phase: "menu" | "confirm" | null): void => {
+    if (trackerKey !== undefined && menuOpenTracker !== undefined) {
+      menuOpenTracker.setPhase(trackerKey, phase);
+    }
+  };
 
   const wrapper = document.createElement("div");
   wrapper.className = "agent-tile-overflow";
@@ -502,7 +551,8 @@ function buildOverflowMenu(opts: {
   btn.type = "button";
   btn.className = "agent-tile-overflow-btn";
   btn.setAttribute("aria-haspopup", "menu");
-  btn.setAttribute("aria-expanded", "false");
+  // Seeded from the tracker so a poll-tick re-render restores the open state.
+  btn.setAttribute("aria-expanded", String(seededPhase !== null));
   btn.setAttribute("aria-label", "agent actions");
   // Horizontal-ellipsis glyph (U+22EF) — the kebab/more affordance.
   btn.textContent = "⋯";
@@ -510,7 +560,9 @@ function buildOverflowMenu(opts: {
   const menu = document.createElement("div");
   menu.className = "agent-tile-overflow-menu";
   menu.setAttribute("role", "menu");
-  menu.hidden = true;
+  // Seeded open when the user had the menu (not the confirm panel) open at the
+  // last tick — BUG 2 persistence.
+  menu.hidden = seededPhase !== "menu";
 
   const hideItem = document.createElement("button");
   hideItem.type = "button";
@@ -535,7 +587,8 @@ function buildOverflowMenu(opts: {
   confirm.className = "agent-tile-remove-confirm";
   confirm.setAttribute("role", "dialog");
   confirm.setAttribute("aria-label", `Remove ${display} from the roster?`);
-  confirm.hidden = true;
+  // Seeded open when the user had the confirm panel open at the last tick.
+  confirm.hidden = seededPhase !== "confirm";
 
   const confirmTitle = document.createElement("p");
   confirmTitle.className = "agent-tile-remove-confirm-title";
@@ -574,6 +627,7 @@ function buildOverflowMenu(opts: {
     menu.hidden = true;
     confirm.hidden = true;
     btn.setAttribute("aria-expanded", "false");
+    recordPhase(null);
     if (returnFocus) {
       btn.focus();
     }
@@ -582,12 +636,14 @@ function buildOverflowMenu(opts: {
     confirm.hidden = true;
     menu.hidden = false;
     btn.setAttribute("aria-expanded", "true");
+    recordPhase("menu");
     hideItem.focus();
   };
   // Swap the menu for the confirm panel (the second step of the remove flow).
   const openConfirm = (): void => {
     menu.hidden = true;
     confirm.hidden = false;
+    recordPhase("confirm");
     // Focus the safe default (Cancel), not the destructive button — a stray
     // Enter shouldn't remove the member.
     cancelBtn.focus();

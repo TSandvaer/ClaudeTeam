@@ -48,6 +48,7 @@ import type { PostMessageFn } from "./agentTile.js";
 import type { FinishedTracker } from "../finishedTracker.js";
 import type { PrevStateTracker } from "../prevStateTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
+import type { MenuOpenTracker } from "../menuOpenTracker.js";
 import type { SpriteTracker } from "../spriteTracker.js";
 
 /**
@@ -89,6 +90,12 @@ export interface SessionBlockProps {
    * persona wrappers survive the next host-driven `renderFull`.
    */
   expandedGroupsTracker?: ExpandedGroupsTracker;
+  /**
+   * Optional webview-local overflow-menu open-state tracker (86ca1fjqu BUG 2).
+   * Threaded down to teamCard → agentTile / multiAgentPersonaTile so an open
+   * "⋯" menu survives the next host-driven `renderFull`.
+   */
+  menuOpenTracker?: MenuOpenTracker;
   /**
    * 86c9zmqa8: when true (the renderFull default — see render.ts), uniform
    * CollapsedPersonaGroups (same persona, same state, all idle/finished)
@@ -135,6 +142,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
     finishedTracker,
     prevStateTracker,
     expandedGroupsTracker,
+    menuOpenTracker,
     autoCollapseUniformClusters,
     expandPersonaTiles,
     hideIdle,
@@ -246,6 +254,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
         ...(finishedTracker ? { finishedTracker } : {}),
         ...(prevStateTracker ? { prevStateTracker } : {}),
         ...(expandedGroupsTracker ? { expandedGroupsTracker } : {}),
+        ...(menuOpenTracker ? { menuOpenTracker } : {}),
         ...(autoCollapseUniformClusters !== undefined
           ? { autoCollapseUniformClusters }
           : {}),
