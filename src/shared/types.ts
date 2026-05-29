@@ -328,6 +328,22 @@ export interface AgentTile {
   /** Agent id (e.g. "a735226d3ddaa543b"). Used for parent→child linking. */
   agentId: string;
   /**
+   * Owning session UUID for this agent instance. Optional + back-compat —
+   * pre-86ca1dtr5 emitters and the baseline (`available`) tile omit it; the
+   * single-tile render path falls back to the session-block's sessionId (the
+   * tile is rendered inside its own session block, so they coincide).
+   *
+   * Load-bearing for `MultiAgentPersonaTile.instances`: a rostered member can
+   * run N≥2 agents that span DIFFERENT sessions (e.g. two VS Code windows on
+   * the same project surface under one team card). Carrying per-instance
+   * sessionId on the tile lets the webview drill into the CORRECT session per
+   * instance row — resolves PR #123 NIT 2, where a single render-param
+   * sessionId opened the wrong transcript for a cross-session instance.
+   *
+   * JSON-safe scalar — survives the `serializeState` host↔webview round-trip.
+   */
+  sessionId?: string;
+  /**
    * toolUseId from meta.json — used for parent→child tree linkage.
    * null on v2.1.119 schema (no toolUseId).
    */
@@ -425,17 +441,125 @@ export interface CollapsedPersonaGroup {
 }
 
 /**
- * Entry in a team's tile list: either a bare AgentTile (the existing
- * pre-M3-10 shape, used when N=1 and back-compat with all older host code)
- * or a CollapsedPersonaGroup wrapper (M3-10, when N>1).
+ * Multi-agent persona tile — the rostered-member N≥2 wire shape (option A,
+ * sponsor GUI-test decision 2026-05-29, ClickUp 86ca1d7er / host 86ca1dtr5).
+ *
+ * SUPERSEDES `CollapsedPersonaGroup` FOR ROSTERED MEMBERS. Where M3-10 emitted
+ * a bare header-tile wrapper (`personaName` + `count` + `instances`, different
+ * chrome, "most-active-first" group state with NO error tier), option A renders
+ * a rostered member with N≥2 live agents as ONE full persona tile — identical
+ * chrome to the single/zero-agent tile — with a `×N` badge + expand affordance.
+ * The wrapper therefore carries the FULL member identity (same fields as a
+ * single `AgentTile`) plus the aggregate + headline + instance list.
+ *
+ * Discriminator: `kind: "multi-agent-persona"`. A bare `AgentTile` has no
+ * `kind` field; `CollapsedPersonaGroup` (retained for any non-rostered legacy
+ * path) carries `kind: "collapsed-persona"`. The three are mutually
+ * discriminable on the `kind` field's presence + value.
+ *
+ * Instance shape — each entry in `instances` is a full `AgentTile` carrying
+ * BOTH `agentId` (the per-instance row key — unique per spawn) AND its own
+ * `sessionId` (resolves the cross-session drill-in bug from PR #123 NIT 2:
+ * with a single render-param sessionId, drill-in into an instance running in a
+ * different session opened the wrong transcript. Carrying per-instance
+ * sessionId on the tile lets the webview address the correct session per row).
+ *
+ * The host reducer (`buildAgentTree`) is the single authority for the aggregate
+ * state (`computeAggregateState`, §2.1), the headline fields (the §2.4 headline
+ * instance's activity + model), and the instance ordering (most-active-first).
+ * The webview renders what the host emits — it does NOT recompute the aggregate
+ * or re-order (`architecture-overview`: host state is not duplicated webview-side).
+ *
+ * Source: team/iris-ux/multiagent-persona-tile-spec.md §1, §2, §5.1, §5.4.
  */
-export type RosterTileEntry = AgentTile | CollapsedPersonaGroup;
+export interface MultiAgentPersonaTile {
+  /** Discriminator — present only on this wrapper. */
+  kind: "multi-agent-persona";
+  /** Stable member id from the roster (e.g. "felix"). */
+  memberId: string;
+  /** Stable team id from the roster (e.g. "claudeteam-alpha"). */
+  teamId: string;
+  /** Display name from roster member.display (e.g. "Felix"). */
+  display: string;
+  /** Role label from roster member.role (e.g. "Extension Host Dev"). */
+  role: string;
+  /**
+   * Aggregate liveness state computed from the per-instance states via
+   * `computeAggregateState` (§2.1 precedence running > error > idle >
+   * finished > available). The tile's single state dot + sprite pose key
+   * off this value.
+   */
+  aggregateState: AgentState;
+  /**
+   * Headline activity string — the §2.4 headline instance's `activity`
+   * (e.g. "tool:Edit reducer.ts"). One representative line so row 3 stays
+   * single-line and skimmable; NOT a merge of all instances' tools.
+   */
+  headlineActivity: string;
+  /**
+   * Headline model string — the §2.4 headline instance's `model`
+   * (e.g. "claude-opus-4-7" or the "model:?" sentinel).
+   */
+  headlineModel: string;
+  /** Number of live instances; invariant `count === instances.length`. */
+  count: number;
+  /**
+   * The per-instance tiles, ordered most-active-first (running → error →
+   * idle → finished → available) with ties broken by `agentId` lexical
+   * order for stable, flicker-free ordering across ticks. Each instance is
+   * a full `AgentTile` carrying its own `agentId` + `sessionId` + state +
+   * activity + finishedAtMs.
+   */
+  instances: AgentTile[];
+  /**
+   * Optional 6-digit lowercase hex color from the matched roster
+   * `Member.color`. Painted on the RUNNING-aggregate state dot (overriding
+   * the semantic token); idle/error/finished/available aggregates ignore it.
+   * Mirrors `AgentTile.memberColor`. Absent when the member has no color set.
+   */
+  memberColor?: string;
+}
 
 /**
- * Type-narrowing helper: discriminate a `RosterTileEntry` between a bare
- * `AgentTile` and a `CollapsedPersonaGroup` wrapper. The wrapper carries the
+ * Entry in a team's tile list: a bare `AgentTile` (N=1 / baseline), a
+ * `MultiAgentPersonaTile` wrapper (rostered N≥2 — option A, 86ca1d7er), or a
+ * legacy `CollapsedPersonaGroup` wrapper (M3-10, retained for back-compat with
+ * any non-rostered grouping path + transitional webview consumers; NOT emitted
+ * by the reducer for rostered members anymore).
+ */
+export type RosterTileEntry =
+  | AgentTile
+  | MultiAgentPersonaTile
+  | CollapsedPersonaGroup;
+
+/**
+ * Type-narrowing helper: is this entry a `MultiAgentPersonaTile` wrapper
+ * (rostered N≥2, option A)? Discriminates on `kind === "multi-agent-persona"`.
+ *
+ * Pure / cheap — safe to call repeatedly during render or per-tick. Host-side
+ * callers (reducer, filters, CLI flattener, diagnostics, integration tests)
+ * AND the webview tile router import this from here (single source of truth,
+ * no mirrored copy — per the M3-10 dual-copy lesson).
+ *
+ * LOCKED identifier per spec §5.4 vocabulary contract.
+ */
+export function isMultiAgentPersonaTile(
+  entry: RosterTileEntry,
+): entry is MultiAgentPersonaTile {
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    "kind" in entry &&
+    (entry as { kind?: unknown }).kind === "multi-agent-persona"
+  );
+}
+
+/**
+ * Type-narrowing helper: discriminate a `RosterTileEntry` as a legacy
+ * `CollapsedPersonaGroup` wrapper. The wrapper carries the
  * `kind: "collapsed-persona"` discriminator; bare `AgentTile`s have no
- * `kind` field, so the absence is the discriminator on the unwrapped side.
+ * `kind` field, and `MultiAgentPersonaTile` carries a different `kind` value,
+ * so the value check disambiguates all three.
  *
  * Pure / cheap — safe to call repeatedly during render or per-tick.
  * Mirrors the webview-side guard in
@@ -452,6 +576,69 @@ export function isCollapsedPersonaGroup(
     "kind" in entry &&
     (entry as { kind?: unknown }).kind === "collapsed-persona"
   );
+}
+
+/**
+ * Aggregate-state helper (LOCKED identifier per spec §5.4). Computes the
+ * single headline state for a `MultiAgentPersonaTile` from its per-instance
+ * states. Pure function over the instance array — no DOM, no clock,
+ * idempotent. Host emit path + unit tests import from here.
+ *
+ * **LOCKED precedence (sponsor decision — running wins over error):**
+ *
+ *   running  >  error  >  idle  >  finished  >  available
+ *
+ * Evaluate top-down; the first tier with ≥1 matching instance is the aggregate.
+ *   - `running` if ANY instance is running (the member is actively working —
+ *     the headline the sponsor most wants to see, per option A's "one active
+ *     presence" framing; a running sibling means the work isn't dead even if
+ *     another instance errored).
+ *   - else `error` if ANY instance errored (a call to action that must not hide
+ *     behind a quiet idle/finished sibling — louder than idle/finished, quieter
+ *     than running).
+ *   - else `idle` if ANY instance is idle (alive-but-quiet; not "all done").
+ *   - else `finished` if ALL remaining instances are finished (the only
+ *     all-finished case — bottom of the "alive" tiers).
+ *   - else `available` — the floor (no live instances at all; in practice
+ *     unreachable when N≥2 since instances counts live agents, but defined for
+ *     totality).
+ *
+ * Empty input: returns `available` (the floor). A `MultiAgentPersonaTile`
+ * should never carry zero instances on the wire (reducer invariant: count≥2),
+ * but `available` is the safe totality value rather than throwing.
+ *
+ * Differs from the retired M3-10 `computeGroupState` (`running > idle >
+ * finished`, NO error tier) by INSERTING `error` between `running` and `idle`
+ * (spec §2.3).
+ *
+ * Source: team/iris-ux/multiagent-persona-tile-spec.md §2.1, §5.4.
+ */
+export function computeAggregateState(instances: AgentTile[]): AgentState {
+  let sawError = false;
+  let sawIdle = false;
+  let sawFinished = false;
+  for (const inst of instances) {
+    switch (inst.state) {
+      case "running":
+        // Highest tier — short-circuit, nothing outranks running.
+        return "running";
+      case "error":
+        sawError = true;
+        break;
+      case "idle":
+        sawIdle = true;
+        break;
+      case "finished":
+        sawFinished = true;
+        break;
+      // "available" instances are not counted toward any tier — they are the
+      // absence of a live agent and fall through to the floor.
+    }
+  }
+  if (sawError) return "error";
+  if (sawIdle) return "idle";
+  if (sawFinished) return "finished";
+  return "available";
 }
 
 /**
@@ -527,11 +714,12 @@ export interface SessionTree {
   /**
    * Rostered tiles grouped by team.
    * Key = teamId; value = ordered list of `RosterTileEntry` entries
-   * (bare `AgentTile` for N=1 per-persona, `CollapsedPersonaGroup` wrapper
-   * for N>=2 — see M3-10).
+   * (bare `AgentTile` for N=1 per-persona, `MultiAgentPersonaTile` wrapper for
+   * rostered N≥2 — 86ca1dtr5, supersedes the M3-10 `CollapsedPersonaGroup`
+   * which is retained in the union only for legacy / non-rostered paths).
    *
-   * Consumers MUST discriminate via the `kind` field (or
-   * `isCollapsedPersonaGroup` type guard). Back-compat with pre-M3-10
+   * Consumers MUST discriminate via the `kind` field (`isMultiAgentPersonaTile`
+   * / `isCollapsedPersonaGroup` type guards). Back-compat with pre-M3-10
    * callers holds when `claudeteam.collapsePersonaTiles` is false or every
    * persona has N=1 (no wrappers emitted).
    */

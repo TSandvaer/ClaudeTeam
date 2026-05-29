@@ -17,13 +17,14 @@
 
 import { matchAgent } from "../roster/matcher.js";
 import { formatFreshness } from "../../shared/freshness.js";
+import { computeAggregateState } from "../../shared/types.js";
 import type {
   AgentMeta,
   AgentState,
   AgentTile,
   AgentTree,
   BackgroundAgent,
-  CollapsedPersonaGroup,
+  MultiAgentPersonaTile,
   RosterTileEntry,
   SessionRecord,
   SessionTree,
@@ -237,6 +238,13 @@ export function buildAgentTree(
         model,
         state,
         agentId,
+        // 86ca1dtr5: stamp the owning sessionId onto every rostered tile so a
+        // MultiAgentPersonaTile instance running in a different session than
+        // the rendering session block can still drill into the correct
+        // transcript (resolves PR #123 NIT 2). Single-tile path is unaffected
+        // — the tile renders inside its own session block, so the value
+        // coincides with the block's sessionId.
+        sessionId: session.sessionId,
         toolUseId: meta.toolUseId,
         // 86c9zfmhp (Obs 11): expose the host-authoritative finish timestamp
         // so the webview can build a precise-ISO tooltip on the activity row.
@@ -345,12 +353,13 @@ export function buildAgentTree(
       return ai - bi;
     });
 
-    // M3-10: persona-tile collapse. Per-team, group N>1 same-memberId tiles
-    // into a `CollapsedPersonaGroup` wrapper. N=1 tiles are emitted bare
-    // (unchanged shape). When `collapsePersonaTiles=false`, the wrapper step
-    // is skipped entirely and the output is identical to pre-M3-10 (every
-    // entry is a bare AgentTile). See `CollapsedPersonaGroup` /
-    // `RosterTileEntry` in shared/types.ts.
+    // 86ca1dtr5 (option A, supersedes M3-10 grouping for rostered members):
+    // per-team, group N≥2 same-memberId tiles into a `MultiAgentPersonaTile`
+    // wrapper carrying the full member identity + aggregate state + headline +
+    // ordered instances. N=1 tiles are emitted bare (unchanged shape). When
+    // `collapsePersonaTiles=false`, the wrapper step is skipped entirely and
+    // the output is identical to pre-M3-10 (every entry is a bare AgentTile).
+    // See `MultiAgentPersonaTile` / `RosterTileEntry` in shared/types.ts.
     const rosterTilesWithGroups: Map<string, RosterTileEntry[]> = new Map();
     for (const [teamId, tiles] of rosterTiles) {
       rosterTilesWithGroups.set(
@@ -523,26 +532,40 @@ export function resolveModelOnParseError(
 }
 
 /**
- * M3-10 AC1: collapse N>1 same-persona tiles into a `CollapsedPersonaGroup`
- * wrapper.
+ * 86ca1dtr5 (option A — supersedes M3-10 grouping for rostered members):
+ * collapse N≥2 same-persona tiles into a `MultiAgentPersonaTile` wrapper.
  *
  * Walks `tiles` in their existing order (already sorted by roster member
- * declaration order — see `rosterTiles.sort` above), groups consecutive
- * (and non-consecutive) entries with the same `memberId`, and emits:
- *   - bare `AgentTile`                       when count for that memberId is 1
- *   - `CollapsedPersonaGroup { instances }`  when count for that memberId is >= 2
+ * declaration order — see `rosterTiles.sort` above), groups (consecutive and
+ * non-consecutive) entries with the same `memberId`, and emits:
+ *   - bare `AgentTile`                          when count for that memberId is 1
+ *   - `MultiAgentPersonaTile { instances, ... }` when count for that memberId is >= 2
+ *
+ * Each wrapper carries the FULL member identity (memberId/teamId/display/role/
+ * memberColor — taken from the bucket's first tile, which is invariant across
+ * the bucket since all share one memberId), the aggregate state
+ * (`computeAggregateState`, §2.1 precedence running > error > idle > finished >
+ * available), the headline instance's activity + model (§2.4), the count, and
+ * the instances ordered most-active-first (§3.2).
  *
  * Order semantics:
- *   - Within a group, `instances` preserves the original input order
- *     (insertion order — typically agentId order from the disk read).
- *   - Across groups, position is determined by the FIRST occurrence of
- *     each memberId in the input. This keeps the roster-declaration-
- *     order sort stable: Felix-group appears before Maya-group iff
- *     Felix's first tile came before Maya's first tile in the input.
+ *   - Within a wrapper, `instances` are ordered MOST-ACTIVE-FIRST
+ *     (running → error → idle → finished → available) with ties broken by
+ *     `agentId` lexical order (deterministic, flicker-free across ticks). This
+ *     replaces M3-10's "preserve input order" — option A wants the headline
+ *     (winning-tier) instance to lead the expanded list (§3.2).
+ *   - Across wrappers, position is determined by the FIRST occurrence of each
+ *     memberId in the input — keeps the roster-declaration-order sort stable.
+ *
+ * Headline instance (§2.4): the most-recently-active instance within the
+ * winning tier — for finished, the one with the largest `finishedAtMs`; for
+ * other tiers, ordering already places the lexically-first agentId of the
+ * winning tier first, which is the deterministic tie-break. The headline's
+ * activity + model drive rows 3/4 of the rendered tile.
  *
  * Pure function. Does NOT mutate the input array or its tiles.
  *
- * Exported for direct unit-test coverage (AC6).
+ * Exported for direct unit-test coverage.
  */
 export function groupTilesByPersona(
   tiles: AgentTile[],
@@ -561,10 +584,8 @@ export function groupTilesByPersona(
     bucket.push(tile);
   }
 
-  // Second pass: emit bare AgentTile for singletons, CollapsedPersonaGroup
-  // for N>=2. The canonical wrapper carries only `kind`, `personaName`,
-  // `count`, `instances` — `memberId`/`teamId`/`role` are recoverable from
-  // `instances[0]` if the renderer needs them.
+  // Second pass: emit bare AgentTile for singletons, MultiAgentPersonaTile
+  // for N>=2.
   const out: RosterTileEntry[] = [];
   for (const memberId of firstSeenOrder) {
     const bucket = buckets.get(memberId)!;
@@ -572,18 +593,144 @@ export function groupTilesByPersona(
       out.push(bucket[0]!);
       continue;
     }
-    const first = bucket[0]!;
-    const group: CollapsedPersonaGroup = {
-      kind: "collapsed-persona",
-      personaName: first.display,
-      count: bucket.length,
-      // Snapshot the array (do not alias the bucket — defense-in-depth
-      // against downstream mutators).
-      instances: bucket.slice(),
+    // Order instances most-active-first (snapshot — do not mutate the bucket).
+    const ordered = bucket.slice().sort(compareInstancesMostActiveFirst);
+    const aggregateState = computeAggregateState(ordered);
+    const headline = pickHeadlineInstance(ordered, aggregateState);
+    // Member identity is invariant across the bucket (all share one memberId);
+    // read it from the first tile.
+    const identity = bucket[0]!;
+    const wrapper: MultiAgentPersonaTile = {
+      kind: "multi-agent-persona",
+      memberId: identity.memberId,
+      teamId: identity.teamId,
+      display: identity.display,
+      role: identity.role,
+      aggregateState,
+      headlineActivity: headline.activity,
+      headlineModel: headline.model,
+      count: ordered.length,
+      instances: ordered,
+      ...(identity.memberColor !== undefined
+        ? { memberColor: identity.memberColor }
+        : {}),
     };
-    out.push(group);
+    out.push(wrapper);
   }
   return out;
+}
+
+/**
+ * Rebuild a `RosterTileEntry` for a rostered member from a (possibly trimmed)
+ * instance set — the shared helper the post-reducer filters
+ * (`hideFinishedFilter`, `hideIdleFilter`, `hideMembersFilter`,
+ * `removeMembersFilter`) use after dropping instances from a
+ * `MultiAgentPersonaTile`.
+ *
+ * Re-derives the aggregate state, headline activity/model, count, and
+ * most-active-first ordering from the surviving instances so the wrapper stays
+ * internally consistent (the §5.4 invariant `count === instances.length` and
+ * `aggregateState === computeAggregateState(instances)` must hold on the wire).
+ *
+ *   - 0 survivors  → `null` (caller drops the entry).
+ *   - 1 survivor   → bare `AgentTile` (matches the reducer's N=1 shape — a
+ *                    rostered member with one live instance is NOT a wrapper).
+ *   - N≥2 survivors → a fresh `MultiAgentPersonaTile` with recomputed
+ *                    aggregate/headline/count/order, carrying forward the
+ *                    member identity from the trimmed wrapper.
+ *
+ * Pure — does not mutate `survivors` (sorts a snapshot). Exported for filter
+ * reuse + direct test coverage.
+ */
+export function rebuildMultiAgentTileFromInstances(
+  identity: Pick<
+    MultiAgentPersonaTile,
+    "memberId" | "teamId" | "display" | "role" | "memberColor"
+  >,
+  survivors: AgentTile[],
+): RosterTileEntry | null {
+  if (survivors.length === 0) return null;
+  if (survivors.length === 1) return survivors[0]!;
+  const ordered = survivors.slice().sort(compareInstancesMostActiveFirst);
+  const aggregateState = computeAggregateState(ordered);
+  const headline = pickHeadlineInstance(ordered, aggregateState);
+  return {
+    kind: "multi-agent-persona",
+    memberId: identity.memberId,
+    teamId: identity.teamId,
+    display: identity.display,
+    role: identity.role,
+    aggregateState,
+    headlineActivity: headline.activity,
+    headlineModel: headline.model,
+    count: ordered.length,
+    instances: ordered,
+    ...(identity.memberColor !== undefined
+      ? { memberColor: identity.memberColor }
+      : {}),
+  };
+}
+
+/**
+ * Rank for the most-active-first instance ordering (lower = more active).
+ * `available` is the floor (in practice unreachable inside a live instance
+ * list, but ranked for totality). Mirrors the `computeAggregateState`
+ * precedence tiers.
+ */
+const INSTANCE_STATE_RANK: Record<AgentState, number> = {
+  running: 0,
+  error: 1,
+  idle: 2,
+  finished: 3,
+  available: 4,
+};
+
+/**
+ * Comparator for ordering instances most-active-first (§3.2). Primary key is
+ * the state rank (running → error → idle → finished → available); ties broken
+ * by `agentId` lexical order so the ordering is deterministic and stable
+ * across ticks (no flicker). Pure / total.
+ */
+function compareInstancesMostActiveFirst(a: AgentTile, b: AgentTile): number {
+  const ra = INSTANCE_STATE_RANK[a.state];
+  const rb = INSTANCE_STATE_RANK[b.state];
+  if (ra !== rb) return ra - rb;
+  return a.agentId < b.agentId ? -1 : a.agentId > b.agentId ? 1 : 0;
+}
+
+/**
+ * Pick the headline instance (§2.4) — the most-recently-active instance within
+ * the winning aggregate tier. For `finished`, "most recent" is the largest
+ * `finishedAtMs` (the last to complete). For all other tiers, the `ordered`
+ * array (already most-active-first with agentId tie-break) places the winning
+ * tier's lexically-first instance at the front, so the first instance whose
+ * state matches the aggregate IS the headline.
+ *
+ * `ordered` is assumed non-empty (N≥2 wrapper invariant). Pure.
+ */
+function pickHeadlineInstance(
+  ordered: AgentTile[],
+  aggregateState: AgentState,
+): AgentTile {
+  const tierMatches = ordered.filter((t) => t.state === aggregateState);
+  if (tierMatches.length === 0) {
+    // Defensive: aggregate didn't match any instance (only reachable if the
+    // aggregate is `available` with no available instances). Fall back to the
+    // first ordered instance so the headline is always defined.
+    return ordered[0]!;
+  }
+  if (aggregateState === "finished") {
+    // Last-to-finish leads — largest finishedAtMs. Ties / missing timestamps
+    // fall back to the existing most-active-first ordering (agentId lexical).
+    return tierMatches.reduce((best, cur) => {
+      const bestMs = best.finishedAtMs ?? -Infinity;
+      const curMs = cur.finishedAtMs ?? -Infinity;
+      return curMs > bestMs ? cur : best;
+    });
+  }
+  // running / error / idle: the first tier-matching instance in the
+  // most-active-first ordering is the deterministic headline.
+  return tierMatches[0]!;
 }
 
 /**

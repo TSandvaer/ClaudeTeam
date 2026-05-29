@@ -24,6 +24,7 @@
  */
 
 import type { RosterTileEntry, Team } from "../../shared/types.js";
+import { isMultiAgentPersonaTile } from "../../shared/types.js";
 import type { WebviewMessage } from "../../shared/messages.js";
 import { renderAgentTile, type PostMessageFn } from "./agentTile.js";
 import {
@@ -168,6 +169,43 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
 
   const now = nowMs ?? Date.now();
   for (const entry of tiles) {
+    if (isMultiAgentPersonaTile(entry)) {
+      // 86ca1dtr5 — the host now emits a MultiAgentPersonaTile for rostered
+      // members with N≥2 live agents. The dedicated single-tile + ×N badge +
+      // expand renderer is Maya's webview scope (Phase 2b,
+      // `multiAgentPersonaTile.ts`). Until that lands this interim branch
+      // flattens the wrapper to its per-instance bare tiles so NO data is
+      // dropped from the dashboard (every agent still renders, drill-in still
+      // works). Maya's PR replaces this block with `renderMultiAgentPersonaTile`.
+      for (const inst of entry.instances) {
+        const instFinishedAtMs =
+          inst.state === "finished" && finishedTracker
+            ? finishedTracker.observe(sessionId, inst.agentId, now)
+            : undefined;
+        const instPrevState = prevStateTracker?.previous(
+          sessionId,
+          inst.agentId,
+        );
+        card.appendChild(
+          renderAgentTile({
+            tile: inst,
+            sessionId,
+            postMessage,
+            ...(instFinishedAtMs !== undefined
+              ? { finishedAtMs: instFinishedAtMs }
+              : {}),
+            ...(instPrevState !== undefined ? { prevState: instPrevState } : {}),
+            ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+            ...(spriteTracker ? { spriteTracker } : {}),
+            nowMs: now,
+          }),
+        );
+        if (prevStateTracker) {
+          prevStateTracker.record(sessionId, inst.agentId, inst.state);
+        }
+      }
+      continue;
+    }
     if (isCollapsedPersonaGroup(entry)) {
       // M3-10 AC2 — collapsed-persona wrapper renders a header tile + lazy
       // instances container. All three trackers forwarded so when the user

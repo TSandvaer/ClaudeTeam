@@ -41,7 +41,11 @@ import type {
   RosterTileEntry,
   SessionTree,
 } from "../../shared/types.js";
-import { isCollapsedPersonaGroup } from "../../shared/types.js";
+import {
+  isCollapsedPersonaGroup,
+  isMultiAgentPersonaTile,
+} from "../../shared/types.js";
+import { rebuildMultiAgentTileFromInstances } from "./reducer.js";
 
 /**
  * Result of applying the hide-finished filter to an `AgentTree`.
@@ -89,7 +93,23 @@ export function applyHideFinishedFilter(
 
       const survivors: RosterTileEntry[] = [];
       for (const entry of entries) {
-        if (isCollapsedPersonaGroup(entry)) {
+        if (isMultiAgentPersonaTile(entry)) {
+          // 86ca1dtr5: walk instances; drop finished ones; rebuild the wrapper
+          // with recomputed aggregate/headline/count (N=0 drop, N=1 unwrap).
+          const keptInstances: AgentTile[] = [];
+          for (const inst of entry.instances) {
+            if (inst.state === "finished") {
+              hiddenFinishedCount += 1;
+            } else {
+              keptInstances.push(inst);
+            }
+          }
+          const rebuilt = rebuildMultiAgentTileFromInstances(
+            entry,
+            keptInstances,
+          );
+          if (rebuilt !== null) survivors.push(rebuilt);
+        } else if (isCollapsedPersonaGroup(entry)) {
           // Walk instances; drop finished ones; rebuild wrapper.
           const keptInstances: AgentTile[] = [];
           for (const inst of entry.instances) {

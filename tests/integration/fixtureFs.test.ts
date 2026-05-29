@@ -60,7 +60,11 @@ import {
   type FinishedMap,
   type SessionAgentData,
 } from "../../src/extension/state/reducer.js";
-import { MetaParseError, isCollapsedPersonaGroup } from "../../src/shared/types.js";
+import {
+  MetaParseError,
+  isCollapsedPersonaGroup,
+  isMultiAgentPersonaTile,
+} from "../../src/shared/types.js";
 import type {
   AgentTile,
   RosterTileEntry,
@@ -79,7 +83,7 @@ function findTile(
   memberId: string,
 ): AgentTile | undefined {
   for (const entry of entries) {
-    if (isCollapsedPersonaGroup(entry)) {
+    if (isCollapsedPersonaGroup(entry) || isMultiAgentPersonaTile(entry)) {
       const match = entry.instances.find((t) => t.memberId === memberId);
       if (match) return match;
       continue;

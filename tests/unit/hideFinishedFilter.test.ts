@@ -27,8 +27,13 @@ import type {
   AgentTree,
   BackgroundAgent,
   CollapsedPersonaGroup,
+  MultiAgentPersonaTile,
   RosterTileEntry,
   SessionTree,
+} from "../../src/shared/types.js";
+import {
+  computeAggregateState,
+  isMultiAgentPersonaTile,
 } from "../../src/shared/types.js";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +64,36 @@ function makeGroup(
   return {
     kind: "collapsed-persona",
     personaName,
+    count: instances.length,
+    instances,
+  };
+}
+
+/**
+ * 86ca1dtr5 — build a MultiAgentPersonaTile (the wrapper the reducer now emits
+ * for rostered N≥2). One memberId shared across instances; aggregate/headline
+ * derived to match what the reducer would produce.
+ */
+function makeMultiAgentGroup(
+  memberId: string,
+  states: AgentState[],
+): MultiAgentPersonaTile {
+  const instances = states.map((s, i) => {
+    const t = makeTile(memberId, s);
+    return { ...t, agentId: `agent-${memberId}-${i}` };
+  });
+  const aggregateState = computeAggregateState(instances);
+  const headline =
+    instances.find((i) => i.state === aggregateState) ?? instances[0]!;
+  return {
+    kind: "multi-agent-persona",
+    memberId,
+    teamId: "claudeteam-alpha",
+    display: memberId,
+    role: "test",
+    aggregateState,
+    headlineActivity: headline.activity,
+    headlineModel: headline.model,
     count: instances.length,
     instances,
   };
@@ -277,6 +312,92 @@ describe("applyHideFinishedFilter — CollapsedPersonaGroup", () => {
     expect(survivors).toHaveLength(1);
     const grp = survivors![0] as CollapsedPersonaGroup;
     expect(grp.count).toBe(2);
+    expect(result.hiddenFinishedCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Filter ON — MultiAgentPersonaTile handling (86ca1dtr5). The same rebuild
+// helper backs hideIdle / hideMembers / removeMembers, so this describe is the
+// representative coverage for the shared `rebuildMultiAgentTileFromInstances`.
+// ---------------------------------------------------------------------------
+
+describe("applyHideFinishedFilter — MultiAgentPersonaTile (86ca1dtr5)", () => {
+  it("drops the whole wrapper when all instances are finished", () => {
+    const tiles = new Map<string, RosterTileEntry[]>([
+      ["claudeteam-alpha", [makeMultiAgentGroup("felix", ["finished", "finished"])]],
+    ]);
+    const tree: AgentTree = { sessions: [makeSession(tiles)] };
+
+    const result = applyHideFinishedFilter(tree, true);
+
+    // Whole team empties → team key removed.
+    expect(
+      result.tree.sessions[0]!.rosterTiles.get("claudeteam-alpha"),
+    ).toBeUndefined();
+    expect(result.hiddenFinishedCount).toBe(2);
+  });
+
+  it("unwraps to a bare AgentTile when exactly one survivor remains", () => {
+    const tiles = new Map<string, RosterTileEntry[]>([
+      [
+        "claudeteam-alpha",
+        [makeMultiAgentGroup("felix", ["finished", "running"])],
+      ],
+    ]);
+    const tree: AgentTree = { sessions: [makeSession(tiles)] };
+
+    const result = applyHideFinishedFilter(tree, true);
+
+    const survivors = result.tree.sessions[0]!.rosterTiles.get(
+      "claudeteam-alpha",
+    );
+    expect(survivors).toHaveLength(1);
+    const entry = survivors![0]!;
+    expect("kind" in entry).toBe(false);
+    expect((entry as AgentTile).state).toBe("running");
+    expect(result.hiddenFinishedCount).toBe(1);
+  });
+
+  it("keeps the wrapper with recomputed aggregate/count when ≥2 survive", () => {
+    const tiles = new Map<string, RosterTileEntry[]>([
+      [
+        "claudeteam-alpha",
+        [makeMultiAgentGroup("felix", ["finished", "running", "idle"])],
+      ],
+    ]);
+    const tree: AgentTree = { sessions: [makeSession(tiles)] };
+
+    const result = applyHideFinishedFilter(tree, true);
+
+    const survivors = result.tree.sessions[0]!.rosterTiles.get(
+      "claudeteam-alpha",
+    );
+    expect(survivors).toHaveLength(1);
+    const grp = survivors![0]!;
+    expect(isMultiAgentPersonaTile(grp)).toBe(true);
+    const wrapper = grp as MultiAgentPersonaTile;
+    expect(wrapper.count).toBe(2);
+    expect(wrapper.instances).toHaveLength(2);
+    // Aggregate recomputed over survivors (running + idle) → running.
+    expect(wrapper.aggregateState).toBe("running");
+    expect(result.hiddenFinishedCount).toBe(1);
+  });
+
+  it("keeps wrapper intact when no instances are finished", () => {
+    const tiles = new Map<string, RosterTileEntry[]>([
+      ["claudeteam-alpha", [makeMultiAgentGroup("felix", ["running", "idle"])]],
+    ]);
+    const tree: AgentTree = { sessions: [makeSession(tiles)] };
+
+    const result = applyHideFinishedFilter(tree, true);
+
+    const survivors = result.tree.sessions[0]!.rosterTiles.get(
+      "claudeteam-alpha",
+    );
+    expect(survivors).toHaveLength(1);
+    expect(isMultiAgentPersonaTile(survivors![0]!)).toBe(true);
+    expect((survivors![0] as MultiAgentPersonaTile).count).toBe(2);
     expect(result.hiddenFinishedCount).toBe(0);
   });
 });

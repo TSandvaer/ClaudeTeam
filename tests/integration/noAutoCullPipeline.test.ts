@@ -50,7 +50,10 @@ import {
   RemovedMembersStore,
   type MementoLike as RemovedMementoLike,
 } from "../../src/extension/state/removedMembersStore.js";
-import { isCollapsedPersonaGroup } from "../../src/shared/types.js";
+import {
+  isCollapsedPersonaGroup,
+  isMultiAgentPersonaTile,
+} from "../../src/shared/types.js";
 
 // Mirror the watcherLoop integration test constants.
 const ALIVE_PID = 2_000_020;
@@ -168,14 +171,16 @@ describe("E-09 no-auto-cull pipeline guard (EPIC 86ca11187)", () => {
     const entries = state.sessions[0]?.rosterTiles.get("claudeteam-alpha");
     expect(entries).toBeDefined();
     const states = entries!.map((e) =>
-      isCollapsedPersonaGroup(e) ? "group" : e.state,
+      isCollapsedPersonaGroup(e) || isMultiAgentPersonaTile(e)
+        ? "group"
+        : e.state,
     );
     // felix is FINISHED and still present (not suppressed); maya + bram are
     // available baselines and present. Nothing was auto-culled.
     expect(states).toContain("finished");
     expect(states).toContain("available");
     const memberIds = entries!
-      .filter((e) => !isCollapsedPersonaGroup(e))
+      .filter((e) => !isCollapsedPersonaGroup(e) && !isMultiAgentPersonaTile(e))
       .map((e) => (e as { memberId: string }).memberId);
     expect(memberIds).toContain("felix");
     expect(memberIds).toContain("maya");
