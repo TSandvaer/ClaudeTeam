@@ -78,6 +78,7 @@ import { runTick } from "../../../src/extension/watcher/watcherLoop.js";
 import { cwdToSlug } from "../../../src/shared/slug.js";
 import {
   isCollapsedPersonaGroup,
+  isMultiAgentPersonaTile,
   type AgentTile,
   type RosterTileEntry,
 } from "../../../src/shared/types.js";
@@ -85,18 +86,18 @@ import {
 /**
  * M3-10 narrowing helper: flatten a `RosterTileEntry[]` to the underlying
  * leaf `AgentTile[]` so `.memberId` is accessible. `RosterTileEntry` widened
- * to `AgentTile | CollapsedPersonaGroup` (M3-10); the wrapper itself does
- * not carry `memberId` — its `instances[]` do. The reducer's default path
- * (`collapsePersonaTiles: true`) only emits a wrapper when N>=2 same-persona
- * tiles share a team key; this suite's fixtures spawn 1 per persona, so in
- * practice every entry is a bare `AgentTile`. The flattening branch is
- * defensive (matches the integration suite's `findTile` pattern at
- * `tests/integration/fixtureFs.test.ts:75-88`).
+ * to `AgentTile | CollapsedPersonaGroup | MultiAgentPersonaTile` (M3-10 +
+ * 86ca1dtr5); neither wrapper carries `memberId` itself — its `instances[]`
+ * do. The reducer's default path (`collapsePersonaTiles: true`) only emits a
+ * wrapper when N>=2 same-persona tiles share a team key; this suite's fixtures
+ * spawn 1 per persona, so in practice every entry is a bare `AgentTile`. The
+ * flattening branches are defensive (matches the integration suite's
+ * `findTile` pattern at `tests/integration/fixtureFs.test.ts:75-88`).
  */
 function flattenTiles(entries: readonly RosterTileEntry[]): AgentTile[] {
   const out: AgentTile[] = [];
   for (const entry of entries) {
-    if (isCollapsedPersonaGroup(entry)) {
+    if (isCollapsedPersonaGroup(entry) || isMultiAgentPersonaTile(entry)) {
       out.push(...entry.instances);
     } else {
       out.push(entry);
