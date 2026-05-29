@@ -25,11 +25,17 @@
 import * as vscode from "vscode";
 
 import type {
+  AssignCharacterMessage,
+  ConfirmOrphanDeleteMessage,
+  DismissSetupSuggestionMessage,
   HideMemberMessage,
+  OpenManageTeamMessage,
   OpenRosterMessage,
   OpenTranscriptMessage,
   RefreshMessage,
   RemoveMemberMessage,
+  RunSetupMessage,
+  SaveTeamMessage,
   ShowAllHiddenMessage,
   ShowMemberMessage,
   WebviewMessage,
@@ -83,6 +89,17 @@ export interface WebviewMessageHandlers {
    * yaml-gated; see `RemovedMembersStore`).
    */
   onRemoveMember?(msg: RemoveMemberMessage): void;
+  /**
+   * Team-setup epic (TS-02 Pt-2 wires the side effects; this provider only
+   * dispatches). Maya's TS-03 webview emits these; Felix's host handlers
+   * generate/write `claudeteam.yaml` + ack via `setup:config-saved`.
+   */
+  onOpenManageTeam?(msg: OpenManageTeamMessage): void;
+  onRunSetup?(msg: RunSetupMessage): void;
+  onSaveTeam?(msg: SaveTeamMessage): void;
+  onAssignCharacter?(msg: AssignCharacterMessage): void;
+  onConfirmOrphanDelete?(msg: ConfirmOrphanDeleteMessage): void;
+  onDismissSetupSuggestion?(msg: DismissSetupSuggestionMessage): void;
   /** Called for messages that don't match a known discriminator. */
   onUnknown?(raw: unknown): void;
 }
@@ -194,6 +211,24 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
         return;
       case "ui:remove-member":
         this._messageHandlers.onRemoveMember?.(raw);
+        return;
+      case "ui:open-manage-team":
+        this._messageHandlers.onOpenManageTeam?.(raw);
+        return;
+      case "ui:run-setup":
+        this._messageHandlers.onRunSetup?.(raw);
+        return;
+      case "ui:save-team":
+        this._messageHandlers.onSaveTeam?.(raw);
+        return;
+      case "ui:assign-character":
+        this._messageHandlers.onAssignCharacter?.(raw);
+        return;
+      case "ui:confirm-orphan-delete":
+        this._messageHandlers.onConfirmOrphanDelete?.(raw);
+        return;
+      case "ui:dismiss-setup-suggestion":
+        this._messageHandlers.onDismissSetupSuggestion?.(raw);
         return;
     }
   }
@@ -310,6 +345,49 @@ export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
   }
   if (t === "ui:show-all-hidden") {
     return true;
+  }
+  // Team-setup epic — no-payload webview→host messages.
+  if (t === "ui:open-manage-team" || t === "ui:dismiss-setup-suggestion") {
+    return true;
+  }
+  // ui:run-setup { include: string[] }
+  if (t === "ui:run-setup") {
+    const p = (raw as { payload?: unknown }).payload;
+    if (typeof p !== "object" || p === null) return false;
+    const { include } = p as { include?: unknown };
+    return Array.isArray(include) && include.every((x) => typeof x === "string");
+  }
+  // ui:save-team { config: ClaudeTeamConfig } — structural guard on config
+  // being a versioned object with a teams array (deep validation is the host
+  // handler's / zod schema's job, mirroring how ui:open-transcript only checks
+  // the discriminator-adjacent shape).
+  if (t === "ui:save-team") {
+    const p = (raw as { payload?: unknown }).payload;
+    if (typeof p !== "object" || p === null) return false;
+    const { config } = p as { config?: unknown };
+    if (typeof config !== "object" || config === null) return false;
+    const { version, teams } = config as { version?: unknown; teams?: unknown };
+    return typeof version === "number" && Array.isArray(teams);
+  }
+  // ui:assign-character { memberId: string; character: string | null }
+  if (t === "ui:assign-character") {
+    const p = (raw as { payload?: unknown }).payload;
+    if (typeof p !== "object" || p === null) return false;
+    const { memberId, character } = p as {
+      memberId?: unknown;
+      character?: unknown;
+    };
+    return (
+      typeof memberId === "string" &&
+      (character === null || typeof character === "string")
+    );
+  }
+  // ui:confirm-orphan-delete { memberId: string }
+  if (t === "ui:confirm-orphan-delete") {
+    const p = (raw as { payload?: unknown }).payload;
+    if (typeof p !== "object" || p === null) return false;
+    const { memberId } = p as { memberId?: unknown };
+    return typeof memberId === "string";
   }
   return false;
 }

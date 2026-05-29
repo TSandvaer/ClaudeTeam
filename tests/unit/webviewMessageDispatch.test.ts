@@ -364,3 +364,132 @@ describe("isWebviewMessage — ui:set-config removed (86ca1gdbp)", () => {
     ).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Team-setup epic (TS-03) — new ui:* messages validate + dispatch.
+// ---------------------------------------------------------------------------
+
+describe("isWebviewMessage — team-setup ui:* messages", () => {
+  it("accepts ui:open-manage-team + ui:dismiss-setup-suggestion (no payload)", () => {
+    expect(isWebviewMessage({ type: "ui:open-manage-team" })).toBe(true);
+    expect(isWebviewMessage({ type: "ui:dismiss-setup-suggestion" })).toBe(true);
+  });
+
+  it("accepts ui:run-setup with a string[] include", () => {
+    expect(
+      isWebviewMessage({ type: "ui:run-setup", payload: { include: ["felix"] } }),
+    ).toBe(true);
+    expect(
+      isWebviewMessage({ type: "ui:run-setup", payload: { include: [] } }),
+    ).toBe(true);
+  });
+
+  it("rejects ui:run-setup with a non-string include entry", () => {
+    expect(
+      isWebviewMessage({ type: "ui:run-setup", payload: { include: [1, 2] } }),
+    ).toBe(false);
+    expect(isWebviewMessage({ type: "ui:run-setup" })).toBe(false);
+  });
+
+  it("accepts ui:save-team with a versioned config + teams array", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:save-team",
+        payload: { config: { version: 1, teams: [] } },
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects ui:save-team without a valid config", () => {
+    expect(
+      isWebviewMessage({ type: "ui:save-team", payload: { config: {} } }),
+    ).toBe(false);
+    expect(isWebviewMessage({ type: "ui:save-team" })).toBe(false);
+  });
+
+  it("accepts ui:assign-character with id or null character", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:assign-character",
+        payload: { memberId: "maya", character: "c1" },
+      }),
+    ).toBe(true);
+    expect(
+      isWebviewMessage({
+        type: "ui:assign-character",
+        payload: { memberId: "maya", character: null },
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects ui:assign-character with a non-string/non-null character", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:assign-character",
+        payload: { memberId: "maya", character: 5 },
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts ui:confirm-orphan-delete with a memberId", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:confirm-orphan-delete",
+        payload: { memberId: "ghost" },
+      }),
+    ).toBe(true);
+    expect(
+      isWebviewMessage({ type: "ui:confirm-orphan-delete", payload: {} }),
+    ).toBe(false);
+  });
+});
+
+describe("provider dispatch — team-setup ui:* routing", () => {
+  function provider(): ClaudeTeamViewProvider {
+    return ClaudeTeamViewProvider.fromExtensionPath("/ext");
+  }
+
+  it("routes each team-setup message to its own handler", () => {
+    const p = provider();
+    const onOpenManageTeam = vi.fn();
+    const onRunSetup = vi.fn();
+    const onSaveTeam = vi.fn();
+    const onAssignCharacter = vi.fn();
+    const onConfirmOrphanDelete = vi.fn();
+    const onDismissSetupSuggestion = vi.fn();
+    p.setMessageHandlers({
+      onOpenManageTeam,
+      onRunSetup,
+      onSaveTeam,
+      onAssignCharacter,
+      onConfirmOrphanDelete,
+      onDismissSetupSuggestion,
+    });
+
+    p._dispatchWebviewMessage({ type: "ui:open-manage-team" });
+    p._dispatchWebviewMessage({
+      type: "ui:run-setup",
+      payload: { include: ["felix"] },
+    });
+    p._dispatchWebviewMessage({
+      type: "ui:save-team",
+      payload: { config: { version: 1, teams: [] } },
+    });
+    p._dispatchWebviewMessage({
+      type: "ui:assign-character",
+      payload: { memberId: "maya", character: null },
+    });
+    p._dispatchWebviewMessage({
+      type: "ui:confirm-orphan-delete",
+      payload: { memberId: "ghost" },
+    });
+    p._dispatchWebviewMessage({ type: "ui:dismiss-setup-suggestion" });
+
+    expect(onOpenManageTeam).toHaveBeenCalledTimes(1);
+    expect(onRunSetup).toHaveBeenCalledTimes(1);
+    expect(onSaveTeam).toHaveBeenCalledTimes(1);
+    expect(onAssignCharacter).toHaveBeenCalledTimes(1);
+    expect(onConfirmOrphanDelete).toHaveBeenCalledTimes(1);
+    expect(onDismissSetupSuggestion).toHaveBeenCalledTimes(1);
+  });
+});

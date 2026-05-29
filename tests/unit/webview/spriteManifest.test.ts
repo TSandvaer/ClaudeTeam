@@ -55,7 +55,8 @@ describe("spriteForMember — 6-member gender binding (E-07b) / AC6", () => {
 
   it("returns null when a bound character is absent from the manifest", () => {
     const emptyManifest: GeneratedSpriteManifest = { characters: {} };
-    expect(spriteForMember("felix", emptyManifest)).toBeNull();
+    // `character: undefined` → legacy gender-binding fallback path.
+    expect(spriteForMember("felix", undefined, emptyManifest)).toBeNull();
   });
 
   it("returns null when the bound character has zero animations", () => {
@@ -70,7 +71,7 @@ describe("spriteForMember — 6-member gender binding (E-07b) / AC6", () => {
         },
       },
     };
-    expect(spriteForMember("felix", zeroAnim)).toBeNull();
+    expect(spriteForMember("felix", undefined, zeroAnim)).toBeNull();
   });
 });
 

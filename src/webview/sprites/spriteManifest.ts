@@ -4,22 +4,23 @@
  *
  * Two pieces of data:
  *   1. `MEMBER_SPRITE_BINDING` — roster member id → sprite character folder.
- *      ONLY members present here render a pixel character; everyone else
- *      degrades to the existing text tile (no sprite box, no broken image —
- *      AC5). The monogram / never-run skin is E-05's scope, not this ticket.
+ *      The LEGACY gender binding, now a FALLBACK only (team-setup epic
+ *      Decision 7 / spec §5.3 supersedes it with a per-member `character`
+ *      choice). Used when a tile has NO `character` field (`undefined` — the
+ *      pre-team-setup roster, or a host that hasn't stamped the field yet).
+ *      When a tile DOES carry `Member.character` (a `CharacterSource` id, or
+ *      explicit `null` for text tile), that drives the render instead — see
+ *      `spriteForMember`'s `character` param + `spriteForCharacterId`.
  *
- *      GENDER binding (sponsor decision 2026-05-29 — see team/DECISIONS.md):
- *      ALL SIX roster members are bound by gender to the two harvested "Dev"
- *      characters. Only `ClaudeTeam-M01-Dev` + `ClaudeTeam-F01-Dev` sprite
- *      folders exist on disk — that is expected; the six members share those
- *      two by gender:
+ *      GENDER binding (legacy, sponsor decision 2026-05-29 — see
+ *      team/DECISIONS.md): all six roster members share the two harvested
+ *      "Dev" characters by gender:
  *        - male   → `ClaudeTeam-M01-Dev`: felix, bram
  *        - female → `ClaudeTeam-F01-Dev`: maya, iris, nora, sage
- *      This FIXES the earlier provisional binding (`felix → F01-Dev`,
- *      `maya → M01-Dev`), which had the genders backwards. No roster member
- *      resolves to the text fallback now — every member has a bound character.
- *      When per-persona characters land (M02-M05, F02-F05), re-point each
- *      member at its own character.
+ *      This remains the fallback so a project still on the pre-team-setup
+ *      roster (no per-member character) keeps its sprites. Once the host
+ *      stamps `tile.character` from `claudeteam.yaml`, the per-member choice
+ *      takes over and this table is no longer consulted for that tile.
  *
  *   2. `GENERATED_SPRITE_MANIFEST` (imported) — per-character anim frame paths,
  *      baked at build time by scripts/build-sprite-manifest.mjs (PixelLab does
@@ -80,23 +81,63 @@ export const MEMBER_SPRITE_BINDING: Record<string, string> = {
 };
 
 /**
- * Look up the sprite character bound to a roster member id. Returns the
- * `SpriteCharacter` (with resolved frame paths) when both (a) the member is
- * bound AND (b) the generated manifest actually has frames for that
- * character. Returns `null` otherwise — the caller renders the text-only
- * tile (AC5: no broken image).
+ * Look up a sprite character by its `CharacterSource` id (team-setup epic
+ * Decision 7 / spec §5.3). The id IS the manifest character-folder key for
+ * bundled characters (e.g. `"ClaudeTeam-M01-Dev"`); the host's
+ * `resolveCharacterSources()` uses the folder name as the stable id, so the
+ * manifest lookup is direct.
+ *
+ * Returns the `SpriteCharacter` (with resolved frame paths) when the manifest
+ * has frames for that id; `null` otherwise (unknown id — e.g. a user-folder
+ * character that isn't baked into THIS bundle, or an id that no longer
+ * resolves). A `null` result → the caller renders the text-tile fallback (no
+ * broken image), exactly as for an unbound member.
  */
-export function spriteForMember(
-  memberId: string,
+export function spriteForCharacterId(
+  characterId: string,
   manifest: GeneratedSpriteManifest = GENERATED_SPRITE_MANIFEST,
 ): SpriteCharacter | null {
-  const charName = MEMBER_SPRITE_BINDING[memberId];
-  if (charName === undefined) {
-    return null;
-  }
-  const char = manifest.characters[charName];
+  const char = manifest.characters[characterId];
   if (!char || Object.keys(char.animations).length === 0) {
     return null;
   }
   return char;
+}
+
+/**
+ * Resolve the sprite character a member's tile should render (team-setup epic
+ * Decision 7 / spec §5.3 — per-member character REPLACES the gender binding).
+ *
+ * Resolution order:
+ *   1. `character` is a non-null id  → resolve by id via `spriteForCharacterId`.
+ *      An unknown id falls through to `null` (text tile) — NOT the gender
+ *      binding, because an explicit assignment that can't resolve in this
+ *      bundle is honored as "render the text tile" rather than silently
+ *      substituting a different character.
+ *   2. `character === null`          → `null` (explicit text-tile choice).
+ *   3. `character === undefined`     → LEGACY gender binding (`MEMBER_SPRITE_BINDING`)
+ *      so a pre-team-setup roster (no per-member character) keeps its sprites.
+ *
+ * Returns the `SpriteCharacter` (with resolved frames) or `null`. `null` →
+ * the caller renders the text-only tile (AC5/§5.3: no broken image).
+ */
+export function spriteForMember(
+  memberId: string,
+  character?: import("../../shared/types.js").MemberCharacter,
+  manifest: GeneratedSpriteManifest = GENERATED_SPRITE_MANIFEST,
+): SpriteCharacter | null {
+  // Per-member character (team-setup) takes precedence when the field is
+  // present (incl. explicit null).
+  if (character !== undefined) {
+    if (character === null) {
+      return null;
+    }
+    return spriteForCharacterId(character, manifest);
+  }
+  // Legacy fallback — gender binding by member id (pre-team-setup roster).
+  const charName = MEMBER_SPRITE_BINDING[memberId];
+  if (charName === undefined) {
+    return null;
+  }
+  return spriteForCharacterId(charName, manifest);
 }

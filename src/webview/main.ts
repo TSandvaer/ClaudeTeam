@@ -30,7 +30,11 @@
 
 import { FIXTURE_EMPTY_STATE, FIXTURE_STATE } from "../shared/fixtures.js";
 import type {
+  CharacterSource,
+  ClaudeTeamConfig,
   RosterTileEntry,
+  ScannedAgent,
+  SetupDetectionState,
   WebviewAgentTree,
   WebviewSessionTree,
 } from "../shared/types.js";
@@ -39,6 +43,8 @@ import type {
   SerializedSessionTree,
   WebviewMessage,
 } from "../shared/messages.js";
+import { workspaceFolderName } from "../shared/types.js";
+import { showSetupBanner } from "./components/setupBanner.js";
 import { initMessageReceiver } from "./messageReceiver.js";
 import {
   renderFull,
@@ -162,6 +168,30 @@ function boot(): void {
   mount.replaceChildren();
 
   const api = acquireApi();
+  // Re-render hook — assigned once `buildCtx` exists below. Lets the
+  // postMessage interceptor + handlers trigger a re-render without a forward
+  // reference to the not-yet-declared `buildCtx`.
+  let rerender: () => void = () => undefined;
+  /**
+   * Webview-side postMessage interceptor (team-setup). Some webview→host
+   * messages ALSO drive webview-local UI:
+   *   - `ui:open-manage-team` → open the panel locally (the host serves
+   *     wizard-vs-edit via config presence; the webview-local flag controls
+   *     whether the panel surface is mounted).
+   *   - `ui:dismiss-setup-suggestion` → hide the suggest card immediately
+   *     (optimistic; the host's durable flag + next detection reconciles).
+   * All messages are still forwarded to the host.
+   */
+  const postMessage = (msg: WebviewMessage): void => {
+    api.postMessage(msg);
+    if (msg.type === "ui:open-manage-team") {
+      managePanelOpen = true;
+      rerender();
+    } else if (msg.type === "ui:dismiss-setup-suggestion") {
+      setupSuggestionDismissed = true;
+      rerender();
+    }
+  };
   let currentError: DashboardErrorState | null = null;
   // VS Code mode → start with an empty state so the dashboard renders no
   // tiles until the first host `state:full` arrives. Browser dev mode →
@@ -251,12 +281,42 @@ function boot(): void {
    */
   let hiddenMembersExpanded = false;
 
+  // ── Team-setup epic (TS-03) webview-local state ──────────────────────────
+  // Detection trichotomy + scanned agents from the most recent `setup:detection`
+  // (host-owned; mirrored here to drive the render switch). Undefined until the
+  // first detection lands → pre-team-setup render path (back-compat).
+  let setupDetection:
+    | { state: SetupDetectionState; scanned: ScannedAgent[] }
+    | undefined;
+  // Merged character sources from `setup:characters` (host-owned mirror).
+  let characterSources: CharacterSource[] = [];
+  // Whether the suggest-setup card was dismissed this workspace (host owns the
+  // durable flag; mirrored optimistically so the card hides immediately on
+  // dismiss until the host re-emits detection).
+  let setupSuggestionDismissed = false;
+  // Manage Team panel open flag — ephemeral webview-local UI (spec §4). Opened
+  // by `ui:open-manage-team`; closed by the panel's close affordance.
+  let managePanelOpen = false;
+  // Parsed config for the panel's edit layout. Synthesized from `roster:loaded`
+  // teams (the channel note: edit-layout config rides the roster channel). Null
+  // → panel serves the wizard layout.
+  let manageConfig: ClaudeTeamConfig | null = null;
+
+  /** Locate the panel's single banner slot (NIT 2) in the live DOM, if mounted. */
+  const bannerSlot = (): HTMLElement | null =>
+    mount.querySelector<HTMLElement>(".ct-setup-banner-slot");
+  /** Workspace-folder seed for the wizard/preview "Team:" line. */
+  const teamNameSeed = (): string => {
+    const cwd = currentState.sessions[0]?.cwd;
+    return cwd ? workspaceFolderName(cwd) : "";
+  };
+
   // Browser dev mode → render FIXTURE_STATE immediately. VS Code mode →
   // render the empty state until the first `state:full` arrives from the
   // host. Either way the first state:full fully replaces the DOM.
   const buildCtx = (): RenderContext => ({
     mount,
-    postMessage: api.postMessage,
+    postMessage,
     error: currentError,
     rosterErrorDismissedKey,
     onRosterErrorDismiss: (key) => {
@@ -278,8 +338,25 @@ function boot(): void {
       hiddenMembersExpanded = next;
       renderFull(buildCtx(), currentState);
     },
+    // Team-setup surface (TS-03).
+    ...(setupDetection !== undefined ? { setup: setupDetection } : {}),
+    setupSuggestionDismissed,
+    managePanelOpen,
+    manageConfig,
+    characterSources,
+    teamNameSeed: teamNameSeed(),
+    onCloseManagePanel: () => {
+      managePanelOpen = false;
+      renderFull(buildCtx(), currentState);
+    },
     ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
   });
+
+  // Wire the re-render hook now that buildCtx exists (used by the postMessage
+  // interceptor + the setup handlers below).
+  rerender = (): void => {
+    renderFull(buildCtx(), currentState);
+  };
 
   renderFull(buildCtx(), currentState);
 
@@ -305,7 +382,7 @@ function boot(): void {
       // state so the UI doesn't drift. Real delta-application is M4 work.
       renderFull(buildCtx(), currentState);
     },
-    onRosterLoaded: () => {
+    onRosterLoaded: (msg) => {
       // Roster reloaded successfully → clear any roster-error chip.
       currentError = null;
       // M3-04: also clear the dismiss-key so a future error (different
@@ -313,6 +390,15 @@ function boot(): void {
       // own merit — the user's prior dismissal applied to the prior
       // failure context, not this new run.
       rosterErrorDismissedKey = null;
+      // Team-setup channel note: the edit-layout config rides the existing
+      // roster channel. Synthesize a `ClaudeTeamConfig` (version 1) from the
+      // loaded teams so the Manage Team panel's edit layout has the member
+      // list (display/role/character/status/match) to edit. Empty teams →
+      // null (the panel serves the wizard layout instead).
+      manageConfig =
+        msg.payload.teams.length > 0
+          ? { version: 1, teams: msg.payload.teams }
+          : null;
       renderFull(buildCtx(), currentState);
     },
     onRosterError: (msg) => {
@@ -323,6 +409,57 @@ function boot(): void {
         showOpenRosterButton: true,
       };
       renderFull(buildCtx(), currentState);
+    },
+    // ── Team-setup epic (TS-03) ────────────────────────────────────────────
+    onSetupDetection: (msg) => {
+      setupDetection = {
+        state: msg.payload.state,
+        scanned: msg.payload.scanned,
+      };
+      // A fresh detection means the host re-evaluated — a `configured` state
+      // (or a re-emit after a config was created) clears any stale local
+      // dismiss so the workspace-remembered flag is the host's to own again.
+      if (msg.payload.state !== "suggest-setup") {
+        setupSuggestionDismissed = false;
+      }
+      renderFull(buildCtx(), currentState);
+    },
+    onSetupCharacters: (msg) => {
+      characterSources = msg.payload.sources;
+      renderFull(buildCtx(), currentState);
+    },
+    onSetupConfigSaved: (msg) => {
+      // Surface the SINGLE banner (NIT 2 — single-slot de-dupe).
+      if (msg.payload.ok) {
+        // "Team created" (wizard create — manageConfig still null at ack time)
+        // vs "Saved" (edit save — config already present). Capture the verb
+        // BEFORE re-render: the host's follow-up `roster:loaded` will set
+        // manageConfig, but at THIS ack the wizard-vs-edit distinction is live.
+        const message = manageConfig === null ? "Team created" : "Saved";
+        // Re-render FIRST so the panel surface is current (the host re-emits
+        // roster:loaded + a fresh setup:detection around this ack; keeping the
+        // panel open lands the user in the edit layout). renderFull rebuilds
+        // the banner slot empty, so we show the banner into the FRESH slot
+        // AFTER the render — otherwise the rebuild would wipe it.
+        renderFull(buildCtx(), currentState);
+        const slot = bannerSlot();
+        if (slot) {
+          showSetupBanner({ slot, kind: "success", message });
+        }
+      } else {
+        // Stay where we are (wizard preview / edit layout) — do NOT re-render
+        // the surface so the user's in-progress edits / curation are kept. The
+        // banner slot is already mounted; show the error into it.
+        const detail = msg.payload.error ?? "unknown error";
+        const slot = bannerSlot();
+        if (slot) {
+          showSetupBanner({
+            slot,
+            kind: "error",
+            message: `Couldn't save: ${detail}`,
+          });
+        }
+      }
     },
   });
 

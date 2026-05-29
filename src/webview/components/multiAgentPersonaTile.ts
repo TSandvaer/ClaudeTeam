@@ -258,8 +258,13 @@ export function renderMultiAgentPersonaTile(
   }
 
   // ── Sprite (pose from AGGREGATE state + headline activity, §1.4) ──────────
+  // Per-member character (team-setup spec §5.3) drives the wrapper's single
+  // persona sprite; `tile.character` (CharacterSource id / null) takes
+  // precedence over the legacy gender binding, `undefined` falls back to it.
   const char =
-    spriteBaseUri !== undefined ? spriteForMember(tile.memberId) : null;
+    spriteBaseUri !== undefined
+      ? spriteForMember(tile.memberId, tile.character)
+      : null;
   if (char && spriteBaseUri !== undefined) {
     article.dataset.hasSprite = "true";
     const handle = createSpriteBox({
