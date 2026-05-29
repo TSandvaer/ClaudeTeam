@@ -124,9 +124,10 @@ suite("M2-08 AC2 — Activation lifecycle", () => {
     if (!ext.isActive) await ext.activate();
 
     const allCommands = await vscode.commands.getCommands(true);
+    // TS-02 (Decision 1): `claudeteam.openRoster` was DROPPED (the global YAML
+    // it auto-created is gone; roster editing moved to the Manage Team panel).
     for (const cmd of [
       "claudeteam.refresh",
-      "claudeteam.openRoster",
       "claudeteam.openAgentTranscript",
     ]) {
       assert.ok(
