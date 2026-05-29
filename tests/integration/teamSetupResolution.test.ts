@@ -126,20 +126,15 @@ function metaV145Persona(agentType: string): AgentMeta {
 // DEFECT pin — current (defective) observed behavior + red-ready desired
 // ---------------------------------------------------------------------------
 
-describe("DEFECT: empty-role generated config dropped by matcher feed", () => {
-  it("DOCUMENTS CURRENT BEHAVIOR: empty-role members are rejected → empty roster", () => {
-    // This asserts the DEFECTIVE state shipped on main so the regression is
-    // pinned. Observed error text is quoted in the DEFECT block above. When the
-    // TS-02 fix lands, this test SHOULD start failing (roster becomes non-empty)
-    // — that is the signal to delete this pin and promote the it.fails below.
-    const { roster, errors } = writeAndLoad(["felix", "maya"]);
-    expect(errors.length).toBeGreaterThan(0);
-    expect(errors.some((e) => e.includes("role"))).toBe(true);
-    expect(roster).toEqual([]); // ENTIRE file dropped — zero tiles
-  });
+describe("DEFECT FIXED (86ca1p51e): empty-role generated config feeds the matcher", () => {
+  // The `DOCUMENTS CURRENT BEHAVIOR` pin (roster === [] + errors>0) was deleted
+  // on fix per Sage's own DEFECT-block instruction: the fix routes the project
+  // `claudeteam.yaml` through `claudeTeamConfigSchema` (role-optional), so the
+  // empty-role default no longer trips `rosterFileSchema`'s `role.min(1)`. The
+  // two `it.fails` below were promoted to `it` — they now pass.
 
-  it.fails(
-    "DESIRED (red-ready): a generated empty-role config loads clean with both members",
+  it(
+    "a generated empty-role config loads clean with both members",
     () => {
       const { roster, errors } = writeAndLoad(["felix", "maya"]);
       expect(errors).toEqual([]);
@@ -148,8 +143,8 @@ describe("DEFECT: empty-role generated config dropped by matcher feed", () => {
     },
   );
 
-  it.fails(
-    "DESIRED (red-ready): seeded agentType_equals routes a live agent from an empty-role config",
+  it(
+    "seeded agentType_equals routes a live agent from an empty-role config",
     () => {
       const { roster } = writeAndLoad(["felix", "maya"]);
       expect(matchAgent(metaV119("felix"), roster)).toEqual({
