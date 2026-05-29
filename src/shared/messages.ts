@@ -18,6 +18,7 @@
 import type {
   AgentState,
   HiddenMemberKey,
+  RemovedMemberKey,
   RosterTileEntry,
   SessionTree,
   StateDelta,
@@ -120,6 +121,24 @@ export interface SerializedDashboardState {
    * `AgentTree.hiddenMemberKeys`.
    */
   hiddenMemberKeys?: HiddenMemberKey[];
+  /**
+   * Count of rostered agent tiles suppressed this tick because their
+   * `(teamId, memberId)` is in the user's persisted REMOVED-member set
+   * (E-07a / EPIC 86ca11187 §7.3). Diagnostic tick-local count (parallel to
+   * `hiddenMemberCount`). Optional + defaults to 0 — webview MUST treat
+   * `undefined` as 0. Mirror of `AgentTree.removedMemberCount`.
+   */
+  removedMemberCount?: number;
+  /**
+   * The persisted removed-member set in effect this tick, as `RemovedMemberKey`
+   * strings (`` `${teamId}:${memberId}` ``). E-07b consumes this so it never
+   * offers an unhide/show affordance for a removed member (remove is more
+   * permanent than hide — restore is yaml-gated only). Plain `string[]` —
+   * JSON-safe (a `Set` would serialize to `{}`). Optional + defaults to empty
+   * array — webview MUST treat `undefined` as `[]`. Mirror of
+   * `AgentTree.removedMemberKeys`.
+   */
+  removedMemberKeys?: RemovedMemberKey[];
   /**
    * Mirror of `claudeteam.*` config scalars relevant to the webview's
    * rendering (M5). Lets the chip boot with its toggle reflecting the truth
@@ -348,6 +367,34 @@ export type ShowAllHiddenMessage = {
 };
 
 /**
+ * User removed a rostered member from the dashboard (E-07a / EPIC 86ca11187
+ * §7.3 — yaml-gated remove-agent). The host adds `(teamId, memberId)` to its
+ * persisted REMOVED-member set (`workspaceState`) and re-emits state on the
+ * next tick with the member's tile suppressed from BOTH the default tree AND
+ * the hidden-reveal set (more permanent than hide).
+ *
+ * ## Why there is NO `ui:un-remove-member` counterpart
+ *
+ * Remove is yaml-gated by design (DECISIONS §30 / spec §7.3): a removed member
+ * returns ONLY by re-adding its block to `teams.yaml`. The host's
+ * `RemovedMembersStore.reconcile()` runs on every roster reload and clears the
+ * removal record when the member reappears in the roster (absent→present
+ * transition). There is intentionally no in-UI un-remove action, so this union
+ * carries no symmetric un-remove message — unlike hide's
+ * `ui:show-member` / `ui:show-all-hidden` pair.
+ *
+ * Distinct message type (NOT a `ui:hide-member` overload) per the messages.ts
+ * "add a new type, don't overload" rule: remove has different persistence
+ * semantics (no in-UI reversal) and a different filter (suppresses past the
+ * show-hidden surface). Payload carries the `(teamId, memberId)` PAIR — the
+ * host builds the key via `removedMemberKey()`. JSON-safe scalars only.
+ */
+export type RemoveMemberMessage = {
+  type: "ui:remove-member";
+  payload: { teamId: string; memberId: string };
+};
+
+/**
  * Diagnostic panel asked the host to clear the in-memory tick ring buffer
  * (86c9zn7tm). Triggered by the panel's "Clear" button. Does NOT clear the
  * Output channel scrollback (that's a VS Code action on the channel
@@ -390,6 +437,7 @@ export type WebviewMessage =
   | HideMemberMessage
   | ShowMemberMessage
   | ShowAllHiddenMessage
+  | RemoveMemberMessage
   | DiagnosticClearMessage
   | DiagnosticPauseMessage
   | DiagnosticRefreshMessage;

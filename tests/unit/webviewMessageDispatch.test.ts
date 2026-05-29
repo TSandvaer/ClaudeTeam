@@ -259,6 +259,23 @@ describe("ClaudeTeamViewProvider._dispatchWebviewMessage — typed dispatch", ()
     expect(onShowAllHidden).toHaveBeenCalledTimes(1);
     expect(onHideMember).not.toHaveBeenCalled();
   });
+
+  it("routes ui:remove-member with valid payload to onRemoveMember only (E-07a)", () => {
+    const provider = makeProvider();
+    const onRemoveMember = vi.fn();
+    const onHideMember = vi.fn();
+    provider.setMessageHandlers({ onRemoveMember, onHideMember });
+
+    const msg = {
+      type: "ui:remove-member" as const,
+      payload: { teamId: "claudeteam-alpha", memberId: "felix" },
+    };
+    provider._dispatchWebviewMessage(msg);
+
+    expect(onRemoveMember).toHaveBeenCalledTimes(1);
+    expect(onRemoveMember).toHaveBeenCalledWith(msg);
+    expect(onHideMember).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -306,6 +323,34 @@ describe("isWebviewMessage — E-06a hide/show messages", () => {
       isWebviewMessage({
         type: "ui:show-member",
         payload: { teamId: "claudeteam-alpha" },
+      }),
+    ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E-07a — remove-member type-guard coverage
+// ---------------------------------------------------------------------------
+
+describe("isWebviewMessage — E-07a remove-member message", () => {
+  it("accepts ui:remove-member with valid {teamId, memberId}", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:remove-member",
+        payload: { teamId: "claudeteam-alpha", memberId: "felix" },
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects ui:remove-member without payload", () => {
+    expect(isWebviewMessage({ type: "ui:remove-member" })).toBe(false);
+  });
+
+  it("rejects ui:remove-member with wrong field types", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:remove-member",
+        payload: { teamId: "claudeteam-alpha", memberId: 7 },
       }),
     ).toBe(false);
   });

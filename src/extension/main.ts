@@ -44,6 +44,7 @@ import {
 } from "./view/provider.js";
 import { startWatcher, type WatcherHandle } from "./watcher/watcherLoop.js";
 import { HiddenMembersStore } from "./state/hiddenMembersStore.js";
+import { RemovedMembersStore } from "./state/removedMembersStore.js";
 import { startRosterWatcher } from "./roster/rosterWatcher.js";
 import {
   openRoster,
@@ -76,6 +77,14 @@ export function activate(context: vscode.ExtensionContext): void {
   // every tick, and the three webview handlers below are the ONLY mutators
   // (no auto-hide path — AC4).
   const hiddenMembersStore = new HiddenMembersStore(context.workspaceState);
+
+  // E-07a (EPIC 86ca11187 §7.3): persisted REMOVED-member set, also backed by
+  // `workspaceState`. More permanent than hide — a removed member is suppressed
+  // from BOTH the default tree and the hidden-reveal set, and returns ONLY via
+  // a yaml re-add (the store's `reconcile(roster)` runs on every roster reload
+  // and clears the record on the absent→present transition). Mutated only by
+  // the `ui:remove-member` handler + reconcile (no auto-remove path — AC4).
+  const removedMembersStore = new RemovedMembersStore(context.workspaceState);
 
   // 86c9zn7vw: diagnostic Output channel. Constructed once at activate
   // time; survives `resolveWebviewView` remounts so the user's existing
@@ -235,6 +244,10 @@ export function activate(context: vscode.ExtensionContext): void {
       // set. The store mutates only via the explicit hide/show/show-all
       // handlers below; this resolver never adds to it (AC4).
       getHiddenMemberKeys: () => hiddenMembersStore.keys(),
+      // E-07a: read-fresh-every-tick snapshot of the persisted removed-member
+      // set. Mutated only via the explicit remove handler + the yaml-gated
+      // reconcile below; this resolver never adds to it (AC4).
+      getRemovedMemberKeys: () => removedMembersStore.keys(),
       onStateChange: (state) => {
         void postState(webview, state);
       },
@@ -331,6 +344,16 @@ export function activate(context: vscode.ExtensionContext): void {
       projectPath: projectRosterPath,
       pollIntervalMs: rosterPollIntervalMs,
       onRosterChange: (result) => {
+        // E-07a (EPIC 86ca11187 §7.3): the yaml-gated reinstate path. On every
+        // roster reload, reconcile the removed-member set against the freshly
+        // loaded roster — ARM a removed key when its member leaves the roster
+        // (sponsor deleted the block) and REINSTATE (clear the record) when an
+        // armed member reappears (sponsor re-added the block). This is the ONLY
+        // way a removed member comes back (no in-UI un-remove). reconcile()
+        // mutates the in-memory store synchronously BEFORE the tick below reads
+        // it via getRemovedMemberKeys, so a re-added member's tile reappears on
+        // this same reload's tick.
+        removedMembersStore.reconcile(result.roster);
         // The tick re-reads disk; we discard the RosterLoadResult here
         // and let runTick own the canonical reload. Keeps a single source
         // of truth for "what roster is in effect right now".
@@ -406,6 +429,17 @@ export function activate(context: vscode.ExtensionContext): void {
       },
       onShowAllHidden: () => {
         void hiddenMembersStore.showAll();
+        watcherHandle?.forceRefresh();
+      },
+      // E-07a (EPIC 86ca11187 §7.3): remove a member. Adds the pair to the
+      // persisted REMOVED set (un-armed — eligible for yaml-gated reinstate
+      // only after the member later leaves the roster) then forces a re-emit so
+      // the tile drops from BOTH the default tree and the hidden-reveal set
+      // within one tick. No symmetric un-remove handler — restore is yaml-gated
+      // via the reconcile path above. forceRefresh (not triggerTick) defeats
+      // any edge where the visible tile set hash happens to match.
+      onRemoveMember: (msg) => {
+        void removedMembersStore.remove(msg.payload.teamId, msg.payload.memberId);
         watcherHandle?.forceRefresh();
       },
     };

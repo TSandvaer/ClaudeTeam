@@ -51,6 +51,7 @@ import { buildAgentTree } from "../state/reducer.js";
 import { applyHideFinishedFilter } from "../state/hideFinishedFilter.js";
 import { applyHideIdleFilter } from "../state/hideIdleFilter.js";
 import { applyHideMembersFilter } from "../state/hideMembersFilter.js";
+import { applyRemoveMembersFilter } from "../state/removeMembersFilter.js";
 import type {
   ActivityMap,
   AgentMetaEntry,
@@ -58,7 +59,11 @@ import type {
   SessionAgentData,
 } from "../state/reducer.js";
 import { cwdToSlug } from "../../shared/slug.js";
-import type { DashboardState, HiddenMemberKey } from "../../shared/types.js";
+import type {
+  DashboardState,
+  HiddenMemberKey,
+  RemovedMemberKey,
+} from "../../shared/types.js";
 
 /**
  * Configuration accepted by `startWatcher`. Splitting these out keeps the
@@ -164,6 +169,18 @@ export interface WatcherOptions {
    * empty set (filter OFF — every rostered tile visible).
    */
   getHiddenMemberKeys?: () => ReadonlySet<HiddenMemberKey>;
+
+  /**
+   * Optional resolver for the persisted removed-member set (E-07a / EPIC
+   * 86ca11187 §7.3 — yaml-gated remove-agent). Read fresh every tick so an
+   * explicit remove user action (or a yaml-gated reinstate via
+   * `RemovedMembersStore.reconcile`) applies on the next tick without restart.
+   * The resolver snapshots `RemovedMembersStore.keys()`, which mutates only via
+   * the explicit `remove` action + the reconcile path (NO auto-remove — AC4).
+   * When omitted, treated as an empty set (filter OFF — every rostered tile
+   * visible).
+   */
+  getRemovedMemberKeys?: () => ReadonlySet<RemovedMemberKey>;
 
   /** Optional logger; defaults to a no-op so silent in production. */
   logger?: { warn: (msg: string) => void };
@@ -305,6 +322,9 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
         // persisted hidden-member set so an explicit hide/show action applies
         // on the next tick. Empty set when omitted (filter OFF).
         hiddenMemberKeys: opts.getHiddenMemberKeys?.(),
+        // E-07a (EPIC 86ca11187 §7.3): same read-fresh-every-tick snapshot for
+        // the persisted removed-member set. Empty set when omitted (filter OFF).
+        removedMemberKeys: opts.getRemovedMemberKeys?.(),
         logger,
       });
       // Always update lastState — even on hash-skip — so host lookups against
@@ -462,6 +482,16 @@ export interface RunTickOptions {
    * counts only the tiles actually suppressed this tick.
    */
   hiddenMemberKeys?: ReadonlySet<HiddenMemberKey>;
+  /**
+   * The persisted removed-member set in effect this tick (E-07a / EPIC
+   * 86ca11187 §7.3). When omitted / empty, the remove-members filter is a
+   * passthrough. The filter only READS this set — no auto-remove path adds to
+   * it (AC4). The set's `RemovedMemberKey` strings ALSO travel onto the wire as
+   * `removedMemberKeys` so E-07b knows which members were explicitly removed
+   * (and never offers a show/unhide affordance for them) — distinct from
+   * `removedMemberCount` which counts only the tiles suppressed this tick.
+   */
+  removedMemberKeys?: ReadonlySet<RemovedMemberKey>;
   logger?: { warn: (msg: string) => void };
 }
 
@@ -626,9 +656,22 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
   // persisted store (workspaceState); the filter never mutates it (AC4).
   const hiddenSet =
     opts.hiddenMemberKeys ?? new Set<HiddenMemberKey>();
-  const { tree: filteredTree, hiddenMemberCount } = applyHideMembersFilter(
+  const { tree: afterHidden, hiddenMemberCount } = applyHideMembersFilter(
     afterIdle,
     hiddenSet,
+  );
+  // E-07a (EPIC 86ca11187 §7.3): persisted REMOVE-members projection, applied
+  // LAST in the filter chain. Structurally identical suppression to hide-members
+  // (set-membership by (teamId, memberId), state-independent) — the difference
+  // is downstream: a removed member is ALSO absent from the wire's reveal
+  // surface (E-07b reads `removedMemberKeys` to suppress any unhide affordance).
+  // Empty set → identity transform. The set comes from the persisted store; the
+  // filter never mutates it (AC4).
+  const removedSet =
+    opts.removedMemberKeys ?? new Set<RemovedMemberKey>();
+  const { tree: filteredTree, removedMemberCount } = applyRemoveMembersFilter(
+    afterHidden,
+    removedSet,
   );
   // 86c9zmqa8: webview-only uniform-cluster auto-collapse. Default true when
   // omitted to match the package.json schema default. Stamped onto the
@@ -664,6 +707,12 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     // tick-local diagnostic.
     hiddenMemberCount,
     hiddenMemberKeys: [...hiddenSet],
+    // E-07a (EPIC 86ca11187 §7.3): remove-members wire surface. `removedMemberCount`
+    // is the tiles suppressed THIS TICK; `removedMemberKeys` is the FULL persisted
+    // set (so E-07b can suppress show/unhide affordances for every removed member,
+    // not just ones with a live tile this session). Parallel to the hide surface.
+    removedMemberCount,
+    removedMemberKeys: [...removedSet],
     config: {
       hideFinishedAgents: hideFinished,
       // 86c9zmqa8: pass-through scalar; webview-only behavior.
@@ -747,6 +796,11 @@ export function hashState(state: DashboardState): string {
     // but two equal sets must hash equal).
     hiddenMemberCount: state.hiddenMemberCount ?? 0,
     hiddenMemberKeys: [...(state.hiddenMemberKeys ?? [])].sort(),
+    // E-07a: include the remove-members surface so an explicit remove (or a
+    // yaml-gated reinstate via reconcile) re-emits state even when the visible
+    // tile set happens to be unchanged. Sorted so two equal sets hash equal.
+    removedMemberCount: state.removedMemberCount ?? 0,
+    removedMemberKeys: [...(state.removedMemberKeys ?? [])].sort(),
   });
 }
 
