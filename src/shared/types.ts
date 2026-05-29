@@ -130,6 +130,30 @@ export interface Member {
   color?: string;
   /** Ordered list of match rules. First hit (per agent meta) wins. */
   match: MatchRule[];
+  /**
+   * Per-member pixel-character binding (team-setup epic, Decision 7 — LOCKED
+   * `MemberCharacter`). A character id referencing a {@link CharacterSource},
+   * or `null` for the text-tile (monogram) fallback. Replaces the hardcoded
+   * gender→character binding.
+   *
+   * Optional + back-compat: ABSENT on the legacy global `teams.yaml` roster and
+   * pre-team-setup `Member` records; absence is treated identically to `null`
+   * (text tile). Present (incl. explicit `null`) only on the new project-scoped
+   * `claudeteam.yaml` ({@link ClaudeTeamConfig}). JSON-safe scalar.
+   */
+  character?: MemberCharacter;
+  /**
+   * Member lifecycle status (team-setup epic, Decision 3 — LOCKED
+   * `MemberStatus`). `"live"` when the backing `.claude/agents/<name>.md` file
+   * exists; `"orphaned"` when removed-but-kept (greyed, non-live) until the
+   * user confirms deletion.
+   *
+   * Optional + back-compat: ABSENT on the legacy roster + pre-team-setup
+   * records; absence is treated as `"live"` (the only sensible default for a
+   * roster that has no drift/orphan tracking). Present only on the new
+   * `claudeteam.yaml` ({@link ClaudeTeamConfig}). JSON-safe scalar.
+   */
+  status?: MemberStatus;
 }
 
 /** A team groups members. The dashboard renders one card per team. */
@@ -148,6 +172,159 @@ export interface Team {
 export type MatchResult =
   | { teamId: string; memberId: string }
   | null;
+
+// =============================================================================
+// Team-setup epic types (TS-02 / EPIC team-setup, LOCKED Vocabulary contract).
+// See team/nora-pl/team-setup-epic-backlog.md § "Vocabulary contract" +
+// team/iris-ux/team-setup-spec.md. These types model the project-scoped,
+// panel-managed `claudeteam.yaml` file (which SUPERSEDES the dropped global
+// `~/.claudeteam/teams.yaml`), the agents-folder scanner output, the per-member
+// character binding, the discoverable-character list, and the detection
+// trichotomy the dashboard switches on.
+//
+// LOCKED identifiers (Felix + Maya MUST use verbatim): ClaudeTeamConfig,
+// ScannedAgent, MemberCharacter, CharacterSource, MemberStatus,
+// SetupDetectionState. Pt-1 (TS-02) authors them; Pt-2 (host impl) + TS-03
+// (Maya webview) consume them.
+// =============================================================================
+
+/**
+ * Per-member character binding (Vocabulary contract: `MemberCharacter`).
+ *
+ * Stored on `Member.character` (see the extended `Member` interface below).
+ * The value is a character id referencing a {@link CharacterSource} entry, or
+ * `null` when no character is assigned → the member renders as a **text tile**
+ * (monogram chip per the whole-team-display fallback). Replaces the previous
+ * hardcoded gender→character binding (Decision 7; supersedes memory
+ * `project_persona_character_gender_binding`).
+ *
+ * Modeled as a named type alias (not just `string | null` inline) so the
+ * Vocabulary-contract identifier is greppable and the webview's picker /
+ * tile-render path can refer to it by name. JSON-safe scalar — survives the
+ * host↔webview boundary.
+ */
+export type MemberCharacter = string | null;
+
+/**
+ * Member lifecycle status (Vocabulary contract: `MemberStatus`).
+ *
+ *   live     — the member's backing `.claude/agents/<name>.md` file exists.
+ *   orphaned — the agent file was removed but the member is KEPT in
+ *              `claudeteam.yaml` (greyed, non-live tile) until the user
+ *              confirms deletion via `ui:confirm-orphan-delete`. NOT
+ *              auto-deleted (Decision 3 / spec §6.1).
+ *
+ * The host flips `live → orphaned` on the file-watch drift path (Pt-2); the
+ * webview renders the orphaned treatment. An orphaned member can never go
+ * `running` — it has no agent to match.
+ */
+export type MemberStatus = "live" | "orphaned";
+
+/**
+ * The detection trichotomy the host computes per project and the webview
+ * switches the entire dashboard root on (Vocabulary contract:
+ * `SetupDetectionState`; Decision 2 / spec §2).
+ *
+ * Host-side precedence (computed in Pt-2, restated from the backlog):
+ *   - `claudeteam.yaml` present                       → "configured"
+ *   - else ≥2 scanned agents in `.claude/agents/`     → "suggest-setup"
+ *   - else (<2 agents)                                → "empty"
+ *
+ *   configured    — normal dashboard (session blocks, team cards, tiles).
+ *   suggest-setup — ≥2 agents detected but no config yet; the dashboard shows
+ *                   the dismissible "Orchestration detected" setup card.
+ *   empty         — fewer than 2 agents; the dashboard shows the centered
+ *                   empty-state card with the LOCKED copy "This project has no
+ *                   orchestration setup, nothing to show".
+ */
+export type SetupDetectionState = "suggest-setup" | "empty" | "configured";
+
+/**
+ * One entry produced by the agents-folder scanner (Vocabulary contract:
+ * `ScannedAgent`; Decision 2 / spec §3.1). One per `.claude/agents/*.md` file.
+ *
+ * `agentName` is the filename STEM (e.g. `felix.md` → `"felix"`) — VERIFIED
+ * against the live capture corpus to equal the runtime `meta.agentType` for
+ * persona-dispatched sub-agents (TS-02 AC2; see the PR body for the evidence).
+ * This is why the starter config can seed `match: [{ agentType_equals:
+ * agentName }]` and have it match live agents without a separate mapping.
+ *
+ * `filePath` is the absolute (or workspace-relative — host's call, documented
+ * in Pt-2) path to the `.md` file, used by the wizard row for disambiguation
+ * (basename shown muted) and by the drift watcher to detect removal.
+ *
+ * The orchestrator (main session) has NO agent file, so it never appears in
+ * `ScannedAgent[]` — orchestrator-not-a-tile holds by construction (Decision 6
+ * / spec §6.2), no filter needed.
+ *
+ * JSON-safe — carried in the `setup:detection` payload.
+ */
+export interface ScannedAgent {
+  /** Filename stem of the `.claude/agents/<name>.md` file (e.g. "felix"). */
+  agentName: string;
+  /** Path to the agent `.md` file (for disambiguation + drift detection). */
+  filePath: string;
+}
+
+/**
+ * One discoverable character for the picker grid (Vocabulary contract:
+ * `CharacterSource`; Decision 7 / spec §5). The host's `resolveCharacterSources()`
+ * (Pt-2) merges bundled (`dist/`-baked) + optional user-folder characters into
+ * `CharacterSource[]`, deduped by `id` (bundled wins on collision — documented
+ * in the Pt-2 PR body). The picker renders the merged list; the origin badge
+ * distinguishes shipped vs user-supplied.
+ *
+ *   id            — stable character id; also the value stored in
+ *                   `Member.character` ({@link MemberCharacter}).
+ *   label         — human-readable label shown under the thumbnail.
+ *   origin        — "bundled" (ships in the `.vsix` via `dist/`) or "user"
+ *                   (discovered at runtime from the user-character folder).
+ *   thumbnailPath — path to the picker thumbnail; ratify-on-return proposal is
+ *                   the south rotation frame (spec §7.1). Host-resolved.
+ *
+ * JSON-safe — carried in the `setup:characters` payload.
+ */
+export interface CharacterSource {
+  /** Stable character id (referenced by `Member.character`). */
+  id: string;
+  /** Human-readable label shown under the picker thumbnail. */
+  label: string;
+  /** Whether the character ships in the bundle or comes from the user folder. */
+  origin: "bundled" | "user";
+  /** Path to the picker thumbnail image (south rotation frame, ratify default). */
+  thumbnailPath: string;
+}
+
+/**
+ * The parsed top-level shape of the new project-scoped `claudeteam.yaml`
+ * (Vocabulary contract: `ClaudeTeamConfig`; Decisions 1, 3, 5).
+ *
+ * **Naming decision (documented in the TS-02 PR body for Maya + Sage):**
+ * introduced as a NEW named type `ClaudeTeamConfig` rather than extending the
+ * existing `RosterFile` (`{ teams: Team[] }`, no version). Rationale: the new
+ * file carries a `version` discriminator and per-member `character` / `status`
+ * fields that the legacy global `teams.yaml` shape never had; a distinct type
+ * lets the loader branch cleanly during the migration window and keeps
+ * `RosterFile` stable for any transitional read path. `ClaudeTeamConfig.teams`
+ * reuses the existing `Team` type, whose `Member` now carries the optional
+ * `character` / `status` fields (additive — back-compat with the legacy roster).
+ *
+ * Shape:
+ *   version — schema version literal (currently `1`). Lets the reader reject /
+ *             migrate future shapes explicitly rather than guessing.
+ *   teams   — same `Team[]` as the roster; members seed
+ *             `match: [{ agentType_equals: <agentName> }]` (immutable,
+ *             Decision 4), `display` = agentName, empty `role`, `character` null,
+ *             `status: "live"` on generation (spec §3.2 fresh-member shape).
+ *
+ * JSON-safe — carried in the `ui:save-team` payload (webview → host).
+ */
+export interface ClaudeTeamConfig {
+  /** Schema version of the `claudeteam.yaml` file. Currently `1`. */
+  version: number;
+  /** Teams (reusing the roster `Team` type). */
+  teams: Team[];
+}
 
 // =============================================================================
 // Subagent activity — output of the JSONL tailer (M1-06).
