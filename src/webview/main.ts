@@ -49,6 +49,7 @@ import { createFinishedTracker } from "./finishedTracker.js";
 import { createPrevStateTracker } from "./prevStateTracker.js";
 import { createExpandedGroupsTracker } from "./expandedGroupsTracker.js";
 import { createSpriteTracker } from "./spriteTracker.js";
+import { MemberDirectory } from "./memberDirectory.js";
 
 // =============================================================================
 // VS Code API shim
@@ -244,6 +245,23 @@ function boot(): void {
    * attribute coerces to undefined so the renderer's optional-prop guards fire.
    */
   const spriteBaseUri = mount.dataset.spriteBase || undefined;
+  /**
+   * E-06b — webview-local roster directory. Accumulates display/role from
+   * every rostered tile observed across ticks so the "show hidden agents"
+   * reveal list can render human-friendly rows for members the host has
+   * filtered out of the tree (their tiles are absent once hidden). Append-only
+   * within a webview boot; bounded by roster size. See memberDirectory.ts.
+   */
+  const memberDirectory = new MemberDirectory();
+  /**
+   * E-06b — expansion state of the "N hidden agents" reveal panel. Webview-
+   * local ephemeral UI state (allowed — the host owns the authoritative hidden
+   * set; this is just whether the recovery panel is open). Persists across the
+   * ~2s poll re-renders so the panel doesn't snap shut, mirroring the
+   * expandedGroupsTracker discipline. Reset on webview reload (coarse user
+   * action — acceptable).
+   */
+  let hiddenMembersExpanded = false;
 
   // Browser dev mode → render FIXTURE_STATE immediately. VS Code mode →
   // render the empty state until the first `state:full` arrives from the
@@ -263,6 +281,14 @@ function boot(): void {
     prevStateTracker,
     expandedGroupsTracker,
     spriteTracker,
+    memberDirectory,
+    hiddenMembersExpanded,
+    onToggleHiddenMembers: (next) => {
+      // Persist the panel's open/closed state across the next host-driven
+      // re-render, then re-render so the reveal list opens/closes immediately.
+      hiddenMembersExpanded = next;
+      renderFull(buildCtx(), currentState);
+    },
     ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
   });
 
