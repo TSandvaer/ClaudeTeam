@@ -100,3 +100,49 @@ describe("generated manifest — AC6 shape", () => {
     expect(f).toMatch(/^sprites\/ClaudeTeam-M01-Dev\/_pixellab_anims\/.+frame_\d+\.png$/);
   });
 });
+
+describe("read-at-screen wiring (regenerated manifest) — AC4 + AC5", () => {
+  it.each(["ClaudeTeam-M01-Dev", "ClaudeTeam-F01-Dev"])(
+    "%s: active_read resolves to the DESK read anim, not the book pose",
+    (charName) => {
+      const char = GENERATED_SPRITE_MANIFEST.characters[charName];
+      const read = char.animations.active_read;
+      // Folder is the shared desk state, NOT reading_an_open_book.
+      expect(read.folder).toBe("sitting_at_a_desk_fa");
+      expect(read.frames[0]).toContain("/sitting_at_a_desk_fa/");
+      expect(read.frames[0]).not.toContain("/reading_an_open_book/");
+      // The inner slug is the head-scan-at-monitor read anim ("...reads_wh...").
+      expect(read.frames[0]).toMatch(/reads_wh-[0-9a-f]+\/south\//);
+    },
+  );
+
+  it.each(["ClaudeTeam-M01-Dev", "ClaudeTeam-F01-Dev"])(
+    "%s: active_work resolves to the WORKING desk anim, distinct from active_read (AC5 disambiguation)",
+    (charName) => {
+      const char = GENERATED_SPRITE_MANIFEST.characters[charName];
+      const work = char.animations.active_work;
+      const read = char.animations.active_read;
+      // Both live in the shared desk folder...
+      expect(work.folder).toBe("sitting_at_a_desk_fa");
+      expect(read.folder).toBe("sitting_at_a_desk_fa");
+      // ...but resolve to DIFFERENT animation subfolders (the folder/slug form
+      // disambiguated them; the old slugDirs.sort()[0] would have collapsed
+      // both onto one slug).
+      expect(work.frames[0]).not.toBe(read.frames[0]);
+      // active_work is the "seated still / typing" anim, not the "reads_wh" one.
+      expect(work.frames[0]).not.toMatch(/reads_wh-/);
+    },
+  );
+
+  it.each(["ClaudeTeam-M01-Dev", "ClaudeTeam-F01-Dev"])(
+    "%s: idle_reading_book joined the idle pool and points at the book pose",
+    (charName) => {
+      const char = GENERATED_SPRITE_MANIFEST.characters[charName];
+      expect(char.idlePool).toContain("idle_reading_book");
+      const book = char.animations.idle_reading_book;
+      expect(book).toBeDefined();
+      expect(book.folder).toBe("reading_an_open_book");
+      expect(book.frames.length).toBeGreaterThan(0);
+    },
+  );
+});

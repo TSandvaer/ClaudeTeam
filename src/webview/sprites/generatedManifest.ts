@@ -26,7 +26,8 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "idle_yawn",
         "idle_watch",
         "idle_headphones",
-        "idle_wave"
+        "idle_wave",
+        "idle_reading_book"
       ],
       "animations": {
         "idle_coffee": {
@@ -225,6 +226,22 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
             "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-7cbc96f9/south/frame_010.png"
           ]
         },
+        "idle_reading_book": {
+          "folder": "reading_an_open_book",
+          "frames": [
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_000.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_001.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_002.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_003.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_004.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_005.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_006.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_007.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_008.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_009.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_010.png"
+          ]
+        },
         "active_work": {
           "folder": "sitting_at_a_desk_fa",
           "frames": [
@@ -240,19 +257,12 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
           ]
         },
         "active_read": {
-          "folder": "reading_an_open_book",
+          "folder": "sitting_at_a_desk_fa",
           "frames": [
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_000.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_001.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_002.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_003.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_004.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_005.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_006.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_007.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_008.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_009.png",
-            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_stays_bowed_down_looking_at_the_book_with-e956cfae/south/frame_010.png"
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-e6977ea1/south/frame_000.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-e6977ea1/south/frame_001.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-e6977ea1/south/frame_002.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-e6977ea1/south/frame_003.png"
           ]
         }
       }
@@ -273,7 +283,8 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "idle_yawn",
         "idle_watch",
         "idle_headphones",
-        "idle_wave"
+        "idle_wave",
+        "idle_reading_book"
       ],
       "animations": {
         "idle_coffee": {
@@ -472,6 +483,22 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
             "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_010.png"
           ]
         },
+        "idle_reading_book": {
+          "folder": "reading_an_open_book",
+          "frames": [
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_003.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_004.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_005.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_006.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_007.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_008.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_009.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_010.png"
+          ]
+        },
         "active_work": {
           "folder": "sitting_at_a_desk_fa",
           "frames": [
@@ -487,19 +514,12 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
           ]
         },
         "active_read": {
-          "folder": "reading_an_open_book",
+          "folder": "sitting_at_a_desk_fa",
           "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_010.png"
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_003.png"
           ]
         }
       }

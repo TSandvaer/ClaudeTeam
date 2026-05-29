@@ -67,11 +67,75 @@ async function copyDir(src, dest) {
 }
 
 /**
- * Discover the single animation directory inside
- * `<charDir>/_pixellab_anims/<folder>/animations/` and return its south
- * frame paths (sorted), relative to `dist/webview/`.
+ * Parse an `animations.json` value into its folder + optional explicit anim
+ * slug. The value-format (sponsor-locked 2026-05-29, see the manifests'
+ * `_note`):
+ *   - bare `<state_folder>` → folder holds exactly ONE animation; the inner
+ *     slug is DISCOVERED at build time (legacy default).
+ *   - `<state_folder>/<anim_slug>` → folder holds MORE THAN ONE animation;
+ *     resolve THAT exact animation subfolder. Used by `active_work` +
+ *     `active_read`, which now SHARE the `sitting_at_a_desk_fa` desk state
+ *     (same posture → no book↔desk flip during active sessions), differing
+ *     only by their residual motion (typing vs head-scan).
+ *
+ * Splits on the FIRST `/` only — the folder name itself never contains a
+ * slash, and the anim slug never does either (PixelLab slugs are flat dir
+ * names). Pure: no filesystem access, exported for unit coverage.
+ *
+ * @param {string} value the raw `animations.json` map value
+ * @returns {{ folder: string, animSlug: string | null }}
  */
-async function resolveAnimFrames(charName, folder) {
+export function parseAnimValue(value) {
+  const i = value.indexOf("/");
+  if (i === -1) {
+    return { folder: value, animSlug: null };
+  }
+  return { folder: value.slice(0, i), animSlug: value.slice(i + 1) };
+}
+
+/**
+ * Pick the animation slug directory to resolve given the discovered slug dirs
+ * and an optional explicit anim slug. Pure: takes the already-listed dir names
+ * so it is unit-testable without a real filesystem.
+ *
+ *   - explicit `animSlug` supplied → must match one of `slugDirs` exactly;
+ *     returns it, or null (caller logs + skips) if the named anim is absent.
+ *     This is what disambiguates a multi-anim folder so `active_work` resolves
+ *     to the WORKING anim and `active_read` to the READ anim within the shared
+ *     `sitting_at_a_desk_fa` folder.
+ *   - no `animSlug` (legacy bare-folder form) → sole-anim behavior: the single
+ *     dir; if a stray extra appears, the alphabetically-first deterministically
+ *     (with a warning by the caller). A bare-folder value pointing at a
+ *     multi-anim folder is ambiguous and warned.
+ *
+ * @param {string[]} slugDirs animation dir names under `<folder>/animations/`
+ * @param {string | null} animSlug explicit slug from the folder/slug form
+ * @returns {{ slug: string | null, ambiguous: boolean }}
+ */
+export function pickAnimSlug(slugDirs, animSlug) {
+  if (slugDirs.length === 0) {
+    return { slug: null, ambiguous: false };
+  }
+  if (animSlug !== null) {
+    // Folder/slug form — resolve the EXACT named anim; null if missing.
+    return {
+      slug: slugDirs.includes(animSlug) ? animSlug : null,
+      ambiguous: false,
+    };
+  }
+  // Legacy bare-folder form — expect exactly one anim per folder.
+  const sorted = [...slugDirs].sort();
+  return { slug: sorted[0], ambiguous: slugDirs.length > 1 };
+}
+
+/**
+ * Discover the animation directory inside
+ * `<charDir>/_pixellab_anims/<folder>/animations/` named by `value` and return
+ * its south frame paths (sorted), relative to `dist/webview/`. `value` follows
+ * the folder-or-folder/slug format parsed by `parseAnimValue`.
+ */
+async function resolveAnimFrames(charName, value) {
+  const { folder, animSlug } = parseAnimValue(value);
   const animsParent = path.join(
     SPRITES_SRC,
     charName,
@@ -85,17 +149,23 @@ async function resolveAnimFrames(charName, folder) {
   const slugDirs = (await readdir(animsParent, { withFileTypes: true }))
     .filter((e) => e.isDirectory())
     .map((e) => e.name);
-  if (slugDirs.length === 0) {
+
+  const { slug, ambiguous } = pickAnimSlug(slugDirs, animSlug);
+  if (slug === null) {
+    if (animSlug !== null) {
+      console.warn(
+        `[sprite-manifest] ${charName}/${folder}: explicit anim slug "${animSlug}" not found among ${slugDirs.length} dir(s) — skipping`,
+      );
+    }
     return null;
   }
-  // Exactly one animation per folder (state-per-pose). If more than one
-  // appears (stray), take the first deterministically and warn.
-  if (slugDirs.length > 1) {
+  if (ambiguous) {
+    // Bare-folder value but the folder holds >1 anim — the value should have
+    // used the folder/slug form to disambiguate. Resolve deterministically + warn.
     console.warn(
-      `[sprite-manifest] ${charName}/${folder} has ${slugDirs.length} animation dirs; using "${slugDirs[0]}"`,
+      `[sprite-manifest] ${charName}/${folder} has ${slugDirs.length} animation dirs but the value is a bare folder; using "${slug}" — use the "<folder>/<anim_slug>" form to disambiguate`,
     );
   }
-  const slug = slugDirs.sort()[0];
   const southDir = path.join(animsParent, slug, "south");
   if (!existsSync(southDir)) {
     return null;
@@ -120,14 +190,16 @@ async function buildCharacter(charName) {
   }
   const animMap = JSON.parse(await readFile(manifestPath, "utf8"));
   const animations = {};
-  for (const [canonical, folder] of Object.entries(animMap.animations ?? {})) {
-    const framePaths = await resolveAnimFrames(charName, folder);
+  for (const [canonical, value] of Object.entries(animMap.animations ?? {})) {
+    const framePaths = await resolveAnimFrames(charName, value);
     if (framePaths === null) {
       console.warn(
-        `[sprite-manifest] ${charName}: anim "${canonical}" (folder "${folder}") has no frames — skipping`,
+        `[sprite-manifest] ${charName}: anim "${canonical}" (value "${value}") has no frames — skipping`,
       );
       continue;
     }
+    // Store the bare folder (not the folder/slug value) for provenance.
+    const { folder } = parseAnimValue(value);
     animations[canonical] = { folder, frames: framePaths };
   }
   // idle_pool filtered to anims that actually resolved to frames.

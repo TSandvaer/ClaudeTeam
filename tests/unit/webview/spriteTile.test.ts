@@ -60,7 +60,7 @@ function recordingScheduler() {
 }
 
 describe("sprite rendering — AC2 pose selection", () => {
-  it("running + tool==Read renders the active_read first frame", () => {
+  it("running + tool==Read renders the active_read DESK pose (read-at-screen, not the book)", () => {
     const sched = recordingScheduler();
     const el = renderAgentTile({
       tile: tile({ state: "running", activity: "tool:Read src/x.ts", agentId: "a1" }),
@@ -72,7 +72,10 @@ describe("sprite rendering — AC2 pose selection", () => {
     });
     const img = el.querySelector("img.sprite-frame") as HTMLImageElement;
     expect(img).not.toBeNull();
-    expect(img.getAttribute("src")).toContain("reading_an_open_book");
+    // active_read now resolves to the shared desk state (read-at-screen),
+    // NOT the standalone book-reading pose (which moved to the idle pool).
+    expect(img.getAttribute("src")).toContain("sitting_at_a_desk_fa");
+    expect(img.getAttribute("src")).not.toContain("reading_an_open_book");
     expect(el.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe(
       "active_read",
     );
