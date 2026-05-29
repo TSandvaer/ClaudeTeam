@@ -12,7 +12,14 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ## Current state — 2026-05-29 (RESUME; sponsor walkthrough — dispatching E-07b + E-09)
 
-**Resume next-action:** Walkthrough done; **2 agents in flight (dispatched 2026-05-29 ~mid-day):**
+**Resume next-action (updated 2026-05-29 ~12:45 UTC):** **EPIC 86ca11187 CLOSED.** All children complete: E-01/02/04/05/06/07 + E-09; E-08 deferred OUT. PR #120 (E-07b, `f6daa9d`) + PR #121 (E-09, `2fbd587`) both merged; tickets `86ca1agc5` + `86ca1c1az` + epic `86ca11187` → complete. main tip `2fbd587`, 0 agents in flight, 0 open PRs. auto-status OFF.
+
+**Remaining (non-epic, low priority):**
+- **SPONSOR GUI TEST (load-bearing, sponsor-only):** rebuild + reinstall `.vsix` and visually confirm on a real VS Code reload — always-visible roster + persona sprites (6-member gender binding) + baseline skin + hide/show + remove-confirm + idle-60s (#111) + gear (#112). This is the structural acceptance the AI team can't self-do.
+- NITs follow-ups: `86ca16gb7` (#111 docs); E-01 `makeBaselineTile` factory de-dup; PR #121 NIT (comment accuracy `noAutoCullPipeline.test.ts:95-97` — sage is claudeteam-beta not -alpha) — ticket filed this session.
+- Optional: epic retro (`.claude/retros/`).
+
+**(superseded) Walkthrough dispatch snapshot — 2 agents in flight:**
 - **Maya → E-07b DONE → PR #120** (`86ca1agc5`, head `820c460`). Remove affordance (in-tile confirm → `ui:remove-member`), `removedMemberKeys` masked from show-hidden via set-diff in `render.ts`, 6-member gender binding fixed. 932 unit/121 integration green; `messageReceiver.ts` untouched (webview→host only — flagged in PR body). **Felix reviewing → agentId `a8376e75a1bf29ec6`** (branch checked out in felix-wt via `gh pr checkout 120`). ClickUp flips queued in `team/log/clickup-pending.md`.
 - **Sage → E-09 DONE → PR #121** (`29df816`). Ticket **`86ca1c1az`** created by orch (Sage lacks create_task), status `in review`, ID backfilled to PR #121. Test plan `team/sage-qa/epic-86ca11187-test-plan.md` + `tests/integration/noAutoCullPipeline.test.ts` (3 pass). 919 unit/124 integration green. E-07b webview-remove checks + 6-member-binding re-confirm marked **re-run-after-PR-#120-merge**. **Felix review QUEUED behind PR #120** (single felix-wt — do NOT dispatch Felix twice). Reviewer Felix (host/pipeline surface).
 

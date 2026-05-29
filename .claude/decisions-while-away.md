@@ -946,3 +946,13 @@ Sponsor authorized dispatching this ticket; result is "work already done" rather
 - **Reversibility:** `git revert f6daa9d` + admin-merge revert PR. ≤1 PR, ~10 min.
 - **Status:** pending review.
 - **Pointers:** PR #120 (`f6daa9d`); DECISIONS commit `1bc92a5`; Felix review agentId `a8376e75a1bf29ec6`; ticket `86ca1agc5` complete.
+
+## 2026-05-29 1243 UTC — Auto-merge PR #121 (E-09 epic QA) — EPIC 86ca11187 CLOSES
+
+- **Decided:** Admin-squash-merge PR #121 (`test(qa): whole-team-always-visible epic — test plan + no-auto-cull pipeline regression guard (E-09)`) at merge SHA `2fbd587`. Flipped `86ca1c1az` (E-09) + `86ca11187` (EPIC) → complete. Epic now closed: E-01/02/04/05/06/07 + E-09 done; E-08 deferred OUT.
+- **Foundation:** rule 6.6 #1 (routine impl PR, CI green + peer APPROVE). Felix APPROVE_WITH_NITS at PR #121#issuecomment-4573912150 — verified the resolved-set-vs-getter guard catches the bug class + positive control non-vacuous. CI authoritative on rebased SHA `578c4fc8`: `typecheck + lint + unit` 2× COMPLETED SUCCESS. Rebase needed for `clickup-pending.md` both-add conflict (PR #120 also appended) — resolved by orchestrator preserving BOTH adds per Felix's NIT 2 + documented both-add pattern (NOT `--ours`), Sage's NEW-TICKET-REQUEST marked RESOLVED inline.
+- **NIT (non-blocking):** comment accuracy at `noAutoCullPipeline.test.ts:95-97` (sage is claudeteam-beta, not -alpha baseline) — filed as follow-up per rule 6.6 #4.
+- **Alternative:** surface to sponsor. Rejected per sponsor-delegated merge authority.
+- **Reversibility:** `git revert 2fbd587` + admin-merge revert PR. ≤1 PR, ~10 min.
+- **Status:** pending review.
+- **Pointers:** PR #121 (`2fbd587`); Felix review agentId `a08fcc4401cf73138`; epic `86ca11187` complete; E-09 ticket `86ca1c1az` complete.
