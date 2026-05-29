@@ -206,3 +206,17 @@ This also folds in the previously-unfiled persona pixel-character → webview di
 **Reversibility:** trivial — re-route via sponsor on request.
 
 **Pointers:** `CLAUDE.md` § Autonomy; cross-references `[[sponsor-doesnt-review-prs]]`.
+
+---
+
+## 2026-05-29 — Persona pixel-characters assigned by gender (M01=male, F01=female); roster expansion deferred
+
+**Decision (sponsor, /sponsor-questions-walkthrough):** Verbatim — "use the same M01 for all male agents and F01 for all female agents. I will generate a lot more characters to choose from later."
+
+**Implication:** No bespoke per-persona character commissioning for now. The two existing Dev sprites are shared by gender across the whole roster: every male-presenting persona → `ClaudeTeam-M01-Dev`, every female-presenting persona → `ClaudeTeam-F01-Dev`. `MEMBER_SPRITE_BINDING` in `src/webview/sprites/spriteManifest.ts` gets an entry for ALL six members (was 2). Sponsor will generate a larger character library later and reassign per-persona at that point.
+
+**Note:** This corrects the provisional binding (`felix→F01-Dev`, `maya→M01-Dev`) which had Felix on the female char — gender mapping per persona is the Q3 follow-up in the same walkthrough.
+
+**Reversibility:** one-line-per-member edit in `spriteManifest.ts`; trivial to reassign when the larger library lands.
+
+**Pointers:** `[[project_dashboard_whole_team_thesis]]`; spriteManifest binding `src/webview/sprites/spriteManifest.ts:59`; walkthrough 2026-05-29.

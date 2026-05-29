@@ -10,6 +10,18 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
+## Current state — 2026-05-29 (RESUME; sponsor walkthrough — dispatching E-07b + E-09)
+
+**Resume next-action:** Walkthrough done; **2 agents in flight (dispatched 2026-05-29 ~mid-day):**
+- **Maya → E-07b DONE → PR #120** (`86ca1agc5`, head `820c460`). Remove affordance (in-tile confirm → `ui:remove-member`), `removedMemberKeys` masked from show-hidden via set-diff in `render.ts`, 6-member gender binding fixed. 932 unit/121 integration green; `messageReceiver.ts` untouched (webview→host only — flagged in PR body). **Felix reviewing → agentId `a8376e75a1bf29ec6`** (branch checked out in felix-wt via `gh pr checkout 120`). ClickUp flips queued in `team/log/clickup-pending.md`.
+- **Sage → E-09 DONE → PR #121** (`29df816`). Ticket **`86ca1c1az`** created by orch (Sage lacks create_task), status `in review`, ID backfilled to PR #121. Test plan `team/sage-qa/epic-86ca11187-test-plan.md` + `tests/integration/noAutoCullPipeline.test.ts` (3 pass). 919 unit/124 integration green. E-07b webview-remove checks + 6-member-binding re-confirm marked **re-run-after-PR-#120-merge**. **Felix review QUEUED behind PR #120** (single felix-wt — do NOT dispatch Felix twice). Reviewer Felix (host/pipeline surface).
+
+On staleness check: `SendMessage`-by-ID (Felix `a8376e75a1bf29ec6`) + `git fetch && gh pr list --author "@me"`. **Sequence:** (1) Felix finishes PR #120 review + detaches → on APPROVE + CI green, admin-merge #120, flip `86ca1agc5` → complete. (2) THEN dispatch Felix on PR #121 review. (3) On APPROVE + CI green, admin-merge #121, flip `86ca1c1az` → complete → **epic 86ca11187 closes** (E-08 deferred OUT). All merges per rule 6.6 #1. auto-status OFF (do not re-arm unless sponsor asks). main = origin/main = `bcf6ea1`. **GUI test remains sponsor-only** (rebuild .vsix). Pending cleanup (not yet done): `git rm team/maya-dev/scratch/pr3-review.md`; NITs `86ca16gb7` + E-01 factory.
+
+**Walkthrough decisions (2026-05-29):** Q1 dispatch-now (done). Q2 persona chars by gender, no bespoke commissioning yet ([[project_persona_character_gender_binding]] + DECISIONS.md). Q3 Sage→F01-Dev (female). Binding fix folded into E-07b.
+
+---
+
 ## Current state — 2026-05-29 ~08:33 UTC (AWAY-MODE; Epic 86ca11187 Wave 0 DONE, Wave 1 in flight)
 
 **Resume next-action:** Away-mode active (cron `dfa42db3`, 15m tick). EPIC 86ca11187 **Wave 0 DONE** (E-01 #114 + E-02 #113 merged → complete; E-03 spec = #109 merged). **Wave 1 IN FLIGHT** (dispatched ~08:33 UTC):
