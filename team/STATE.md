@@ -10,6 +10,12 @@ This file is the orchestrator's source of truth between heartbeat ticks / betwee
 
 ---
 
+## Nora (PL) — 2026-05-29 (team-setup EPIC backlog authored, away-mode)
+
+Authored the **team-setup EPIC** (project-scoped roster + Manage Team panel + character picker, Marketplace-ready) + 4 dispatch-ready child tickets (TS-01 Iris spec / TS-02 Felix host / TS-03 Maya webview / TS-04 Sage QA). Backlog doc: `team/nora-pl/team-setup-epic-backlog.md` (incl. LOCKED Vocabulary contract for the shared types/schema/messages so Felix+Maya don't diverge — Pattern A). ClickUp creation requests appended to `team/log/clickup-pending.md` (5 tickets; orchestrator creates — sub-agent MCP gap). PR `feat(backlog): team-setup epic` opened for orchestrator review (Nora-domain). Dispatch order: TS-01 solo gate → TS-02 (types first) → TS-03 + TS-04. 7 design decisions are LOCKED (do NOT re-open); 4 ratify-on-return items flagged as Iris spec proposals, NOT blockers. 3 Decision-drafts queued for the next DECISIONS.md weekly batch (in the backlog doc footer).
+
+---
+
 ## Current state — 2026-05-29 ~16:25 UTC (DRAINED + SAVED — quiet; M01 read_at_screen PixelLab gate pending next session)
 
 **Resume next-action:** **IDLE — 0 agents, 0 open PRs, main = origin/main = `c123d75`, auto-status OFF, recurring crons cleared.** All GUI-test-round-2 dev work merged: #127 overflow-menu fix, #128 playback tuning, #129 hide-chips removal (tickets `86ca1fjqu`/`86ca1fntp`/`86ca1gdbp` complete).

@@ -433,3 +433,17 @@ ENTRY-2026-05-29T16:00:00Z: 86ca1gdbp -> in progress (Felix accepted dispatch �
 ENTRY-2026-05-29T16:30:00Z: 86ca1gdbp -> in review (Felix PR opened — chore(webview+host): remove global hide-finished/hide-idle chips (superseded by whole-team-always-visible + per-member hide) — manifest gate vsce-packaged; suite green)
 ENTRY-2026-05-29T17:00:00Z: 86ca1fv2z -> in progress (Maya accepted dispatch — active Read uses read-at-screen desk pose; book-reading → idle pool; generator parses folder/slug form + regenerate manifest; branch maya/86ca1fv2z-read-at-screen-wire)
 ENTRY-2026-05-29T17:30:00Z: 86ca1fv2z -> in review (Maya PR #130 opened — feat(webview): active Read read-at-screen desk pose + book→idle pool; generator parses folder/slug form, manifest regenerated; 960 unit + 118 integration green; typecheck+lint+build clean; Self-Test Report posted; Felix reviewer)
+
+## Team-setup EPIC — ticket-creation requests (Nora away-mode shaping 2026-05-29)
+
+Nora's session has NO ClickUp `create_task` MCP tool surfaced at runtime (documented sub-agent MCP gap — see "Why this exists" above). Orchestrator creates these 5 tickets in list `901523520912`, all status `to do`. Full ticket bodies (Scope / ACs / OOS / Done-when / Files-in-play / Dependencies) are in `team/nora-pl/team-setup-epic-backlog.md` — copy the matching section as each ticket's `markdown_description`. After creation, set each child's `parent` to the EPIC's task ID and backfill the ClickUp IDs into the backlog doc headers (TS-01..TS-04) + this block.
+
+NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (EPIC): CREATE in list 901523520912, status `to do`, name "EPIC — Project-scoped Team Setup + Manage Team panel + Character picker (Marketplace-ready)". Body = the EPIC summary section at the top of team-setup-epic-backlog.md (thesis + 7 LOCKED decisions + Marketplace intent + child list + ratify-on-return items + dispatch order). This is the PARENT for TS-01..TS-04. [ID: ________]
+
+NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (TS-01): CREATE child of the EPIC in list 901523520912, status `to do`, name "spec(setup): team-setup + Manage Team panel + character-picker UX spec". Owner Iris. Body = the "## TS-01" section of team-setup-epic-backlog.md. FIRST in dispatch order (gate). [ID: ________]
+
+NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (TS-02): CREATE child of the EPIC in list 901523520912, status `to do`, name "feat(host): claudeteam.yaml scanner + gen/read/write + project-scope + drift/orphan + character sources". Owner Felix. Body = the "## TS-02" section. Lands Vocabulary-contract types/schema/messages FIRST (Pattern A). [ID: ________]
+
+NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (TS-03): CREATE child of the EPIC in list 901523520912, status `to do`, name "feat(webview): Manage Team panel + setup wizard + 3 dashboard states + character-picker grid". Owner Maya. Body = the "## TS-03" section. Dispatch AFTER TS-02 types merge. [ID: ________]
+
+NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (TS-04): CREATE child of the EPIC in list 901523520912, status `to do`, name "test(setup): QA across scanner / gen / resolution / matcher / orphan + Manage Team panel". Owner Sage. Body = the "## TS-04" section. Spans the impl tickets. [ID: ________]
