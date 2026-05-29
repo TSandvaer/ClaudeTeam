@@ -21,7 +21,10 @@ On their PRs: Felix↔Maya cross-review, green CI, admin-merge + ticket→comple
 
 **SHIPPED this session:** idle-debounce 10s→60s (#111 / `86ca168j9`); settings gear (#112 / `86ca16r2d`); Iris epic design spec (#109); M01+F01 full 15-pose set harvested+committed+pushed (`51c2564`) + canonical `animations.json` naming (idle_* / active_work / active_read). NITs follow-up `86ca16gb7` (to do). PixelLab stray `70e39b6d` for sponsor to delete in UI (optional).
 
-**QUEUED for sponsor (return):** GUI test once Wave 0/1 yields an installable `.vsix` rendering the always-visible roster + persona tiles (sub-agent GUI gap — only sponsor visually confirms). E-08 DEAD-toggle defaulted OUT/deferred. Two unbuilt code improvements on main (idle-60s + gear) need a rebuild+reinstall to see — batch with epic.
+**QUEUED for sponsor (return):**
+- **Persona→character face-map binding** (from E-04 #116): currently PROVISIONAL `felix→F01-Dev`, `maya→M01-Dev` — only 2 generic "Dev" sprites exist, no sponsor-locked face map. One-line edit in `spriteManifest.ts`. Decide which persona shows which character (and whether to commission more PixelLab characters for the other roster members — currently Sage/Iris/Nora/Bram degrade to text tiles).
+- **GUI test** once Wave 0/1 yields an installable `.vsix` rendering the always-visible roster + persona tiles (sub-agent GUI gap — only sponsor visually confirms).
+- E-08 DEAD-toggle defaulted OUT/deferred. Two unbuilt code improvements on main (idle-60s + gear) need a rebuild+reinstall to see — batch with epic.
 
 **New idle-pose progress (state UUIDs; NONE harvested to disk yet — PixelLab only):**
 - idle_think — DONE both: M01 `ec0293a9-e3e9-4545-8e21-b11391ac1d23`, F01 `32b6afd4-d669-439f-b003-766cd6d96e02` (F01's was best; M01 re-rolled to hand-glued-to-chin)
