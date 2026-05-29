@@ -828,3 +828,159 @@ describe("E-06a: runTick applies persisted hidden-member filter", () => {
     expect(state.hiddenMemberKeys).toEqual([ghostKey]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// E-07a (EPIC 86ca11187 §7.3) — runTick applies the removed-member filter
+// ---------------------------------------------------------------------------
+
+describe("E-07a: runTick applies persisted removed-member filter", () => {
+  let root: string;
+  let cleanup: () => void;
+  let rosterPath: string;
+
+  const TEAM_ALPHA = "claudeteam-alpha";
+
+  beforeEach(() => {
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    writeSessionFile(root, {
+      pid: DEAD_PID,
+      sessionId: SESSION_A,
+      cwd: CWD_A,
+    });
+    writeParentJsonl(root, CWD_A, SESSION_A, { title: "remove-members-test" });
+    // A live (running) Felix agent; maya/bram seeded as baseline tiles.
+    writeMetaJson(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "meta-new-schema-persona.json",
+    );
+    writeSubagentJsonl(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "subagent-running.jsonl",
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("empty removed set (omitted): every roster tile visible; count 0; keys []", async () => {
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+    });
+
+    const alpha = state.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    expect(alpha).toBeDefined();
+    expect(state.removedMemberCount).toBe(0);
+    expect(state.removedMemberKeys).toEqual([]);
+  });
+
+  it("removes a RUNNING detected member (felix): tile dropped; count 1; keys carry the key", async () => {
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      removedMemberKeys: new Set([`${TEAM_ALPHA}:felix`] as const),
+    });
+
+    const alpha = state.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    const felixPresent = (alpha ?? []).some(
+      (e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix",
+    );
+    expect(felixPresent).toBe(false);
+    expect(state.removedMemberCount).toBe(1);
+    expect(state.removedMemberKeys).toEqual([`${TEAM_ALPHA}:felix`]);
+  });
+
+  it("removes a baseline AVAILABLE member (maya): never-run tile is removable too", async () => {
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      removedMemberKeys: new Set([`${TEAM_ALPHA}:maya`] as const),
+    });
+
+    const alpha = state.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    const mayaPresent = (alpha ?? []).some(
+      (e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya",
+    );
+    expect(mayaPresent).toBe(false);
+    expect(state.removedMemberCount).toBe(1);
+    expect(state.removedMemberKeys).toEqual([`${TEAM_ALPHA}:maya`]);
+  });
+
+  it("AC1: removed member is suppressed BEYOND show-hidden — its key is on removedMemberKeys (not hiddenMemberKeys)", async () => {
+    // maya is BOTH hidden AND removed. The remove filter suppresses her tile
+    // from the default tree the same way hide does — but the distinguishing
+    // wire signal is that her key appears on `removedMemberKeys`, NOT just
+    // `hiddenMemberKeys`. E-06b's "show hidden" reveal renders from
+    // `hiddenMemberKeys`; E-07b reads `removedMemberKeys` to ensure a removed
+    // member is never offered for reveal/unhide (suppressed beyond show-hidden).
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      hiddenMemberKeys: new Set([`${TEAM_ALPHA}:maya`] as const),
+      removedMemberKeys: new Set([`${TEAM_ALPHA}:maya`] as const),
+    });
+
+    const alpha = state.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    const mayaPresent = (alpha ?? []).some(
+      (e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya",
+    );
+    expect(mayaPresent).toBe(false);
+    // The wire carries maya on BOTH surfaces; E-07b uses removedMemberKeys to
+    // mask her from the show-hidden recovery list that hiddenMemberKeys feeds.
+    expect(state.removedMemberKeys).toEqual([`${TEAM_ALPHA}:maya`]);
+    expect(state.hiddenMemberKeys).toEqual([`${TEAM_ALPHA}:maya`]);
+  });
+
+  it("removedMemberKeys carries the FULL persisted set even for a key with no tile this session", async () => {
+    const ghostKey = "some-other-team:ghost";
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      removedMemberKeys: new Set([ghostKey] as const),
+    });
+
+    expect(state.removedMemberCount).toBe(0);
+    expect(state.removedMemberKeys).toEqual([ghostKey]);
+  });
+
+  it("a re-emit after the key is gone (yaml-gated reinstate simulated) restores the tile", async () => {
+    // Simulate the post-reconcile state: the removed-member set no longer
+    // carries felix (the store's reconcile cleared it on yaml re-add). runTick
+    // with an empty removed set must show felix again — proving the filter is a
+    // pure projection of the set, so the reinstate path's clearing of the
+    // record is sufficient to bring the tile back on the next tick.
+    const removed = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      removedMemberKeys: new Set([`${TEAM_ALPHA}:felix`] as const),
+    });
+    const removedAlpha = removed.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    expect(
+      (removedAlpha ?? []).some(
+        (e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix",
+      ),
+    ).toBe(false);
+
+    const restored = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      removedMemberKeys: new Set([] as const),
+    });
+    const restoredAlpha = restored.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    expect(
+      (restoredAlpha ?? []).some(
+        (e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix",
+      ),
+    ).toBe(true);
+    expect(restored.removedMemberCount).toBe(0);
+    expect(restored.removedMemberKeys).toEqual([]);
+  });
+});

@@ -29,6 +29,7 @@ import type {
   OpenRosterMessage,
   OpenTranscriptMessage,
   RefreshMessage,
+  RemoveMemberMessage,
   SetConfigMessage,
   ShowAllHiddenMessage,
   ShowMemberMessage,
@@ -82,6 +83,13 @@ export interface WebviewMessageHandlers {
    * tick.
    */
   onShowAllHidden?(msg: ShowAllHiddenMessage): void;
+  /**
+   * User removed a rostered member (E-07a `ui:remove-member`). Host adds the
+   * `(teamId, memberId)` pair to the persisted REMOVED-member set + triggers a
+   * tick. More permanent than hide — no symmetric un-remove handler (restore is
+   * yaml-gated; see `RemovedMembersStore`).
+   */
+  onRemoveMember?(msg: RemoveMemberMessage): void;
   /** Called for messages that don't match a known discriminator. */
   onUnknown?(raw: unknown): void;
 }
@@ -194,6 +202,9 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
       case "ui:show-all-hidden":
         this._messageHandlers.onShowAllHidden?.(raw);
         return;
+      case "ui:remove-member":
+        this._messageHandlers.onRemoveMember?.(raw);
+        return;
     }
   }
 
@@ -305,7 +316,13 @@ export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
   }
   // E-06a (EPIC 86ca11187 §7.2): hide / show a single member carry a
   // `{ teamId, memberId }` pair; show-all carries no payload.
-  if (t === "ui:hide-member" || t === "ui:show-member") {
+  // E-07a (EPIC 86ca11187 §7.3): ui:remove-member carries the same
+  // `{ teamId, memberId }` pair shape as hide / show.
+  if (
+    t === "ui:hide-member" ||
+    t === "ui:show-member" ||
+    t === "ui:remove-member"
+  ) {
     const p = (raw as { payload?: unknown }).payload;
     if (typeof p !== "object" || p === null) return false;
     const { teamId, memberId } = p as {

@@ -80,6 +80,13 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
     // `undefined` branch in the "show hidden" renderer). E-06b consumes both.
     hiddenMemberCount: state.hiddenMemberCount ?? 0,
     hiddenMemberKeys: state.hiddenMemberKeys ?? [],
+    // E-07a (EPIC 86ca11187 §7.3): remove-members wire surface. `removedMemberCount`
+    // = tiles suppressed this tick; `removedMemberKeys` = the FULL persisted set
+    // (string[] — JSON-safe). Defaults to 0 / [] when the host omits so the
+    // webview always sees real values. E-07b consumes `removedMemberKeys` to
+    // suppress show/unhide affordances for removed members.
+    removedMemberCount: state.removedMemberCount ?? 0,
+    removedMemberKeys: state.removedMemberKeys ?? [],
     config: {
       hideFinishedAgents: state.config?.hideFinishedAgents === true,
       // 86c9zmqa8 (uniform-cluster polish): mirror the auto-collapse flag onto

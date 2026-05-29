@@ -649,6 +649,29 @@ export interface AgentTree {
    */
   hiddenMemberKeys?: HiddenMemberKey[];
   /**
+   * Count of rostered agent tiles suppressed this tick because their
+   * `(teamId, memberId)` is in the user's persisted REMOVED-member set
+   * (E-07a / EPIC 86ca11187 §7.3 — yaml-gated remove-agent). Diagnostic
+   * tick-local count (parallel to `hiddenMemberCount`). Optional for
+   * back-compat; absent → treated as 0. See
+   * `src/extension/state/removeMembersFilter.ts` for the producer.
+   *
+   * UNLIKE hide, a removed member does NOT surface under "show hidden" — it is
+   * suppressed from BOTH the default tree and the hidden-reveal set. There is
+   * no in-UI un-remove; restore is yaml-gated (re-add to teams.yaml → the
+   * reconcile path clears the removal record on the next roster reload).
+   */
+  removedMemberCount?: number;
+  /**
+   * The persisted removed-member set in effect this tick, as `RemovedMemberKey`
+   * strings (`` `${teamId}:${memberId}` ``). E-07b (webview) consumes this to
+   * know which members were explicitly removed (so it never offers an unhide /
+   * show affordance for them). Plain `string[]` — JSON-safe (a `Set` would
+   * serialize to `{}`). Optional for back-compat; absent → webview treats as
+   * empty array. Source: `src/extension/state/removeMembersFilter.ts`.
+   */
+  removedMemberKeys?: RemovedMemberKey[];
+  /**
    * Mirror of `claudeteam.*` config scalars relevant to the webview's
    * rendering (M5). The watcher reads these once per tick and stamps them
    * onto the produced tree so `serializeState` can pass through to the wire
@@ -735,6 +758,66 @@ export function hiddenMemberKey(
  * Pure / cheap. Exported for the webview's unhide affordance (E-06b) and tests.
  */
 export function parseHiddenMemberKey(
+  key: string,
+): { teamId: string; memberId: string } | null {
+  const idx = key.indexOf(":");
+  if (idx < 0) return null;
+  return { teamId: key.slice(0, idx), memberId: key.slice(idx + 1) };
+}
+
+// =============================================================================
+// Removed-member set (E-07a / EPIC 86ca11187 §7.3 — yaml-gated remove-agent).
+// =============================================================================
+
+/**
+ * Stable key identifying ONE rostered member for the remove-agent feature.
+ *
+ * Same `` `${teamId}:${memberId}` `` shape as {@link HiddenMemberKey} — and for
+ * the same reason (two teams may declare the same `member.id`, so a member is
+ * identified for removal by the (team, member) PAIR). Built / parsed via
+ * `removedMemberKey()` / `parseRemovedMemberKey()`. Persists as a `string[]` in
+ * VS Code `workspaceState` (host) and travels to the webview as a `string[]`
+ * (`SerializedDashboardState.removedMemberKeys`) — never as a `Set`.
+ *
+ * ## How remove differs from hide (the load-bearing distinction)
+ *
+ * Hide ({@link HiddenMemberKey}) is REVERSIBLE in-UI: a hidden member is
+ * suppressed from the DEFAULT tree but resurfaces under the "show hidden"
+ * recovery surface, and one click un-hides it.
+ *
+ * Remove is MORE PERMANENT (DECISIONS §30 / spec §7.3): a removed member is
+ * suppressed from BOTH the default tree AND the hidden-reveal set — it does not
+ * appear anywhere on the dashboard. There is deliberately NO in-UI un-remove
+ * (no `ui:un-remove-member` message). Restore is YAML-gated only: re-adding the
+ * member block to `teams.yaml` brings the tile back on the next roster reload,
+ * via the reconcile path in `RemovedMembersStore.reconcile()` — see that store's
+ * doc for the absent→present arm/reinstate semantics.
+ *
+ * A removed key is distinct in name (`RemovedMemberKey` vs `HiddenMemberKey`) so
+ * the type system keeps the two sets from being accidentally crossed, even
+ * though the runtime string shape is identical.
+ */
+export type RemovedMemberKey = `${string}:${string}`;
+
+/**
+ * Build the canonical `RemovedMemberKey` string from a (teamId, memberId) pair.
+ * Mirror of {@link hiddenMemberKey}; the separator is `:`. Pure / cheap.
+ */
+export function removedMemberKey(
+  teamId: string,
+  memberId: string,
+): RemovedMemberKey {
+  return `${teamId}:${memberId}`;
+}
+
+/**
+ * Parse a `RemovedMemberKey` back into its `teamId` / `memberId` components.
+ * Splits on the FIRST `:` only (defensive — mirror of
+ * {@link parseHiddenMemberKey}). Returns `null` on a separator-less key.
+ *
+ * Pure / cheap. Exported for the reconcile path and tests.
+ */
+export function parseRemovedMemberKey(
   key: string,
 ): { teamId: string; memberId: string } | null {
   const idx = key.indexOf(":");
