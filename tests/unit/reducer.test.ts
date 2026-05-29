@@ -209,7 +209,7 @@ describe("buildAgentTree", () => {
       expect(tile!.state).toBe("running");
     });
 
-    it("JSONL mtime < 10s ago → running", () => {
+    it("JSONL mtime < IDLE_THRESHOLD_MS ago → running", () => {
       const session = makeSession();
       const agentId = "agent002";
       const meta = makeMeta({ agentType: "felix", description: "Felix running" });
@@ -231,11 +231,11 @@ describe("buildAgentTree", () => {
       expect(tile!.activity).toMatch(/^tool:Edit/);
     });
 
-    it("JSONL mtime >= 10s ago → idle", () => {
+    it("JSONL mtime >= IDLE_THRESHOLD_MS ago → idle", () => {
       const session = makeSession();
       const agentId = "agent003";
       const meta = makeMeta({ agentType: "felix", description: "Felix idle" });
-      const staleMtime = NOW_MS - IDLE_THRESHOLD_MS - 1_000; // 11s old
+      const staleMtime = NOW_MS - IDLE_THRESHOLD_MS - 1_000; // 61s old (just past the 60s threshold)
       const activity = makeActivity({ mtimeMs: staleMtime });
       const activities: ActivityMap = new Map([[agentId, activity]]);
 
@@ -251,9 +251,45 @@ describe("buildAgentTree", () => {
       const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
       expect(tile!.state).toBe("idle");
       expect(tile!.activity).toMatch(/^idle \d+s$/);
-      // Elapsed seconds should be ~11
+      // Elapsed seconds derive from the threshold; with the 60s value this is ~61.
+      const expectedElapsed = Math.round((IDLE_THRESHOLD_MS + 1_000) / 1000);
       const elapsed = parseInt(tile!.activity.replace("idle ", "").replace("s", ""), 10);
-      expect(elapsed).toBeGreaterThanOrEqual(11);
+      expect(elapsed).toBeGreaterThanOrEqual(expectedElapsed);
+    });
+
+    // ----------------------- 86ca168j9 (idle debounce) -----------------------
+    // Bug class: Claude Code flushes the sub-agent JSONL only on tool-call
+    // completion, NOT during text generation. Measured generation gaps of
+    // 20s–202s exceeded the OLD 10s cutoff, so an actively-generating agent
+    // flickered to "idle" between tool calls. Sponsor raised IDLE_THRESHOLD_MS
+    // to 60s so common generation gaps (the 20s–45s band) stay "running".
+    it("~35s stale gap classifies running (would have been idle under the old 10s cutoff)", () => {
+      const session = makeSession();
+      const agentId = "agent168j9";
+      const meta = makeMeta({ agentType: "felix", description: "Felix mid-generation gap" });
+      // 35s gap: a representative text-generation pause between tool calls.
+      // < 60s (new threshold) → running; was > 10s (old threshold) → idle.
+      const activity = makeActivity({ mtimeMs: NOW_MS - 35_000 });
+      const activities: ActivityMap = new Map([[agentId, activity]]);
+
+      // Guard: this test only proves the regression is fixed if the gap sits
+      // strictly between the old (10s) and new (60s) thresholds.
+      expect(35_000).toBeGreaterThan(10_000);
+      expect(35_000).toBeLessThan(IDLE_THRESHOLD_MS);
+
+      const tree = buildAgentTree(
+        [session],
+        [makeSessionData(session.sessionId, [makeAgentEntry(agentId, meta)])],
+        activities,
+        new Map(),
+        ROSTER_ALPHA,
+        NOW_MS,
+      );
+
+      const tile = expectTile(tree.sessions[0]!.rosterTiles.get("alpha")?.[0]);
+      expect(tile!.state).toBe("running");
+      // Negative path: the pre-fix "idle 35s" rendering must NOT appear.
+      expect(tile!.activity).not.toMatch(/^idle /);
     });
 
     it("agentId in finishedIds → finished (overrides JSONL staleness)", () => {
