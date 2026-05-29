@@ -212,6 +212,103 @@ describe("ClaudeTeamViewProvider._dispatchWebviewMessage — typed dispatch", ()
     expect(onSetConfig).toHaveBeenCalledWith(msg);
     expect(onRefresh).not.toHaveBeenCalled();
   });
+
+  // E-06a: hide / show / show-all dispatch
+  it("routes ui:hide-member with valid payload to onHideMember only", () => {
+    const provider = makeProvider();
+    const onHideMember = vi.fn();
+    const onShowMember = vi.fn();
+    provider.setMessageHandlers({ onHideMember, onShowMember });
+
+    const msg = {
+      type: "ui:hide-member" as const,
+      payload: { teamId: "claudeteam-alpha", memberId: "felix" },
+    };
+    provider._dispatchWebviewMessage(msg);
+
+    expect(onHideMember).toHaveBeenCalledTimes(1);
+    expect(onHideMember).toHaveBeenCalledWith(msg);
+    expect(onShowMember).not.toHaveBeenCalled();
+  });
+
+  it("routes ui:show-member with valid payload to onShowMember only", () => {
+    const provider = makeProvider();
+    const onShowMember = vi.fn();
+    const onHideMember = vi.fn();
+    provider.setMessageHandlers({ onShowMember, onHideMember });
+
+    const msg = {
+      type: "ui:show-member" as const,
+      payload: { teamId: "claudeteam-alpha", memberId: "maya" },
+    };
+    provider._dispatchWebviewMessage(msg);
+
+    expect(onShowMember).toHaveBeenCalledTimes(1);
+    expect(onShowMember).toHaveBeenCalledWith(msg);
+    expect(onHideMember).not.toHaveBeenCalled();
+  });
+
+  it("routes ui:show-all-hidden (no payload) to onShowAllHidden only", () => {
+    const provider = makeProvider();
+    const onShowAllHidden = vi.fn();
+    const onHideMember = vi.fn();
+    provider.setMessageHandlers({ onShowAllHidden, onHideMember });
+
+    provider._dispatchWebviewMessage({ type: "ui:show-all-hidden" });
+
+    expect(onShowAllHidden).toHaveBeenCalledTimes(1);
+    expect(onHideMember).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E-06a — hide / show / show-all type-guard coverage
+// ---------------------------------------------------------------------------
+
+describe("isWebviewMessage — E-06a hide/show messages", () => {
+  it("accepts ui:hide-member with valid {teamId, memberId}", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:hide-member",
+        payload: { teamId: "claudeteam-alpha", memberId: "felix" },
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts ui:show-member with valid {teamId, memberId}", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:show-member",
+        payload: { teamId: "claudeteam-alpha", memberId: "maya" },
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts ui:show-all-hidden with no payload", () => {
+    expect(isWebviewMessage({ type: "ui:show-all-hidden" })).toBe(true);
+  });
+
+  it("rejects ui:hide-member without payload", () => {
+    expect(isWebviewMessage({ type: "ui:hide-member" })).toBe(false);
+  });
+
+  it("rejects ui:hide-member with wrong field types", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:hide-member",
+        payload: { teamId: 1, memberId: "felix" },
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects ui:show-member with missing memberId", () => {
+    expect(
+      isWebviewMessage({
+        type: "ui:show-member",
+        payload: { teamId: "claudeteam-alpha" },
+      }),
+    ).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -714,3 +714,117 @@ describe("86c9zq9vm: runTick applies hideIdleAgents filter", () => {
     expect(state.config?.hideIdleAgents).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// E-06a (EPIC 86ca11187 §7.2) — runTick applies the hidden-member filter
+// ---------------------------------------------------------------------------
+
+describe("E-06a: runTick applies persisted hidden-member filter", () => {
+  let root: string;
+  let cleanup: () => void;
+  let rosterPath: string;
+
+  // teams-valid.yaml roster ids used below.
+  const TEAM_ALPHA = "claudeteam-alpha";
+
+  beforeEach(() => {
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    writeSessionFile(root, {
+      pid: DEAD_PID,
+      sessionId: SESSION_A,
+      cwd: CWD_A,
+    });
+    writeParentJsonl(root, CWD_A, SESSION_A, { title: "hide-members-test" });
+    // A live (running) Felix agent. The other roster members (maya/bram/sage)
+    // are seeded as baseline `available` tiles by the reducer.
+    writeMetaJson(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "meta-new-schema-persona.json",
+    );
+    writeSubagentJsonl(
+      root,
+      CWD_A,
+      SESSION_A,
+      AGENT_FELIX,
+      "subagent-running.jsonl",
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("empty hidden set (omitted): every roster tile visible; count 0; keys []", async () => {
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+    });
+
+    const alpha = state.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    expect(alpha).toBeDefined();
+    // felix (running) + maya + bram baselines all present.
+    const memberIds = alpha!.map((e) =>
+      isCollapsedPersonaGroup(e) ? e.personaName : e.memberId,
+    );
+    expect(memberIds).toContain("felix");
+    expect(state.hiddenMemberCount).toBe(0);
+    expect(state.hiddenMemberKeys).toEqual([]);
+  });
+
+  it("hides a RUNNING detected member (felix): tile dropped; count 1; keys carry the key", async () => {
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      hiddenMemberKeys: new Set([`${TEAM_ALPHA}:felix`] as const),
+    });
+
+    const alpha = state.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    const felixPresent = (alpha ?? []).some(
+      (e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix",
+    );
+    expect(felixPresent).toBe(false);
+    expect(state.hiddenMemberCount).toBe(1);
+    expect(state.hiddenMemberKeys).toEqual([`${TEAM_ALPHA}:felix`]);
+  });
+
+  it("hides a baseline AVAILABLE member (maya): never-run tile is hide-able too (primary declutter case)", async () => {
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      hiddenMemberKeys: new Set([`${TEAM_ALPHA}:maya`] as const),
+    });
+
+    const alpha = state.sessions[0]?.rosterTiles.get(TEAM_ALPHA);
+    const mayaPresent = (alpha ?? []).some(
+      (e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya",
+    );
+    expect(mayaPresent).toBe(false);
+    // felix (running) still present — only maya hidden.
+    const felixPresent = (alpha ?? []).some(
+      (e) => !isCollapsedPersonaGroup(e) && e.memberId === "felix",
+    );
+    expect(felixPresent).toBe(true);
+    expect(state.hiddenMemberCount).toBe(1);
+    expect(state.hiddenMemberKeys).toEqual([`${TEAM_ALPHA}:maya`]);
+  });
+
+  it("hiddenMemberKeys carries the FULL persisted set even for a key with no tile this session", async () => {
+    // Hide a key that doesn't correspond to any tile in this session's roster
+    // (different team scope). The count of tiles-suppressed-this-tick is 0, but
+    // the wire still carries the full persisted set for E-06b's "show hidden"
+    // recovery surface.
+    const ghostKey = "some-other-team:ghost";
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      hiddenMemberKeys: new Set([ghostKey] as const),
+    });
+
+    expect(state.hiddenMemberCount).toBe(0);
+    expect(state.hiddenMemberKeys).toEqual([ghostKey]);
+  });
+});

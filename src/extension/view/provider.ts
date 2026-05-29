@@ -25,10 +25,13 @@
 import * as vscode from "vscode";
 
 import type {
+  HideMemberMessage,
   OpenRosterMessage,
   OpenTranscriptMessage,
   RefreshMessage,
   SetConfigMessage,
+  ShowAllHiddenMessage,
+  ShowMemberMessage,
   WebviewMessage,
 } from "../../shared/messages.js";
 
@@ -62,6 +65,23 @@ export interface WebviewMessageHandlers {
    * .update(key, value, vscode.ConfigurationTarget.Global)` per spec §8 Q3.
    */
   onSetConfig?(msg: SetConfigMessage): void;
+  /**
+   * User hid a rostered member (E-06a `ui:hide-member`). Host adds the
+   * `(teamId, memberId)` pair to the persisted hidden-member set + triggers a
+   * tick.
+   */
+  onHideMember?(msg: HideMemberMessage): void;
+  /**
+   * User un-hid a single rostered member (E-06a `ui:show-member`). Host
+   * removes the pair from the persisted set + triggers a tick.
+   */
+  onShowMember?(msg: ShowMemberMessage): void;
+  /**
+   * User clicked "show all" on the hidden-members chip (E-06a
+   * `ui:show-all-hidden`). Host clears the entire persisted set + triggers a
+   * tick.
+   */
+  onShowAllHidden?(msg: ShowAllHiddenMessage): void;
   /** Called for messages that don't match a known discriminator. */
   onUnknown?(raw: unknown): void;
 }
@@ -164,6 +184,15 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
         return;
       case "ui:set-config":
         this._messageHandlers.onSetConfig?.(raw);
+        return;
+      case "ui:hide-member":
+        this._messageHandlers.onHideMember?.(raw);
+        return;
+      case "ui:show-member":
+        this._messageHandlers.onShowMember?.(raw);
+        return;
+      case "ui:show-all-hidden":
+        this._messageHandlers.onShowAllHidden?.(raw);
         return;
     }
   }
@@ -273,6 +302,20 @@ export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
       (key === "hideFinishedAgents" || key === "hideIdleAgents") &&
       typeof value === "boolean"
     );
+  }
+  // E-06a (EPIC 86ca11187 §7.2): hide / show a single member carry a
+  // `{ teamId, memberId }` pair; show-all carries no payload.
+  if (t === "ui:hide-member" || t === "ui:show-member") {
+    const p = (raw as { payload?: unknown }).payload;
+    if (typeof p !== "object" || p === null) return false;
+    const { teamId, memberId } = p as {
+      teamId?: unknown;
+      memberId?: unknown;
+    };
+    return typeof teamId === "string" && typeof memberId === "string";
+  }
+  if (t === "ui:show-all-hidden") {
+    return true;
   }
   return false;
 }
