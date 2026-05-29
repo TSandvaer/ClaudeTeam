@@ -220,3 +220,17 @@ This also folds in the previously-unfiled persona pixel-character → webview di
 **Reversibility:** one-line-per-member edit in `spriteManifest.ts`; trivial to reassign when the larger library lands.
 
 **Pointers:** `[[project_dashboard_whole_team_thesis]]`; spriteManifest binding `src/webview/sprites/spriteManifest.ts:59`; walkthrough 2026-05-29.
+
+---
+
+## 2026-05-29 — Read state uses "read-at-screen" (desk posture), book-reading moves to idle pool
+
+**Decision (sponsor):** The active Read state (tool==Read during a working session) renders a NEW "read-at-screen" animation — the working desk posture (hands on keyboard/mouse) with the head scanning left→right — INSTEAD of the book-reading pose. Always desk-read in active sessions (not conditional). The existing book-reading animation is REPURPOSED into the idle_* pool (a "reading a book" idle variant), so it only shows while idle (rotation expected, not jarring) and is not wasted.
+
+**Why:** during active sessions the tool alternates Read / non-Read, which flipped the character between book-reading and desk-working postures repeatedly — visually jarring. Both working and read-at-screen are desk postures → zero posture flip.
+
+**Implementation:**
+- PixelLab (orchestrator-only, gated): generate `read_at_screen` for M01 + F01 — desk posture like `active_work`, head L→R scan, hands locked on keyboard/mouse.
+- Webview (Maya): pose→state map — `active_read` → `read_at_screen` in active sessions; add the old book anim to the `idle_pool` (new canonical name e.g. `idle_reading_book`); update animations.json for both chars.
+
+**Pointers:** [[project_persona_character_gender_binding]]; persona doc .claude/docs/persona-pixel-character-animation-prompts.md; pose-iteration workflow [[feedback_persona_anim_iteration_workflow]]; ticket filed 2026-05-29.
