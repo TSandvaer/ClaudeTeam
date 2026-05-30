@@ -441,6 +441,7 @@ ENTRY-2026-05-29T17:30:00Z: 86ca1fv2z -> in review (Maya PR #130 opened — feat
 ENTRY-2026-05-29T19:58:08Z: 86ca1mw40 -> in review (Sage TS-04 QA PR opened — test(setup): QA across scanner/gen/resolution/matcher/orphan + Manage Team panel; test plan + 10 new integration tests; found HIGH-sev DEFECT: empty-role generated claudeteam.yaml dropped by matcher feed via rosterFileSchema role.min(1); pinned red-ready; reviewer Felix host-side)
 ENTRY-2026-05-30T09:30:00Z: 86ca1tv41 -> in review (Felix PR opened — fix(host): emit roster:loaded so Manage Team reaches edit layout + webview-URI picker thumbnails; both root causes confirmed; 1085 unit + 153 integration green incl. new rosterLoadedEmit + toWebRootRelative + panel-layout-by-config tests; reviewer Maya webview-facing)
 ENTRY-2026-05-30T00:00:00Z: 86ca1tv41 -> in review
+ENTRY-2026-05-30T10:30:00Z: 86ca1u41m -> in review
 
 ## Team-setup EPIC — ticket-creation requests (Nora away-mode shaping 2026-05-29)
 
