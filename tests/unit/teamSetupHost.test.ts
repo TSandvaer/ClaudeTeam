@@ -34,6 +34,7 @@ import {
   reconcileOrphans,
   removeMemberById,
 } from "../../src/extension/roster/orphanReconcile.js";
+import { toWebRootRelative } from "../../src/extension/characterSources.js";
 import type {
   ClaudeTeamConfig,
   Member,
@@ -325,5 +326,69 @@ describe("removeMemberById (AC6 — confirm-delete is the only delete path)", ()
     const res = removeMemberById(cfg, "ghost");
     expect(res.removed).toBe(false);
     expect(res.config).toBe(cfg);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// characterSources.toWebRootRelative (86ca1tv41 — secondary fix)
+//
+// The picker thumbnail MUST be a path relative to the webview's sprite base
+// (`dist/webview`), forward-slashed, so the webview can resolve it against
+// `spriteBaseUri`. An absolute fs path produced a broken `<img src>` (and was
+// not webview-loadable anyway). Path math is OS-aware via node:path, so these
+// build inputs with `join` to stay correct on win32 + posix.
+// ---------------------------------------------------------------------------
+
+import { join } from "node:path";
+
+describe("toWebRootRelative (86ca1tv41 — webview-resolvable thumbnail path)", () => {
+  const webRoot = join("X:", "ext", "dist", "webview");
+
+  it("returns a forward-slashed path relative to the web root for a bundled frame", () => {
+    const abs = join(
+      webRoot,
+      "sprites",
+      "ClaudeTeam-M01-Dev",
+      "_pixellab_anims",
+      "idle",
+      "animations",
+      "x",
+      "south",
+      "frame_000.png",
+    );
+    expect(toWebRootRelative(abs, webRoot)).toBe(
+      "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/idle/animations/x/south/frame_000.png",
+    );
+  });
+
+  it("never contains a backslash (forward-slashed for the webview URL)", () => {
+    const abs = join(webRoot, "sprites", "C", "a", "b.png");
+    expect(toWebRootRelative(abs, webRoot)).not.toContain("\\");
+  });
+
+  it("returns '' when the absolute path is null (no south frame found)", () => {
+    expect(toWebRootRelative(null, webRoot)).toBe("");
+  });
+
+  it("returns '' when no web root is supplied (CLI/test caller)", () => {
+    expect(toWebRootRelative(join(webRoot, "sprites", "x.png"), undefined)).toBe(
+      "",
+    );
+  });
+
+  it("returns '' for a path OUTSIDE the web root (user-folder char → monogram)", () => {
+    // e.g. ~/.claudeteam/characters/Custom/... — outside dist/webview, not
+    // under localResourceRoots, so not webview-loadable.
+    const outside = join("X:", "Users", "me", ".claudeteam", "characters", "C", "f.png");
+    expect(toWebRootRelative(outside, webRoot)).toBe("");
+  });
+
+  it("returns '' when the path equals the web root (degenerate)", () => {
+    expect(toWebRootRelative(webRoot, webRoot)).toBe("");
+  });
+
+  it("NON-VACUOUS: a real bundled frame must NOT degrade to '' (would break the picker)", () => {
+    const abs = join(webRoot, "sprites", "ClaudeTeam-F01-Dev", "f.png");
+    expect(toWebRootRelative(abs, webRoot).length).toBeGreaterThan(0);
   });
 });

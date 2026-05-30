@@ -61,6 +61,7 @@ import type {
   DashboardState,
   HiddenMemberKey,
   RemovedMemberKey,
+  Team,
 } from "../../shared/types.js";
 
 /**
@@ -90,6 +91,19 @@ export interface WatcherOptions {
    * NOT stop the loop.
    */
   onStateChange: (state: DashboardState) => void;
+
+  /**
+   * Optional roster-loaded sink (86ca1tv41). Called on every tick that emits
+   * (i.e. immediately after `onStateChange`, gated by the same hash-skip) with
+   * the full loaded roster (`state.roster`). Production wires this to
+   * `postRosterLoaded(webview, teams)` so the webview's `manageConfig` is set →
+   * the Manage Team panel renders the EDIT layout (member list + character
+   * picker) instead of the setup wizard. Before this callback existed the host
+   * never posted `roster:loaded`, so `manageConfig` stayed permanently null and
+   * the panel was stuck on the wizard. Errors thrown here are caught + logged;
+   * they do NOT stop the loop (same contract as `onStateChange`).
+   */
+  onRosterLoaded?: (teams: Team[]) => void;
 
   /**
    * Optional VS Code FileSystemWatcher to bolt onto the loop. When provided,
@@ -314,6 +328,21 @@ export function startWatcher(opts: WatcherOptions): WatcherHandle {
           logger.warn(
             `watcherLoop: onStateChange handler threw: ${(err as Error).message}`,
           );
+        }
+        // 86ca1tv41: emit `roster:loaded` alongside `state:full` so the
+        // webview's `manageConfig` is set and the Manage Team panel reaches its
+        // edit layout. Gated by the SAME hash-skip as onStateChange (roster is
+        // part of the hash), so a roster YAML edit re-fires this even when the
+        // visible tile set is unchanged. Independent try/catch — a throwing
+        // roster sink must not suppress the diagnostic hook or crash the loop.
+        if (opts.onRosterLoaded) {
+          try {
+            opts.onRosterLoaded(state.roster ?? []);
+          } catch (err) {
+            logger.warn(
+              `watcherLoop: onRosterLoaded handler threw: ${(err as Error).message}`,
+            );
+          }
         }
       }
     } catch (err) {
@@ -626,6 +655,13 @@ export async function runTick(opts: RunTickOptions): Promise<DashboardState> {
     filterApplied,
     rosterErrors: rosterResult.errors,
     rosterWarnings: rosterResult.warnings,
+    // 86ca1tv41: carry the loaded roster so the watcher loop can post
+    // `roster:loaded` to the webview alongside `state:full`. This is the ONLY
+    // write path to the Manage Team panel's `manageConfig` (null → wizard;
+    // non-empty → edit layout with member list + character picker). Verbatim
+    // from loadRoster; NOT serialized onto the state:full wire (serializeState
+    // omits it). Included in hashState below so a roster YAML edit re-emits.
+    roster: rosterResult.roster,
     // E-06a (EPIC 86ca11187 §7.2): hide-members wire surface. `hiddenMemberCount`
     // is the tiles suppressed THIS TICK; `hiddenMemberKeys` is the FULL persisted
     // set (so E-06b's "show hidden" list is complete even for hidden members with
@@ -711,6 +747,13 @@ export function hashState(state: DashboardState): string {
     // tile set happens to be unchanged. Sorted so two equal sets hash equal.
     removedMemberCount: state.removedMemberCount ?? 0,
     removedMemberKeys: [...(state.removedMemberKeys ?? [])].sort(),
+    // 86ca1tv41: include the loaded roster so a roster YAML edit (new member,
+    // changed display/role/character/status) re-emits even when the visible
+    // tile set is unchanged — the watcher re-posts `roster:loaded`, which
+    // refreshes the Manage Team panel's edit layout. The roster's member fields
+    // (display/role/color/match/character/status) all participate so any edit
+    // the panel cares about propagates within one tick.
+    roster: state.roster ?? [],
   });
 }
 

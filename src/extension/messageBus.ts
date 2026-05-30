@@ -22,6 +22,7 @@ import type {
   DashboardState,
   ScannedAgent,
   SetupDetectionState,
+  Team,
 } from "../shared/types.js";
 import type {
   HostMessage,
@@ -119,6 +120,43 @@ export function postState(
     // but do not propagate — the watcher loop must keep running.
     console.warn(
       `[claudeteam.messageBus] postState failed: ${(err as Error).message}`,
+    );
+    return Promise.resolve(false);
+  }
+}
+
+/**
+ * Serialize and post a `roster:loaded` message to the given webview (86ca1tv41).
+ *
+ * `teams` is the full loaded roster (`Team[]`) from the watcher's most recent
+ * `loadRoster` call. `Team` / `Member` are plain JSON-safe objects (string /
+ * scalar fields + a `match[]` array of single-key rule objects — no Map / Set /
+ * Date), so the payload round-trips through `webview.postMessage`'s JSON
+ * serialization unchanged.
+ *
+ * This is the message that sets the webview's `manageConfig` (`onRosterLoaded`
+ * in `src/webview/main.ts`) — non-empty teams → the Manage Team panel renders
+ * the EDIT layout (member list + character picker); empty teams → the panel
+ * serves the setup wizard. Before 86ca1tv41 no host code path posted this
+ * message, so `manageConfig` was permanently null and the panel was stuck on
+ * the wizard.
+ *
+ * Same disposed-webview guard as `postState` (the view can be disposed
+ * mid-tick when the user collapses the Activity Bar panel).
+ */
+export function postRosterLoaded(
+  webview: vscode.Webview,
+  teams: Team[],
+): Thenable<boolean> {
+  const msg: HostMessage = {
+    type: "roster:loaded",
+    payload: { teams },
+  };
+  try {
+    return webview.postMessage(msg);
+  } catch (err) {
+    console.warn(
+      `[claudeteam.messageBus] postRosterLoaded failed: ${(err as Error).message}`,
     );
     return Promise.resolve(false);
   }

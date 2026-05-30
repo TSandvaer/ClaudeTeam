@@ -1017,6 +1017,23 @@ export interface AgentTree {
    */
   rosterWarnings?: string[];
   /**
+   * The full loaded roster (`Team[]`) in effect this tick — verbatim from the
+   * most recent `loadRoster` call (86ca1tv41). Carried so the watcher loop can
+   * emit `roster:loaded` to the webview alongside `state:full`, which is what
+   * sets the Manage Team panel's `manageConfig` (null → wizard layout; non-empty
+   * → edit layout with the member list + character picker). Before 86ca1tv41 the
+   * host never posted `roster:loaded`, so `manageConfig` was permanently null and
+   * the panel was stuck on the setup wizard.
+   *
+   * NOT serialized onto the `state:full` wire (`serializeState` omits it — the
+   * roster rides its own `roster:loaded` message). Included in `hashState` so a
+   * roster YAML edit re-emits even when the visible tile set is unchanged.
+   * Optional for back-compat with the CLI driver and pre-86ca1tv41 tests; absent
+   * → the watcher posts an empty `roster:loaded` (webview keeps `manageConfig`
+   * null → wizard).
+   */
+  roster?: Team[];
+  /**
    * Count of rostered agent tiles suppressed this tick because their
    * `(teamId, memberId)` is in the user's persisted hidden-member set
    * (E-06a / EPIC 86ca11187 §7.2 — reversible hide-agent). Used by the
