@@ -61,10 +61,20 @@
         "command": "claudeteam.openSettings",
         "title": "ClaudeTeam: Open Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "claudeteam.manageTeam",
+        "title": "ClaudeTeam: Manage Team",
+        "icon": "$(organization)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "claudeteam.manageTeam",
+          "when": "view == claudeteam.dashboard",
+          "group": "navigation@1"
+        },
         {
           "command": "claudeteam.openSettings",
           "when": "view == claudeteam.dashboard",

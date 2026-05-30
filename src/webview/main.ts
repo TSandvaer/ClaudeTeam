@@ -428,6 +428,16 @@ function boot(): void {
       characterSources = msg.payload.sources;
       renderFull(buildCtx(), currentState);
     },
+    // 86ca1u0nf: host-driven open of the Manage Team panel (the
+    // `claudeteam.manageTeam` command's title-bar button + Command Palette
+    // entry). Mirrors the webview-local open path the suggest-setup card's
+    // "Set up team" CTA uses (postMessage interceptor → managePanelOpen=true) —
+    // the host has no other way to flip this webview-local flag. Layout (wizard
+    // vs edit) is unchanged: it's decided by setupDetection + manageConfig.
+    onOpenManageTeamPanel: () => {
+      managePanelOpen = true;
+      renderFull(buildCtx(), currentState);
+    },
     onSetupConfigSaved: (msg) => {
       // Surface the SINGLE banner (NIT 2 — single-slot de-dupe).
       if (msg.payload.ok) {

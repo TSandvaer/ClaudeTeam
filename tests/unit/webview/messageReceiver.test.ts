@@ -225,6 +225,31 @@ describe("initMessageReceiver — team-setup setup:* dispatch", () => {
 
     handle.dispose();
   });
+
+  it("routes setup:open-manage-team only to onOpenManageTeamPanel (86ca1u0nf)", () => {
+    const onOpenManageTeamPanel = vi.fn();
+    const onSetupDetection = vi.fn();
+    const onStateFull = vi.fn();
+    const onUnknown = vi.fn();
+
+    const handle = initMessageReceiver({
+      onOpenManageTeamPanel,
+      onSetupDetection,
+      onStateFull,
+      onUnknown,
+    });
+
+    const open: HostMessage = { type: "setup:open-manage-team" };
+    postToWindow(open);
+
+    expect(onOpenManageTeamPanel).toHaveBeenCalledTimes(1);
+    expect(onOpenManageTeamPanel).toHaveBeenCalledWith(open);
+    expect(onSetupDetection).not.toHaveBeenCalled();
+    expect(onStateFull).not.toHaveBeenCalled();
+    expect(onUnknown).not.toHaveBeenCalled();
+
+    handle.dispose();
+  });
 });
 
 // ---------------------------------------------------------------------------

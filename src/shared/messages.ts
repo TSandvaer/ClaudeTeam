@@ -300,6 +300,27 @@ export type SetupConfigSavedMessage = {
   payload: { ok: boolean; error?: string };
 };
 
+/**
+ * Host asks the webview to OPEN the Manage Team panel (86ca1u0nf).
+ *
+ * The Manage Team panel's open/closed state is webview-LOCAL (the
+ * `managePanelOpen` flag in `src/webview/main.ts`) — historically the only way
+ * to set it was the webview's own outbound `ui:open-manage-team` interception
+ * (the suggest-setup card's "Set up team" CTA). That left the panel UNREACHABLE
+ * once a config existed (the suggest card no longer renders), so there was no
+ * discoverable entry point.
+ *
+ * This message is the host→webview counterpart: the new `claudeteam.manageTeam`
+ * command (dashboard title-bar button + Command Palette) posts it so the panel
+ * opens on demand. The webview sets `managePanelOpen = true` + re-renders; the
+ * WIZARD-vs-EDIT layout is decided exactly as before — by the `setup:detection`
+ * state + `manageConfig` (from `roster:loaded`), so no config → wizard, config
+ * present → edit layout (the #141 surface). No payload.
+ */
+export type OpenManageTeamPanelMessage = {
+  type: "setup:open-manage-team";
+};
+
 /** Union of all host → webview messages. */
 export type HostMessage =
   | StateFullMessage
@@ -309,7 +330,8 @@ export type HostMessage =
   | DiagnosticStateMessage
   | SetupDetectionMessage
   | SetupCharactersMessage
-  | SetupConfigSavedMessage;
+  | SetupConfigSavedMessage
+  | OpenManageTeamPanelMessage;
 
 // =============================================================================
 // Webview → Host

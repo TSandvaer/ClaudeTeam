@@ -215,6 +215,26 @@ export function postSetupCharacters(
 }
 
 /**
+ * Post `setup:open-manage-team` — ask the webview to OPEN the Manage Team panel
+ * (86ca1u0nf). Posted by the `claudeteam.manageTeam` command (title-bar button
+ * + Command Palette). The webview flips its local `managePanelOpen` flag +
+ * re-renders; the wizard-vs-edit layout is decided by the existing detection +
+ * config state (no config → wizard, config present → edit). No payload.
+ *
+ * Same fire-and-forget disposed-webview guard as the other posters — if the
+ * view was disposed mid-command (rare), the post no-ops rather than throwing.
+ */
+export function postOpenManageTeam(
+  webview: vscode.Webview,
+): Thenable<boolean> {
+  return safePost(
+    webview,
+    { type: "setup:open-manage-team" },
+    "postOpenManageTeam",
+  );
+}
+
+/**
  * Post `setup:config-saved` — ack for `ui:run-setup` / `ui:save-team` /
  * `ui:assign-character` / `ui:confirm-orphan-delete` (spec §3.3, §4.3). On
  * `ok: true` the webview transitions; on `ok: false` it surfaces the error
