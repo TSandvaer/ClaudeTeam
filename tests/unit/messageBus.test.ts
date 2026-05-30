@@ -23,6 +23,7 @@ import {
   serializeState,
   postState,
   postRosterLoaded,
+  postOpenManageTeam,
 } from "../../src/extension/messageBus.js";
 import type {
   AgentTile,
@@ -339,6 +340,44 @@ describe("postRosterLoaded — webview dispatch (86ca1tv41)", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ok = await postRosterLoaded(wv as any, sampleTeams);
+    expect(ok).toBe(false);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// postOpenManageTeam (86ca1u0nf)
+// ---------------------------------------------------------------------------
+
+describe("postOpenManageTeam — webview dispatch (86ca1u0nf)", () => {
+  function mockWebview() {
+    return {
+      postMessage: vi.fn().mockResolvedValue(true),
+    } as unknown as { postMessage: ReturnType<typeof vi.fn> };
+  }
+
+  it("posts a no-payload setup:open-manage-team envelope", async () => {
+    const wv = mockWebview();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await postOpenManageTeam(wv as any);
+
+    expect(wv.postMessage).toHaveBeenCalledTimes(1);
+    const sent = wv.postMessage.mock.calls[0]![0];
+    expect(sent.type).toBe("setup:open-manage-team");
+    // No payload — the open is decided by detection/config state, not data.
+    expect(sent.payload).toBeUndefined();
+  });
+
+  it("catches synchronous postMessage errors (disposed webview) and returns false", async () => {
+    const wv = {
+      postMessage: vi.fn(() => {
+        throw new Error("webview disposed");
+      }),
+    };
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ok = await postOpenManageTeam(wv as any);
     expect(ok).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();

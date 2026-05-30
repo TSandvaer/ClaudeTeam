@@ -49,12 +49,14 @@ import { startRosterWatcher } from "./roster/rosterWatcher.js";
 import { startAgentWatcher } from "./roster/agentWatcher.js";
 import { SetupController } from "./setupController.js";
 import { registerOpenSettingsCommand } from "./commands/openSettings.js";
+import { registerManageTeamCommand } from "./commands/manageTeam.js";
 import {
   postState,
   postRosterLoaded,
   postSetupConfigSaved,
   postSetupCharacters,
   postSetupDetection,
+  postOpenManageTeam,
 } from "./messageBus.js";
 import { cwdToSlug } from "../shared/slug.js";
 import {
@@ -133,6 +135,14 @@ export function activate(context: vscode.ExtensionContext): void {
    * resolve in lockstep with `watcherHandle`. Torn down on `deactivate()`.
    */
   let agentWatcherDisposable: vscode.Disposable | null = null;
+  /**
+   * The CURRENT setup controller (86ca1u0nf). Reassigned on every webview
+   * resolve so the `claudeteam.manageTeam` command's deps always target the
+   * live webview's controller (re-emit detection/characters when opening the
+   * panel). Null until the first resolve. Capturing the per-resolve local
+   * directly in the command would point at a disposed webview after a reload.
+   */
+  let currentSetupController: SetupController | null = null;
 
   // TS-02 (team-setup epic, Decision 1): the `claudeteam.openRoster` command
   // and its auto-create-of-the-global-file flow are DROPPED. The roster is now
@@ -402,6 +412,9 @@ export function activate(context: vscode.ExtensionContext): void {
         info: (msg) => console.info(`[claudeteam.setup] ${msg}`),
       },
     });
+    // 86ca1u0nf: track the live controller so the `claudeteam.manageTeam`
+    // command can re-emit detection/characters against THIS webview.
+    currentSetupController = setupController;
     // Emit initial detection + the character list to the freshly-resolved
     // webview so the dashboard root switches to the correct state immediately.
     // (The webview also pulls via ui:open-manage-team / ui:refresh; this push
@@ -560,6 +573,35 @@ export function activate(context: vscode.ExtensionContext): void {
   // UI filtered to ClaudeTeam's config via `@ext:claudeteam.claudeteam`. Like
   // openRoster, it needs no closure over `watcherHandle`, so it self-registers.
   registerOpenSettingsCommand(context);
+
+  // `claudeteam.manageTeam` (86ca1u0nf) — "Manage Team" button in the Dashboard
+  // view title bar (contributes.menus → view/title, next to the gear) + Command
+  // Palette entry. Opens the Manage Team panel (the render-state of the single
+  // dashboard webview) in its wizard or edit layout depending on whether
+  // `claudeteam.yaml` exists. depsFactory runs PER INVOCATION so it closes over
+  // the CURRENT webview + setup controller (both replaced on every resolve).
+  registerManageTeamCommand(context, () => {
+    const view = provider.view;
+    return {
+      revealView: async () => {
+        if (view) {
+          view.show(true);
+        } else {
+          // View not yet resolved — focusing it triggers resolveWebviewView.
+          await vscode.commands.executeCommand("claudeteam.dashboard.focus");
+        }
+      },
+      getWebview: () => provider.view?.webview,
+      emitSetup: () => {
+        currentSetupController?.emitDetection();
+        currentSetupController?.emitCharacters();
+      },
+      postOpenPanel: () => {
+        const wv = provider.view?.webview;
+        if (wv) void postOpenManageTeam(wv);
+      },
+    };
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand("claudeteam.refresh", () => {

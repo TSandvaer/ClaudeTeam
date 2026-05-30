@@ -31,6 +31,7 @@ import type {
   SetupDetectionMessage,
   SetupCharactersMessage,
   SetupConfigSavedMessage,
+  OpenManageTeamPanelMessage,
 } from "../shared/messages.js";
 
 /** One handler per HostMessage `type` discriminator. All optional. */
@@ -57,6 +58,14 @@ export interface HostMessageHandlers {
    * edit-layout transition.
    */
   onSetupConfigSaved?(msg: SetupConfigSavedMessage): void;
+  /**
+   * Host asked the webview to open the Manage Team panel (86ca1u0nf —
+   * `setup:open-manage-team`). Driven by the `claudeteam.manageTeam` command
+   * (title-bar button + Command Palette). The handler flips the webview-local
+   * `managePanelOpen` flag + re-renders; layout (wizard vs edit) is decided by
+   * the existing detection + config state.
+   */
+  onOpenManageTeamPanel?(msg: OpenManageTeamPanelMessage): void;
   /**
    * Called when the incoming message's `type` did not match any known
    * discriminator. Defaults to console.warn if not supplied; tests can override
@@ -98,7 +107,8 @@ function isHostMessage(raw: unknown): raw is HostMessage {
     t === "roster:error" ||
     t === "setup:detection" ||
     t === "setup:characters" ||
-    t === "setup:config-saved"
+    t === "setup:config-saved" ||
+    t === "setup:open-manage-team"
   );
 }
 
@@ -145,6 +155,9 @@ export function initMessageReceiver(
         return;
       case "setup:config-saved":
         handlers.onSetupConfigSaved?.(data);
+        return;
+      case "setup:open-manage-team":
+        handlers.onOpenManageTeamPanel?.(data);
         return;
     }
   };
