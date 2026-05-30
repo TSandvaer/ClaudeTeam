@@ -381,6 +381,48 @@ describe("AC1 — Manage Team panel edit layout", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// 86ca1tv41 — panel state machine: config gates wizard vs edit layout
+//
+// This is the exact branch the bug was stuck on: `manageConfig === null` forced
+// the wizard forever because the host never posted `roster:loaded`. The fix
+// makes the host post a non-null config → the panel reaches the edit layout
+// (member rows + reachable character picker). These tests pin BOTH branches so
+// a regression that re-strands the panel on the wizard fails here.
+// ---------------------------------------------------------------------------
+
+describe("86ca1tv41 — Manage Team panel layout selection by config", () => {
+  it("config === null → renders the setup WIZARD, not the edit layout", () => {
+    const panel = renderManageTeamPanel({
+      config: null,
+      scanned: scanned("felix", "maya"),
+      characters: sources(),
+      teamNameSeed: "ClaudeTeam",
+      postMessage: vi.fn(),
+    });
+    // Wizard present; edit layout absent.
+    expect(panel.querySelector(".ct-wizard")).not.toBeNull();
+    expect(panel.querySelector(".ct-manage-edit")).toBeNull();
+    expect(panel.querySelectorAll(".ct-manage-row").length).toBe(0);
+  });
+
+  it("config !== null → renders the EDIT layout (member rows), not the wizard", () => {
+    const panel = renderManageTeamPanel({
+      config: config(),
+      scanned: scanned("felix", "maya"),
+      characters: sources(),
+      teamNameSeed: "ClaudeTeam",
+      spriteBaseUri: "vscode-webview://host/dist/webview",
+      postMessage: vi.fn(),
+    });
+    // Edit layout present; wizard absent.
+    expect(panel.querySelector(".ct-manage-edit")).not.toBeNull();
+    expect(panel.querySelector(".ct-wizard")).toBeNull();
+    // One editable row per member → the picker is reachable from the edit layout.
+    expect(panel.querySelectorAll(".ct-manage-row").length).toBe(2);
+  });
+});
+
 describe("AC5 — orphan tile + confirm-delete + orchestrator-not-a-tile", () => {
   function orphanConfig(): ClaudeTeamConfig {
     const c = config();

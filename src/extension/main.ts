@@ -51,6 +51,7 @@ import { SetupController } from "./setupController.js";
 import { registerOpenSettingsCommand } from "./commands/openSettings.js";
 import {
   postState,
+  postRosterLoaded,
   postSetupConfigSaved,
   postSetupCharacters,
   postSetupDetection,
@@ -251,6 +252,14 @@ export function activate(context: vscode.ExtensionContext): void {
       getRemovedMemberKeys: () => removedMembersStore.keys(),
       onStateChange: (state) => {
         void postState(webview, state);
+      },
+      // 86ca1tv41: post `roster:loaded` alongside `state:full` so the webview's
+      // `manageConfig` is set → the Manage Team panel reaches its edit layout
+      // (member list + character picker) instead of being stuck on the setup
+      // wizard. Fired by the watcher on every emitting tick (same hash-skip as
+      // onStateChange); a roster YAML edit re-fires it via the roster-in-hash.
+      onRosterLoaded: (teams) => {
+        void postRosterLoaded(webview, teams);
       },
       // 86c9zn7vw: feed the diagnostic dispatcher every tick. The
       // dispatcher's `recordTick` is a no-op fast path when

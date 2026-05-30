@@ -288,6 +288,47 @@ describe("resolveCharacterSources (AC7)", () => {
       }),
     ).toEqual([]);
   });
+
+  // 86ca1tv41 (secondary fix): thumbnailPath MUST be a web-root-relative,
+  // forward-slashed path the webview can resolve against spriteBaseUri — NOT an
+  // absolute fs path (which would break the <img src> once the picker renders).
+  it("bundled thumbnailPath is web-root-relative + forward-slashed (NOT absolute)", () => {
+    const webRoot = join(root, "dist", "webview");
+    const bundled = join(webRoot, "sprites");
+    makeChar(bundled, "ClaudeTeam-M01-Dev");
+    const sources = resolveCharacterSources({
+      bundledSpritesDir: bundled,
+      userCharacterDir: join(root, "no-user"),
+      // webRootDir defaults to the parent of bundledSpritesDir (dist/webview).
+    });
+    expect(sources).toHaveLength(1);
+    const tp = sources[0]!.thumbnailPath;
+    // Relative to dist/webview, starting at `sprites/...` (the manifest
+    // convention the persona-tile sprite player also uses).
+    expect(tp).toBe(
+      "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/idle/animations/x/south/frame_0.png",
+    );
+    expect(tp).not.toContain("\\");
+    // NON-VACUOUS guard: must NOT be the absolute on-disk path.
+    expect(tp.startsWith(root)).toBe(false);
+    expect(tp).not.toMatch(/^[A-Za-z]:/); // no Windows drive prefix
+  });
+
+  it("user-folder thumbnailPath degrades to '' (outside web root → monogram)", () => {
+    const webRoot = join(root, "dist", "webview");
+    const bundled = join(webRoot, "sprites");
+    const user = join(root, "user-chars"); // OUTSIDE dist/webview
+    makeChar(user, "Custom-User-Char");
+    const sources = resolveCharacterSources({
+      bundledSpritesDir: bundled, // absent → no bundled entries
+      userCharacterDir: user,
+    });
+    const userSrc = sources.find((s) => s.id === "Custom-User-Char")!;
+    expect(userSrc.origin).toBe("user");
+    // Not under dist/webview → not webview-loadable → "" → webview renders the
+    // monogram chip (graceful degrade) instead of a broken <img>.
+    expect(userSrc.thumbnailPath).toBe("");
+  });
 });
 
 // ---------------------------------------------------------------------------

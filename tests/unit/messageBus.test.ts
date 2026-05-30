@@ -19,11 +19,16 @@
 
 import { describe, it, expect, vi } from "vitest";
 
-import { serializeState, postState } from "../../src/extension/messageBus.js";
+import {
+  serializeState,
+  postState,
+  postRosterLoaded,
+} from "../../src/extension/messageBus.js";
 import type {
   AgentTile,
   AgentTree,
   SessionTree,
+  Team,
 } from "../../src/shared/types.js";
 
 // Mock vscode — messageBus only imports `vscode.Webview` as a type, so the
@@ -261,6 +266,79 @@ describe("postState — webview dispatch", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ok = await postState(wv as any, { sessions: [] });
 
+    expect(ok).toBe(false);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// postRosterLoaded (86ca1tv41)
+// ---------------------------------------------------------------------------
+
+describe("postRosterLoaded — webview dispatch (86ca1tv41)", () => {
+  function mockWebview() {
+    return {
+      postMessage: vi.fn().mockResolvedValue(true),
+    } as unknown as { postMessage: ReturnType<typeof vi.fn> };
+  }
+
+  const sampleTeams: Team[] = [
+    {
+      id: "claudeteam-alpha",
+      name: "ClaudeTeam Alpha",
+      members: [
+        {
+          id: "felix",
+          display: "Felix",
+          role: "Extension Host Dev",
+          color: "#5d8aa8",
+          match: [{ agentType_equals: "felix" }],
+        },
+      ],
+    },
+  ];
+
+  it("wraps the teams in a roster:loaded envelope", async () => {
+    const wv = mockWebview();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await postRosterLoaded(wv as any, sampleTeams);
+
+    expect(wv.postMessage).toHaveBeenCalledTimes(1);
+    const sent = wv.postMessage.mock.calls[0]![0];
+    expect(sent.type).toBe("roster:loaded");
+    expect(sent.payload.teams).toEqual(sampleTeams);
+  });
+
+  it("payload is JSON-safe — round-trips through JSON.stringify intact", async () => {
+    const wv = mockWebview();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await postRosterLoaded(wv as any, sampleTeams);
+    const sent = wv.postMessage.mock.calls[0]![0];
+    const wire = JSON.parse(JSON.stringify(sent));
+    expect(wire.payload.teams[0].members[0].match[0].agentType_equals).toBe(
+      "felix",
+    );
+  });
+
+  it("posts an empty teams array verbatim (webview keeps manageConfig null → wizard)", async () => {
+    const wv = mockWebview();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await postRosterLoaded(wv as any, []);
+    const sent = wv.postMessage.mock.calls[0]![0];
+    expect(sent.type).toBe("roster:loaded");
+    expect(sent.payload.teams).toEqual([]);
+  });
+
+  it("catches synchronous postMessage errors (disposed webview) and returns false", async () => {
+    const wv = {
+      postMessage: vi.fn(() => {
+        throw new Error("webview disposed");
+      }),
+    };
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ok = await postRosterLoaded(wv as any, sampleTeams);
     expect(ok).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();

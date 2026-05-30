@@ -31,10 +31,30 @@
  *
  * The picker thumbnail is the character's SOUTH rotation frame (front-facing
  * idle — the most recognizable single still). This module resolves a best-effort
- * `thumbnailPath`; exact frame selection mirrors the sprite-manifest's
- * south-frame discovery. When no south frame is found, `thumbnailPath` is the
- * character folder itself (the webview defends an unresolvable thumbnail per
- * spec §5.2 empty-grid edge case).
+ * thumbnail; exact frame selection mirrors the sprite-manifest's south-frame
+ * discovery.
+ *
+ * ## Thumbnail path is WEB-ROOT-RELATIVE, not absolute (86ca1tv41)
+ *
+ * `CharacterSource.thumbnailPath` is a path RELATIVE to the webview's sprite
+ * base (`<extensionUri>/dist/webview`), forward-slashed, e.g.
+ * `"sprites/ClaudeTeam-M01-Dev/_pixellab_anims/.../south/frame_000.png"`. The
+ * webview prefixes it with the host-injected `spriteBaseUri`
+ * (`webview.asWebviewUri(dist/webview)`) — the SAME mechanism the persona-tile
+ * sprite player uses (`GENERATED_SPRITE_MANIFEST` frame paths are also relative
+ * to `dist/webview`). An ABSOLUTE filesystem path here would produce a broken
+ * `<img src>` (concatenating an OS path onto a `vscode-webview://` URI) AND the
+ * raw fs path is not loadable from a webview anyway (only `localResourceRoots`
+ * paths are). Before 86ca1tv41 this returned an absolute path, so the picker's
+ * thumbnails were broken once the edit layout reached the picker.
+ *
+ * When no south frame is found, OR the resolved thumbnail is NOT under the
+ * supplied web root (e.g. user-folder characters under `~/.claudeteam/
+ * characters/`, which are outside `localResourceRoots` and therefore not
+ * webview-loadable), `thumbnailPath` is the empty string. The webview's
+ * `source.thumbnailPath.length > 0` guard then skips the `<img>` and falls back
+ * to the monogram chip (spec §5.2 empty-grid / graceful-degrade edge case) —
+ * never a broken image.
  *
  * ## Flippable constant (ratify-on-return, spec §7.1)
  *
@@ -48,7 +68,7 @@
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 
 import type { CharacterSource } from "../shared/types.js";
 
@@ -88,17 +108,23 @@ export function isValidCharacterDir(charDir: string): boolean {
 /**
  * Best-effort resolve the SOUTH idle thumbnail for a character folder (spec
  * §7.1). Walks `_pixellab_anims/<state>/animations/<slug>/south/frame_*.png`
- * and returns the first such frame found (alphabetical). Falls back to the
- * char folder path when no south frame exists (webview defends). Pure-ish.
+ * and returns the ABSOLUTE path of the first such frame found (alphabetical).
+ * Returns `null` when no south frame exists (caller degrades to monogram).
+ * Pure-ish.
+ *
+ * NOTE: this returns an absolute fs path — `scanCharacterRoot` converts it to a
+ * web-root-relative path via {@link toWebRootRelative} before storing it on
+ * `CharacterSource.thumbnailPath` (86ca1tv41). Callers MUST NOT put the raw
+ * absolute path on the wire; the webview cannot load it.
  */
-export function resolveThumbnailPath(charDir: string): string {
+export function resolveThumbnailPath(charDir: string): string | null {
   const animsRoot = join(charDir, "_pixellab_anims");
-  if (!existsSync(animsRoot)) return charDir;
+  if (!existsSync(animsRoot)) return null;
   let states: string[];
   try {
     states = readdirSync(animsRoot).sort();
   } catch {
-    return charDir;
+    return null;
   }
   for (const state of states) {
     const slugsRoot = join(animsRoot, state, "animations");
@@ -125,7 +151,39 @@ export function resolveThumbnailPath(charDir: string): string {
       }
     }
   }
-  return charDir;
+  return null;
+}
+
+/**
+ * Convert an absolute thumbnail fs path to a forward-slashed path RELATIVE to
+ * the webview's sprite base (`<extensionUri>/dist/webview`), so the webview can
+ * resolve it against the host-injected `spriteBaseUri` (86ca1tv41).
+ *
+ * Returns the empty string when:
+ *   - `webRootDir` is undefined (no web root supplied — e.g. a CLI/test caller
+ *     that doesn't render a picker), OR
+ *   - `absPath` is null (no south frame found), OR
+ *   - `absPath` is NOT under `webRootDir` (e.g. a user-folder character outside
+ *     `dist/webview` / `localResourceRoots` — not webview-loadable). The webview
+ *     skips the `<img>` and renders a monogram chip.
+ *
+ * Pure (string/path math only). Normalizes OS path separators to `/`.
+ */
+export function toWebRootRelative(
+  absPath: string | null,
+  webRootDir: string | undefined,
+): string {
+  if (absPath === null || webRootDir === undefined) return "";
+  const rel = relative(webRootDir, absPath);
+  // Outside the web root → `relative` yields a `..`-prefixed path (or, on
+  // Windows across drives, an absolute path). Either way it's not loadable from
+  // the webview, so degrade to monogram.
+  if (rel === "" || rel.startsWith("..") || rel.includes(`..${sep}`)) {
+    return "";
+  }
+  // Defensive: an absolute result (different drive on Windows) is also "outside".
+  if (rel.includes(":")) return "";
+  return rel.split(sep).join("/");
 }
 
 /**
@@ -141,6 +199,7 @@ export function resolveThumbnailPath(charDir: string): string {
 function scanCharacterRoot(
   root: string,
   origin: "bundled" | "user",
+  webRootDir: string | undefined,
   logger?: { info?: (msg: string) => void },
 ): CharacterSource[] {
   if (!existsSync(root)) return [];
@@ -162,11 +221,18 @@ function scanCharacterRoot(
       );
       continue;
     }
+    // 86ca1tv41: store the thumbnail as a web-root-relative path the webview
+    // can resolve against `spriteBaseUri`. Absolute fs paths / paths outside
+    // the web root (user-folder chars) degrade to "" → monogram fallback.
+    const thumbnailPath = toWebRootRelative(
+      resolveThumbnailPath(charDir),
+      webRootDir,
+    );
     sources.push({
       id: name,
       label: name,
       origin,
-      thumbnailPath: resolveThumbnailPath(charDir),
+      thumbnailPath,
     });
   }
   return sources;
@@ -187,6 +253,21 @@ export interface ResolveCharacterSourcesOptions {
    * tempdir in tests.
    */
   userCharacterDir?: string;
+  /**
+   * Absolute path to the webview's sprite-base root (`<extensionUri>/dist/
+   * webview`) — the directory the webview's `spriteBaseUri` points at
+   * (86ca1tv41). `CharacterSource.thumbnailPath` is emitted RELATIVE to this so
+   * the webview can resolve it against `spriteBaseUri`. Defaults to the PARENT
+   * of `bundledSpritesDir` (production: `dist/webview/sprites` → `dist/webview`),
+   * which is correct for bundled characters. Tests that point `bundledSpritesDir`
+   * at a tempdir get a matching relative path automatically; pass an explicit
+   * value only to decouple the two.
+   *
+   * User-folder characters live OUTSIDE this root (and outside
+   * `localResourceRoots`), so their thumbnails resolve to `""` → monogram
+   * fallback (they are not webview-loadable in V1).
+   */
+  webRootDir?: string;
   logger?: { info?: (msg: string) => void };
 }
 
@@ -203,13 +284,20 @@ export interface ResolveCharacterSourcesOptions {
 export function resolveCharacterSources(
   opts: ResolveCharacterSourcesOptions,
 ): CharacterSource[] {
+  // 86ca1tv41: the web root is the parent of the bundled sprites dir
+  // (`dist/webview/sprites` → `dist/webview`) unless explicitly overridden.
+  // Thumbnails are emitted relative to this so the webview can resolve them
+  // against `spriteBaseUri` (= asWebviewUri(dist/webview)).
+  const webRootDir =
+    opts.webRootDir ?? join(opts.bundledSpritesDir, "..");
   const bundled = scanCharacterRoot(
     opts.bundledSpritesDir,
     "bundled",
+    webRootDir,
     opts.logger,
   );
   const userDir = opts.userCharacterDir ?? resolveUserCharacterDir();
-  const user = scanCharacterRoot(userDir, "user", opts.logger);
+  const user = scanCharacterRoot(userDir, "user", webRootDir, opts.logger);
 
   const seen = new Set<string>(bundled.map((c) => c.id));
   const merged: CharacterSource[] = [...bundled];
