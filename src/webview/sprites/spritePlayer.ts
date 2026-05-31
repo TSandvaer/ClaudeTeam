@@ -64,8 +64,19 @@ export const DWELL_MS_DEFAULT = 400;
 export const PEAK_DWELL_MS_DEFAULT = 600;
 
 /**
- * Per-animation playback override (86ca1fntp). All fields optional; an absent
- * field means "use the default behavior". Keyed by canonical anim name.
+ * Frame-advance mode for a pose's loop (anim-playback epic E1, 86ca21876).
+ *   - `"loop"` (default/absent): advance +1, wrap last→0 (the historic behavior).
+ *   - `"pingpong"`: advance forward to the last frame, then reverse to the
+ *     first, then repeat — frames `[a,b,c]` play `0,1,2,1,0,1,2,…`. Endpoint
+ *     behavior is NAIVE endpoint-hold: frame 0 and frame N-1 each display once
+ *     per turnaround (the direction reverses ON them). No new frame assets.
+ */
+export type PlaybackMode = "loop" | "pingpong";
+
+/**
+ * Per-animation playback override (86ca1fntp; extended by E1 86ca21876). All
+ * fields optional; an absent field means "use the default behavior". Keyed by
+ * canonical anim name.
  */
 export interface PlaybackOverride {
   /**
@@ -81,6 +92,19 @@ export interface PlaybackOverride {
   dwellFrameIndex?: number;
   /** Extra ms to hold the peak frame. Absent → PEAK_DWELL_MS_DEFAULT. */
   dwellMs?: number;
+  /**
+   * Per-anim final-frame hold (ms) before the loop restarts (E1 86ca21876).
+   * Overrides the global DWELL_MS_DEFAULT for this anim's final-frame idle
+   * dwell. Absent → DWELL_MS_DEFAULT (current fixed-400ms behavior). In
+   * pingpong mode the dwell fires only on the FORWARD arrival at the last
+   * frame, not on the reverse pass back through it.
+   */
+  finalDwellMs?: number;
+  /**
+   * Frame-advance mode (E1 86ca21876). Absent → `"loop"` (byte-identical to the
+   * historic +1/wrap behavior).
+   */
+  playbackMode?: PlaybackMode;
 }
 
 /** A per-character override table: canonical anim name → override. */
@@ -153,19 +177,36 @@ function withPeak(
  *
  * Sponsor visually tunes the exact feel on reload — these indices/ms are the
  * starting point.
+ *
+ * E1 (86ca21876) pingpong preview: `idle_stretch` is wired to
+ * `playbackMode: "pingpong"` + a longer `finalDwellMs` on both characters so the
+ * sponsor can eyeball the endpoint feel (the AC5 sponsor-preview gate). The
+ * arms-up→down→up sweep reads as a natural stretch under pingpong rather than a
+ * jump-cut wrap. This seeding lives in the hardcoded map only as the E1 preview
+ * surface — E2 (86ca…) routes these fields through `animations.json` and
+ * removes the map. The existing peak `dwellFrameIndex` (M01 8 / F01 5) still
+ * composes with pingpong (extra apex hold at the overhead frame).
  */
 export const PLAYBACK_OVERRIDES: Record<string, PlaybackOverrideTable> = (() => {
   const m01 = baseSpeedTable();
   m01["idle_coffee"] = withPeak(m01["idle_coffee"], 4);
   m01["idle_snack"] = withPeak(m01["idle_snack"], 4);
   m01["idle_phone"] = withPeak(m01["idle_phone"], 4);
-  m01["idle_stretch"] = withPeak(m01["idle_stretch"], 8);
+  m01["idle_stretch"] = {
+    ...withPeak(m01["idle_stretch"], 8),
+    playbackMode: "pingpong",
+    finalDwellMs: 800,
+  };
 
   const f01 = baseSpeedTable();
   f01["idle_coffee"] = withPeak(f01["idle_coffee"], 4);
   f01["idle_snack"] = withPeak(f01["idle_snack"], 4);
   f01["idle_phone"] = withPeak(f01["idle_phone"], 4);
-  f01["idle_stretch"] = withPeak(f01["idle_stretch"], 5);
+  f01["idle_stretch"] = {
+    ...withPeak(f01["idle_stretch"], 5),
+    playbackMode: "pingpong",
+    finalDwellMs: 800,
+  };
 
   return {
     "ClaudeTeam-M01-Dev": m01,
@@ -339,8 +380,20 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   const peakIndex = override.dwellFrameIndex;
   const peakDwellMs =
     typeof override.dwellMs === "number" ? override.dwellMs : PEAK_DWELL_MS_DEFAULT;
+  // Final-frame idle dwell (E1 86ca21876): per-anim override falls back to the
+  // global default so an absent field preserves today's fixed-400ms behavior.
+  const finalDwellMs =
+    typeof override.finalDwellMs === "number"
+      ? override.finalDwellMs
+      : DWELL_MS_DEFAULT;
+  // Frame-advance mode (E1 86ca21876): only "pingpong" diverges; anything else
+  // (incl. absent) is treated as "loop" → byte-identical historic advance.
+  const isPingpong = override.playbackMode === "pingpong";
 
   let frameIdx = 0;
+  // Advance direction (+1 forward / -1 reverse). Only meaningful in pingpong
+  // mode; loop mode never sets it to -1 so the advance stays historic.
+  let direction = 1;
   let handle: number | null = null;
   let disposed = false;
 
@@ -355,17 +408,31 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     img.src = frameUris[frameIdx];
     // Base per-frame duration (speed-scaled).
     let ms = frameMs;
-    // Final-frame idle dwell before wrapping (idle poses only — active poses
-    // loop at uniform cadence so typing/reading feels continuous).
-    if (frameIdx === lastIndex && !isActive) {
-      ms += DWELL_MS_DEFAULT;
+    // Final-frame idle dwell before turnaround/wrap (idle poses only — active
+    // poses loop at uniform cadence so typing/reading feels continuous). In
+    // pingpong mode this fires ONLY on the FORWARD arrival at the last frame
+    // (direction still +1), not on the reverse pass back through it (Bram's
+    // gotcha — E1 86ca21876).
+    if (frameIdx === lastIndex && !isActive && direction === 1) {
+      ms += finalDwellMs;
     }
     // Mid-sequence peak-frame dwell (hold the gesture apex). Composes with the
     // final-frame dwell when the peak coincides with the last frame.
     if (peakIsValid && frameIdx === peakIndex) {
       ms += peakDwellMs;
     }
-    frameIdx = frameIdx === lastIndex ? 0 : frameIdx + 1;
+    // Advance to the next frame.
+    if (isPingpong && lastIndex > 0) {
+      // Reverse direction AT each endpoint (naive endpoint-hold: 0 and N-1 each
+      // show once per turnaround). Single-frame anims never reach here (handled
+      // below) and a 2-frame anim oscillates 0,1,0,1,….
+      if (frameIdx === lastIndex) direction = -1;
+      else if (frameIdx === 0) direction = 1;
+      frameIdx += direction;
+    } else {
+      // Loop mode (default/absent) — byte-identical historic advance.
+      frameIdx = frameIdx === lastIndex ? 0 : frameIdx + 1;
+    }
     handle = sched(tick, ms);
   };
 

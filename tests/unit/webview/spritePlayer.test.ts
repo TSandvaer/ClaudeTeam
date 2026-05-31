@@ -281,3 +281,184 @@ describe("createSpriteBox — reduced-motion regression (AC4 unchanged)", () => 
     expect(schedule).not.toHaveBeenCalled();
   });
 });
+
+// ── E1 (86ca21876): finalDwellMs + playbackMode:"pingpong" ──────────────────
+//
+// Non-vacuity (revert checklist):
+//   - "pingpong index sequence": reverting the direction-aware advance back to
+//     `frameIdx = frameIdx === lastIndex ? 0 : frameIdx + 1` makes the observed
+//     frame order 0,1,2,0,1,2 (loop wrap) instead of 0,1,2,1,0,1 → FAILS.
+//   - "finalDwellMs override": dropping the `override.finalDwellMs ?? …` resolve
+//     reverts the final-frame hold to the fixed 400ms → the 800ms assertion FAILS.
+//   - "loop mode byte-identical": if the loop branch is replaced by pingpong the
+//     wrap order changes → FAILS.
+//   - "final dwell only on forward arrival": dropping the `direction === 1` gate
+//     adds the dwell on the reverse pass through lastIndex too → the reverse-pass
+//     plain-base assertion FAILS.
+
+/** Extract the numeric frame index from an img src of the form …/frame_<i>.png. */
+function frameOf(img: HTMLImageElement): number {
+  const m = /frame_(\d+)\.png$/.exec(img.getAttribute("src") ?? "");
+  if (!m) throw new Error(`no frame index in src: ${img.getAttribute("src")}`);
+  return Number(m[1]);
+}
+
+describe("PlaybackOverride — new E1 fields exist + resolve (AC1)", () => {
+  it("idle_stretch carries playbackMode:'pingpong' + finalDwellMs on both chars", () => {
+    for (const c of [M01, F01]) {
+      const o = resolvePlayback(c, "idle_stretch");
+      expect(o.playbackMode).toBe("pingpong");
+      expect(o.finalDwellMs).toBe(800);
+    }
+  });
+
+  it("a non-pingpong pose leaves playbackMode/finalDwellMs absent (loop default)", () => {
+    const o = resolvePlayback(M01, "idle_hips");
+    expect(o.playbackMode).toBeUndefined();
+    expect(o.finalDwellMs).toBeUndefined();
+  });
+});
+
+describe("createSpriteBox — pingpong frame sequence (AC3)", () => {
+  it("plays [0,1,2] forward then reverses: 0,1,2,1,0,1,2,1,0", () => {
+    const sched = recordingScheduler();
+    // idle_stretch is seeded pingpong; 3 frames → peak (8) is out of range so it
+    // does not interfere with the pure index-sequence assertion.
+    const handle = createSpriteBox({
+      char: char(M01, { idle_stretch: 3 }),
+      state: "idle",
+      activity: "idle 30s",
+      spriteBaseUri: "base",
+      priorIdlePick: "idle_stretch",
+      rng: () => 0,
+      scheduleFrame: sched.schedule,
+      cancelFrame: () => undefined,
+    });
+    const img = handle.element.querySelector("img.sprite-frame") as HTMLImageElement;
+    const seen: number[] = [frameOf(img)]; // frame shown by the synchronous tick()
+    for (let i = 0; i < 8; i++) {
+      sched.step();
+      seen.push(frameOf(img));
+    }
+    expect(seen).toEqual([0, 1, 2, 1, 0, 1, 2, 1, 0]);
+  });
+
+  it("a 2-frame pingpong oscillates 0,1,0,1 (endpoints adjacent)", () => {
+    const sched = recordingScheduler();
+    const handle = createSpriteBox({
+      char: char(M01, { idle_stretch: 2 }),
+      state: "idle",
+      activity: "idle 30s",
+      spriteBaseUri: "base",
+      priorIdlePick: "idle_stretch",
+      rng: () => 0,
+      scheduleFrame: sched.schedule,
+      cancelFrame: () => undefined,
+    });
+    const img = handle.element.querySelector("img.sprite-frame") as HTMLImageElement;
+    const seen: number[] = [frameOf(img)];
+    for (let i = 0; i < 4; i++) {
+      sched.step();
+      seen.push(frameOf(img));
+    }
+    expect(seen).toEqual([0, 1, 0, 1, 0]);
+  });
+});
+
+describe("createSpriteBox — finalDwellMs (AC2)", () => {
+  it("holds the final frame for the per-anim finalDwellMs (800), not the 400 default", () => {
+    const sched = recordingScheduler();
+    // Loop-mode pose with an explicit finalDwellMs via a custom override table
+    // through createSpriteBox is not reachable (the engine reads PLAYBACK_OVERRIDES),
+    // so drive it through the seeded pingpong idle_stretch and assert the FORWARD
+    // arrival hold. 3 frames: forward arrival at frame 2 (direction +1).
+    const base = FRAME_MS_DEFAULT / 0.5; // idle_stretch is also 50% speed
+    createSpriteBox({
+      char: char(M01, { idle_stretch: 3 }),
+      state: "idle",
+      activity: "idle 30s",
+      spriteBaseUri: "base",
+      priorIdlePick: "idle_stretch",
+      rng: () => 0,
+      scheduleFrame: sched.schedule,
+      cancelFrame: () => undefined,
+    });
+    // calls[0]=frame0, [1]=frame1, [2]=frame2 (forward arrival → +800 finalDwell).
+    sched.step(); // schedule for frame 1
+    sched.step(); // schedule for frame 2 (forward arrival)
+    expect(sched.calls[2]).toBe(base + 800);
+    // Prove it is NOT the global 400 default.
+    expect(sched.calls[2]).not.toBe(base + DWELL_MS_DEFAULT);
+  });
+
+  it("absent finalDwellMs preserves the global DWELL_MS_DEFAULT (400) on the final frame", () => {
+    const sched = recordingScheduler();
+    // idle_hips: 50% speed, loop mode, no finalDwellMs → final frame holds 400.
+    const base = FRAME_MS_DEFAULT / 0.5;
+    createSpriteBox({
+      char: char(M01, { idle_hips: 3 }),
+      state: "idle",
+      activity: "idle 30s",
+      spriteBaseUri: "base",
+      priorIdlePick: "idle_hips",
+      rng: () => 0,
+      scheduleFrame: sched.schedule,
+      cancelFrame: () => undefined,
+    });
+    sched.step();
+    sched.step(); // frame 2 = final
+    expect(sched.calls[2]).toBe(base + DWELL_MS_DEFAULT);
+  });
+});
+
+describe("createSpriteBox — final dwell fires only on FORWARD arrival in pingpong (Bram gotcha)", () => {
+  it("does NOT add the final dwell on the reverse pass back through lastIndex", () => {
+    const sched = recordingScheduler();
+    const base = FRAME_MS_DEFAULT / 0.5;
+    createSpriteBox({
+      char: char(M01, { idle_stretch: 3 }),
+      state: "idle",
+      activity: "idle 30s",
+      spriteBaseUri: "base",
+      priorIdlePick: "idle_stretch",
+      rng: () => 0,
+      scheduleFrame: sched.schedule,
+      cancelFrame: () => undefined,
+    });
+    // Index sequence (frames shown): 0,1,2,1,0,1,2,…
+    // calls index → frame shown: [0]→0, [1]→1, [2]→2(fwd, +800), [3]→1, [4]→0,
+    //   [5]→1, [6]→2(fwd again, +800).
+    // lastIndex (2) is only ever reached via forward arrival, so it always
+    // dwells; the gate's value is that frames 1/0 on the REVERSE pass carry
+    // plain base (no spurious final dwell leaking onto a non-last frame).
+    for (let i = 0; i < 6; i++) sched.step();
+    expect(sched.calls[2]).toBe(base + 800); // forward arrival at last
+    expect(sched.calls[3]).toBe(base); // reverse pass, frame 1 → plain base
+    expect(sched.calls[4]).toBe(base); // reverse pass, frame 0 → plain base
+    expect(sched.calls[6]).toBe(base + 800); // next forward arrival at last
+  });
+});
+
+describe("createSpriteBox — loop-mode regression: advance byte-identical to historic", () => {
+  it("a loop-mode pose wraps last→0 (0,1,2,0,1,2), never reversing", () => {
+    const sched = recordingScheduler();
+    // idle_hips = loop (no playbackMode) — must keep the historic wrap.
+    const handle = createSpriteBox({
+      char: char(M01, { idle_hips: 3 }),
+      state: "idle",
+      activity: "idle 30s",
+      spriteBaseUri: "base",
+      priorIdlePick: "idle_hips",
+      rng: () => 0,
+      scheduleFrame: sched.schedule,
+      cancelFrame: () => undefined,
+    });
+    const img = handle.element.querySelector("img.sprite-frame") as HTMLImageElement;
+    const seen: number[] = [frameOf(img)];
+    for (let i = 0; i < 5; i++) {
+      sched.step();
+      seen.push(frameOf(img));
+    }
+    expect(seen).toEqual([0, 1, 2, 0, 1, 2]);
+  });
+});
