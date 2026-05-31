@@ -541,6 +541,29 @@ export type DismissSetupSuggestionMessage = {
   type: "ui:dismiss-setup-suggestion";
 };
 
+/**
+ * User confirmed "Reset team setup" / "Start over" in the Manage Team panel
+ * (86ca1u0rw). The host REMOVES `<workspace>/.claude/claudeteam.yaml`, acks via
+ * `setup:config-saved`, re-emits a fresh `setup:detection` (now `empty` /
+ * `suggest-setup` instead of `configured`), and forces a watcher tick so the
+ * empty `roster:loaded` + cleared `state:full` land — the panel transitions
+ * back to the wizard/detection state and the dashboard reflects the cleared
+ * roster on the next tick.
+ *
+ * No payload — the action targets the sole project config (single-team per
+ * project in V1; see the AssignCharacterMessage note). Distinct message type
+ * (NOT a `ui:save-team` / `ui:confirm-orphan-delete` overload) per the
+ * messages.ts "add a new type, don't overload" rule: reset has different
+ * semantics (delete the whole file vs mutate one member) and a different
+ * webview transition (back to wizard, not stay-in-edit).
+ *
+ * The destructive confirm is webview-LOCAL (mirrors the orphan-delete inline
+ * confirm) — the host only sees the message AFTER the user confirms.
+ */
+export type ResetTeamMessage = {
+  type: "ui:reset-team";
+};
+
 /** Union of all webview → host messages. */
 export type WebviewMessage =
   | OpenTranscriptMessage
@@ -558,4 +581,5 @@ export type WebviewMessage =
   | SaveTeamMessage
   | AssignCharacterMessage
   | ConfirmOrphanDeleteMessage
-  | DismissSetupSuggestionMessage;
+  | DismissSetupSuggestionMessage
+  | ResetTeamMessage;

@@ -473,3 +473,102 @@ describe("Bug D (86ca1u41m) — save banner survives the detection re-render", (
     }
   });
 });
+
+// ===========================================================================
+// Reset team setup (86ca1u0rw) — destructive confirm → ui:reset-team →
+// panel transitions back to the wizard. NON-VACUOUS: dropping the confirm gate
+// (posting on the first click) fails the "no message before confirm" test;
+// dropping the manageConfig→null transition fails the "wizard after confirm"
+// test.
+// ===========================================================================
+
+describe("Reset team setup (86ca1u0rw)", () => {
+  /**
+   * Build a ctx whose postMessage models main.ts's interceptor: a `ui:reset-team`
+   * flips manageConfig→null (optimistic wizard transition) and re-renders, exactly
+   * like the boot closure. `state.config` is a mutable box so the re-render serves
+   * the wizard. Returns the posted-message log + the box.
+   */
+  function setup() {
+    const mount = document.createElement("div");
+    const posted: WebviewMessage[] = [];
+    const box: { config: ClaudeTeamConfig | null } = {
+      config: configWithMembers(),
+    };
+    const make = (): RenderContext => ({
+      mount,
+      postMessage: (m: WebviewMessage) => {
+        posted.push(m);
+        if (m.type === "ui:reset-team") {
+          box.config = null; // optimistic transition (main.ts interceptor)
+          renderFull(make(), emptyTree());
+        }
+      },
+      managePanelOpen: true,
+      manageConfig: box.config,
+      characterSources: characterSources(),
+      teamNameSeed: "ClaudeTeam",
+      spriteBaseUri: "vscode-webview://host",
+    });
+    renderFull(make(), emptyTree());
+    return { mount, posted, box };
+  }
+
+  it("AC1: the edit layout renders a 'Reset team setup' button", () => {
+    const { mount } = setup();
+    const btn = mount.querySelector<HTMLButtonElement>(".ct-manage-reset-btn");
+    expect(btn).not.toBeNull();
+    expect(btn!.textContent).toBe("Reset team setup");
+  });
+
+  it("AC2: clicking Reset shows the destructive confirm; no message yet", () => {
+    const { mount, posted } = setup();
+    const confirm = q<HTMLElement>(mount, ".ct-manage-reset-confirm");
+    // Hidden until the user clicks Reset.
+    expect(confirm.hidden).toBe(true);
+
+    q<HTMLButtonElement>(mount, ".ct-manage-reset-btn").click();
+    expect(q<HTMLElement>(mount, ".ct-manage-reset-confirm").hidden).toBe(false);
+    // Load-bearing: NO ui:reset-team is posted on the first (arming) click.
+    expect(posted.some((m) => m.type === "ui:reset-team")).toBe(false);
+  });
+
+  it("AC3: confirming posts ui:reset-team AND the panel renders the wizard", () => {
+    const { mount, posted } = setup();
+    q<HTMLButtonElement>(mount, ".ct-manage-reset-btn").click();
+    q<HTMLButtonElement>(mount, ".ct-manage-reset-confirm-btn").click();
+
+    // The host-bound message fired exactly once.
+    expect(posted.filter((m) => m.type === "ui:reset-team")).toHaveLength(1);
+    // Load-bearing transition: the edit layout is gone, the wizard is mounted.
+    expect(mount.querySelector(".ct-manage-edit")).toBeNull();
+    expect(mount.querySelector(".ct-wizard")).not.toBeNull();
+    // The panel surface itself stays open (we landed on the wizard, not the
+    // dashboard) — its banner slot is still present.
+    expect(mount.querySelector(".ct-manage-panel")).not.toBeNull();
+  });
+
+  it("AC5: cancelling posts NOTHING and leaves the edit layout unchanged", () => {
+    const { mount, posted } = setup();
+    q<HTMLButtonElement>(mount, ".ct-manage-reset-btn").click();
+    q<HTMLButtonElement>(mount, ".ct-manage-reset-cancel-btn").click();
+
+    expect(q<HTMLElement>(mount, ".ct-manage-reset-confirm").hidden).toBe(true);
+    expect(posted.some((m) => m.type === "ui:reset-team")).toBe(false);
+    // Still the edit layout (members rendered), not the wizard.
+    expect(mount.querySelector(".ct-manage-edit")).not.toBeNull();
+    expect(mount.querySelector(".ct-wizard")).toBeNull();
+    expect(mount.querySelectorAll(".ct-manage-row").length).toBe(2);
+  });
+
+  it("AC5: Escape inside the confirm cancels without posting", () => {
+    const { mount, posted } = setup();
+    q<HTMLButtonElement>(mount, ".ct-manage-reset-btn").click();
+    const confirm = q<HTMLElement>(mount, ".ct-manage-reset-confirm");
+    confirm.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    expect(q<HTMLElement>(mount, ".ct-manage-reset-confirm").hidden).toBe(true);
+    expect(posted.some((m) => m.type === "ui:reset-team")).toBe(false);
+  });
+});

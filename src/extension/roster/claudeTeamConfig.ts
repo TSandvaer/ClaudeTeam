@@ -22,7 +22,13 @@
  * against a tempdir.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
 
 import yaml from "js-yaml";
@@ -261,6 +267,35 @@ export function writeClaudeTeamConfig(
     return {
       ok: false,
       error: `claudeteam.yaml write error (${path}): ${(err as Error).message}`,
+    };
+  }
+}
+
+/** Result of {@link clearClaudeTeamConfig}. Mirrors the `setup:config-saved` ack. */
+export type ClearConfigResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Remove the `claudeteam.yaml` at `path` (86ca1u0rw — "Reset team setup").
+ * IDEMPOTENT: an already-absent file is treated as a SUCCESS (`rmSync` with
+ * `force: true` does not throw on ENOENT) — the post-condition the caller wants
+ * ("no config exists") holds either way. NEVER throws — a real filesystem
+ * failure (e.g. EPERM / EBUSY on a locked file) surfaces as `{ ok: false,
+ * error }` so the caller can ack `setup:config-saved { ok: false }` and leave
+ * the panel where it is.
+ *
+ * After this returns ok, `existsSync(path)` is false, the roster watcher's
+ * next `loadRoster` yields an empty roster (→ empty `roster:loaded` → the
+ * Manage Team panel's `manageConfig` becomes null → wizard layout), and the
+ * detection state flips off `configured`.
+ */
+export function clearClaudeTeamConfig(path: string): ClearConfigResult {
+  try {
+    rmSync(path, { force: true });
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `claudeteam.yaml clear error (${path}): ${(err as Error).message}`,
     };
   }
 }

@@ -190,6 +190,18 @@ function boot(): void {
     } else if (msg.type === "ui:dismiss-setup-suggestion") {
       setupSuggestionDismissed = true;
       rerender();
+    } else if (msg.type === "ui:reset-team") {
+      // 86ca1u0rw: optimistic transition back to the wizard. The host removes
+      // claudeteam.yaml + re-emits an empty `roster:loaded` (→ manageConfig
+      // null) + a fresh `setup:detection`; we pre-empt that here so the panel
+      // flips to the wizard immediately (the panel STAYS open — managePanelOpen
+      // unchanged — so the user lands on the wizard, not the dashboard). We also
+      // clear any pendingBanner so the reused `setup:config-saved` ack does NOT
+      // flash a misleading "Saved" banner over the freshly-reset wizard.
+      manageConfig = null;
+      pendingBanner = null;
+      resetPending = true;
+      rerender();
     }
   };
   let currentError: DashboardErrorState | null = null;
@@ -322,6 +334,11 @@ function boot(): void {
   // teams (the channel note: edit-layout config rides the roster channel). Null
   // → panel serves the wizard layout.
   let manageConfig: ClaudeTeamConfig | null = null;
+  // 86ca1u0rw: set when the user confirms "Reset team setup"; cleared by the
+  // host's following `setup:config-saved` ack. While true, that ack is treated
+  // as the reset's completion and does NOT raise a (misleading) "Saved" /
+  // "Team created" banner — the panel has already flipped to the wizard.
+  let resetPending = false;
 
   /** Workspace-folder seed for the wizard/preview "Team:" line. */
   const teamNameSeed = (): string => {
@@ -468,6 +485,23 @@ function boot(): void {
       renderFull(buildCtx(), currentState);
     },
     onSetupConfigSaved: (msg) => {
+      // 86ca1u0rw: this ack is ALSO the reset path's completion signal. When a
+      // reset is pending, swallow the ack (no banner) — the panel already
+      // flipped to the wizard optimistically; a "Saved" / "Team created" banner
+      // would be misleading. A failed reset ack (ok:false) still surfaces the
+      // error so a locked/undeletable file is not silent.
+      if (resetPending) {
+        resetPending = false;
+        if (!msg.payload.ok) {
+          const detail = msg.payload.error ?? "unknown error";
+          pendingBanner = {
+            kind: "error",
+            message: `Couldn't reset: ${detail}`,
+          };
+          renderFull(buildCtx(), currentState);
+        }
+        return;
+      }
       // 86ca1u41m BUG D — the banner is now PERSISTED in `pendingBanner` and
       // re-applied by `renderFull`'s panel branch, NOT shown imperatively here.
       // Previously this called `showSetupBanner` into the live slot AFTER a
