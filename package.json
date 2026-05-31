@@ -133,6 +133,10 @@
   "scripts": {
     "build": "node esbuild.config.mjs",
     "watch": "node esbuild.config.mjs --watch",
+    "dev:package": "node scripts/dev-package.mjs",
+    "dev:install": "node scripts/dev-package.mjs && node scripts/dev-install.mjs",
+    "dev:package": "node scripts/dev-package.mjs",
+    "dev:install": "node scripts/dev-package.mjs && node scripts/dev-install.mjs",
     "agent-tree": "node dist/cli/agentTree.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
