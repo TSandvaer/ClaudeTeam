@@ -48,11 +48,7 @@
 
 import type { AgentState } from "../../shared/types.js";
 import type { SpriteCharacter } from "./spriteManifest.js";
-import {
-  pickIdle,
-  poseNameForTile,
-  resolvePose,
-} from "./posePicker.js";
+import { pickIdle, poseNameForTile, resolvePose } from "./posePicker.js";
 
 /** Default slow per-frame duration (ms) — mirrors --ct-anim-frame-ms-default. */
 export const FRAME_MS_DEFAULT = 160;
@@ -149,10 +145,7 @@ function baseSpeedTable(): PlaybackOverrideTable {
  * Merge a peak-frame `dwellFrameIndex` into a speed override for a pose.
  * Keeps any existing speedMultiplier.
  */
-function withPeak(
-  base: PlaybackOverride | undefined,
-  dwellFrameIndex: number,
-): PlaybackOverride {
+function withPeak(base: PlaybackOverride | undefined, dwellFrameIndex: number): PlaybackOverride {
   return { ...(base ?? {}), dwellFrameIndex };
 }
 
@@ -278,10 +271,7 @@ function prefersReducedMotion(override?: boolean): boolean {
   if (typeof override === "boolean") {
     return override;
   }
-  if (
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function"
-  ) {
+  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
   return false;
@@ -364,8 +354,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   const sched =
     scheduleFrame ??
     ((cb: () => void, ms: number) => window.setTimeout(cb, ms) as unknown as number);
-  const cancel =
-    cancelFrame ?? ((h: number) => window.clearTimeout(h));
+  const cancel = cancelFrame ?? ((h: number) => window.clearTimeout(h));
 
   // Per-animation playback tuning (86ca1fntp). The canonical anim name is the
   // active pose name OR the idle pick; resolve the override for this character.
@@ -383,9 +372,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // Final-frame idle dwell (E1 86ca21876): per-anim override falls back to the
   // global default so an absent field preserves today's fixed-400ms behavior.
   const finalDwellMs =
-    typeof override.finalDwellMs === "number"
-      ? override.finalDwellMs
-      : DWELL_MS_DEFAULT;
+    typeof override.finalDwellMs === "number" ? override.finalDwellMs : DWELL_MS_DEFAULT;
   // Frame-advance mode (E1 86ca21876): only "pingpong" diverges; anything else
   // (incl. absent) is treated as "loop" → byte-identical historic advance.
   const isPingpong = override.playbackMode === "pingpong";
@@ -400,8 +387,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   const lastIndex = frameUris.length - 1;
   // Guard against an out-of-range peak index (frame counts differ M01 vs F01;
   // a stale index must not break the loop).
-  const peakIsValid =
-    typeof peakIndex === "number" && peakIndex >= 0 && peakIndex <= lastIndex;
+  const peakIsValid = typeof peakIndex === "number" && peakIndex >= 0 && peakIndex <= lastIndex;
 
   const tick = (): void => {
     if (disposed) return;
