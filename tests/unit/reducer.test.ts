@@ -2237,14 +2237,20 @@ describe("buildAgentTree", () => {
   });
 
   // =========================================================================
-  // 86ca1nzde — character projection from roster Member.character onto the
-  // tile (single-agent, baseline, and multi-agent wrapper paths). The reducer
-  // is a pure projector: it stamps a NON-EMPTY character id onto the tile and
-  // omits the field for `null` / `undefined` / "" so the webview's gender
-  // fall-back is preserved. #136 persisted `Member.character` but never
-  // stamped `tile.character`; this fixes that gap.
+  // 86ca1nzde + 86ca20zq0 — character projection from roster Member.character
+  // onto the tile (single-agent, baseline, and multi-agent wrapper paths). The
+  // reducer is a pure projector preserving the THREE-STATE MemberCharacter
+  // contract via `stampCharacter`:
+  //   • non-empty id  → `{ character: <id> }`  (sprite)
+  //   • explicit null → `{ character: null }`  (TEXT TILE — 86ca20zq0 fix)
+  //   • undefined / "" → `{}` field omitted     (gender fall-back)
+  // #136 persisted `Member.character` but never stamped `tile.character`;
+  // 86ca1nzde added the stamp but (NIT2, PR #138) collapsed `null` → omitted,
+  // routing an explicit text-tile choice into the gender binding. 86ca20zq0
+  // restores `null` on the wire so the webview's `spriteForMember` renders the
+  // text tile for an explicitly-cleared character.
   // =========================================================================
-  describe("character projection (86ca1nzde)", () => {
+  describe("character projection (86ca1nzde + 86ca20zq0)", () => {
     const ROSTER_WITH_CHARS: Team[] = [
       {
         id: "alpha",
@@ -2261,8 +2267,9 @@ describe("buildAgentTree", () => {
             id: "maya",
             display: "Maya",
             role: "Webview UI Dev",
-            // character null → explicit "fall back" (text-tile per type doc);
-            // the AC collapses null to the gender fall-back (field omitted).
+            // character null → explicit TEXT-TILE choice (86ca20zq0): the
+            // reducer PRESERVES `null` on the wire so the webview renders the
+            // text tile (monogram), NOT the gender-guessed sprite.
             character: null,
             match: [{ agentType_equals: "maya" }],
           },
@@ -2299,7 +2306,7 @@ describe("buildAgentTree", () => {
       expect(tile!.character).toBe("knight-m01");
     });
 
-    it("omits character when member.character is null (fall-back preserved)", () => {
+    it("PRESERVES explicit null character (text tile, NOT gender fall-back) — 86ca20zq0", () => {
       const session = makeSession();
       const agentId = "agent-maya-01";
       const meta = makeMeta({ agentType: "maya", description: "Maya webview" });
@@ -2319,10 +2326,15 @@ describe("buildAgentTree", () => {
         entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya"),
       );
       expect(tile!.state).not.toBe("available");
-      expect(tile!.character).toBeUndefined();
-      // Field truly absent from the wire shape (not just undefined-valued).
+      // 86ca20zq0 — the load-bearing assertion: explicit `null` is PRESERVED
+      // on the wire (text-tile signal), NOT collapsed to omitted/undefined.
+      // Reverting the reducer stamp to the NIT2 form
+      // (`typeof member.character === "string" && length > 0 ? {character} : {}`)
+      // omits the field → this FAILS (gets `undefined`), proving non-vacuity.
+      expect(tile!.character).toBeNull();
+      // The key is PRESENT on the wire shape (carrying the explicit null).
       expect(Object.prototype.hasOwnProperty.call(tile, "character")).toBe(
-        false,
+        true,
       );
     });
 
@@ -2399,11 +2411,13 @@ describe("buildAgentTree", () => {
       );
       expect(tile!.state).toBe("available");
       expect(tile!.character).toBe("knight-m01");
-      // maya baseline (null) omits the field.
+      // 86ca20zq0 — maya baseline (explicit null) PRESERVES the text-tile
+      // signal even on a never-run tile: a never-run member the sponsor cleared
+      // renders the text tile, not a gender-guessed sprite.
       const mayaTile = expectTile(
         entries.find((e) => !isCollapsedPersonaGroup(e) && e.memberId === "maya"),
       );
-      expect(mayaTile!.character).toBeUndefined();
+      expect(mayaTile!.character).toBeNull();
     });
 
     it("mirrors character onto a MultiAgentPersonaTile wrapper (N≥2)", () => {

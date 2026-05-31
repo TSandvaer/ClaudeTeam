@@ -28,12 +28,15 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type {
+  AgentTile,
   CharacterSource,
   ClaudeTeamConfig,
   ScannedAgent,
 } from "../../../src/shared/types.js";
 import type { WebviewMessage } from "../../../src/shared/messages.js";
 import { renderSetupWizard } from "../../../src/webview/components/setupWizard.js";
+import { renderCharacterPicker } from "../../../src/webview/components/characterPicker.js";
+import { renderAgentTile } from "../../../src/webview/components/agentTile.js";
 import {
   renderFull,
   type RenderableState,
@@ -570,5 +573,114 @@ describe("Reset team setup (86ca1u0rw)", () => {
     );
     expect(q<HTMLElement>(mount, ".ct-manage-reset-confirm").hidden).toBe(true);
     expect(posted.some((m) => m.type === "ui:reset-team")).toBe(false);
+  });
+});
+
+// ===========================================================================
+// 86ca20zq0 — "Clear character" → explicit-null → TEXT TILE (no sprite),
+// distinct from unset (gender fall-back). DOM-INTERACTION harness (AC4):
+// drive the picker's Clear button, then drive the real `renderAgentTile` with
+// the `character: null` the reducer now stamps, across a simulated poll
+// re-render.
+//
+// NON-VACUOUS: this block fails if the 86ca20zq0 fix is reverted on EITHER side:
+//   • If the picker's Clear button stops posting `character: null` (e.g. omits
+//     the field) → the "Clear posts character:null" assertion FAILS.
+//   • If the reducer's stamp collapses `null` → omitted (the NIT2 / PR #138
+//     form) → the host would send `character: undefined`, and `spriteForMember`
+//     would fall back to the gender sprite. We model that exact regression by
+//     rendering a tile with `character: undefined` and asserting it renders a
+//     SPRITE — so the contrast between `null` (text tile) and `undefined`
+//     (sprite) is the load-bearing, mutation-proving assertion.
+// ===========================================================================
+
+describe("86ca20zq0 — Clear character → explicit-null text tile (AC4)", () => {
+  const BASE = "vscode-webview://host/dist/webview";
+
+  function agentTile(overrides: Partial<AgentTile> = {}): AgentTile {
+    return {
+      memberId: "felix", // gender binding = M01 (male) — so a fall-back WOULD
+      // render a sprite; only an explicit null suppresses it.
+      teamId: "alpha",
+      display: "Felix",
+      role: "Host",
+      activity: "idle 5s",
+      model: "claude-opus-4-8",
+      state: "idle",
+      agentId: "a1",
+      toolUseId: null,
+      ...overrides,
+    };
+  }
+
+  it("the picker's Clear button posts ui:assign-character with character: null", () => {
+    const mount = document.createElement("div");
+    const posted: WebviewMessage[] = [];
+    const picker = renderCharacterPicker({
+      memberId: "felix",
+      display: "Felix",
+      sources: characterSources(),
+      current: "ClaudeTeam-M01-Dev",
+      spriteBaseUri: BASE,
+      postMessage: (m) => posted.push(m),
+    });
+    mount.appendChild(picker);
+
+    q<HTMLButtonElement>(mount, ".ct-character-picker-clear").click();
+
+    // Load-bearing: the EXACT wire value the reducer must now PRESERVE.
+    const clear = posted.find((m) => m.type === "ui:assign-character");
+    expect(clear).toBeDefined();
+    expect(
+      (clear as { payload: { character: unknown } }).payload.character,
+    ).toBeNull();
+  });
+
+  it("a tile with character: null renders a TEXT tile (no sprite box)", () => {
+    const el = renderAgentTile({
+      tile: agentTile({ character: null }),
+      sessionId: "s1",
+      postMessage: () => undefined,
+      spriteBaseUri: BASE,
+    });
+    // Explicit null → spriteForMember returns null → no sprite box, no broken
+    // image, the monogram/text tile renders instead.
+    expect(el.querySelector(".sprite-box")).toBeNull();
+    expect(el.dataset.hasSprite).toBeUndefined();
+  });
+
+  it("CONTRAST: a tile with character undefined renders the gender SPRITE (proves null≠undefined)", () => {
+    const el = renderAgentTile({
+      tile: agentTile({}), // no character key → undefined → gender fall-back
+      sessionId: "s1",
+      postMessage: () => undefined,
+      spriteBaseUri: BASE,
+    });
+    // undefined (unset) → felix's M01 gender sprite renders. This is the exact
+    // behavior an explicit `null` must NOT collapse into — the whole point of
+    // 86ca20zq0.
+    const box = el.querySelector<HTMLElement>(".sprite-box");
+    expect(box).not.toBeNull();
+    expect(box!.dataset.character).toBe("ClaudeTeam-M01-Dev");
+  });
+
+  it("the text tile survives a poll re-render (character: null stays a text tile)", () => {
+    // Two consecutive renders with the SAME character:null tile — model the
+    // ~2s poll tick rebuilding the tile DOM. The text-tile choice must NOT
+    // resurrect a sprite on the rebuild.
+    const render = (): HTMLElement =>
+      renderAgentTile({
+        tile: agentTile({ character: null }),
+        sessionId: "s1",
+        postMessage: () => undefined,
+        spriteBaseUri: BASE,
+      });
+
+    const first = render();
+    expect(first.querySelector(".sprite-box")).toBeNull();
+
+    const second = render(); // poll-tick rebuild
+    expect(second.querySelector(".sprite-box")).toBeNull();
+    expect(second.dataset.hasSprite).toBeUndefined();
   });
 });
