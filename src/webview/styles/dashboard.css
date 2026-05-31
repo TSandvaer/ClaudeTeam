@@ -784,20 +784,28 @@ body {
 
 .persona-instance-row:hover,
 .persona-instance-row:focus-visible {
-  background-color: var(--ct-color-bg-hover);
+  /* 86ca23utq — the persona-instance rows live INSIDE `.agent-tile` (light card,
+   * see multiAgentPersonaTile.ts line 33), so the default translucent-WHITE hover
+   * tint is invisible on #ECEFF1. Use the translucent-DARK card hover (matches
+   * `.agent-tile:hover`). */
+  background-color: var(--ct-card-hover);
   outline: 1px solid var(--ct-color-focus);
 }
 
 .persona-instance-id {
   flex-shrink: 0;
-  color: var(--ct-color-fg-muted);
+  /* 86ca23utq — card descendant (inside `.agent-tile`); muted fg must be the
+   * dark-on-light card-muted token, not the light `--ct-color-fg-muted` which
+   * renders light-on-light on #ECEFF1. */
+  color: var(--ct-card-fg-muted);
   font-family: var(--vscode-editor-font-family, monospace);
 }
 
 .persona-instance-activity {
   flex: 1 1 auto;
   min-width: 0;
-  color: var(--ct-color-fg);
+  /* 86ca23utq — card descendant (inside `.agent-tile`); dark-on-light card fg. */
+  color: var(--ct-card-fg);
   font-family: var(--vscode-editor-font-family, monospace);
   /* Truncate at the tile width with an ellipsis (spec §3.2). */
   white-space: nowrap;
@@ -982,7 +990,11 @@ body {
   padding: 0;
   line-height: 1;
   background-color: transparent;
-  color: var(--ct-color-fg-muted);
+  /* 86ca23utq — the kebab is a transparent child of `.agent-tile`, so the light
+   * card bg shows through. It becomes visible on tile-hover (opacity 0→1), at
+   * which point the rest fg is what reads — it must be the dark-on-light card-
+   * muted token, not the light `--ct-color-fg-muted` (light-on-light). */
+  color: var(--ct-card-fg-muted);
   border: 1px solid transparent;
   border-radius: var(--ct-radius-chip);
   cursor: pointer;
@@ -997,8 +1009,11 @@ body {
 }
 
 .agent-tile-overflow-btn:hover {
-  background-color: var(--ct-color-bg-hover);
-  color: var(--ct-color-fg);
+  /* 86ca23utq — on the light card: the default translucent-WHITE bg-hover tint is
+   * invisible on #ECEFF1, and the light `--ct-color-fg` is light-on-light. Use the
+   * translucent-DARK card hover + dark-on-light card fg (matches `.agent-tile:hover`). */
+  background-color: var(--ct-card-hover);
+  color: var(--ct-card-fg);
 }
 
 .agent-tile-overflow-btn:focus-visible {

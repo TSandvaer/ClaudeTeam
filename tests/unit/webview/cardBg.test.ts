@@ -139,4 +139,84 @@ describe("light whole-card background (86ca23utq)", () => {
       ).not.toMatch(/background-color:/);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Card-DESCENDANT text + chrome must read on the light card (Felix REQUEST_
+  // CHANGES on PR #155, 86ca23utq). The whole-card flip (above) covered
+  // `.agent-tile` itself + the primary text rows (`.agent-display`/`.agent-role`),
+  // but TWO multi-agent-persona-tile descendants + the kebab were left on the
+  // LIGHT `--ct-color-*` tokens → light-on-light on #ECEFF1 (a legibility bug).
+  //
+  // These selectors all render INSIDE `.agent-tile` (verified:
+  // multiAgentPersonaTile.ts line 33 nests `.persona-instance-row` /
+  // `.persona-instance-id` / `.persona-instance-activity` under
+  // `<article class="agent-tile">`; the kebab `.agent-tile-overflow-btn` is a
+  // transparent `.agent-tile` child so the card bg shows through). On the light
+  // card their fg MUST resolve to a `--ct-card-*` token, and their hover bg must
+  // use the translucent-DARK `--ct-card-hover` (the default translucent-WHITE
+  // `--ct-color-bg-hover` is invisible on #ECEFF1).
+  //
+  // Non-vacuity: reverting ANY recolor (e.g. `.persona-instance-activity` back to
+  // `var(--ct-color-fg)`, or the kebab hover back to `var(--ct-color-fg)` /
+  // `var(--ct-color-bg-hover)`) flips a `.not.toMatch(/--ct-color-/)` assertion to
+  // a failure. This is the test that would have caught Felix's two findings + the
+  // kebab NIT before review.
+  describe("card-descendant text + chrome read on the light card", () => {
+    // fg-token selectors: rule body must use a --ct-card-* color and must NOT
+    // fall back to any --ct-color-* foreground/hover token.
+    const fgSelectors: ReadonlyArray<[string, RegExp]> = [
+      // [selectorRegex, the --ct-card-* token its `color:` must use]
+      ["\\.persona-instance-activity", /color:\s*var\(--ct-card-fg\)/],
+      ["\\.persona-instance-id", /color:\s*var\(--ct-card-fg-muted\)/],
+      // kebab REST fg (visible the moment the tile-hover reveals the button).
+      [
+        "\\.agent-tile-overflow-btn(?![-:\\w])",
+        /color:\s*var\(--ct-card-fg-muted\)/,
+      ],
+    ];
+
+    for (const [selector, cardToken] of fgSelectors) {
+      it(`${selector.replace(/\\\\/g, "")} uses a --ct-card-* fg, not --ct-color-*`, () => {
+        const body = bodiesFor(selector)[0];
+        expect(body, `no rule for ${selector}`).toBeDefined();
+        expect(body!).toMatch(cardToken);
+        // The bug class: ANY light-token foreground on a card descendant.
+        expect(
+          body!,
+          `${selector} still uses a light --ct-color-* foreground on the light card`,
+        ).not.toMatch(/color:\s*var\(--ct-color-fg(?:-muted)?\)/);
+      });
+    }
+
+    it(".agent-tile-overflow-btn:hover recolors fg + bg for the light card", () => {
+      const hover = [
+        ...normalized.matchAll(
+          /\.agent-tile-overflow-btn:hover\s*\{([^}]*)\}/g,
+        ),
+      ].map((m) => m[1]);
+      expect(hover.length, "no .agent-tile-overflow-btn:hover rule").toBeGreaterThan(0);
+      const body = hover[0];
+      expect(body).toMatch(/color:\s*var\(--ct-card-fg\)/);
+      expect(body).toMatch(/background-color:\s*var\(--ct-card-hover\)/);
+      expect(
+        body,
+        "kebab hover still uses light --ct-color-* fg/hover on the light card",
+      ).not.toMatch(/var\(--ct-color-(?:fg(?:-muted)?|bg-hover)\)/);
+    });
+
+    it(".persona-instance-row:hover uses the translucent-dark card hover", () => {
+      const hover = [
+        ...normalized.matchAll(
+          /\.persona-instance-row:(?:hover|focus-visible)[^{}]*\{([^}]*)\}/g,
+        ),
+      ].map((m) => m[1]);
+      expect(hover.length, "no .persona-instance-row:hover rule").toBeGreaterThan(0);
+      const body = hover[0];
+      expect(body).toMatch(/background-color:\s*var\(--ct-card-hover\)/);
+      expect(
+        body,
+        "persona-instance-row hover still uses the invisible translucent-white --ct-color-bg-hover",
+      ).not.toMatch(/background-color:\s*var\(--ct-color-bg-hover\)/);
+    });
+  });
 });
