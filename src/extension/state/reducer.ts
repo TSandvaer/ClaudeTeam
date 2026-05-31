@@ -69,6 +69,45 @@ export type ActivityMap = Map<string, SubagentActivity>;
 export type FinishedMap = Map<string, number>; // agentId → finishedAtMs
 
 /**
+ * Project a roster `Member.character` ({@link import("../../shared/types.js").MemberCharacter})
+ * onto the spread-shape `{ character }` partial stamped on an `AgentTile` /
+ * baseline tile (86ca20zq0). Preserves the THREE-STATE contract the webview's
+ * `spriteForMember` switches on:
+ *
+ *   • a real CharacterSource id (non-empty string) → `{ character: <id> }`
+ *       → webview resolves that sprite.
+ *   • explicit `null`                              → `{ character: null }`
+ *       → webview renders the TEXT tile (the sponsor deliberately cleared the
+ *         character — distinct from "no choice → gender guess").
+ *   • `undefined` / empty-string `""`              → `{}` (field OMITTED)
+ *       → webview falls back to the legacy gender binding. `undefined` is the
+ *         pre-team-setup / legacy-roster signal; `""` is not a valid id
+ *         (schema enforces `.min(1)`) and carries no text-tile-vs-fallback
+ *         meaning, so it collapses to "omit → fall back" rather than reaching
+ *         `spriteForCharacterId` as an unresolvable id.
+ *
+ * The prior projector (NIT2, PR #138) used
+ * `typeof member.character === "string" && member.character.length > 0`, which
+ * collapsed explicit `null` → omitted → `undefined`, silently routing an
+ * explicit "text tile" choice into the gender binding. This helper fixes that
+ * by stamping `null` onto the wire.
+ *
+ * Exported for direct unit coverage.
+ */
+export function stampCharacter(
+  character: import("../../shared/types.js").MemberCharacter | undefined,
+): { character?: import("../../shared/types.js").MemberCharacter } {
+  if (character === null) {
+    return { character: null };
+  }
+  if (typeof character === "string" && character.length > 0) {
+    return { character };
+  }
+  // undefined OR empty-string → omit → gender fall-back.
+  return {};
+}
+
+/**
  * Per-session subagent inputs. One entry per live SessionRecord.
  */
 export interface SessionAgentData {
@@ -265,20 +304,23 @@ export function buildAgentTree(
         // Absent on tiles whose matched member has no `color` set, preserving
         // the pre-86c9zq9vm wire shape for sponsors who haven't opted in.
         ...(member.color !== undefined ? { memberColor: member.color } : {}),
-        // 86ca1nzde: mirror the matched member's pixel-character binding onto
-        // the tile so the webview's `spriteForMember` renders the per-member
-        // sprite instead of the legacy gender fall-back. Stamp ONLY when the
-        // member carries a non-empty character id — `null` / `undefined` /
-        // empty-string all leave `tile.character` absent so the webview's
-        // gender-binding fall-back is preserved (AC: unset/empty → fall-back).
-        // The `undefined`-vs-`null` semantic from the type doc (null = explicit
-        // text tile) is intentionally collapsed to "fall back" here: the legacy
-        // roster never sets the field and the team-setup config seeds `null`,
-        // so treating both as fall-back matches the AC. `tile.character` is only
-        // ever a real CharacterSource id, never `null`, on the wire.
-        ...(typeof member.character === "string" && member.character.length > 0
-          ? { character: member.character }
-          : {}),
+        // 86ca20zq0: mirror the matched member's pixel-character binding onto
+        // the tile, PRESERVING the three-state `MemberCharacter` contract so
+        // the webview's `spriteForMember` can distinguish:
+        //   • a real CharacterSource id (string) → render that sprite
+        //   • explicit `null`                    → render the TEXT tile (the
+        //       sponsor deliberately cleared the character — NOT a gender guess)
+        //   • `undefined` / absent               → fall back to the legacy
+        //       gender binding (pre-team-setup roster; field never set)
+        // The earlier stamp (NIT2, PR #138) collapsed `null` → omitted →
+        // `undefined`, which made an explicit "text tile" choice silently fall
+        // through to the gender binding. We now stamp whenever the field is
+        // present (`!== undefined`), carrying `null` onto the wire. Empty-string
+        // `""` is not a valid CharacterSource id (schema enforces `.min(1)`) and
+        // carries no "text tile vs fall back" meaning, so it normalizes to
+        // `null` (the explicit text-tile signal) rather than reaching
+        // `spriteForCharacterId` as an unresolvable id.
+        ...stampCharacter(member.character),
       };
 
       if (!rosterTiles.has(teamId)) {
@@ -341,12 +383,12 @@ export function buildAgentTree(
           // Member color is independent of liveness — carry it through so
           // E-05 can paint the leading-edge identity even on a baseline tile.
           ...(member.color !== undefined ? { memberColor: member.color } : {}),
-          // 86ca1nzde: character is independent of liveness too — a never-run
-          // member should still render its assigned sprite. Same stamp rule as
-          // the live-tile path: only a non-empty character id, else fall back.
-          ...(typeof member.character === "string" && member.character.length > 0
-            ? { character: member.character }
-            : {}),
+          // 86ca20zq0: character is independent of liveness too — a never-run
+          // member should still render its assigned sprite OR its explicit
+          // text-tile choice. Same three-state stamp as the live-tile path
+          // (`stampCharacter`): preserve a real id, preserve explicit `null`
+          // (text tile), omit only when `undefined` (gender fall-back).
+          ...stampCharacter(member.character),
         };
         if (!rosterTiles.has(team.id)) {
           rosterTiles.set(team.id, []);
