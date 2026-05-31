@@ -111,6 +111,96 @@ describe("light whole-card background (86ca23utq)", () => {
     });
   });
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Card-CONTAINER hover stays LIGHT (86ca23utq dark-on-hover fix).
+  //
+  // Bug: `--ct-card-hover` was a translucent-DARK token (`rgba(0,0,0,0.06)`). The
+  // card-CONTAINER hover selectors (`.agent-tile:hover`,
+  // `.collapsed-persona-header:hover`) apply it as `background-color`, REPLACING
+  // the light `--ct-card-bg` (#ECEFF1). A translucent rgba(0,0,0,α) there
+  // composites over the DARK editor bg behind the tile → the card reads as turning
+  // dark on hover. Fix: `--ct-card-hover` is a SOLID light hex (a gentle darkening
+  // of #ECEFF1) so the hovered card stays light, deterministically.
+  //
+  // Non-vacuity: reverting `--ct-card-hover` to `rgba(0, 0, 0, 0.06)` (or any
+  // translucent-dark / non-hex value) flips both the solid-hex assertion AND the
+  // no-translucent-dark assertion to failures.
+  describe("card-container hover stays light (86ca23utq dark-on-hover fix)", () => {
+    function cardHoverValue(): string {
+      const m = normalized.match(/--ct-card-hover:\s*([^;]+);/);
+      expect(m, "--ct-card-hover token not defined").not.toBeNull();
+      return m![1].trim();
+    }
+
+    it("--ct-card-hover resolves to a SOLID light hex, not a translucent token", () => {
+      const value = cardHoverValue();
+      // Solid 3- or 6-digit hex only — no rgba()/hsla()/named alpha forms.
+      expect(
+        value,
+        `--ct-card-hover must be a solid hex (got "${value}")`,
+      ).toMatch(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+    });
+
+    it("--ct-card-hover is NOT a translucent-dark rgba(0,0,0,...) tint", () => {
+      const value = cardHoverValue();
+      expect(
+        value,
+        "--ct-card-hover is a translucent-dark tint — composites dark over the editor bg behind the card",
+      ).not.toMatch(/rgba?\(\s*0\s*,\s*0\s*,\s*0/i);
+      // Belt-and-suspenders: forbid any alpha-channel form as the card-container
+      // background (an rgba/hsla there always composites over what's behind).
+      expect(value).not.toMatch(/rgba|hsla/i);
+    });
+
+    it("--ct-card-hover is a LIGHT value (channels high → stays a light card)", () => {
+      const value = cardHoverValue();
+      const hex = value.replace("#", "");
+      const full =
+        hex.length === 3
+          ? hex
+              .split("")
+              .map((c) => c + c)
+              .join("")
+          : hex;
+      const r = parseInt(full.slice(0, 2), 16);
+      const g = parseInt(full.slice(2, 4), 16);
+      const b = parseInt(full.slice(4, 6), 16);
+      // A "light tint" of #ECEFF1 keeps every channel high; a dark token (the bug)
+      // would have low channels. Floor well above mid-grey.
+      for (const [name, ch] of [
+        ["r", r],
+        ["g", g],
+        ["b", b],
+      ] as const) {
+        expect(ch, `--ct-card-hover channel ${name} too dark (${ch})`).toBeGreaterThan(
+          180,
+        );
+      }
+    });
+
+    const containerHoverSelectors: ReadonlyArray<string> = [
+      "\\.agent-tile:(?:hover|focus-visible)",
+      "\\.collapsed-persona-header:(?:hover|focus-visible)",
+    ];
+    for (const selector of containerHoverSelectors) {
+      it(`${selector.replace(/\\\\/g, "")} consumes the (now-solid-light) --ct-card-hover bg`, () => {
+        const bodies = [
+          ...normalized.matchAll(
+            new RegExp(`${selector}[^{}]*\\{([^}]*)\\}`, "g"),
+          ),
+        ].map((m) => m[1]);
+        expect(bodies.length, `no rule for ${selector}`).toBeGreaterThan(0);
+        const hasCardHover = bodies.some((b) =>
+          /background-color:\s*var\(--ct-card-hover\)/.test(b),
+        );
+        expect(
+          hasCardHover,
+          `${selector} does not apply background-color: var(--ct-card-hover)`,
+        ).toBe(true);
+      });
+    }
+  });
+
   describe("card text flipped dark-on-light", () => {
     it(".agent-display uses --ct-card-fg (not the light default --ct-color-fg)", () => {
       const body = bodiesFor("\\.agent-display")[0];

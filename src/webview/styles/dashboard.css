@@ -111,12 +111,22 @@
    * design spec §5 (against #ECEFF1):
    *   --ct-card-fg        #1f2933  near-black slate   ≈ 13:1 (AA/AAA) — name, activity
    *   --ct-card-fg-muted  #52606d  slate-grey         ≈ 6:1  (AA)     — role, model, count text
-   *   --ct-card-hover     rgba(0,0,0,0.06)            translucent-DARK (the default
-   *                       translucent-white hover is invisible on light)
-   * The blue SELECTED/focus border stays --ct-color-focus (unchanged). */
+   *   --ct-card-hover     #E1E4E6  SOLID light tint   gentle ~6% darkening of #ECEFF1
+   * The blue SELECTED/focus border stays --ct-color-focus (unchanged).
+   *
+   * 86ca23utq dark-on-hover FIX: --ct-card-hover MUST be a SOLID light hex, not a
+   * translucent-DARK token. It is used as `background-color` on the CARD-CONTAINER
+   * hovers (`.agent-tile:hover`, `.collapsed-persona-header:hover`) which both carry
+   * `--ct-card-bg` (#ECEFF1). A translucent rgba(0,0,0,α) there REPLACES the light bg
+   * and composites over the DARK editor bg behind the tile → the card reads as turning
+   * dark on hover. A solid hex keeps the hover LIGHT with a deterministic gentle shade,
+   * with no compositing surprise. #E1E4E6 (225,228,230) ≈ a 6% darkening of #ECEFF1 —
+   * matching the subtle darkening the descendant-on-light hovers (badge / instance-row /
+   * overflow-btn, which sit ON the already-light card) produced via the old alpha tint,
+   * so all 5 consumers read identically but deterministically. */
   --ct-card-fg: #1f2933;
   --ct-card-fg-muted: #52606d;
-  --ct-card-hover: rgba(0, 0, 0, 0.06);
+  --ct-card-hover: #E1E4E6;
   /* Hairline that delineates the light card from a LIGHT VS Code theme bg (where
    * the card and editor bg are tonally close). Subtle in dark theme, load-bearing
    * in light theme. Hardcoded translucent-dark, theme-independent. */
@@ -319,8 +329,10 @@ body {
 
 .agent-tile:hover,
 .agent-tile:focus-visible {
-  /* Translucent-DARK hover tint (the default translucent-white is invisible on
-   * the light card) + the SAME blue selected/focus border as before, untouched. */
+  /* SOLID light hover tint (--ct-card-hover, a gentle ~6% darkening of the #ECEFF1
+   * card bg) + the SAME blue selected/focus border as before, untouched. Must be
+   * solid, NOT translucent-dark: a translucent token here composites over the dark
+   * editor bg behind the tile and reads as the card turning dark (86ca23utq fix). */
   background-color: var(--ct-card-hover);
   outline: 1px solid var(--ct-color-focus);
 }
@@ -786,8 +798,8 @@ body {
 .persona-instance-row:focus-visible {
   /* 86ca23utq — the persona-instance rows live INSIDE `.agent-tile` (light card,
    * see multiAgentPersonaTile.ts line 33), so the default translucent-WHITE hover
-   * tint is invisible on #ECEFF1. Use the translucent-DARK card hover (matches
-   * `.agent-tile:hover`). */
+   * tint is invisible on #ECEFF1. Use the solid-light card hover (matches
+   * `.agent-tile:hover`) — a gentle darkening of the light card. */
   background-color: var(--ct-card-hover);
   outline: 1px solid var(--ct-color-focus);
 }
@@ -1011,7 +1023,7 @@ body {
 .agent-tile-overflow-btn:hover {
   /* 86ca23utq — on the light card: the default translucent-WHITE bg-hover tint is
    * invisible on #ECEFF1, and the light `--ct-color-fg` is light-on-light. Use the
-   * translucent-DARK card hover + dark-on-light card fg (matches `.agent-tile:hover`). */
+   * solid-light card hover + dark-on-light card fg (matches `.agent-tile:hover`). */
   background-color: var(--ct-card-hover);
   color: var(--ct-card-fg);
 }
