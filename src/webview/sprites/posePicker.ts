@@ -91,12 +91,7 @@ export function pickIdle(
   char: SpriteCharacter,
   rng: () => number = Math.random,
 ): string {
-  // TEMP PREVIEW — REVERT BEFORE MERGE (PR #151): force idle_stretch as the
-  // SOLE idle pose for BOTH M01 + F01 so every idle tile loops the E1 pingpong
-  // (idle_stretch is wired playbackMode:"pingpong" + finalDwellMs:800). This
-  // line replaces the real idle-pool selection — restore the original on revert:
-  //   const pool = char.idlePool.length > 0 ? char.idlePool : Object.keys(char.animations);
-  const pool = ["idle_stretch"];
+  const pool = char.idlePool.length > 0 ? char.idlePool : Object.keys(char.animations);
   if (pool.length === 0) {
     return char.defaultIdle ?? "";
   }
