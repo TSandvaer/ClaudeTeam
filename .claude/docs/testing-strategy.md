@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Three layers. Each layer catches a different bug class. None of them is optional.
+Three layers plus a webview DOM-interaction sub-layer (Layer 2.5). Each layer catches a different bug class. None of them is optional. See "Layer 2.5 — Webview DOM-interaction" + "Layer decision rule" below for which layer a given behavior belongs in — the load-bearing rule is that FUNCTIONAL interactive behavior is NOT sponsor-deferrable.
 
 ## Layer 1 — Unit (vitest)
 
@@ -38,6 +38,46 @@ Spin up VS Code with the extension installed, drive the webview via the test har
 - Theme switch (toggle dark/light → no broken styling).
 
 **Where:** `tests/vscode-integration/`. CI-only by default; locally on demand.
+
+## Layer 2.5 — Webview DOM-interaction (jsdom harness)
+
+Added 2026-05-31 (ticket `86ca1u4ef`) after **four functional Manage Team panel bugs reached the sponsor** despite full data-plane coverage. The data-plane layers (host message protocol + reducer + fixture filesystem) assert *what the host sends*; they cannot assert *what the webview does over time* when DOM events and re-renders interleave. This layer fills that gap.
+
+**What it is.** vitest tests that run under `@vitest-environment jsdom`, MOUNT the real webview components (no host, no VS Code API), and DRIVE them through **time-separated DOM events and simulated poll re-renders**. It is a sub-layer of Layer 2 (component tests) distinguished by its emphasis on *interaction sequence + render-cycle survivability* of webview-local state, not just first-paint output.
+
+**Reference implementation:** `tests/unit/webview/panelInteraction.test.ts` (the four-bug harness). Sibling examples: `tests/unit/webview/overflowMenuPersistence.test.ts`, `tests/unit/webview/expandedGroupsTracker.test.ts`, `tests/unit/webview/removeMember.test.ts`.
+
+### How to mount + drive a webview component
+
+1. **Mount.** Build a detached root: `const mount = document.createElement("div")`. For a single component, call its `render*` function directly (`renderSetupWizard({ scanned, teamNameSeed, postMessage })` returns the root element). For a panel that lives inside the full render tree, call `renderFull(ctx, tree)` with a `RenderContext` (mount + `postMessage` spy + panel flags + any webview-local trackers) and a minimal `RenderableState` (`{ sessions: [], rosterErrors: [] }` is enough when the Manage Team branch short-circuits before the session walk).
+2. **Drive.** Query the real selectors (`.ct-manage-pick-btn`, `.ct-wizard-preview-btn`, `.ct-character-cell`) and `.click()` / `dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`. jsdom toggles `checked` on `.click()` but does NOT always fire `change` — dispatch it explicitly when a listener reads it (`cb.click(); cb.dispatchEvent(new Event("change"))`).
+3. **Simulate the poll tick.** Call `renderFull(ctx, tree)` a SECOND time with the **same** webview-local tracker instance. This reproduces the ~2s poll re-render that rebuilds the panel DOM — the exact moment webview-local open-state is lost if a fix is missing. Assert the post-re-render DOM (picker still open, banner still present, etc.).
+4. **Capture host-bound messages.** Pass `postMessage` as `vi.fn()` (or `(m) => posted.push(m)`) and assert message shape with `posted.some((m) => m.type === "ui:assign-character")`.
+5. **Timers.** For auto-dismiss / debounce behavior use `vi.useFakeTimers()` + `vi.advanceTimersByTime(ms)` inside a `try/finally` that restores `vi.useRealTimers()`.
+
+**Non-vacuity is mandatory.** Each describe block must FAIL when its fix is reverted. State the revert failure mode in a header comment (`panelInteraction.test.ts` lines 14-23 document it per bug). A DOM-interaction test that passes both with and against the fix is worthless — the four bugs shipped *because* the data-plane tests were vacuous w.r.t. interaction.
+
+### Layer decision rule — which layer covers a given behavior
+
+When a behavior needs a test, classify it and pick the layer. **The classification is not a preference — it is a contract:**
+
+| Behavior class | Layer | Example |
+|---|---|---|
+| **Data-plane** — host parse / match / reduce / message shape, file-watcher state machine | Layer 1 (unit) + Layer 2 (fixture fs) | "the reducer seeds an `available` baseline tile for a never-run member"; "`ui:save-team` is posted with the correct payload" |
+| **DOM-interaction (functional)** — a click / blur / keypress / re-render produces the correct *functional* result: an element opens/closes/persists, a value renders, a control toggles, webview-local state survives a poll tick | **Layer 2.5 (jsdom DOM-interaction) — REQUIRED** | "the picker stays open after a poll re-render"; "the Save banner survives the interleaved `setup:detection` re-render"; "the preview row shows the auto-derived role, not `—`" |
+| **Sponsor-visual (fidelity only)** — pixel-level appearance, theme contrast, sprite animation smoothness, layout aesthetics, color correctness | Manual reload + sponsor confirm (deferred to sponsor) | "the running-state dot paints in the member's `color`"; "the idle sprite animates smoothly"; "dark/light theme contrast reads well" |
+
+**The load-bearing rule (codified after the 2026-05-30 incident):**
+
+> **FUNCTIONAL interactive behavior MUST have a Layer-2.5 DOM-interaction test. Only TRUE visual fidelity may be deferred to the sponsor.**
+
+"Does the picker reopen after the poll tick?", "does Save show feedback?", "does the preview show the right role?" are **functional** questions with a deterministic right answer in jsdom — they are NOT visual-fidelity questions and may NOT be deferred. The only things the sponsor's eyes are the gate for are questions jsdom genuinely cannot answer: how a rendered thing *looks* (pixels, theme, animation feel), not whether it *works*.
+
+**Decision test when unsure:** ask "can I assert the correct outcome on the jsdom DOM tree or on a captured `postMessage`?" If YES → it is functional → Layer 2.5 is required. If the only assertion possible is "a human looks at it and judges the appearance" → it is visual fidelity → sponsor-deferred. Most "the UI is broken" reports are functional; reach for visual-deferral sparingly.
+
+### Cross-ref — the 2026-05-30 incident (why this layer exists)
+
+Sponsor dogfood on build `8dc156b` found **four functional Manage Team panel bugs** that full data-plane coverage missed: (D, SEVERE) "Save team" had no visible effect — the banner was wiped by an interleaved `setup:detection` re-render; (A) preview roles showed `—` despite auto-derived roles; (B) the character picker vanished on the ~2s poll tick; (C) the picker thumbnail showed an arms-raised sprite instead of the neutral `default_idle` frame. All four are interaction-sequence / render-survivability failures — every one is now covered by a non-vacuous Layer-2.5 test (`panelInteraction.test.ts` for A/B/D; `teamSetupFs.test.ts` § `resolveThumbnailPath` for C). Full root-cause analysis: `team/bram-research/86ca1u41m-panel-quad-triage-2026-05-30.md` § "Why the data-plane tests missed all four". The data-plane tests at `tests/unit/webview/teamSetup.test.ts:333-360` asserted `ui:save-team`'s payload shape (a spy-only assertion that never touched banner DOM) and passed throughout — a textbook vacuous-w.r.t.-interaction case.
 
 ## Manual reload checklist
 
