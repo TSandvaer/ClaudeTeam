@@ -43,5 +43,28 @@
     "idle_reading_book": "reading_an_open_book",
     "active_work": "sitting_at_a_desk_fa/the_character_stays_seated_and_completely_still_th-a1b98373",
     "active_read": "sitting_at_a_desk_fa/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2"
+  },
+  "_playback_note": "Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Keyed by canonical anim name (must exist in `animations`). Fields (all optional): speedMultiplier (fraction of default frame RATE; 0.5 = half speed = 2x per-frame ms), dwellFrameIndex (mid-sequence apex frame held longer), dwellMs (apex hold add-on), finalDwellMs (final-frame hold before loop restart; default 400), playbackMode (\"loop\"|\"pingpong\"; default loop), startFrame/endFrame (inclusive frame sub-window). Malformed values are dropped + warned by scripts/build-sprite-manifest.mjs (unknown playbackMode falls back to loop). Migrated from the former hardcoded PLAYBACK_OVERRIDES map (E2). Edit + `npm run build` + reload to retune — no TS edit.",
+  "playback": {
+    "active_work": { "speedMultiplier": 0.5 },
+    "active_read": { "speedMultiplier": 0.5 },
+    "idle_coffee": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
+    "idle_snack": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
+    "idle_stretch": {
+      "speedMultiplier": 0.5,
+      "startFrame": 5,
+      "endFrame": 10,
+      "playbackMode": "pingpong",
+      "finalDwellMs": 800
+    },
+    "idle_phone": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
+    "idle_hips": { "speedMultiplier": 0.5 },
+    "idle_think": { "speedMultiplier": 0.5 },
+    "idle_arms_crossed": { "speedMultiplier": 0.5 },
+    "idle_pockets": { "speedMultiplier": 0.5 },
+    "idle_neck_roll": { "speedMultiplier": 0.5 },
+    "idle_yawn": { "speedMultiplier": 0.5 },
+    "idle_watch": { "speedMultiplier": 0.5 },
+    "idle_headphones": { "speedMultiplier": 0.7 }
   }
 }

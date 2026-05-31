@@ -22,6 +22,20 @@
  *      webview resolves a full webview-URI by prefixing the host-injected
  *      sprite base. Re-harvest-safe: re-run this script after any harvest /
  *      re-roll and the slugs are re-discovered automatically.
+ *
+ *   Per-animation PLAYBACK fields (anim-playback epic E2, 86ca2187g): each
+ *   character's `animations.json` MAY carry an optional top-level `playback`
+ *   block keyed by canonical anim name. The build script threads validated
+ *   fields onto each manifest anim entry as `entry.playback`, so the webview's
+ *   `resolvePlayback` reads them from the baked manifest instead of a hardcoded
+ *   map. The `animations` string-map is untouched — `playback` is a SEPARATE
+ *   sibling block so the two concerns stay decoupled. Schema (all optional):
+ *     "playback": {
+ *       "<anim>": { speedMultiplier?, dwellFrameIndex?, dwellMs?,
+ *                   finalDwellMs?, playbackMode?, startFrame?, endFrame? }
+ *     }
+ *   `playbackMode` is the literal `"loop"` or `"pingpong"`; any other value is
+ *   dropped (defaulting to loop) with a warning — see `sanitizePlayback`.
  *   2. `dist/webview/sprites/<char>/...` — copied PNG frames + rotations,
  *      reachable from the webview via `asWebviewUri` under the existing
  *      `dist/webview` localResourceRoot.
@@ -128,6 +142,76 @@ export function pickAnimSlug(slugDirs, animSlug) {
   return { slug: sorted[0], ambiguous: slugDirs.length > 1 };
 }
 
+/** Canonical playback-mode literals (mirror `PlaybackMode` in spritePlayer.ts). */
+const PLAYBACK_MODES = ["loop", "pingpong"];
+
+/** Numeric playback fields that are validated as finite numbers + passed through. */
+const PLAYBACK_NUMERIC_FIELDS = [
+  "speedMultiplier",
+  "dwellFrameIndex",
+  "dwellMs",
+  "finalDwellMs",
+  "startFrame",
+  "endFrame",
+];
+
+/**
+ * Sanitize one anim's raw playback object from `animations.json` into the
+ * shape baked onto the manifest (anim-playback epic E2, 86ca2187g). Pure —
+ * no filesystem, exported for unit coverage.
+ *
+ * Validation policy (malformed → drop the field + warn, never throw):
+ *   - numeric fields (speed/dwell/window indices): kept only when a finite
+ *     number; non-numbers/NaN/Infinity dropped with a warning.
+ *   - `playbackMode`: kept only when exactly `"loop"` or `"pingpong"`; any
+ *     other value (e.g. `"bounce"`) dropped → the engine defaults to `"loop"`.
+ *   - unknown keys: ignored (forward-compat — a future field a stale build
+ *     doesn't know yet must not crash the build).
+ *
+ * Returns `{ playback, warnings }`. `playback` is `null` when nothing valid
+ * survived (so the manifest entry omits the field entirely, byte-identical to
+ * a no-playback anim). `warnings` are surfaced by the caller as console.warn.
+ *
+ * @param {string} label `<char>/<anim>` for warning context
+ * @param {unknown} raw the raw per-anim playback object (or undefined)
+ * @returns {{ playback: object | null, warnings: string[] }}
+ */
+export function sanitizePlayback(label, raw) {
+  const warnings = [];
+  if (raw === undefined || raw === null) {
+    return { playback: null, warnings };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    warnings.push(
+      `[sprite-manifest] ${label}: playback must be an object — ignoring (got ${Array.isArray(raw) ? "array" : typeof raw})`,
+    );
+    return { playback: null, warnings };
+  }
+  const out = {};
+  for (const field of PLAYBACK_NUMERIC_FIELDS) {
+    if (!(field in raw)) continue;
+    const v = raw[field];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      out[field] = v;
+    } else {
+      warnings.push(
+        `[sprite-manifest] ${label}: playback.${field} must be a finite number — dropping (got ${JSON.stringify(v)})`,
+      );
+    }
+  }
+  if ("playbackMode" in raw) {
+    const m = raw.playbackMode;
+    if (PLAYBACK_MODES.includes(m)) {
+      out.playbackMode = m;
+    } else {
+      warnings.push(
+        `[sprite-manifest] ${label}: playback.playbackMode must be one of ${PLAYBACK_MODES.map((x) => `"${x}"`).join(" | ")} — dropping (got ${JSON.stringify(m)}); engine will default to "loop"`,
+      );
+    }
+  }
+  return { playback: Object.keys(out).length > 0 ? out : null, warnings };
+}
+
 /**
  * Discover the animation directory inside
  * `<charDir>/_pixellab_anims/<folder>/animations/` named by `value` and return
@@ -189,6 +273,11 @@ async function buildCharacter(charName) {
     return null;
   }
   const animMap = JSON.parse(await readFile(manifestPath, "utf8"));
+  // Per-anim playback block (E2 86ca2187g) — optional sibling of `animations`.
+  const playbackBlock =
+    animMap.playback && typeof animMap.playback === "object" && !Array.isArray(animMap.playback)
+      ? animMap.playback
+      : {};
   const animations = {};
   for (const [canonical, value] of Object.entries(animMap.animations ?? {})) {
     const framePaths = await resolveAnimFrames(charName, value);
@@ -200,7 +289,27 @@ async function buildCharacter(charName) {
     }
     // Store the bare folder (not the folder/slug value) for provenance.
     const { folder } = parseAnimValue(value);
-    animations[canonical] = { folder, frames: framePaths };
+    const entry = { folder, frames: framePaths };
+    // Thread validated playback fields (E2). Malformed values are dropped with
+    // a warning rather than crashing the build (AC4).
+    const { playback, warnings } = sanitizePlayback(
+      `${charName}/${canonical}`,
+      playbackBlock[canonical],
+    );
+    for (const w of warnings) console.warn(w);
+    if (playback !== null) {
+      entry.playback = playback;
+    }
+    animations[canonical] = entry;
+  }
+  // Warn on playback entries that name an anim absent from the `animations`
+  // map — a likely typo the sponsor should see (it would otherwise vanish).
+  for (const animName of Object.keys(playbackBlock)) {
+    if (!(animName in (animMap.animations ?? {}))) {
+      console.warn(
+        `[sprite-manifest] ${charName}: playback names anim "${animName}" which is not in the animations map — ignoring`,
+      );
+    }
   }
   // idle_pool filtered to anims that actually resolved to frames.
   const idlePool = (animMap.idle_pool ?? []).filter(
