@@ -87,6 +87,23 @@ Prefer per-project (`<project-root>/.claude/teams.yaml`) for any roster whose pe
 
 **Open follow-up:** package.json's `claudeteam.rosterPath` description currently reads "uses the default global location (~/.claudeteam/teams.yaml) with per-project fallback" — that ordering primes users toward the failure mode. Triage open under ticket `86c9yteju` for Bram/Felix to flip the framing (or add a `cwd_prefix` match rule to make global rosters project-scopable without migrating).
 
+## `claudeteam.yaml` (TS-02) reads through TWO divergent schemas — keep them in sync
+
+TS-02 (team-setup epic) introduced the project-scoped `<workspace>/.claude/claudeteam.yaml`, which SUPERSEDES the dropped global `~/.claudeteam/teams.yaml`. The non-obvious trap: **the same file is validated by two different Zod schemas on two different read-paths**, and they diverge:
+
+| Read-path | Schema | `role` rule |
+|---|---|---|
+| **Matcher feed** — `loadRoster` → `parseFile` (`loader.ts:155`), wired via `projectRosterPath` (`main.ts:217`) → `loadRoster(` (`src/extension/watcher/watcherLoop.ts:590`) | `rosterFileSchema` → `memberSchema` (`schema.ts:58`) | `role: z.string().min(1)` — **required, non-empty** |
+| **Panel read-path** — `readClaudeTeamConfig` (`claudeTeamConfig.ts`) | `claudeTeamConfigSchema` → `claudeTeamMemberSchema` (`schema.ts:117`) | `role: z.string().default("")` — **optional** |
+
+Two hard consequences:
+
+1. **A field that validates on one path can be rejected on the other.** A `claudeteam.yaml` the panel happily writes + reads back (e.g. `role: ""`) is *rejected* by the matcher feed. **Rule: any change to the `claudeteam.yaml` shape must update BOTH schemas (`schema.ts`), or the divergence silently breaks one path.** The comment at `schema.ts:96-101` flags the divergence as intentional-but-fragile.
+
+2. **`parseFile` drops the ENTIRE file on any validation failure, not just the bad member.** On a failed `safeParse` it pushes errors and returns with no `teams` (`loader.ts:198-203`); `loadRoster` then returns `roster: []`. So one invalid member → the whole team renders zero tiles, with the error only surfaced as a logged warning / dashboard error chip — easy to mistake for "no agents matched."
+
+**Shipped instance (defect `86ca1p51e`):** the setup wizard's default `role: ""` was accepted by `claudeTeamConfigSchema` but rejected by the matcher's `rosterFileSchema.min(1)` → a freshly set-up team rendered zero tiles. Caught by TS-04 QA (`tests/integration/teamSetupResolution.test.ts`, which is the only test that drives a *generated* config through the *production* matcher feed — the TS-02 impl tests stop at the panel schema). The fix reconciles the two schemas (route `claudeteam.yaml` through `claudeTeamConfigSchema` for the matcher, or relax `rosterFileSchema`'s role). Lesson outlives the fix: **when one file feeds two consumers, test the end-to-end seam through each consumer's real validation, not just the writer's.**
+
 ## Why this shape
 
 - **Stable ids** (`team.id`, `member.id`) decouple display from identity, so renaming Felix → Frank doesn't break a UI session.
