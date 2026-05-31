@@ -11,16 +11,25 @@
  * window end is NOT the clip's last frame, so the reverse pass genuinely travels
  * back through the end frame).
  *
- * NON-VACUITY (each block fails when the relevant fix is reverted; mutation-
- * verified 2026-05-31 against spritePlayer.ts):
+ * NON-VACUITY (mutation-verified 2026-05-31 against spritePlayer.ts):
  *  - "windowed-pingpong full cycle": FAILS if the turnaround keys off the global
  *    lastIndex/0 instead of winEnd/winStart (mutation: reverse-at-lastIndex /
- *    forward-at-0 lets the lower pass run past winStart down to frame 0).
- *  - "apex dwell forward-only at a MID-clip endFrame": FAILS if the dwell fires
- *    on the reverse pass through endFrame (mutation: drop the `direction === 1`
- *    guard -> the 2nd visit to endFrame on the way down also gets the long hold).
+ *    forward-at-0 lets the lower pass run past winStart down to frame 0). Proven:
+ *    under that mutation `Tests 1 failed | 3 passed`.
  *  - "loop + no window byte-identical": FAILS if windowing changes the historic
- *    +1/wrap-to-0 advance for an override without start/endFrame.
+ *    +1/wrap-to-0 advance (this assertion is what the windowed-cycle test relies
+ *    on for the loop-mode branch).
+ *
+ * NOTE on the `direction === 1` guard at winEnd: the `apex dwell at a MID-clip
+ * endFrame` test below asserts the dwell lands at the right frame/ms, but it is
+ * NOT a non-vacuity probe for the `direction === 1` guard. Verified by mutation:
+ * dropping that guard does NOT fail any test here, because in pingpong the window
+ * END frame is rendered exactly ONCE per oscillation and always on the forward
+ * arrival (the advance flips direction AT winEnd then steps inward, so winEnd is
+ * never re-rendered descending — trace [3,7]: 3,4,5,6,7,6,5,4,3,…). The guard is
+ * therefore redundant for the `finalDwellMs` dwell specifically; it only governs
+ * a hypothetical mid-window dwell. The apex test stays as a placement/magnitude
+ * assertion, not a guard-mutation probe.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -110,10 +119,12 @@ describe("spritePlayer windowed pingpong (E1 86ca21876)", () => {
     expect(Math.max(...idx)).toBe(10);
   });
 
-  it("apex finalDwell fires ONLY on the FORWARD arrival at a MID-clip endFrame, not the reverse pass", () => {
-    // Window [3,7] on an 11-frame clip: endFrame(7) is NOT the clip's last frame,
-    // so the reverse pass DOES travel back through 7 — the exact moment a
-    // direction-blind dwell would wrongly double-hold.
+  it("apex finalDwell lands at the MID-clip endFrame with the right magnitude (placement assertion)", () => {
+    // Window [3,7] on an 11-frame clip: endFrame(7) is NOT the clip's last frame.
+    // This asserts the dwell magnitude (frameMs + finalDwellMs) lands on the
+    // endFrame render and nowhere else. It is NOT a `direction === 1` guard probe
+    // (see the file header: winEnd is rendered once per oscillation, always
+    // ascending, so the guard is redundant for the finalDwellMs dwell).
     const { idx, ms } = driveSequence(
       {
         startFrame: 3,
