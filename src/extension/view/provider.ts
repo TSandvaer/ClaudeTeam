@@ -34,6 +34,7 @@ import type {
   OpenTranscriptMessage,
   RefreshMessage,
   RemoveMemberMessage,
+  ResetTeamMessage,
   RunSetupMessage,
   SaveTeamMessage,
   ShowAllHiddenMessage,
@@ -100,6 +101,12 @@ export interface WebviewMessageHandlers {
   onAssignCharacter?(msg: AssignCharacterMessage): void;
   onConfirmOrphanDelete?(msg: ConfirmOrphanDeleteMessage): void;
   onDismissSetupSuggestion?(msg: DismissSetupSuggestionMessage): void;
+  /**
+   * User confirmed "Reset team setup" (86ca1u0rw `ui:reset-team`). Host removes
+   * `claudeteam.yaml`, acks via `setup:config-saved`, re-emits detection, and
+   * forces a tick so the panel returns to the wizard + the dashboard clears.
+   */
+  onResetTeam?(msg: ResetTeamMessage): void;
   /** Called for messages that don't match a known discriminator. */
   onUnknown?(raw: unknown): void;
 }
@@ -230,6 +237,9 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
       case "ui:dismiss-setup-suggestion":
         this._messageHandlers.onDismissSetupSuggestion?.(raw);
         return;
+      case "ui:reset-team":
+        this._messageHandlers.onResetTeam?.(raw);
+        return;
     }
   }
 
@@ -347,7 +357,11 @@ export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
     return true;
   }
   // Team-setup epic — no-payload webview→host messages.
-  if (t === "ui:open-manage-team" || t === "ui:dismiss-setup-suggestion") {
+  if (
+    t === "ui:open-manage-team" ||
+    t === "ui:dismiss-setup-suggestion" ||
+    t === "ui:reset-team"
+  ) {
     return true;
   }
   // ui:run-setup { include: string[] }

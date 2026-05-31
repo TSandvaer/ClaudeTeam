@@ -519,6 +519,15 @@ export function activate(context: vscode.ExtensionContext): void {
       onDismissSetupSuggestion: () => {
         setupController.dismissSuggestion();
       },
+      // 86ca1u0rw: "Reset team setup" — remove claudeteam.yaml + re-emit
+      // detection. forceRefresh re-runs loadRoster (now empty) so the empty
+      // `roster:loaded` (→ manageConfig null → wizard layout) + the cleared
+      // `state:full` land within one tick. The destructive confirm is
+      // webview-local; the host runs this only after the user confirmed.
+      onResetTeam: () => {
+        setupController.resetTeam();
+        watcherHandle?.forceRefresh();
+      },
       // E-06a (EPIC 86ca11187 §7.2): hide / show / show-all. Each mutates the
       // persisted store then forces a re-emit so the dashboard updates within
       // one tick. forceRefresh (not triggerTick) bypasses hash-skip — hiding a

@@ -29,6 +29,7 @@ import {
   resolveAgentsDir,
 } from "../../src/extension/roster/agentScanner.js";
 import {
+  clearClaudeTeamConfig,
   generateStarterConfig,
   readClaudeTeamConfig,
   writeClaudeTeamConfig,
@@ -555,6 +556,142 @@ describe("SetupController.reconcileDrift (AC6 — orphan flip persists)", () => 
     const mayas = r.config.teams[0]!.members.filter((m) => m.id === "maya");
     expect(mayas).toHaveLength(1); // not duplicated by the round-trip
     expect(mayas[0]!.status).toBe("live");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reset team setup — clearClaudeTeamConfig + SetupController.resetTeam
+// (86ca1u0rw — AC3 "claudeteam.yaml is removed", AC4 cleared state next tick)
+// ---------------------------------------------------------------------------
+
+describe("clearClaudeTeamConfig (86ca1u0rw)", () => {
+  it("removes an existing claudeteam.yaml file", () => {
+    const ws = makeWorkspace({ "felix.md": "# F", "maya.md": "# M" });
+    const cfgPath = join(ws, ".claude", "claudeteam.yaml");
+    expect(
+      writeClaudeTeamConfig(cfgPath, generateStarterConfig(["felix"], "Demo")).ok,
+    ).toBe(true);
+    expect(existsSync(cfgPath)).toBe(true);
+
+    const res = clearClaudeTeamConfig(cfgPath);
+    expect(res.ok).toBe(true);
+    // Load-bearing post-condition: the file is GONE on disk.
+    expect(existsSync(cfgPath)).toBe(false);
+  });
+
+  it("is idempotent — clearing an already-absent file is a success", () => {
+    const ws = makeWorkspace({ "felix.md": "# F" });
+    const cfgPath = join(ws, ".claude", "claudeteam.yaml");
+    expect(existsSync(cfgPath)).toBe(false);
+    const res = clearClaudeTeamConfig(cfgPath);
+    expect(res.ok).toBe(true);
+    expect(existsSync(cfgPath)).toBe(false);
+  });
+});
+
+describe("SetupController.resetTeam (86ca1u0rw)", () => {
+  function makeController(folder: string) {
+    const posts: Array<{ kind: string; args: unknown[] }> = [];
+    const memento = new Map<string, boolean>();
+    const controller = new SetupController({
+      workspaceFolderPath: folder,
+      bundledSpritesDir: join(root, "no-bundled"),
+      userCharacterDir: join(root, "no-user"),
+      post: {
+        detection: (...args) => posts.push({ kind: "detection", args }),
+        characters: (...args) => posts.push({ kind: "characters", args }),
+        configSaved: (...args) => posts.push({ kind: "configSaved", args }),
+      },
+      dismissStore: {
+        get: (k) => memento.get(k),
+        update: (k, v) => {
+          memento.set(k, v);
+          return Promise.resolve();
+        },
+      },
+    });
+    return { controller, posts, memento };
+  }
+
+  it("AC3: removes claudeteam.yaml from disk and acks ok", () => {
+    const ws = makeWorkspace({ "felix.md": "# F", "maya.md": "# M" });
+    const { controller, posts } = makeController(ws);
+    controller.runSetup(["felix", "maya"]);
+    const cfgPath = join(ws, ".claude", "claudeteam.yaml");
+    expect(existsSync(cfgPath)).toBe(true);
+
+    posts.length = 0; // drop the runSetup posts
+    controller.resetTeam();
+
+    // The file is gone (the load-bearing AC3 post-condition).
+    expect(existsSync(cfgPath)).toBe(false);
+    // Acked ok.
+    const saved = posts.find((p) => p.kind === "configSaved");
+    expect(saved).toBeDefined();
+    expect(saved!.args[0]).toBe(true);
+  });
+
+  it("AC3/AC4: after reset, detection re-emits a NON-configured state", () => {
+    // Single agent → after the config is gone, detection is `empty` (<2 agents).
+    const ws = makeWorkspace({ "felix.md": "# F" });
+    const { controller, posts } = makeController(ws);
+    controller.runSetup(["felix"]);
+    const cfgPath = join(ws, ".claude", "claudeteam.yaml");
+    // While configured, detection is `configured`.
+    expect(controller.detectionState()).toBe("configured");
+
+    posts.length = 0;
+    controller.resetTeam();
+
+    expect(existsSync(cfgPath)).toBe(false);
+    // detectionState recomputes from disk → no config → empty (1 agent).
+    expect(controller.detectionState()).toBe("empty");
+    // resetTeam re-emitted a detection post carrying the cleared state.
+    const detection = posts.find((p) => p.kind === "detection");
+    expect(detection).toBeDefined();
+    expect(detection!.args[0]).toBe("empty");
+  });
+
+  it("AC4: with >=2 agents on disk, post-reset detection is suggest-setup", () => {
+    const ws = makeWorkspace({ "felix.md": "# F", "maya.md": "# M" });
+    const { controller, posts } = makeController(ws);
+    controller.runSetup(["felix", "maya"]);
+
+    posts.length = 0;
+    controller.resetTeam();
+
+    const detection = posts.find((p) => p.kind === "detection");
+    expect(detection!.args[0]).toBe("suggest-setup");
+  });
+
+  it("is idempotent — resetTeam twice both ack ok (no throw on absent file)", () => {
+    const ws = makeWorkspace({ "felix.md": "# F" });
+    const { controller, posts } = makeController(ws);
+    controller.runSetup(["felix"]);
+
+    controller.resetTeam();
+    posts.length = 0;
+    controller.resetTeam(); // file already gone
+    const saved = posts.find((p) => p.kind === "configSaved");
+    expect(saved!.args[0]).toBe(true);
+  });
+
+  it("acks an error (and does NOT re-emit detection) when no workspace folder is open", () => {
+    const posts: Array<{ kind: string; args: unknown[] }> = [];
+    const controller = new SetupController({
+      bundledSpritesDir: join(root, "no-bundled"),
+      userCharacterDir: join(root, "no-user"),
+      post: {
+        detection: (...args) => posts.push({ kind: "detection", args }),
+        characters: (...args) => posts.push({ kind: "characters", args }),
+        configSaved: (...args) => posts.push({ kind: "configSaved", args }),
+      },
+      dismissStore: { get: () => undefined, update: () => Promise.resolve() },
+    });
+    controller.resetTeam();
+    const saved = posts.find((p) => p.kind === "configSaved");
+    expect(saved!.args[0]).toBe(false);
+    expect(posts.find((p) => p.kind === "detection")).toBeUndefined();
   });
 });
 

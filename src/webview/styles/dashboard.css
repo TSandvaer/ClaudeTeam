@@ -1660,6 +1660,42 @@ body {
   justify-content: flex-end;
 }
 
+/* -- Reset team setup (86ca1u0rw) -- */
+.ct-manage-reset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+  margin-top: var(--ct-space-m);
+  padding-top: var(--ct-space-s);
+  border-top: 1px solid var(--ct-color-border);
+}
+.ct-manage-reset-btn {
+  align-self: flex-start;
+}
+/* Reset confirm panel — flex + hidden-toggled -> MANDATORY [hidden] guard
+ * (mirrors .ct-manage-orphan-confirm[hidden]). */
+.ct-manage-reset-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-s);
+  padding: var(--ct-space-s);
+  border: 1px solid var(--ct-color-state-error);
+  border-radius: var(--ct-radius-tile);
+  background-color: var(--ct-color-bg-sidebar);
+}
+.ct-manage-reset-confirm[hidden] {
+  display: none;
+}
+.ct-manage-reset-confirm-text {
+  margin: 0;
+  font-size: smaller;
+}
+.ct-manage-reset-confirm-actions {
+  display: flex;
+  gap: var(--ct-space-s);
+  justify-content: flex-end;
+}
+
 /* -- Setup wizard (§3) -- */
 .ct-wizard {
   display: flex;

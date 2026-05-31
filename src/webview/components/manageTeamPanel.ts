@@ -246,6 +246,82 @@ export function renderEditLayout(props: EditLayoutProps): HTMLElement {
   actions.appendChild(saveBtn);
   wrap.appendChild(actions);
 
+  // ── Reset team setup (86ca1u0rw) ──────────────────────────────────────────
+  // Destructive "start over": clears claudeteam.yaml + returns the panel to the
+  // wizard/detection state. The confirm mirrors the orphan-delete inline confirm
+  // (flex + [hidden]-guarded → MANDATORY [hidden] guard in dashboard.css).
+  wrap.appendChild(buildResetControls());
+
+  // ── Reset-team controls (destructive; §reset 86ca1u0rw) ───────────────────
+  function buildResetControls(): HTMLElement {
+    const controls = document.createElement("div");
+    controls.className = "ct-manage-reset";
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "ct-btn ct-btn--danger ct-manage-reset-btn";
+    resetBtn.textContent = "Reset team setup";
+    controls.appendChild(resetBtn);
+
+    // Inline confirm panel (hidden by default; [hidden]-guarded flex in CSS).
+    // The variable is named `resetConfirm` (NOT `confirm`) so the source-derived
+    // [hidden]-guard test (removeMember.test.ts) resolves it to its OWN class —
+    // the orphan-confirm block in this file already binds the name `confirm`, and
+    // the derivation keys on the FIRST `<var>.className` match per variable name.
+    const resetConfirm = document.createElement("div");
+    resetConfirm.className = "ct-manage-reset-confirm";
+    resetConfirm.setAttribute("role", "dialog");
+    resetConfirm.setAttribute("aria-label", "Reset team setup?");
+    resetConfirm.hidden = true;
+
+    const resetConfirmText = document.createElement("p");
+    resetConfirmText.className = "ct-manage-reset-confirm-text";
+    resetConfirmText.textContent =
+      "Reset team setup? This deletes .claude/claudeteam.yaml and returns to " +
+      "the setup wizard. Your members, roles, and character assignments are " +
+      "removed.";
+    resetConfirm.appendChild(resetConfirmText);
+
+    const resetConfirmActions = document.createElement("div");
+    resetConfirmActions.className = "ct-manage-reset-confirm-actions";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "ct-btn ct-manage-reset-cancel-btn";
+    cancelBtn.textContent = "Cancel";
+    const reallyResetBtn = document.createElement("button");
+    reallyResetBtn.type = "button";
+    reallyResetBtn.className =
+      "ct-btn ct-btn--danger ct-manage-reset-confirm-btn";
+    reallyResetBtn.textContent = "Reset";
+    resetConfirmActions.appendChild(cancelBtn);
+    resetConfirmActions.appendChild(reallyResetBtn);
+    resetConfirm.appendChild(resetConfirmActions);
+
+    resetBtn.addEventListener("click", () => {
+      resetConfirm.hidden = false;
+      cancelBtn.focus();
+    });
+    cancelBtn.addEventListener("click", () => {
+      resetConfirm.hidden = true;
+      resetBtn.focus();
+    });
+    reallyResetBtn.addEventListener("click", () => {
+      const msg: WebviewMessage = { type: "ui:reset-team" };
+      postMessage(msg);
+      resetConfirm.hidden = true;
+    });
+    resetConfirm.addEventListener("keydown", (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        resetConfirm.hidden = true;
+        resetBtn.focus();
+      }
+    });
+
+    controls.appendChild(resetConfirm);
+    return controls;
+  }
+
   // ── Member row builder ────────────────────────────────────────────────────
   function buildMemberRow(member: Member): HTMLElement {
     const state = edits.get(member.id)!;

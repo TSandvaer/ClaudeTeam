@@ -22,6 +22,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  clearClaudeTeamConfig,
   generateStarterConfig,
   readClaudeTeamConfig,
   writeClaudeTeamConfig,
@@ -233,6 +234,32 @@ export class SetupController {
       return;
     }
     const res = writeClaudeTeamConfig(path, config);
+    this.opts.post.configSaved(res.ok, res.ok ? undefined : res.error);
+    if (res.ok) this.emitDetection();
+  }
+
+  /**
+   * `ui:reset-team` (86ca1u0rw) — remove `claudeteam.yaml`, ack, and re-emit
+   * detection (now `empty` / `suggest-setup` instead of `configured`). The
+   * destructive confirm is webview-local (the panel's inline confirm); the host
+   * only runs this AFTER the user confirmed.
+   *
+   * Idempotent: an already-absent config is a success (the post-condition "no
+   * config exists" holds). On a real filesystem failure the ack carries
+   * `ok: false` + the error and detection is NOT re-emitted (nothing changed).
+   *
+   * After the ok ack, `main.ts`'s handler forces a watcher tick so the empty
+   * `roster:loaded` + cleared `state:full` land — the panel transitions to the
+   * wizard layout (`manageConfig` → null) and the dashboard reflects the cleared
+   * roster on the next tick.
+   */
+  resetTeam(): void {
+    const path = this.configPath();
+    if (!path) {
+      this.opts.post.configSaved(false, "no workspace folder open");
+      return;
+    }
+    const res = clearClaudeTeamConfig(path);
     this.opts.post.configSaved(res.ok, res.ok ? undefined : res.error);
     if (res.ok) this.emitDetection();
   }

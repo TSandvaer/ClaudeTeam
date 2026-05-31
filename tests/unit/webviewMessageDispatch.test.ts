@@ -375,6 +375,10 @@ describe("isWebviewMessage — team-setup ui:* messages", () => {
     expect(isWebviewMessage({ type: "ui:dismiss-setup-suggestion" })).toBe(true);
   });
 
+  it("accepts ui:reset-team (no payload — 86ca1u0rw)", () => {
+    expect(isWebviewMessage({ type: "ui:reset-team" })).toBe(true);
+  });
+
   it("accepts ui:run-setup with a string[] include", () => {
     expect(
       isWebviewMessage({ type: "ui:run-setup", payload: { include: ["felix"] } }),
@@ -457,6 +461,7 @@ describe("provider dispatch — team-setup ui:* routing", () => {
     const onAssignCharacter = vi.fn();
     const onConfirmOrphanDelete = vi.fn();
     const onDismissSetupSuggestion = vi.fn();
+    const onResetTeam = vi.fn();
     p.setMessageHandlers({
       onOpenManageTeam,
       onRunSetup,
@@ -464,6 +469,7 @@ describe("provider dispatch — team-setup ui:* routing", () => {
       onAssignCharacter,
       onConfirmOrphanDelete,
       onDismissSetupSuggestion,
+      onResetTeam,
     });
 
     p._dispatchWebviewMessage({ type: "ui:open-manage-team" });
@@ -484,6 +490,7 @@ describe("provider dispatch — team-setup ui:* routing", () => {
       payload: { memberId: "ghost" },
     });
     p._dispatchWebviewMessage({ type: "ui:dismiss-setup-suggestion" });
+    p._dispatchWebviewMessage({ type: "ui:reset-team" });
 
     expect(onOpenManageTeam).toHaveBeenCalledTimes(1);
     expect(onRunSetup).toHaveBeenCalledTimes(1);
@@ -491,5 +498,6 @@ describe("provider dispatch — team-setup ui:* routing", () => {
     expect(onAssignCharacter).toHaveBeenCalledTimes(1);
     expect(onConfirmOrphanDelete).toHaveBeenCalledTimes(1);
     expect(onDismissSetupSuggestion).toHaveBeenCalledTimes(1);
+    expect(onResetTeam).toHaveBeenCalledTimes(1);
   });
 });
