@@ -300,6 +300,14 @@ describe("createSpriteBox — reduced-motion regression (AC4 unchanged)", () => 
       rng: () => 0,
       reducedMotion: true,
       scheduleFrame: schedule,
+      cancelFrame: () => undefined,
+    });
+    const img = handle.element.querySelector("img.sprite-frame") as HTMLImageElement;
+    expect(img.getAttribute("src")).toMatch(/frame_0\.png$/);
+    expect(handle.element.getAttribute("data-reduced-motion")).toBe("true");
+    expect(schedule).not.toHaveBeenCalled();
+  });
+});
 
 // ── E1 (86ca21876): finalDwellMs + playbackMode + startFrame/endFrame window ──
 //
@@ -478,7 +486,7 @@ describe("createSpriteBox — final dwell fires only on FORWARD arrival in pingp
   it("does NOT add the final dwell on the reverse pass back through the window end", () => {
     const sched = recordingScheduler();
     const base = FRAME_MS_DEFAULT / 0.5;
-    createSpriteBox({
+    const handle = createSpriteBox({
       char: char(M01, { idle_stretch: 11 }),
       state: "idle",
       activity: "idle 30s",
@@ -488,15 +496,23 @@ describe("createSpriteBox — final dwell fires only on FORWARD arrival in pingp
       scheduleFrame: sched.schedule,
       cancelFrame: () => undefined,
     });
-    // Windowed frames shown: 5,6,7,8,9,10(fwd,+800),9,8,7,6,5,6,7,8,9,10(fwd,+800)…
-    // calls[5] = forward arrival at window end (frame 10) → +800.
-    // calls[6..10] = reverse pass (frames 9,8,7,6,5) → plain base (no dwell).
-    for (let i = 0; i < 16; i++) sched.step();
-    expect(sched.calls[5]).toBe(base + 800); // forward arrival at window end
-    expect(sched.calls[6]).toBe(base); // reverse pass, frame 9 → plain base
-    expect(sched.calls[7]).toBe(base); // reverse pass, frame 8 → plain base
-    // Next forward arrival at the window end (frame 10) again dwells:
-    expect(sched.calls[15]).toBe(base + 800);
+    // Window [5,10]: the windowed sequence is 5,6,7,8,9,10(fwd),9,8,7,6,5,…
+    // (proven by the windowed-sequence test above). calls[i] is the ms scheduled
+    // while showing the frame at that step.
+    //   calls[5] = forward arrival at the window end (frame 10) → +800.
+    //   calls[6..10] = the full REVERSE pass (frames 9,8,7,6,5) → plain base.
+    // The reverse pass re-enters the window end's neighbourhood without dwelling,
+    // which is the Bram gotcha this guards.
+    for (let i = 0; i < 11; i++) sched.step();
+    expect(sched.calls[5]).toBe(base + 800); // forward arrival at apex → dwell
+    expect(sched.calls[6]).toBe(base); // reverse pass frame 9 → plain base
+    expect(sched.calls[7]).toBe(base); // reverse pass frame 8 → plain base
+    expect(sched.calls[8]).toBe(base); // reverse pass frame 7 → plain base
+    expect(sched.calls[9]).toBe(base); // reverse pass frame 6 → plain base
+    expect(sched.calls[10]).toBe(base); // reverse arrival at winStart (5) → base
+    // No reverse-pass frame leaked the dwell:
+    expect(sched.calls.slice(6, 11).every((ms) => ms === base)).toBe(true);
+    handle.dispose();
   });
 });
 
