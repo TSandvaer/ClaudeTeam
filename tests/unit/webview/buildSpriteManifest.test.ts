@@ -22,6 +22,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseAnimValue,
   pickAnimSlug,
+  sanitizePlayback,
 } from "../../../scripts/build-sprite-manifest.mjs";
 
 describe("parseAnimValue — folder/slug value-format (AC5)", () => {
@@ -105,5 +106,90 @@ describe("pickAnimSlug — disambiguation (AC5)", () => {
       slug: null,
       ambiguous: false,
     });
+  });
+});
+
+describe("sanitizePlayback — playback-field validation + threading (E2 86ca2187g)", () => {
+  it("passes a fully-valid override through unchanged (the migrated M01 idle_stretch)", () => {
+    const raw = {
+      speedMultiplier: 0.5,
+      startFrame: 5,
+      endFrame: 10,
+      playbackMode: "pingpong",
+      finalDwellMs: 800,
+    };
+    const { playback, warnings } = sanitizePlayback("M01/idle_stretch", raw);
+    expect(playback).toEqual(raw);
+    expect(warnings).toEqual([]);
+  });
+
+  it("threads dwellFrameIndex + dwellMs (peak fields) through", () => {
+    const { playback, warnings } = sanitizePlayback("M01/idle_coffee", {
+      speedMultiplier: 0.5,
+      dwellFrameIndex: 4,
+      dwellMs: 600,
+    });
+    expect(playback).toEqual({ speedMultiplier: 0.5, dwellFrameIndex: 4, dwellMs: 600 });
+    expect(warnings).toEqual([]);
+  });
+
+  it("AC4: unknown playbackMode is DROPPED + warned (engine defaults to loop, no crash)", () => {
+    const { playback, warnings } = sanitizePlayback("M01/idle_yawn", {
+      speedMultiplier: 0.5,
+      playbackMode: "bounce",
+    });
+    // The bad mode is removed; the valid speedMultiplier survives.
+    expect(playback).toEqual({ speedMultiplier: 0.5 });
+    expect(playback).not.toHaveProperty("playbackMode");
+    expect(warnings.some((w) => w.includes("playbackMode") && w.includes("bounce"))).toBe(true);
+  });
+
+  it("accepts both canonical playbackMode literals", () => {
+    expect(sanitizePlayback("c/a", { playbackMode: "loop" }).playback).toEqual({
+      playbackMode: "loop",
+    });
+    expect(sanitizePlayback("c/a", { playbackMode: "pingpong" }).playback).toEqual({
+      playbackMode: "pingpong",
+    });
+  });
+
+  it("drops non-finite + non-numeric numeric fields + warns, keeps the good ones", () => {
+    const { playback, warnings } = sanitizePlayback("c/a", {
+      speedMultiplier: "fast", // wrong type → dropped
+      finalDwellMs: Infinity, // non-finite → dropped
+      startFrame: NaN, // NaN → dropped
+      endFrame: 10, // valid → kept
+    });
+    expect(playback).toEqual({ endFrame: 10 });
+    expect(warnings).toHaveLength(3);
+    expect(warnings.some((w) => w.includes("speedMultiplier"))).toBe(true);
+    expect(warnings.some((w) => w.includes("finalDwellMs"))).toBe(true);
+    expect(warnings.some((w) => w.includes("startFrame"))).toBe(true);
+  });
+
+  it("an all-invalid object yields null playback (manifest omits the field entirely)", () => {
+    const { playback } = sanitizePlayback("c/a", { playbackMode: "wat", speedMultiplier: "nope" });
+    expect(playback).toBeNull();
+  });
+
+  it("absent / null playback → null, no warning (no-playback anim is byte-identical)", () => {
+    expect(sanitizePlayback("c/a", undefined)).toEqual({ playback: null, warnings: [] });
+    expect(sanitizePlayback("c/a", null)).toEqual({ playback: null, warnings: [] });
+  });
+
+  it("a non-object playback value (array / scalar) → null + warn, never throws", () => {
+    expect(sanitizePlayback("c/a", [1, 2]).playback).toBeNull();
+    expect(sanitizePlayback("c/a", [1, 2]).warnings).toHaveLength(1);
+    expect(sanitizePlayback("c/a", 42).playback).toBeNull();
+    expect(sanitizePlayback("c/a", "loop").playback).toBeNull();
+  });
+
+  it("ignores unknown keys (forward-compat — a future field must not crash the build)", () => {
+    const { playback, warnings } = sanitizePlayback("c/a", {
+      speedMultiplier: 0.7,
+      someFutureField: 123,
+    });
+    expect(playback).toEqual({ speedMultiplier: 0.7 });
+    expect(warnings).toEqual([]);
   });
 });

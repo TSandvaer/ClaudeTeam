@@ -20,8 +20,8 @@ import {
   FRAME_MS_DEFAULT,
   DWELL_MS_DEFAULT,
   PEAK_DWELL_MS_DEFAULT,
-  PLAYBACK_OVERRIDES,
 } from "../../../src/webview/sprites/spritePlayer.js";
+import { GENERATED_SPRITE_MANIFEST } from "../../../src/webview/sprites/generatedManifest.js";
 import type { SpriteCharacter } from "../../../src/webview/sprites/spriteManifest.js";
 
 const M01 = "ClaudeTeam-M01-Dev";
@@ -138,8 +138,22 @@ describe("resolvePlayback — peak-frame dwell indices (character-specific)", ()
     expect(resolvePlayback(M01, "idle_hips").speedMultiplier).toBe(0.5);
   });
 
-  it("PLAYBACK_OVERRIDES exposes both character tables", () => {
-    expect(Object.keys(PLAYBACK_OVERRIDES).sort()).toEqual([F01, M01]);
+  it("the generated manifest carries playback for both characters (E2 — map removed)", () => {
+    // The former hardcoded PLAYBACK_OVERRIDES map was migrated INTO each
+    // character's animations.json + baked into GENERATED_SPRITE_MANIFEST (E2).
+    // resolvePlayback reads the manifest by default — assert both characters'
+    // playback survived the migration as the new source of truth.
+    expect(Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort()).toEqual([F01, M01]);
+    expect(GENERATED_SPRITE_MANIFEST.characters[M01].animations.idle_stretch.playback).toEqual({
+      speedMultiplier: 0.5,
+      startFrame: 5,
+      endFrame: 10,
+      playbackMode: "pingpong",
+      finalDwellMs: 800,
+    });
+    expect(GENERATED_SPRITE_MANIFEST.characters[F01].animations.idle_stretch.playback).toEqual({
+      speedMultiplier: 0.5,
+    });
   });
 });
 
@@ -537,5 +551,89 @@ describe("createSpriteBox — loop-mode regression: advance byte-identical to hi
       seen.push(frameOf(img));
     }
     expect(seen).toEqual([0, 1, 2, 0, 1, 2]);
+  });
+});
+
+describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () => {
+  // Build a minimal manifest in the production GeneratedSpriteManifest shape
+  // (anim entries carrying an optional `playback` field). Mutating these values
+  // must change the resolver output → non-vacuous.
+  const synthManifest = {
+    characters: {
+      "Synth-A": {
+        character: "Synth-A",
+        defaultIdle: "idle_x",
+        idlePool: ["idle_x"],
+        animations: {
+          idle_x: {
+            folder: "f",
+            frames: ["a/f/0.png"],
+            playback: { speedMultiplier: 0.5, playbackMode: "pingpong" as const, finalDwellMs: 700 },
+          },
+          idle_plain: { folder: "g", frames: ["a/g/0.png"] }, // no playback
+        },
+      },
+    },
+  };
+
+  it("reads the playback override off the manifest anim entry", () => {
+    const o = resolvePlayback("Synth-A", "idle_x", synthManifest);
+    expect(o).toEqual({ speedMultiplier: 0.5, playbackMode: "pingpong", finalDwellMs: 700 });
+  });
+
+  it("mutation-check: changing the manifest playback changes the result (non-vacuous)", () => {
+    const mutated = {
+      characters: {
+        "Synth-A": {
+          ...synthManifest.characters["Synth-A"],
+          animations: {
+            ...synthManifest.characters["Synth-A"].animations,
+            idle_x: {
+              folder: "f",
+              frames: ["a/f/0.png"],
+              playback: { speedMultiplier: 0.9 as number },
+            },
+          },
+        },
+      },
+    };
+    expect(resolvePlayback("Synth-A", "idle_x", mutated).speedMultiplier).toBe(0.9);
+  });
+
+  it("an anim with no manifest playback → empty override (default behavior)", () => {
+    expect(resolvePlayback("Synth-A", "idle_plain", synthManifest)).toEqual({});
+  });
+
+  it("unknown character / anim → empty override", () => {
+    expect(resolvePlayback("Nope", "idle_x", synthManifest)).toEqual({});
+    expect(resolvePlayback("Synth-A", "nope", synthManifest)).toEqual({});
+  });
+
+  it("NO-REGRESSION: the shipped manifest resolves M01/F01 to their migrated values", () => {
+    // The former hardcoded PLAYBACK_OVERRIDES map (M01/F01) was migrated into
+    // animations.json + baked into GENERATED_SPRITE_MANIFEST. resolvePlayback's
+    // DEFAULT source is that manifest — so these are the byte-identical
+    // post-migration values the sponsor's approved idle_stretch depends on.
+    expect(resolvePlayback(M01, "idle_stretch", GENERATED_SPRITE_MANIFEST)).toEqual({
+      speedMultiplier: 0.5,
+      startFrame: 5,
+      endFrame: 10,
+      playbackMode: "pingpong",
+      finalDwellMs: 800,
+    });
+    expect(resolvePlayback(M01, "idle_coffee", GENERATED_SPRITE_MANIFEST)).toEqual({
+      speedMultiplier: 0.5,
+      dwellFrameIndex: 4,
+    });
+    expect(resolvePlayback(F01, "idle_stretch", GENERATED_SPRITE_MANIFEST)).toEqual({
+      speedMultiplier: 0.5,
+    });
+    expect(resolvePlayback(M01, "idle_headphones", GENERATED_SPRITE_MANIFEST).speedMultiplier).toBe(
+      0.7,
+    );
+    // The default arg (no 3rd param) resolves identically to the explicit manifest.
+    expect(resolvePlayback(M01, "idle_stretch")).toEqual(
+      resolvePlayback(M01, "idle_stretch", GENERATED_SPRITE_MANIFEST),
+    );
   });
 });

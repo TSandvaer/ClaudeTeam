@@ -31,6 +31,7 @@
  *           § Naming convention + § Webview wiring note
  */
 
+import type { PlaybackOverride } from "./spritePlayer.js";
 import { GENERATED_SPRITE_MANIFEST } from "./generatedManifest.js";
 
 /** One animation: its build-time-resolved frame paths (relative to dist/webview/). */
@@ -39,6 +40,15 @@ export interface SpriteAnimation {
   folder: string;
   /** Ordered frame paths relative to dist/webview/ (south view only). */
   frames: string[];
+  /**
+   * Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Baked by
+   * `scripts/build-sprite-manifest.mjs` from each character's `animations.json`
+   * `playback` block (validated there — malformed fields dropped). Absent when
+   * the anim has no playback overrides → the engine uses its defaults. Read by
+   * `resolvePlayback` (spritePlayer.ts), which replaced the hardcoded
+   * `PLAYBACK_OVERRIDES` map this manifest field supersedes.
+   */
+  playback?: PlaybackOverride;
 }
 
 /** One character's full animation set. */

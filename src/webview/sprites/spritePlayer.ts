@@ -47,7 +47,8 @@
  */
 
 import type { AgentState } from "../../shared/types.js";
-import type { SpriteCharacter } from "./spriteManifest.js";
+import type { GeneratedSpriteManifest, SpriteCharacter } from "./spriteManifest.js";
+import { GENERATED_SPRITE_MANIFEST } from "./generatedManifest.js";
 import { pickIdle, poseNameForTile, resolvePose } from "./posePicker.js";
 
 /** Default slow per-frame duration (ms) — mirrors --ct-anim-frame-ms-default. */
@@ -128,127 +129,49 @@ export interface PlaybackOverride {
 export type PlaybackOverrideTable = Record<string, PlaybackOverride>;
 
 /**
- * Speed-only override shared by BOTH characters (the brief's 50% / 70% list).
- * Peak-frame dwell indices are layered per-character on top of these because
- * the apex frame differs between M01 and F01 frame sequences.
+ * Resolve the playback override for (character, canonical anim name).
  *
- * 50% speed (≈half the default rate): active_read, active_work + the listed
- * idle poses. 70%: idle_headphones. idle_wave + any unlisted anim → unchanged.
- */
-const SPEED_HALF: PlaybackOverride = { speedMultiplier: 0.5 };
-const SPEED_HALF_NAMES = [
-  "active_read",
-  "active_work",
-  "idle_coffee",
-  "idle_snack",
-  "idle_stretch",
-  "idle_phone",
-  "idle_hips",
-  "idle_think",
-  "idle_arms_crossed",
-  "idle_pockets",
-  "idle_neck_roll",
-  "idle_yawn",
-  "idle_watch",
-];
-
-function baseSpeedTable(): PlaybackOverrideTable {
-  const t: PlaybackOverrideTable = {};
-  for (const name of SPEED_HALF_NAMES) {
-    t[name] = { ...SPEED_HALF };
-  }
-  t["idle_headphones"] = { speedMultiplier: 0.7 };
-  // idle_wave: intentionally absent → unchanged (default rate, no dwell).
-  return t;
-}
-
-/**
- * Merge a peak-frame `dwellFrameIndex` into a speed override for a pose.
- * Keeps any existing speedMultiplier.
- */
-function withPeak(base: PlaybackOverride | undefined, dwellFrameIndex: number): PlaybackOverride {
-  return { ...(base ?? {}), dwellFrameIndex };
-}
-
-/**
- * Per-character playback override tables (86ca1fntp).
+ * MANIFEST-FED (anim-playback epic E2, 86ca2187g). The per-anim playback fields
+ * now live in each character's `animations.json` `playback` block, threaded
+ * into `GENERATED_SPRITE_MANIFEST` at build time by
+ * `scripts/build-sprite-manifest.mjs` (which validates them — malformed values
+ * are dropped there). This resolver reads `manifest.characters[char]
+ * .animations[anim].playback`. The previous hardcoded `PLAYBACK_OVERRIDES` map
+ * (M01/F01 speed + peak + idle_stretch windowing) was MIGRATED into the two
+ * `animations.json` files and removed — `animations.json` is now the single
+ * source of truth, editable + rebuild-driven with NO TS edit (AC1/AC3).
  *
- * Speed multipliers are identical across characters (the brief's list applies
- * to BOTH M01 + F01). Peak-frame dwell indices are character-specific because
- * the two characters' frame sequences put the gesture apex at different
- * indices (verified by inspecting the harvested south-view frames):
+ * Returns an empty override (default behavior) when the character/anim is
+ * unlisted or carries no `playback`. Exported for unit-test coverage.
  *
- *   PEAK FRAMES (mid-sequence apex held longer):
- *   - idle_coffee (cup at mouth)  — 9-frame loop, both → frame 4 (mid-loop hold)
- *   - idle_snack  (hand at mouth) — 9-frame loop, both → frame 4
- *   - idle_phone  (phone at face) — 9-frame loop, both → frame 4
- *   - idle_stretch (arms fully up) — 11-frame loop. The two genders' clips
- *     differ in AUTHORED MOTION (verified by inspecting the south frames +
- *     measuring the silhouette top-reach per frame, E1-refine 86ca21876):
- *       · M01 (`a_slow_stretching_loop_from_the_overhead_stretched`): a LARGE
- *         sweep. Frame 0 = arms OVERHEAD (apex); frame 5 = arms DOWN (rest);
- *         frame 10 = arms OVERHEAD again. So the clip is `up → rest → up`.
- *         Played forward from frame 0 it reads "starts hands up, LOWERS slowly,
- *         restarts" — the sponsor's bug. The fix windows the loop to the
- *         rest→up HALF (frames 5..10) and runs it pingpong: forward 5→10 is a
- *         clean RAISE, the finalDwell holds at 10 (apex), reverse 10→5 is a
- *         clean LOWER, restart. Result: RAISE → HOLD-at-top → LOWER → restart.
- *       · F01 (`a_gentle_tired_stretching_motion_the_arms_reach_a`): NEAR-STATIC.
- *         The measured top-reach varies by ~1px across all 11 frames — the arms
- *         stay up/stretched the entire clip (only a small body/knee bob). It
- *         physically CANNOT express a raise sweep. The sponsor said F01's
- *         held-stretch "is fine," so F01 keeps a plain gentle loop (no pingpong,
- *         no apex window) — faking a raise here is impossible without new art.
- *
- * Sponsor visually tunes the exact feel on reload — these indices/ms are the
- * starting point.
- *
- * E1-refine (86ca21876): M01 `idle_stretch` is windowed to frames 5..10 +
- * `playbackMode:"pingpong"` + `finalDwellMs:800` so the preview shows the
- * corrected raise-first loop. F01 keeps held-stretch (sponsor-approved). This
- * seeding lives in the hardcoded map only as the E1 preview surface — E2 (86ca…)
- * routes these fields through `animations.json` and removes the map.
- */
-export const PLAYBACK_OVERRIDES: Record<string, PlaybackOverrideTable> = (() => {
-  const m01 = baseSpeedTable();
-  m01["idle_coffee"] = withPeak(m01["idle_coffee"], 4);
-  m01["idle_snack"] = withPeak(m01["idle_snack"], 4);
-  m01["idle_phone"] = withPeak(m01["idle_phone"], 4);
-  // M01 stretch: window to the rest→up half (5..10) + pingpong so it plays
-  // RAISE(5→10) → HOLD@10(apex, finalDwell) → LOWER(10→5) → restart. No new art.
-  m01["idle_stretch"] = {
-    ...m01["idle_stretch"],
-    startFrame: 5,
-    endFrame: 10,
-    playbackMode: "pingpong",
-    finalDwellMs: 800,
-  };
-
-  const f01 = baseSpeedTable();
-  f01["idle_coffee"] = withPeak(f01["idle_coffee"], 4);
-  f01["idle_snack"] = withPeak(f01["idle_snack"], 4);
-  f01["idle_phone"] = withPeak(f01["idle_phone"], 4);
-  // F01 stretch: near-static held stretch (sponsor said "fine"). Plain gentle
-  // loop — its frames can't express a raise sweep, so no pingpong/window/peak.
-  // Speed-half from baseSpeedTable() is kept for a calm cadence.
-
-  return {
-    "ClaudeTeam-M01-Dev": m01,
-    "ClaudeTeam-F01-Dev": f01,
-  };
-})();
-
-/**
- * Resolve the playback override for (character, canonical anim name). Returns
- * an empty override (default behavior) when the character or anim is unlisted.
- * Exported for unit-test coverage.
+ * The third arg is an optional source override for tests:
+ *   - a `GeneratedSpriteManifest` (the production shape; default is the baked
+ *     `GENERATED_SPRITE_MANIFEST`), OR
+ *   - a flat `Record<charName, PlaybackOverrideTable>` (the injected
+ *     `playbackTable` form used by the `createSpriteBox` sequencer tests to
+ *     drive a generic pingpong/window without depending on the shipped seed).
+ * The two shapes are disambiguated by the presence of a `characters` key.
  */
 export function resolvePlayback(
   characterName: string,
   animName: string,
-  table: Record<string, PlaybackOverrideTable> = PLAYBACK_OVERRIDES,
+  source: GeneratedSpriteManifest | Record<string, PlaybackOverrideTable> = GENERATED_SPRITE_MANIFEST,
 ): PlaybackOverride {
-  return table[characterName]?.[animName] ?? {};
+  // Injected flat override-table form (tests): `{ [char]: { [anim]: override } }`.
+  if (!isManifestSource(source)) {
+    return source[characterName]?.[animName] ?? {};
+  }
+  return source.characters[characterName]?.animations?.[animName]?.playback ?? {};
+}
+
+/** True when `source` is a `GeneratedSpriteManifest` (has a `characters` map). */
+function isManifestSource(
+  source: GeneratedSpriteManifest | Record<string, PlaybackOverrideTable>,
+): source is GeneratedSpriteManifest {
+  return (
+    typeof (source as GeneratedSpriteManifest).characters === "object" &&
+    (source as GeneratedSpriteManifest).characters !== null
+  );
 }
 
 export interface SpriteBoxProps {
