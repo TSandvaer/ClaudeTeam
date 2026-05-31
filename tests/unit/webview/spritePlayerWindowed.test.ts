@@ -96,7 +96,11 @@ function driveSequence(
   for (let i = 0; i < steps; i++) {
     idx.push(readIdx());
     ms.push(nextMs);
-    const cb = pending;
+    // `pending` is reassigned indirectly inside the `schedule` closure that
+    // createSpriteBox invokes, which TS control-flow analysis can't see — it
+    // narrows `pending` to `null` (then `never` after the guard). Read through a
+    // typed local to defeat the over-narrowing without weakening any real types.
+    const cb = pending as (() => void) | null;
     pending = null;
     if (!cb) break;
     cb();
