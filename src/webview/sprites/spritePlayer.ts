@@ -291,6 +291,36 @@ export interface SpriteBoxProps {
    * without depending on the shipped idle_stretch seed.
    */
   playbackTable?: Record<string, PlaybackOverrideTable>;
+  /**
+   * Playback-position resume across re-renders (E1 live-preview fix 86ca2c4t8).
+   *
+   * A tile is fully re-rendered (DOM replaced, handle disposed, new box built)
+   * every ~2s poll tick. WITHOUT resume, each new box restarts its loop at
+   * `winStart` — so a pose whose full cycle is LONGER than the poll interval
+   * never gets to play past the point the re-render lands on. For M01
+   * `idle_stretch` (window [5,10], 320ms/frame) the apex is reached at ~1.6s
+   * and held; the ~2s re-render resets to the arms-down `winStart` BEFORE the
+   * descent (10→5) ever renders — the sponsor saw "raise → hold → immediate
+   * swap" with no lower. Threading the prior frame index + direction back in
+   * lets the new box RESUME the in-flight cycle instead of restarting it, so
+   * raise → hold → lower → settle plays as ONE continuous motion that spans
+   * however many poll re-renders it takes — exactly one full cycle before the
+   * loop returns to its natural beginning.
+   *
+   * `priorPose` guards the resume: the position is only resumed when the new
+   * canonical pose name (and therefore its window) matches the prior one.
+   * A pose change (or fresh idle episode → new pick) starts at `winStart`.
+   * Undefined on first render / pose change → start at `winStart`.
+   */
+  priorFrameIdx?: number;
+  /** Prior advance direction (+1 / -1) for pingpong resume. See `priorFrameIdx`. */
+  priorDirection?: number;
+  /**
+   * The canonical pose name the prior render was playing. Resume only fires when
+   * it equals the pose this render resolves to (same window math). See
+   * `priorFrameIdx`.
+   */
+  priorPose?: string;
 }
 
 /** Handle returned so the caller can stop the timer on tile teardown. */
@@ -302,6 +332,19 @@ export interface SpriteBoxHandle {
   idlePick: string | null;
   /** Whether the rendered pose is an active pose. For re-render threading. */
   isActive: boolean;
+  /**
+   * The canonical pose name this box is playing (active name or idle pick).
+   * Threaded back on re-render so the player only RESUMES position when the
+   * pose is unchanged (E1 live-preview fix 86ca2c4t8).
+   */
+  pose: string;
+  /**
+   * Current playback position — the LAST frame index shown + the advance
+   * direction the loop is heading. Read at re-render time so the next box
+   * resumes the in-flight cycle instead of restarting at `winStart`. For a
+   * disposed/static box this is the frame it stopped on. (E1 fix 86ca2c4t8.)
+   */
+  currentFrame(): { frameIdx: number; direction: number };
 }
 
 function prefersReducedMotion(override?: boolean): boolean {
@@ -332,6 +375,9 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     scheduleFrame,
     cancelFrame,
     playbackTable,
+    priorFrameIdx,
+    priorDirection,
+    priorPose,
   } = props;
 
   // ── Pose selection (AC2) ────────────────────────────────────────────────
@@ -347,6 +393,11 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
 
   const { name, isActive } = poseNameForTile(state, activity, idlePick);
   const anim = resolvePose(char, name);
+
+  // Canonical pose name for this render (active name or idle pick). Used for
+  // playback-position resume (E1 fix 86ca2c4t8) and exposed on the handle so a
+  // re-render only resumes position when the pose is unchanged.
+  const canonicalName = isActive ? name : (idlePick ?? name);
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const box = document.createElement("div");
@@ -368,13 +419,15 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       dispose: () => undefined,
       idlePick,
       isActive,
+      pose: canonicalName,
+      currentFrame: () => ({ frameIdx: 0, direction: 1 }),
     };
   }
 
   const base = spriteBaseUri.replace(/\/+$/, "");
   const frameUris = anim.frames.map((p) => `${base}/${p}`);
 
-  box.dataset.pose = isActive ? name : (idlePick ?? name);
+  box.dataset.pose = canonicalName;
 
   // Reduced motion (AC4) — show frame 0 only, no timer.
   if (prefersReducedMotion(reducedMotion)) {
@@ -385,6 +438,8 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       dispose: () => undefined,
       idlePick,
       isActive,
+      pose: canonicalName,
+      currentFrame: () => ({ frameIdx: 0, direction: 1 }),
     };
   }
 
@@ -394,9 +449,8 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     ((cb: () => void, ms: number) => window.setTimeout(cb, ms) as unknown as number);
   const cancel = cancelFrame ?? ((h: number) => window.clearTimeout(h));
 
-  // Per-animation playback tuning (86ca1fntp). The canonical anim name is the
-  // active pose name OR the idle pick; resolve the override for this character.
-  const canonicalName = isActive ? name : (idlePick ?? name);
+  // Per-animation playback tuning (86ca1fntp). `canonicalName` (the active pose
+  // name OR the idle pick) was resolved above; resolve the override for it.
   const override = playbackTable
     ? resolvePlayback(char.character, canonicalName, playbackTable)
     : resolvePlayback(char.character, canonicalName);
@@ -439,6 +493,33 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // Advance direction (+1 forward / -1 reverse). Only meaningful in pingpong
   // mode; loop mode never sets it to -1 so the advance stays historic.
   let direction = 1;
+
+  // ── Playback-position RESUME across re-renders (E1 live-preview fix
+  // 86ca2c4t8) ────────────────────────────────────────────────────────────
+  // The tile DOM is replaced every ~2s poll tick, disposing this box and
+  // building a fresh one. Without resume the fresh box restarts at `winStart`,
+  // so a cycle longer than the poll interval (M01 idle_stretch: ~2.7s for
+  // raise+hold+lower) NEVER plays past where the re-render lands — the descent
+  // is dropped and the loop visibly snaps back to the rest frame. When the
+  // caller threads back the prior box's position AND the pose is unchanged,
+  // resume from it so raise → hold → lower → settle plays as ONE continuous
+  // cycle spanning however many re-renders it takes.
+  //
+  // Guard: only resume on an exact pose match (priorPose === canonicalName) so
+  // a pose change / fresh idle episode starts cleanly at `winStart`. The prior
+  // index is clamped into the live window so a stale index (window changed
+  // between renders) can never park the loop out of bounds.
+  if (
+    priorPose === canonicalName &&
+    typeof priorFrameIdx === "number" &&
+    Number.isFinite(priorFrameIdx)
+  ) {
+    frameIdx = Math.max(winStart, Math.min(winEnd, Math.trunc(priorFrameIdx)));
+    if (priorDirection === -1 || priorDirection === 1) {
+      direction = priorDirection;
+    }
+  }
+
   let handle: number | null = null;
   let disposed = false;
 
@@ -489,6 +570,8 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       dispose: () => undefined,
       idlePick,
       isActive,
+      pose: canonicalName,
+      currentFrame: () => ({ frameIdx: 0, direction: 1 }),
     };
   }
 
@@ -505,5 +588,11 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     },
     idlePick,
     isActive,
+    pose: canonicalName,
+    // After each `tick()` the local `frameIdx`/`direction` already point at the
+    // NEXT frame to render, so a resuming box that starts at this position
+    // continues the cycle seamlessly (no re-shown or skipped frame). Live —
+    // reads the current value whenever the next render asks for it.
+    currentFrame: () => ({ frameIdx, direction }),
   };
 }

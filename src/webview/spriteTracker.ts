@@ -29,6 +29,22 @@ interface SpriteEntry {
   idlePick: string | null;
   isActive: boolean;
   dispose: () => void;
+  /** Canonical pose the prior box played (for resume pose-match guard). */
+  pose: string;
+  /** Reads the prior box's live playback position at re-render time. */
+  currentFrame: () => { frameIdx: number; direction: number };
+}
+
+/**
+ * The prior box's playback position threaded into the next render so the cycle
+ * RESUMES instead of restarting at the window start (E1 live-preview fix
+ * 86ca2c4t8). `pose` lets the player verify the pose is unchanged before
+ * resuming. Undefined when there is no prior box for this member.
+ */
+export interface PriorPlayback {
+  pose: string;
+  frameIdx: number;
+  direction: number;
 }
 
 export interface SpriteTracker {
@@ -37,14 +53,26 @@ export interface SpriteTracker {
   /** Whether the prior render's pose for this member was active. */
   priorWasActive(sessionId: string, memberId: string): boolean;
   /**
+   * The prior box's pose + current playback position for this member, read at
+   * re-render time so the next box resumes the in-flight cycle (E1 fix
+   * 86ca2c4t8). Undefined when there is no prior box.
+   */
+  priorPlayback(sessionId: string, memberId: string): PriorPlayback | undefined;
+  /**
    * Register the freshly-rendered sprite handle. Disposes any prior handle's
    * timer for this key first (prevents detached-img timer leaks), then stores
-   * the new pick / active flag / disposer.
+   * the new pick / active flag / pose / position-reader / disposer.
    */
   register(
     sessionId: string,
     memberId: string,
-    entry: { idlePick: string | null; isActive: boolean; dispose: () => void },
+    entry: {
+      idlePick: string | null;
+      isActive: boolean;
+      dispose: () => void;
+      pose: string;
+      currentFrame: () => { frameIdx: number; direction: number };
+    },
   ): void;
   /**
    * Dispose + drop entries whose tile is no longer rendered. Pass the set of
@@ -67,6 +95,12 @@ export function createSpriteTracker(): SpriteTracker {
     priorWasActive(sessionId, memberId) {
       const e = entries.get(`${sessionId}:${memberId}`);
       return e ? e.isActive : false;
+    },
+    priorPlayback(sessionId, memberId) {
+      const e = entries.get(`${sessionId}:${memberId}`);
+      if (!e) return undefined;
+      const { frameIdx, direction } = e.currentFrame();
+      return { pose: e.pose, frameIdx, direction };
     },
     register(sessionId, memberId, entry) {
       const key: SpriteKey = `${sessionId}:${memberId}`;

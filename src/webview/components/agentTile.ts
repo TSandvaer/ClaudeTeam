@@ -275,13 +275,26 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
       activity: tile.activity,
       spriteBaseUri,
       ...(spriteTracker
-        ? {
-            priorIdlePick: spriteTracker.priorIdlePick(sessionId, tile.memberId),
-            priorWasActive: spriteTracker.priorWasActive(
-              sessionId,
-              tile.memberId,
-            ),
-          }
+        ? (() => {
+            const pp = spriteTracker.priorPlayback(sessionId, tile.memberId);
+            return {
+              priorIdlePick: spriteTracker.priorIdlePick(sessionId, tile.memberId),
+              priorWasActive: spriteTracker.priorWasActive(
+                sessionId,
+                tile.memberId,
+              ),
+              // Playback-position resume across the ~2s poll re-render (E1 fix
+              // 86ca2c4t8) — lets the in-flight cycle continue rather than
+              // restarting at the window start each tick.
+              ...(pp
+                ? {
+                    priorPose: pp.pose,
+                    priorFrameIdx: pp.frameIdx,
+                    priorDirection: pp.direction,
+                  }
+                : {}),
+            };
+          })()
         : {}),
       ...(spriteRng ? { rng: spriteRng } : {}),
       ...(reducedMotion !== undefined ? { reducedMotion } : {}),
@@ -294,6 +307,8 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
         idlePick: handle.idlePick,
         isActive: handle.isActive,
         dispose: handle.dispose,
+        pose: handle.pose,
+        currentFrame: handle.currentFrame,
       });
     }
   }
