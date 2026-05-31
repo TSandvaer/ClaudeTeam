@@ -7,7 +7,8 @@
  *            (included) by default (opt-OUT curation). Live "N detected · M
  *            included" count. "Preview →" disabled at 0 included.
  *   Step 2 — Preview: read-only friendly summary of the starter team (display =
- *            agentName, role "—", character "not set" → monogram chip).
+ *            agentName, role = the auto-derived `ScannedAgent.role` or "—" when
+ *            absent, character "not set" → monogram chip).
  *            "Confirm & create" posts `ui:run-setup { include }`.
  *
  * The wizard owns its OWN ephemeral step + checkbox state (webview-local UI —
@@ -179,6 +180,17 @@ export function renderSetupWizard(props: SetupWizardProps): HTMLElement {
     teamLine.textContent = `Team: ${teamNameSeed}`;
     wrap.appendChild(teamLine);
 
+    // Bug A (86ca1u41m): the preview must show each member's auto-derived role
+    // (86ca1nvae seeds `Member.role` from `ScannedAgent.role` at config gen), so
+    // the preview matches what "Confirm & create" will actually persist.
+    // Previously this hardcoded "role: —" regardless of the scanned role, so a
+    // team with auto-resolved roles still previewed every member as blank.
+    // Look the role up by agentName from the `scanned` array (in closure).
+    const byName = new Map<string, ScannedAgent>();
+    for (const a of scanned) {
+      byName.set(a.agentName, a);
+    }
+
     const table = document.createElement("div");
     table.className = "ct-wizard-preview-table";
     for (const name of includedNames()) {
@@ -195,7 +207,12 @@ export function renderSetupWizard(props: SetupWizardProps): HTMLElement {
 
       const roleSpan = document.createElement("span");
       roleSpan.className = "ct-wizard-preview-role";
-      roleSpan.textContent = "role: —"; // blank role
+      // Auto-derived role when present; em-dash fallback when the `.md` had no
+      // parseable description (ScannedAgent.role is then absent — matches the
+      // empty role string gen will fall back to).
+      const role = byName.get(name)?.role;
+      roleSpan.textContent =
+        role !== undefined && role.length > 0 ? `role: ${role}` : "role: —";
       memberRow.appendChild(roleSpan);
 
       const charSpan = document.createElement("span");

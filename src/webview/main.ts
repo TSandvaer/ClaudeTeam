@@ -44,7 +44,6 @@ import type {
   WebviewMessage,
 } from "../shared/messages.js";
 import { workspaceFolderName } from "../shared/types.js";
-import { showSetupBanner } from "./components/setupBanner.js";
 import { initMessageReceiver } from "./messageReceiver.js";
 import {
   renderFull,
@@ -55,6 +54,7 @@ import { createFinishedTracker } from "./finishedTracker.js";
 import { createPrevStateTracker } from "./prevStateTracker.js";
 import { createExpandedGroupsTracker } from "./expandedGroupsTracker.js";
 import { createMenuOpenTracker } from "./menuOpenTracker.js";
+import { createPickerOpenTracker } from "./pickerOpenTracker.js";
 import { createSpriteTracker } from "./spriteTracker.js";
 import { MemberDirectory } from "./memberDirectory.js";
 
@@ -250,6 +250,27 @@ function boot(): void {
    */
   const menuOpenTracker = createMenuOpenTracker();
   /**
+   * 86ca1u41m BUG B — Manage Team character-picker open-state tracker. Single
+   * instance per webview boot, pruned each panel render. Persists which member
+   * row's picker the user has open across the ~2s poll-tick `renderFull` that
+   * rebuilds the whole panel, so the picker no longer vanishes on the tick. Same
+   * lifecycle + persistence scope as `menuOpenTracker` (reset on webview
+   * reload). See pickerOpenTracker.ts.
+   */
+  const pickerOpenTracker = createPickerOpenTracker();
+  /**
+   * 86ca1u41m BUG D — pending save/create banner that must SURVIVE the
+   * `setup:detection` re-render firing in the same microtask as the
+   * `setup:config-saved` ack. Set by `onSetupConfigSaved`; re-applied into the
+   * freshly-built banner slot by every panel-branch `renderFull`; cleared once a
+   * success banner auto-dismisses (via the ctx `onPendingBannerDismiss`
+   * callback). Without this the "Saved" banner is wiped before paint → the
+   * SEVERE "Save team looks dead" symptom.
+   */
+  let pendingBanner:
+    | { kind: "success" | "error"; message: string }
+    | null = null;
+  /**
    * Whole-team-display sprite playback tracker (idle-episode stickiness +
    * frame-timer disposal). Single instance per webview boot, pruned each
    * render. See spriteTracker.ts.
@@ -302,9 +323,6 @@ function boot(): void {
   // → panel serves the wizard layout.
   let manageConfig: ClaudeTeamConfig | null = null;
 
-  /** Locate the panel's single banner slot (NIT 2) in the live DOM, if mounted. */
-  const bannerSlot = (): HTMLElement | null =>
-    mount.querySelector<HTMLElement>(".ct-setup-banner-slot");
   /** Workspace-folder seed for the wizard/preview "Team:" line. */
   const teamNameSeed = (): string => {
     const cwd = currentState.sessions[0]?.cwd;
@@ -347,7 +365,18 @@ function boot(): void {
     teamNameSeed: teamNameSeed(),
     onCloseManagePanel: () => {
       managePanelOpen = false;
+      // Closing the panel discards any pending save banner — a fresh open
+      // starts clean (the banner was a transient confirmation of the last save).
+      pendingBanner = null;
       renderFull(buildCtx(), currentState);
+    },
+    // 86ca1u41m BUG B + BUG D — picker open-state tracker + pending save banner.
+    pickerOpenTracker,
+    pendingBanner,
+    onPendingBannerDismiss: () => {
+      // The success banner's auto-dismiss timer fired and cleared the slot —
+      // drop the persisted copy so it does not resurrect on the next re-render.
+      pendingBanner = null;
     },
     ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
   });
@@ -439,37 +468,28 @@ function boot(): void {
       renderFull(buildCtx(), currentState);
     },
     onSetupConfigSaved: (msg) => {
-      // Surface the SINGLE banner (NIT 2 — single-slot de-dupe).
+      // 86ca1u41m BUG D — the banner is now PERSISTED in `pendingBanner` and
+      // re-applied by `renderFull`'s panel branch, NOT shown imperatively here.
+      // Previously this called `showSetupBanner` into the live slot AFTER a
+      // single `renderFull`; the host then emitted `setup:detection` in the same
+      // microtask, triggering ANOTHER `renderFull` that rebuilt the panel + wiped
+      // the banner before paint → "Save team" looked dead. Routing through
+      // `pendingBanner` makes the banner survive every subsequent re-render
+      // (detection / roster:loaded / state:full) until it auto-dismisses.
       if (msg.payload.ok) {
         // "Team created" (wizard create — manageConfig still null at ack time)
         // vs "Saved" (edit save — config already present). Capture the verb
-        // BEFORE re-render: the host's follow-up `roster:loaded` will set
-        // manageConfig, but at THIS ack the wizard-vs-edit distinction is live.
+        // BEFORE the host's follow-up roster:loaded sets manageConfig.
         const message = manageConfig === null ? "Team created" : "Saved";
-        // Re-render FIRST so the panel surface is current (the host re-emits
-        // roster:loaded + a fresh setup:detection around this ack; keeping the
-        // panel open lands the user in the edit layout). renderFull rebuilds
-        // the banner slot empty, so we show the banner into the FRESH slot
-        // AFTER the render — otherwise the rebuild would wipe it.
-        renderFull(buildCtx(), currentState);
-        const slot = bannerSlot();
-        if (slot) {
-          showSetupBanner({ slot, kind: "success", message });
-        }
+        pendingBanner = { kind: "success", message };
       } else {
-        // Stay where we are (wizard preview / edit layout) — do NOT re-render
-        // the surface so the user's in-progress edits / curation are kept. The
-        // banner slot is already mounted; show the error into it.
         const detail = msg.payload.error ?? "unknown error";
-        const slot = bannerSlot();
-        if (slot) {
-          showSetupBanner({
-            slot,
-            kind: "error",
-            message: `Couldn't save: ${detail}`,
-          });
-        }
+        pendingBanner = { kind: "error", message: `Couldn't save: ${detail}` };
       }
+      // Re-render so the panel branch mounts a fresh slot + (re)applies the
+      // pending banner. The single-slot de-dupe (NIT 2) still holds — only one
+      // banner lives in the slot at a time.
+      renderFull(buildCtx(), currentState);
     },
   });
 

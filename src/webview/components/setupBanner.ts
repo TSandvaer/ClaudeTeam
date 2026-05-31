@@ -45,6 +45,14 @@ export interface ShowSetupBannerProps {
   schedule?: (cb: () => void, ms: number) => number;
   /** Timer canceller injection (tests). Defaults to clearTimeout. */
   cancel?: (handle: number) => void;
+  /**
+   * BUG D (86ca1u41m) — fired when a SUCCESS banner's auto-dismiss timer
+   * expires and it clears itself. Lets the caller (the boot closure's
+   * `pendingBanner`) drop its persisted copy so the banner does not resurrect on
+   * the next re-render. Not called for error banners (they persist) nor when a
+   * replacement banner pre-empts the timer. Optional.
+   */
+  onAutoDismiss?: () => void;
 }
 
 /**
@@ -66,6 +74,7 @@ export function showSetupBanner(props: ShowSetupBannerProps): HTMLElement {
     autoDismissMs = 4000,
     schedule = (cb, ms) => window.setTimeout(cb, ms) as unknown as number,
     cancel = (h) => window.clearTimeout(h),
+    onAutoDismiss,
   } = props;
 
   // Cancel any prior auto-dismiss timer for this slot, then clear the slot —
@@ -100,6 +109,9 @@ export function showSetupBanner(props: ShowSetupBannerProps): HTMLElement {
       // would have replaced it AND re-armed its own timer + WeakMap entry).
       if (slot.firstChild === banner) {
         slot.replaceChildren();
+        // BUG D: tell the caller the persisted pending banner can be dropped —
+        // only when WE actually cleared it (not when a replacement pre-empted).
+        onAutoDismiss?.();
       }
       activeTimers.delete(slot);
     }, autoDismissMs);
