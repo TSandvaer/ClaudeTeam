@@ -124,6 +124,7 @@ ENTRY-2026-05-31T06:33:00Z: 86ca1u4ef -> in review
 ENTRY-2026-05-31T05:12:34Z: 86ca1u0rw -> in review
 ENTRY-2026-05-31T11:30:00Z: 86ca22e5r -> in review (PR #152 opened — build(dev): unique per-build .vsix version to kill stale-cache collisions; reviewer Maya)
 ENTRY-2026-05-31T12:30:00Z: 86ca2522v -> in progress (Iris dispatched — responsive character-sprite sizing design brief; branch iris/86ca2522v-sprite-sizing-responsive)
+ENTRY-2026-05-31T12:45:00Z: 86ca2522v -> in review (PR #156 opened — design(spec): responsive character-sprite sizing; clamp(76px,26cqw,112px) + container query; reviewer Maya)
 ```
 
 ## NEW-TICKET-REQUEST — M3-01 NITs follow-up (FULFILLED — ticket `86c9yb0yg`)
