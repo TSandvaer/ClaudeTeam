@@ -101,6 +101,27 @@ export interface PlaybackOverride {
    * historic +1/wrap behavior).
    */
   playbackMode?: PlaybackMode;
+  /**
+   * Inclusive lower bound of the frame SUB-WINDOW the loop animates within
+   * (E1-refine 86ca21876). Absent → `0` (start of the clip). The sequencer
+   * clamps both endpoints to the real frame count, so a stale index can never
+   * break the loop. Use with `endFrame` to animate only a contiguous slice of
+   * a clip — e.g. a stretch authored as `up → rest → up` can be played as a
+   * clean `rest → up → (hold) → rest` by windowing to the rest→up half and
+   * running it pingpong. NOT pose-specific; any pose may declare a window.
+   *
+   * In pingpong the window endpoints are the turnaround points (the loop
+   * oscillates `startFrame … endFrame … startFrame`). In loop mode it advances
+   * `startFrame … endFrame` then wraps back to `startFrame` (NOT to 0).
+   */
+  startFrame?: number;
+  /**
+   * Inclusive upper bound of the frame sub-window (E1-refine 86ca21876).
+   * Absent → the clip's last frame. See `startFrame`. The per-anim
+   * `finalDwellMs` hold fires on the FORWARD arrival at `endFrame` (the window
+   * end), so windowing the apex to `endFrame` makes the hold land on the apex.
+   */
+  endFrame?: number;
 }
 
 /** A per-character override table: canonical anim name → override. */
@@ -161,32 +182,44 @@ function withPeak(base: PlaybackOverride | undefined, dwellFrameIndex: number): 
  *   - idle_coffee (cup at mouth)  — 9-frame loop, both → frame 4 (mid-loop hold)
  *   - idle_snack  (hand at mouth) — 9-frame loop, both → frame 4
  *   - idle_phone  (phone at face) — 9-frame loop, both → frame 4
- *   - idle_stretch (arms fully up) — 11-frame loop:
- *       · M01 sequence starts at the overhead peak (frame 0) and re-peaks
- *         mid-sequence at frame 8 (overhead→lower→overhead). Hold frame 8 so
- *         the loop reads "up → HOLD → relax → up", not exercise reps.
- *       · F01 sequence is gentler (no full overhead); max arm-raise is at
- *         frame 5. Hold frame 5.
+ *   - idle_stretch (arms fully up) — 11-frame loop. The two genders' clips
+ *     differ in AUTHORED MOTION (verified by inspecting the south frames +
+ *     measuring the silhouette top-reach per frame, E1-refine 86ca21876):
+ *       · M01 (`a_slow_stretching_loop_from_the_overhead_stretched`): a LARGE
+ *         sweep. Frame 0 = arms OVERHEAD (apex); frame 5 = arms DOWN (rest);
+ *         frame 10 = arms OVERHEAD again. So the clip is `up → rest → up`.
+ *         Played forward from frame 0 it reads "starts hands up, LOWERS slowly,
+ *         restarts" — the sponsor's bug. The fix windows the loop to the
+ *         rest→up HALF (frames 5..10) and runs it pingpong: forward 5→10 is a
+ *         clean RAISE, the finalDwell holds at 10 (apex), reverse 10→5 is a
+ *         clean LOWER, restart. Result: RAISE → HOLD-at-top → LOWER → restart.
+ *       · F01 (`a_gentle_tired_stretching_motion_the_arms_reach_a`): NEAR-STATIC.
+ *         The measured top-reach varies by ~1px across all 11 frames — the arms
+ *         stay up/stretched the entire clip (only a small body/knee bob). It
+ *         physically CANNOT express a raise sweep. The sponsor said F01's
+ *         held-stretch "is fine," so F01 keeps a plain gentle loop (no pingpong,
+ *         no apex window) — faking a raise here is impossible without new art.
  *
  * Sponsor visually tunes the exact feel on reload — these indices/ms are the
  * starting point.
  *
- * E1 (86ca21876) pingpong preview: `idle_stretch` is wired to
- * `playbackMode: "pingpong"` + a longer `finalDwellMs` on both characters so the
- * sponsor can eyeball the endpoint feel (the AC5 sponsor-preview gate). The
- * arms-up→down→up sweep reads as a natural stretch under pingpong rather than a
- * jump-cut wrap. This seeding lives in the hardcoded map only as the E1 preview
- * surface — E2 (86ca…) routes these fields through `animations.json` and
- * removes the map. The existing peak `dwellFrameIndex` (M01 8 / F01 5) still
- * composes with pingpong (extra apex hold at the overhead frame).
+ * E1-refine (86ca21876): M01 `idle_stretch` is windowed to frames 5..10 +
+ * `playbackMode:"pingpong"` + `finalDwellMs:800` so the preview shows the
+ * corrected raise-first loop. F01 keeps held-stretch (sponsor-approved). This
+ * seeding lives in the hardcoded map only as the E1 preview surface — E2 (86ca…)
+ * routes these fields through `animations.json` and removes the map.
  */
 export const PLAYBACK_OVERRIDES: Record<string, PlaybackOverrideTable> = (() => {
   const m01 = baseSpeedTable();
   m01["idle_coffee"] = withPeak(m01["idle_coffee"], 4);
   m01["idle_snack"] = withPeak(m01["idle_snack"], 4);
   m01["idle_phone"] = withPeak(m01["idle_phone"], 4);
+  // M01 stretch: window to the rest→up half (5..10) + pingpong so it plays
+  // RAISE(5→10) → HOLD@10(apex, finalDwell) → LOWER(10→5) → restart. No new art.
   m01["idle_stretch"] = {
-    ...withPeak(m01["idle_stretch"], 8),
+    ...m01["idle_stretch"],
+    startFrame: 5,
+    endFrame: 10,
     playbackMode: "pingpong",
     finalDwellMs: 800,
   };
@@ -195,11 +228,9 @@ export const PLAYBACK_OVERRIDES: Record<string, PlaybackOverrideTable> = (() => 
   f01["idle_coffee"] = withPeak(f01["idle_coffee"], 4);
   f01["idle_snack"] = withPeak(f01["idle_snack"], 4);
   f01["idle_phone"] = withPeak(f01["idle_phone"], 4);
-  f01["idle_stretch"] = {
-    ...withPeak(f01["idle_stretch"], 5),
-    playbackMode: "pingpong",
-    finalDwellMs: 800,
-  };
+  // F01 stretch: near-static held stretch (sponsor said "fine"). Plain gentle
+  // loop — its frames can't express a raise sweep, so no pingpong/window/peak.
+  // Speed-half from baseSpeedTable() is kept for a calm cadence.
 
   return {
     "ClaudeTeam-M01-Dev": m01,
@@ -254,6 +285,12 @@ export interface SpriteBoxProps {
   scheduleFrame?: (cb: () => void, ms: number) => number;
   /** Clear a scheduled frame — defaults to window.clearTimeout. */
   cancelFrame?: (handle: number) => void;
+  /**
+   * Override the per-character playback table (tests only). Defaults to the
+   * baked-in PLAYBACK_OVERRIDES. Lets a test drive a generic pingpong / window
+   * without depending on the shipped idle_stretch seed.
+   */
+  playbackTable?: Record<string, PlaybackOverrideTable>;
 }
 
 /** Handle returned so the caller can stop the timer on tile teardown. */
@@ -294,6 +331,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     reducedMotion,
     scheduleFrame,
     cancelFrame,
+    playbackTable,
   } = props;
 
   // ── Pose selection (AC2) ────────────────────────────────────────────────
@@ -359,7 +397,9 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // Per-animation playback tuning (86ca1fntp). The canonical anim name is the
   // active pose name OR the idle pick; resolve the override for this character.
   const canonicalName = isActive ? name : (idlePick ?? name);
-  const override = resolvePlayback(char.character, canonicalName);
+  const override = playbackTable
+    ? resolvePlayback(char.character, canonicalName, playbackTable)
+    : resolvePlayback(char.character, canonicalName);
   const speedMultiplier =
     typeof override.speedMultiplier === "number" && override.speedMultiplier > 0
       ? override.speedMultiplier
@@ -377,14 +417,31 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // (incl. absent) is treated as "loop" → byte-identical historic advance.
   const isPingpong = override.playbackMode === "pingpong";
 
-  let frameIdx = 0;
+  const lastIndex = frameUris.length - 1;
+
+  // Frame SUB-WINDOW (E1-refine 86ca21876). Clamp both endpoints into
+  // [0, lastIndex] and ensure winStart <= winEnd, so a stale/inverted override
+  // can never break the loop. Absent fields → [0, lastIndex] (full clip), which
+  // makes the windowed advance below byte-identical to the historic behavior.
+  const clamp = (n: number): number => Math.max(0, Math.min(lastIndex, Math.trunc(n)));
+  let winStart = typeof override.startFrame === "number" ? clamp(override.startFrame) : 0;
+  let winEnd = typeof override.endFrame === "number" ? clamp(override.endFrame) : lastIndex;
+  if (winStart > winEnd) {
+    // Inverted window → fall back to the full clip rather than animating nothing.
+    winStart = 0;
+    winEnd = lastIndex;
+  }
+
+  // Start at the window's lower bound (the loop's natural beginning — for a
+  // windowed raise this is the REST frame, so the first thing shown is the
+  // start of the raise, not the apex).
+  let frameIdx = winStart;
   // Advance direction (+1 forward / -1 reverse). Only meaningful in pingpong
   // mode; loop mode never sets it to -1 so the advance stays historic.
   let direction = 1;
   let handle: number | null = null;
   let disposed = false;
 
-  const lastIndex = frameUris.length - 1;
   // Guard against an out-of-range peak index (frame counts differ M01 vs F01;
   // a stale index must not break the loop).
   const peakIsValid = typeof peakIndex === "number" && peakIndex >= 0 && peakIndex <= lastIndex;
@@ -395,29 +452,31 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     // Base per-frame duration (speed-scaled).
     let ms = frameMs;
     // Final-frame idle dwell before turnaround/wrap (idle poses only — active
-    // poses loop at uniform cadence so typing/reading feels continuous). In
-    // pingpong mode this fires ONLY on the FORWARD arrival at the last frame
-    // (direction still +1), not on the reverse pass back through it (Bram's
-    // gotcha — E1 86ca21876).
-    if (frameIdx === lastIndex && !isActive && direction === 1) {
+    // poses loop at uniform cadence so typing/reading feels continuous). Fires
+    // on the FORWARD arrival at the WINDOW END (the apex when the window is the
+    // raise half), NOT on the reverse pass back through it (Bram's gotcha —
+    // E1 86ca21876).
+    if (frameIdx === winEnd && !isActive && direction === 1) {
       ms += finalDwellMs;
     }
     // Mid-sequence peak-frame dwell (hold the gesture apex). Composes with the
-    // final-frame dwell when the peak coincides with the last frame.
+    // final-frame dwell when the peak coincides with the window end.
     if (peakIsValid && frameIdx === peakIndex) {
       ms += peakDwellMs;
     }
-    // Advance to the next frame.
-    if (isPingpong && lastIndex > 0) {
-      // Reverse direction AT each endpoint (naive endpoint-hold: 0 and N-1 each
-      // show once per turnaround). Single-frame anims never reach here (handled
-      // below) and a 2-frame anim oscillates 0,1,0,1,….
-      if (frameIdx === lastIndex) direction = -1;
-      else if (frameIdx === 0) direction = 1;
+    // Advance to the next frame WITHIN the window.
+    if (isPingpong && winEnd > winStart) {
+      // Reverse direction AT each window endpoint (naive endpoint-hold: winStart
+      // and winEnd each show once per turnaround). A single-frame window
+      // (winEnd === winStart) is handled by the else branch (stays put).
+      if (frameIdx === winEnd) direction = -1;
+      else if (frameIdx === winStart) direction = 1;
       frameIdx += direction;
     } else {
-      // Loop mode (default/absent) — byte-identical historic advance.
-      frameIdx = frameIdx === lastIndex ? 0 : frameIdx + 1;
+      // Loop mode (default/absent) — advance within the window, wrap winEnd →
+      // winStart. With a full-clip window [0, lastIndex] this is byte-identical
+      // to the historic +1/wrap-to-0 advance.
+      frameIdx = frameIdx === winEnd ? winStart : frameIdx + 1;
     }
     handle = sched(tick, ms);
   };
