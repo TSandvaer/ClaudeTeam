@@ -460,4 +460,43 @@ NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (TS-02): CREATE child of the EPIC in lis
 
 NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (TS-03): CREATE child of the EPIC in list 901523520912, status `to do`, name "feat(webview): Manage Team panel + setup wizard + 3 dashboard states + character-picker grid". Owner Maya. Body = the "## TS-03" section. Dispatch AFTER TS-02 types merge. [ID: ________]
 
-NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (TS-04): CREATE child of the EPIC in list 901523520912, status `to do`, name "test(setup): QA across scanner / gen / resolution / matcher / orphan + Manage Team panel". Owner Sage. Body = the "## TS-04" section. Spans the impl tickets. [ID: ________]
+
+
+## EPIC: Per-Character / Per-Animation Playback Tweaks (Nora, 2026-05-31)
+
+> Source: sponsor asks 2026-05-31 + Bram feasibility note. Full ACs/OOS/dispatch-contracts in `team/nora-pl/anim-playback-epic-backlog.md`. Engine file = `src/webview/sprites/spritePlayer.ts` (Bram's note is accurate on file/symbols/line-numbers — verified against this branch). Orchestrator: create the 5 child tickets below, set ClickUp IDs, flip each to `created`. Create an EPIC/parent first if the board supports it, else tag all 5 with `anim-playback`. ⚠️ `PLAYBACK_OVERRIDES` is populated on this branch (86ca1fntp M01/F01 tuning at :157-174); reconcile E4/E5 against existing `maya/86ca1fntp-playback-tuning` branch's tuner work before dispatch.
+
+### E1 — feat(webview): playback engine — finalDwellMs + playbackMode:pingpong in spritePlayer
+- status: pending-create · priority: high · owner: Felix or Maya · reviewer: the other · QA: Sage · size: S-M · depends-on: none (owns type vocabulary, merge first)
+- ACs: PlaybackMode="loop"|"pingpong" + finalDwellMs?/playbackMode? added to PlaybackOverride (spritePlayer.ts:70-84), exported; finalDwellMs uses `override.finalDwellMs ?? DWELL_MS_DEFAULT` at :360-362 (absent = today's fixed 400ms); playbackMode:"pingpong" replaces hard-wrap at :368 with direction-aware advance, "loop"/absent byte-identical; final-frame dwell gated to forward-arrival only in pingpong (Bram gotcha); speedMultiplier + dwellFrameIndex/dwellMs unchanged (:333-367); Self-Test Report includes manual reload + idle_stretch pingpong gif (sponsor feel-gate).
+- OOS: animations.json routing (E2 — E1 still reads hardcoded map); pose-defaults (E3); tuner (E4/E5); new PixelLab; first-frame hold (already reachable via dwellFrameIndex:0).
+- done-when: unit tests pingpong index sequence + finalDwellMs timing (reuse recordingScheduler harness in tests/unit/webview/spritePlayer.test.ts); green CI; Sage sign-off; webview-smoke with pingpong gif.
+- files: src/webview/sprites/spritePlayer.ts; tests/unit/webview/spritePlayer.test.ts.
+
+### E2 — feat(host+build): animations.json playback schema + build-script threading + manifest read-routing
+- status: pending-create · priority: high · owner: Felix · reviewer: Maya · QA: Sage · size: M · depends-on: E1 merged
+- ACs: speedMultiplier/finalDwellMs/playbackMode editable in animations.json + `npm run build` + reload drive E1 engine (no TS edit); build-sprite-manifest.mjs threads fields into generatedManifest.ts; resolvePlayback (spritePlayer.ts:181-187) reads manifest not hardcoded PLAYBACK_OVERRIDES (:157-174); M01/F01 overrides migrated w/o regression + map removed; unknown playbackMode falls back to "loop" + warning; PR documents the json schema chosen. NOTE Bram: animations.json today carries NO playback fields (animations = name→folder strings) + runtime reads only generatedManifest.ts → this is M-sized plumbing, not pass-through.
+- OOS: pose-defaults (E3); file-watcher/auto-reload (E5); tuner; engine semantics (E1).
+- done-when: resolvePlayback-reads-manifest unit test + build-emit assertion + migration regression; webview-smoke (edit json→build→reload); green CI; Sage sign-off.
+- files: assets/sprites/ClaudeTeam-{M01,F01}-Dev/animations.json; scripts/build-sprite-manifest.mjs; src/webview/sprites/generatedManifest.ts; src/webview/sprites/spritePlayer.ts.
+
+### E3 — feat(build): pose-keyed defaults cascade (pose-defaults.json)
+- status: pending-create · priority: medium · owner: Felix · reviewer: Maya · QA: Sage · size: M · depends-on: E2 merged
+- ACs: assets/sprites/pose-defaults.json keyed by anim name applies to ALL chars; per-char animations.json field-level overrides (set speed only → inherit playbackMode/finalDwellMs from pose-default); empty pose-defaults = no regression; cascade precedence (per-char > pose-default > engine default) unit-tested for all 3 layers, field-level merge.
+- OOS: tuner UI; auto-reload; fields beyond the three.
+- done-when: 3-layer field-level merge unit tests; webview-smoke (populate→build→reload→all chars); green CI; Sage sign-off.
+- files: assets/sprites/pose-defaults.json (new); scripts/build-sprite-manifest.mjs; src/webview/sprites/spritePlayer.ts (resolvePlayback cascade); generatedManifest.ts.
+
+### E4 — design(spec): live playback tuner UI spec (Iris)
+- status: pending-create · priority: medium · owner: Iris · reviewer: Maya (visual)/Felix (spec edges) · size: M · depends-on: none for spec (parallel with E1-E3); gates E5
+- ACs: spec enumerates every control + bound field using LOCKED vocab; defines write-target rule (per-char animations.json vs pose-defaults.json); defines live-preview (reuse spritePlayer engine) + save/debounce; detailed enough for Maya to impl E5 with zero clarifying round. Reconcile against maya/86ca1fntp-playback-tuning.
+- OOS: implementation; engine changes; pixel-polish (solo-user experimental).
+- done-when: spec merged; orchestrator confirms E5 dispatch-readiness.
+- files: team/iris-design/anim-tuner-spec.md.
+
+### E5 — feat(webview): live playback tuner implementation + QA (Maya + Sage)
+- status: pending-create · priority: medium · owner: Maya · reviewer: Felix · QA: Sage · size: L · depends-on: E3 merged + E4 spec merged
+- ACs: all E4-spec controls render+wired; slider→live preview within debounce; tweak persists to correct json file (per-char vs pose-default) per spec rule — verified by jsdom interaction test asserting write payload+target; reload round-trips saved values; webview-smoke + jsdom DOM-interaction test. FUNCTIONAL save/preview/write-target headlessly tested, NOT sponsor-deferred; only visual feel is sponsor post-merge.
+- OOS: engine semantics (E1); schema/plumbing (E2); cascade (E3).
+- done-when: jsdom interaction tests (slider→preview, slider→correct-json-write); webview-smoke; green CI; Sage sign-off.
+- files: TBD by E4 spec (tuner view + test; host file-write path crosses webview↔host → webview-smoke gate).
