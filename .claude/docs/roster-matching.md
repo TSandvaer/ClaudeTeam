@@ -93,14 +93,14 @@ TS-02 (team-setup epic) introduced the project-scoped `<workspace>/.claude/claud
 
 | Read-path | Schema | `role` rule |
 |---|---|---|
-| **Matcher feed** — `loadRoster` → `parseFile` (`loader.ts:125`), wired via `main.ts:206` `projectRosterPath` → `watcherLoop.ts:561` | `rosterFileSchema` → `memberSchema` (`schema.ts:58`) | `role: z.string().min(1)` — **required, non-empty** |
+| **Matcher feed** — `loadRoster` → `parseFile` (`loader.ts:155`), wired via `projectRosterPath` (`main.ts:217`) → `loadRoster(` (`src/extension/watcher/watcherLoop.ts:590`) | `rosterFileSchema` → `memberSchema` (`schema.ts:58`) | `role: z.string().min(1)` — **required, non-empty** |
 | **Panel read-path** — `readClaudeTeamConfig` (`claudeTeamConfig.ts`) | `claudeTeamConfigSchema` → `claudeTeamMemberSchema` (`schema.ts:117`) | `role: z.string().default("")` — **optional** |
 
 Two hard consequences:
 
 1. **A field that validates on one path can be rejected on the other.** A `claudeteam.yaml` the panel happily writes + reads back (e.g. `role: ""`) is *rejected* by the matcher feed. **Rule: any change to the `claudeteam.yaml` shape must update BOTH schemas (`schema.ts`), or the divergence silently breaks one path.** The comment at `schema.ts:96-101` flags the divergence as intentional-but-fragile.
 
-2. **`parseFile` drops the ENTIRE file on any validation failure, not just the bad member.** On a failed `safeParse` it pushes errors and returns with no `teams` (`loader.ts:126-134`); `loadRoster` then returns `roster: []`. So one invalid member → the whole team renders zero tiles, with the error only surfaced as a logged warning / dashboard error chip — easy to mistake for "no agents matched."
+2. **`parseFile` drops the ENTIRE file on any validation failure, not just the bad member.** On a failed `safeParse` it pushes errors and returns with no `teams` (`loader.ts:198-203`); `loadRoster` then returns `roster: []`. So one invalid member → the whole team renders zero tiles, with the error only surfaced as a logged warning / dashboard error chip — easy to mistake for "no agents matched."
 
 **Shipped instance (defect `86ca1p51e`):** the setup wizard's default `role: ""` was accepted by `claudeTeamConfigSchema` but rejected by the matcher's `rosterFileSchema.min(1)` → a freshly set-up team rendered zero tiles. Caught by TS-04 QA (`tests/integration/teamSetupResolution.test.ts`, which is the only test that drives a *generated* config through the *production* matcher feed — the TS-02 impl tests stop at the panel schema). The fix reconciles the two schemas (route `claudeteam.yaml` through `claudeTeamConfigSchema` for the matcher, or relax `rosterFileSchema`'s role). Lesson outlives the fix: **when one file feeds two consumers, test the end-to-end seam through each consumer's real validation, not just the writer's.**
 
