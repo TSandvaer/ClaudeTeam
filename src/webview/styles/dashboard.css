@@ -89,6 +89,16 @@
   --ct-sprite-size: 68px;
   --ct-anim-frame-ms-default: 160ms;
   --ct-anim-dwell-ms-default: 400ms;
+
+  /* Light stage behind the persona sprite so the dark-outlined pixel character
+   * reads against the dark side bar (86ca23utq). HARDCODED hex — must stay
+   * light in BOTH themes (same no-theme exemption as the semantic state colors
+   * above). Kept in a token so the sponsor can tweak the exact hex live after
+   * previewing without touching the rule. Sponsor-picked: #ECEFF1 (Material
+   * Blue-Grey 50); alternatives considered #FFFFFF (max pop) / #F5F1E8 (warm
+   * paper) per the design spec. */
+  --ct-sprite-stage-bg: #ECEFF1;
+  --ct-sprite-stage-radius: var(--ct-radius-tile);
 }
 
 /* ===========================================================================
@@ -319,7 +329,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Sprite sits on transparent tile background; no frame/border (spec §3.1). */
+  /* 86ca23utq — light stage so the dark-outlined character pops off the dark
+   * side bar. Stage-only: the text column is untouched, so no text/dot/hover
+   * color flip is needed. Idle/available dimming applies to the text rows, NOT
+   * .sprite-box, so quiet teammates' characters stay crisp (spec §6). */
+  background-color: var(--ct-sprite-stage-bg);
+  border-radius: var(--ct-sprite-stage-radius);
 }
 
 .sprite-frame {
