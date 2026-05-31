@@ -86,7 +86,32 @@
    * sprite player (spritePlayer.ts FRAME_MS_DEFAULT / DWELL_MS_DEFAULT) — kept
    * here as the single source of truth even though they parameterize JS, not
    * CSS visuals. */
-  --ct-sprite-size: 68px;
+  /* Hero-character card sizing (86ca2522v — hero-layout). Sponsor mocked up a
+   * HERO card: the sprite becomes large + central with meta wrapping around it
+   * (3-zone vertical stack), replacing the prior 2-column 68px tile. The hero
+   * SCALES with the panel drag-width (container-query `cqw` units on
+   * `.session-block`), clamped between a narrow-panel floor and a cap — carry-
+   * forward of the #156 responsive rec, re-tuned for the hero size (design spec
+   * §3). `--ct-sprite-size` is still the SINGLE lever: it feeds `.sprite-box` +
+   * `.sprite-frame` w/h, so redefining it inside the hero scope (the @container
+   * rule below) is the whole sizing change — no per-element edits. The three
+   * sub-tokens are split out so the sponsor live-tunes floor / slope / cap
+   * INDEPENDENTLY on a reload without touching the clamp() rule.
+   *   --ct-sprite-size-min  140px  hero floor on a narrow ~240px side bar
+   *                                 (~144px content — design spec §3.3 width
+   *                                 math; Iris Q1 default: 140 so the hero just
+   *                                 fits rather than clipping. SPONSOR-TWEAKABLE).
+   *   --ct-sprite-grow      48cqw  slope: ~144px @300px container → ~173px @360px
+   *                                 (the mockup sweet spot), caps shortly after.
+   *   --ct-sprite-size-max  176px  cap = top of the mockup's ~150–180 range
+   *                                 ("until a certain point"; Iris Q4 default 176
+   *                                 over the exact-3× 144 — SPONSOR-TWEAKABLE).
+   * The base value below is the non-container / fallback hero size (also used by
+   * the 4 existing .sprite-box/.sprite-frame consumers when no @container match). */
+  --ct-sprite-size: 140px;
+  --ct-sprite-size-min: 140px;
+  --ct-sprite-size-max: 176px;
+  --ct-sprite-grow: 48cqw;
   --ct-anim-frame-ms-default: 160ms;
   --ct-anim-dwell-ms-default: 400ms;
 
@@ -177,6 +202,12 @@ body {
   background-color: var(--ct-color-bg-sidebar);
   border: 1px solid var(--ct-color-border);
   border-radius: var(--ct-radius-tile);
+  /* Hero-layout (86ca2522v): establish an inline-size query container so the
+   * hero sprite scales with the panel drag-width (cqw units resolve against
+   * this element's content-box width). See the @container ct-panel rule under
+   * the persona-sprite section. */
+  container-type: inline-size;
+  container-name: ct-panel;
 }
 
 .session-block--dead {
@@ -338,31 +369,98 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
- * Persona pixel-character sprite (whole-team-display-spec §3, 86ca191uy)
+ * Persona pixel-character sprite — HERO-CHARACTER card layout
+ * (86ca2522v hero-layout · supersedes the 2-column grid · whole-team-display §3)
  *
  * When a tile carries a sprite (`data-has-sprite="true"`), lay it out as a
- * 2-column grid: a fixed 68px sprite box at the leading (inline-start) edge,
- * spanning all rows, with the text rows flowing in the second column. Tiles
- * WITHOUT a sprite keep the original column flex layout untouched (AC5 — no
- * layout difference for sprite-less members beyond the absent box).
+ * 3-ZONE VERTICAL grid (was a 2-column grid): a top meta bar, a large CENTERED
+ * hero sprite, and a bottom meta bar — the sprite dominates the card. This is a
+ * CSS-ONLY re-flow of the EXISTING markup (design spec §2): no element moves in
+ * the DOM and no element is added. The components emit, in order, the sprite-box
+ * then the primary / role / activity / model rows (then overflow + the inline
+ * `.persona-instances` expand region for multi-agent). We re-place each existing
+ * child into a named grid area:
+ *
+ *   grid-template-areas:
+ *     "name   role"      ← Zone A: .tile-row--primary (left) | .tile-row--role (right)
+ *     "hero   hero"      ← Zone B: .sprite-box spans both cols, centered
+ *     "model  activity"; ← Zone C: .tile-row--model (left) | .tile-row--activity (right)
+ *
+ * Tiles WITHOUT a sprite keep the original column flex layout untouched (the
+ * hero grid is scoped to `[data-has-sprite="true"]`; sprite-less degrades to the
+ * text stack exactly as before — design spec §8.3).
  * ------------------------------------------------------------------------- */
 .agent-tile[data-has-sprite="true"] {
   display: grid;
-  grid-template-columns: var(--ct-sprite-size) 1fr;
+  grid-template-columns: 1fr auto; /* left meta | right meta */
+  grid-template-rows: auto auto auto; /* TOP bar | HERO | BOTTOM bar */
+  grid-template-areas:
+    "name   role"
+    "hero   hero"
+    "model  activity";
   align-items: center;
   column-gap: var(--ct-space-s);
+  row-gap: var(--ct-space-xs);
 }
 
-/* The sprite box is the first child element; pin it to column 1, all rows. */
+/* Re-place each existing child into its zone. DOM order is unchanged; grid areas
+ * do the placement. The `×N ▸` badge rides into `name` (child of --primary) and
+ * the `(N agents)` count-hint rides into `model` (child of --model) for free. */
 .agent-tile[data-has-sprite="true"] > .sprite-box {
-  grid-column: 1;
-  grid-row: 1 / -1;
-  align-self: center;
+  grid-area: hero;
+  justify-self: center;
+}
+.agent-tile[data-has-sprite="true"] > .tile-row--primary {
+  grid-area: name;
+  justify-self: start;
+}
+.agent-tile[data-has-sprite="true"] > .tile-row--role {
+  grid-area: role;
+  justify-self: end;
+}
+.agent-tile[data-has-sprite="true"] > .tile-row--model {
+  grid-area: model;
+  justify-self: start;
+}
+.agent-tile[data-has-sprite="true"] > .tile-row--activity {
+  grid-area: activity;
+  justify-self: end;
 }
 
-/* Text rows flow into column 2, stacked. */
-.agent-tile[data-has-sprite="true"] > .tile-row {
-  grid-column: 2;
+/* Indent reset (design spec §2.3, load-bearing): rows 2-4 normally indent past
+ * the state dot (`.tile-row--role/--activity/--model { padding-left: ... }`) to
+ * align under the name. In the hero layout these rows are in their OWN grid
+ * cells, not stacked under the dot — so the indent is wrong and is zeroed inside
+ * the hero scope. */
+.agent-tile[data-has-sprite="true"] > .tile-row--role,
+.agent-tile[data-has-sprite="true"] > .tile-row--activity,
+.agent-tile[data-has-sprite="true"] > .tile-row--model {
+  padding-left: 0;
+}
+
+/* The `.persona-instances` expand region (multi-agent, appended AFTER the model
+ * row) carries NO grid-area, so grid auto-placement drops it into an implicit
+ * 4th row below the explicit 3 — full-width below Zone C. Pin it to span both
+ * columns so it can never wedge into a single auto-placed cell. (Design spec
+ * §4 EXPANDED / §8.2 — the hero stays held, the instance list flows below.) */
+.agent-tile[data-has-sprite="true"] > .persona-instances {
+  grid-column: 1 / -1;
+}
+
+/* Hero size SCALES with the panel drag-width (carry-forward of the #156 rec,
+ * re-tuned for the hero — design spec §3). `--ct-sprite-size` is redefined here
+ * to a clamp() of the three sub-tokens; because the token already feeds
+ * `.sprite-box` + `.sprite-frame` w/h, this single redefinition IS the sizing
+ * change. `image-rendering: pixelated` (already on `.sprite-frame`) keeps the
+ * sprite crisp at every clamp ratio — continuous scaling, never blur (§6). */
+@container ct-panel (min-width: 0) {
+  .agent-tile[data-has-sprite="true"] {
+    --ct-sprite-size: clamp(
+      var(--ct-sprite-size-min),
+      var(--ct-sprite-grow),
+      var(--ct-sprite-size-max)
+    );
+  }
 }
 
 .sprite-box {
