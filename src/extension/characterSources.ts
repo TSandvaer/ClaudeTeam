@@ -66,7 +66,7 @@
  * contribution from that source.
  */
 
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative, sep } from "node:path";
 
@@ -106,11 +106,136 @@ export function isValidCharacterDir(charDir: string): boolean {
 }
 
 /**
+ * Resolve the first `south/frame_*.png` (alphabetical) inside a single state
+ * folder, given the `animations/<slug>` directory to look in. Returns the
+ * ABSOLUTE path or `null`. If `preferredSlug` is supplied it is tried first;
+ * otherwise the alphabetically-first slug with a `south/` directory wins.
+ */
+function resolveSouthFrameInState(
+  slugsRoot: string,
+  preferredSlug?: string,
+): string | null {
+  if (!existsSync(slugsRoot)) return null;
+  let slugs: string[];
+  try {
+    slugs = readdirSync(slugsRoot).sort();
+  } catch {
+    return null;
+  }
+  // Try the named slug first (defaultIdle slug-form), then fall through to the
+  // alphabetical scan of the folder's slugs (bare-folder single-animation form).
+  const ordered =
+    preferredSlug !== undefined && slugs.includes(preferredSlug)
+      ? [preferredSlug, ...slugs.filter((s) => s !== preferredSlug)]
+      : slugs;
+  for (const slug of ordered) {
+    const southDir = join(slugsRoot, slug, "south");
+    if (!existsSync(southDir)) continue;
+    let frames: string[];
+    try {
+      frames = readdirSync(southDir)
+        .filter((f) => /^frame_\d+\.png$/.test(f))
+        .sort();
+    } catch {
+      continue;
+    }
+    if (frames.length > 0) {
+      return join(southDir, frames[0]!);
+    }
+  }
+  return null;
+}
+
+/**
+ * Walk EVERY state folder under `_pixellab_anims/` alphabetically and return the
+ * first `<state>/animations/<slug>/south/frame_*.png` found. This is the legacy
+ * behavior — used as the fallback when `animations.json` lacks a usable
+ * `default_idle` (or it can't be resolved to an on-disk south frame). Returns
+ * the ABSOLUTE path or `null`.
+ */
+function resolveFirstSouthFrame(animsRoot: string): string | null {
+  let states: string[];
+  try {
+    states = readdirSync(animsRoot).sort();
+  } catch {
+    return null;
+  }
+  for (const state of states) {
+    const found = resolveSouthFrameInState(join(animsRoot, state, "animations"));
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/**
+ * Resolve the character's `default_idle` state folder + (optional) animation
+ * slug from `animations.json`. Returns `null` when the manifest is absent,
+ * unparseable, or lacks a resolvable `default_idle`.
+ *
+ * `animations.json` schema (sponsor-locked 2026-05-29 — verified on-disk against
+ * `assets/sprites/ClaudeTeam-M01-Dev/animations.json`):
+ *   - `default_idle`: a logical animation key (e.g. `"idle_coffee"`).
+ *   - `animations`: maps each logical key → a VALUE that is either
+ *       • a bare `<state_folder>` (the folder holds exactly ONE animation —
+ *         resolve `animations/<sole-slug>/south/`), OR
+ *       • a `<state_folder>/<anim_slug>` (folder holds >1 — the slug picks one).
+ * Both M01 and F01 use the bare-folder form for `idle_coffee` →
+ * `holding_a_coffee_cup`.
+ */
+function resolveDefaultIdleState(
+  charDir: string,
+): { stateFolder: string; slug?: string } | null {
+  const manifestPath = join(charDir, "animations.json");
+  if (!existsSync(manifestPath)) return null;
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch {
+    return null;
+  }
+  if (typeof manifest !== "object" || manifest === null) return null;
+  const m = manifest as {
+    default_idle?: unknown;
+    animations?: Record<string, unknown>;
+  };
+  const key = m.default_idle;
+  if (typeof key !== "string" || key.length === 0) return null;
+  const animations = m.animations;
+  if (typeof animations !== "object" || animations === null) return null;
+  const value = (animations as Record<string, unknown>)[key];
+  if (typeof value !== "string" || value.length === 0) return null;
+  // Split on the FIRST `/` only — `<state_folder>/<anim_slug>` (slug may not
+  // itself contain `/`, but be defensive: state folder is the first segment).
+  const slashIdx = value.indexOf("/");
+  if (slashIdx === -1) {
+    return { stateFolder: value };
+  }
+  return {
+    stateFolder: value.slice(0, slashIdx),
+    slug: value.slice(slashIdx + 1),
+  };
+}
+
+/**
  * Best-effort resolve the SOUTH idle thumbnail for a character folder (spec
- * §7.1). Walks `_pixellab_anims/<state>/animations/<slug>/south/frame_*.png`
- * and returns the ABSOLUTE path of the first such frame found (alphabetical).
- * Returns `null` when no south frame exists (caller degrades to monogram).
- * Pure-ish.
+ * §7.1, Bug C / 86ca1u41m).
+ *
+ * Selection order:
+ *   1. PREFERRED — the `default_idle` state's south frame, resolved from
+ *      `animations.json` (the canonical neutral-stance portrait, e.g.
+ *      `idle_coffee` → `holding_a_coffee_cup/.../south/frame_000.png`).
+ *   2. FALLBACK — the alphabetically-first `<state>/animations/<slug>/south/`
+ *      frame across all state folders. Used when `animations.json` is absent,
+ *      unparseable, lacks a usable `default_idle`, or the resolved state has no
+ *      south frame on disk.
+ *
+ * BEFORE this fix the resolver used (2) unconditionally, which for both M01 and
+ * F01 selected `a_relaxed_tired_upwa` (`idle_stretch`, arms-raised mid-stretch)
+ * because it is the alphabetically-first state folder carrying an
+ * `animations/<slug>/south/` path — the wrong, arms-raised thumbnail.
+ *
+ * Returns the ABSOLUTE path of the chosen frame, or `null` when no south frame
+ * exists anywhere (caller degrades to monogram). Pure-ish.
  *
  * NOTE: this returns an absolute fs path — `scanCharacterRoot` converts it to a
  * web-root-relative path via {@link toWebRootRelative} before storing it on
@@ -120,38 +245,17 @@ export function isValidCharacterDir(charDir: string): boolean {
 export function resolveThumbnailPath(charDir: string): string | null {
   const animsRoot = join(charDir, "_pixellab_anims");
   if (!existsSync(animsRoot)) return null;
-  let states: string[];
-  try {
-    states = readdirSync(animsRoot).sort();
-  } catch {
-    return null;
+
+  // 1. Preferred: the default_idle state's south frame.
+  const defaultIdle = resolveDefaultIdleState(charDir);
+  if (defaultIdle !== null) {
+    const slugsRoot = join(animsRoot, defaultIdle.stateFolder, "animations");
+    const preferred = resolveSouthFrameInState(slugsRoot, defaultIdle.slug);
+    if (preferred !== null) return preferred;
   }
-  for (const state of states) {
-    const slugsRoot = join(animsRoot, state, "animations");
-    if (!existsSync(slugsRoot)) continue;
-    let slugs: string[];
-    try {
-      slugs = readdirSync(slugsRoot).sort();
-    } catch {
-      continue;
-    }
-    for (const slug of slugs) {
-      const southDir = join(slugsRoot, slug, "south");
-      if (!existsSync(southDir)) continue;
-      let frames: string[];
-      try {
-        frames = readdirSync(southDir)
-          .filter((f) => /^frame_\d+\.png$/.test(f))
-          .sort();
-      } catch {
-        continue;
-      }
-      if (frames.length > 0) {
-        return join(southDir, frames[0]!);
-      }
-    }
-  }
-  return null;
+
+  // 2. Fallback: alphabetically-first south frame across all states (legacy).
+  return resolveFirstSouthFrame(animsRoot);
 }
 
 /**

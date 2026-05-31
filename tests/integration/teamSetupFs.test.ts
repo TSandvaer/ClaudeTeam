@@ -33,7 +33,10 @@ import {
   readClaudeTeamConfig,
   writeClaudeTeamConfig,
 } from "../../src/extension/roster/claudeTeamConfig.js";
-import { resolveCharacterSources } from "../../src/extension/characterSources.js";
+import {
+  resolveCharacterSources,
+  resolveThumbnailPath,
+} from "../../src/extension/characterSources.js";
 import { SetupController } from "../../src/extension/setupController.js";
 import type { ScannedAgent } from "../../src/shared/types.js";
 
@@ -328,6 +331,107 @@ describe("resolveCharacterSources (AC7)", () => {
     // Not under dist/webview → not webview-loadable → "" → webview renders the
     // monogram chip (graceful degrade) instead of a broken <img>.
     expect(userSrc.thumbnailPath).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveThumbnailPath: default_idle south frame, NOT arms-raised (Bug C / 86ca1u41m)
+// ---------------------------------------------------------------------------
+
+/**
+ * Write a south-frame file inside `_pixellab_anims/<state>/animations/<slug>/south/`.
+ * Mirrors the real on-disk PixelLab-harvest shape (verified against
+ * assets/sprites/ClaudeTeam-M01-Dev/_pixellab_anims/).
+ */
+function writeSouthFrame(
+  charDir: string,
+  state: string,
+  slug: string,
+  frame = "frame_000.png",
+): void {
+  const southDir = join(charDir, "_pixellab_anims", state, "animations", slug, "south");
+  mkdirSync(southDir, { recursive: true });
+  writeFileSync(join(southDir, frame), "PNG", "utf8");
+}
+
+describe("resolveThumbnailPath — default_idle south frame (Bug C / 86ca1u41m)", () => {
+  it("selects the default_idle state's south frame, NOT the alphabetically-first (arms-raised) state", () => {
+    const charDir = join(root, "ClaudeTeam-M01-Dev");
+    // Alphabetically-first state folder = arms-raised idle_stretch. The OLD
+    // resolver picked this (wrong). Sorts before "holding_a_coffee_cup".
+    writeSouthFrame(charDir, "a_relaxed_tired_upwa", "a_slow_stretching_loop");
+    // The intended portrait pose — default_idle → idle_coffee.
+    writeSouthFrame(charDir, "holding_a_coffee_cup", "the_coffee_cup_stays_pressed");
+    writeFileSync(
+      join(charDir, "animations.json"),
+      JSON.stringify({
+        default_idle: "idle_coffee",
+        animations: {
+          idle_coffee: "holding_a_coffee_cup",
+          idle_stretch: "a_relaxed_tired_upwa",
+        },
+      }),
+      "utf8",
+    );
+
+    const abs = resolveThumbnailPath(charDir);
+    expect(abs).not.toBeNull();
+    // Non-vacuous: reverting the fix (alphabetical-first) would return the
+    // arms-raised path and FAIL both assertions below.
+    expect(abs!).toContain(`${join("holding_a_coffee_cup", "animations")}`);
+    expect(abs!).not.toContain("a_relaxed_tired_upwa");
+  });
+
+  it("resolves a default_idle whose value carries an explicit <state>/<slug> form", () => {
+    const charDir = join(root, "slug-form");
+    // Folder with TWO slugs; default_idle names the specific one.
+    writeSouthFrame(charDir, "sitting_at_a_desk", "wrong_slug");
+    writeSouthFrame(charDir, "sitting_at_a_desk", "the_right_one");
+    writeFileSync(
+      join(charDir, "animations.json"),
+      JSON.stringify({
+        default_idle: "active_work",
+        animations: { active_work: "sitting_at_a_desk/the_right_one" },
+      }),
+      "utf8",
+    );
+    const abs = resolveThumbnailPath(charDir);
+    expect(abs).not.toBeNull();
+    expect(abs!).toContain(`${join("the_right_one", "south")}`);
+    expect(abs!).not.toContain("wrong_slug");
+  });
+
+  it("falls back to alphabetical-first south frame when animations.json lacks default_idle", () => {
+    const charDir = join(root, "no-default-idle");
+    writeSouthFrame(charDir, "idle", "x");
+    writeFileSync(join(charDir, "animations.json"), "{}", "utf8"); // legacy fixture shape
+    const abs = resolveThumbnailPath(charDir);
+    expect(abs).not.toBeNull();
+    expect(abs!).toContain(`${join("idle", "animations", "x", "south")}`);
+  });
+
+  it("falls back to alphabetical-first when default_idle's state has no south frame on disk", () => {
+    const charDir = join(root, "missing-default-state");
+    // default_idle points at a folder that does not exist on disk.
+    writeSouthFrame(charDir, "standing_relaxed", "y");
+    writeFileSync(
+      join(charDir, "animations.json"),
+      JSON.stringify({
+        default_idle: "idle_coffee",
+        animations: { idle_coffee: "holding_a_coffee_cup" },
+      }),
+      "utf8",
+    );
+    const abs = resolveThumbnailPath(charDir);
+    expect(abs).not.toBeNull();
+    expect(abs!).toContain(`${join("standing_relaxed", "animations", "y", "south")}`);
+  });
+
+  it("returns null when no south frame exists anywhere (caller degrades to monogram)", () => {
+    const charDir = join(root, "empty-anims");
+    mkdirSync(join(charDir, "_pixellab_anims"), { recursive: true });
+    writeFileSync(join(charDir, "animations.json"), "{}", "utf8");
+    expect(resolveThumbnailPath(charDir)).toBeNull();
   });
 });
 
