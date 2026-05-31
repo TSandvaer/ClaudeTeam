@@ -52,6 +52,7 @@ import { renderSessionBlock } from "./components/sessionBlock.js";
 import { renderEmptyState, renderNoSetupState } from "./components/emptyState.js";
 import { renderSuggestSetupCard } from "./components/suggestSetupCard.js";
 import { renderManageTeamPanel } from "./components/manageTeamPanel.js";
+import { showSetupBanner } from "./components/setupBanner.js";
 import {
   renderErrorChip,
   type ErrorChipLevel,
@@ -73,6 +74,7 @@ import type {
   MenuOpenTracker,
 } from "./menuOpenTracker.js";
 import type { SpriteTracker } from "./spriteTracker.js";
+import type { PickerOpenTracker } from "./pickerOpenTracker.js";
 
 /** Persistent error state stored on the dashboard. */
 export interface DashboardErrorState {
@@ -249,6 +251,34 @@ export interface RenderContext {
   teamNameSeed?: string;
   /** Called when the user closes the Manage Team panel (caller flips the flag). */
   onCloseManagePanel?: () => void;
+  /**
+   * BUG B (86ca1u41m) — webview-local character-picker open-state tracker.
+   * Threaded into the Manage Team panel so an open picker survives the ~2s
+   * poll-tick `renderFull` that rebuilds the panel DOM. Owned by the boot
+   * closure in `main.ts`; pruned each render against the rendered team's member
+   * ids. Optional — absent in component tests without re-render.
+   */
+  pickerOpenTracker?: PickerOpenTracker;
+  /**
+   * BUG D (86ca1u41m) — the success/error banner that must SURVIVE the
+   * immediately-following re-render. After a successful "Save team", the host
+   * emits `setup:detection` in the same microtask, which triggers ANOTHER
+   * `renderFull` that rebuilds the panel (including a fresh empty banner slot) —
+   * wiping the just-shown "Saved" banner before the user can see it. The boot
+   * closure stores the pending banner here; `renderFull` re-applies it into the
+   * freshly-built slot AFTER mounting the panel, so the banner persists across
+   * the detection re-render. Cleared by the boot closure once the banner
+   * auto-dismisses (via `onPendingBannerDismiss`). Optional — absent in
+   * component tests / pre-fix call sites.
+   */
+  pendingBanner?: { kind: "success" | "error"; message: string } | null;
+  /**
+   * BUG D — invoked when `renderFull` has re-applied a SUCCESS `pendingBanner`
+   * and armed its auto-dismiss timer; the callback fires when the timer expires
+   * so the boot closure can clear `pendingBanner` (otherwise every subsequent
+   * re-render would resurrect the dismissed banner). Optional.
+   */
+  onPendingBannerDismiss?: () => void;
 }
 
 /**
@@ -388,6 +418,9 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     characterSources,
     teamNameSeed,
     onCloseManagePanel,
+    pickerOpenTracker,
+    pendingBanner,
+    onPendingBannerDismiss,
   } = ctx;
 
   // ── Team-setup surface switch (spec §1, §2, §4) ─────────────────────────────
@@ -403,6 +436,19 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
 
   // 1. Manage Team panel (explicit open — highest precedence).
   if (managePanelOpen === true) {
+    // BUG B (86ca1u41m): prune the picker tracker to the members the edit
+    // layout will render, so a removed/renamed member doesn't leak a stale
+    // open-entry. Bounded by roster size — cheap. (The panel is a full-pane
+    // surface; the session-walk prune below never runs for this branch.)
+    if (pickerOpenTracker) {
+      const memberIds = new Set<string>();
+      for (const team of manageConfig?.teams ?? []) {
+        for (const m of team.members) {
+          memberIds.add(m.id);
+        }
+      }
+      pickerOpenTracker.prune(memberIds);
+    }
     mount.replaceChildren();
     mount.appendChild(
       renderManageTeamPanel({
@@ -411,10 +457,31 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         characters: characterSources ?? [],
         teamNameSeed: teamNameSeed ?? "",
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(pickerOpenTracker !== undefined ? { pickerOpenTracker } : {}),
         postMessage,
         ...(onCloseManagePanel ? { onClose: onCloseManagePanel } : {}),
       }),
     );
+    // BUG D (86ca1u41m): re-apply the pending save/create banner into the
+    // freshly-built slot AFTER mounting the panel. Without this, the
+    // `setup:detection` re-render that fires in the same microtask as the
+    // `setup:config-saved` ack rebuilds the panel (new empty slot) and wipes the
+    // "Saved" banner before the user ever sees it — the SEVERE "Save looks dead"
+    // symptom. The boot closure persists `pendingBanner` until the success
+    // banner auto-dismisses (cleared via `onPendingBannerDismiss`).
+    if (pendingBanner) {
+      const slot = mount.querySelector<HTMLElement>(".ct-setup-banner-slot");
+      if (slot) {
+        showSetupBanner({
+          slot,
+          kind: pendingBanner.kind,
+          message: pendingBanner.message,
+          ...(pendingBanner.kind === "success" && onPendingBannerDismiss
+            ? { onAutoDismiss: onPendingBannerDismiss }
+            : {}),
+        });
+      }
+    }
     return;
   }
 

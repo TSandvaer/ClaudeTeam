@@ -47,6 +47,7 @@ import type { WebviewMessage } from "../../shared/messages.js";
 import { renderMonogramChip } from "./monogramChip.js";
 import { renderCharacterPicker } from "./characterPicker.js";
 import { renderSetupWizard } from "./setupWizard.js";
+import type { PickerOpenTracker } from "../pickerOpenTracker.js";
 
 export interface ManageTeamPanelProps {
   /**
@@ -63,6 +64,15 @@ export interface ManageTeamPanelProps {
   teamNameSeed: string;
   /** Host-injected webview base URI for thumbnails. Optional. */
   spriteBaseUri?: string;
+  /**
+   * Webview-local character-picker open-state tracker (86ca1u41m BUG B).
+   * Threaded down to each member row's `buildCharacterControls` so an open
+   * picker survives the ~2s poll-tick `renderFull` instead of vanishing every
+   * tick. Owned by the boot closure in `main.ts`. Optional — when omitted
+   * (component tests without re-render) the picker starts closed and its open
+   * state lives only in the current DOM (pre-fix behavior).
+   */
+  pickerOpenTracker?: PickerOpenTracker;
   /** Webview → host dispatcher. */
   postMessage: (msg: WebviewMessage) => void;
   /** Called when the user closes/cancels the panel. */
@@ -83,6 +93,7 @@ export function renderManageTeamPanel(
     characters,
     teamNameSeed,
     spriteBaseUri,
+    pickerOpenTracker,
     postMessage,
     onClose,
   } = props;
@@ -133,6 +144,7 @@ export function renderManageTeamPanel(
       config,
       characters,
       ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+      ...(pickerOpenTracker !== undefined ? { pickerOpenTracker } : {}),
       postMessage,
     }),
   );
@@ -143,6 +155,7 @@ interface EditLayoutProps {
   config: ClaudeTeamConfig;
   characters: CharacterSource[];
   spriteBaseUri?: string;
+  pickerOpenTracker?: PickerOpenTracker;
   postMessage: (msg: WebviewMessage) => void;
 }
 
@@ -152,7 +165,8 @@ interface EditLayoutProps {
  * the row chips update on assign without a host round-trip.
  */
 export function renderEditLayout(props: EditLayoutProps): HTMLElement {
-  const { config, characters, spriteBaseUri, postMessage } = props;
+  const { config, characters, spriteBaseUri, pickerOpenTracker, postMessage } =
+    props;
 
   const wrap = document.createElement("div");
   wrap.className = "ct-manage-edit";
@@ -340,20 +354,31 @@ export function renderEditLayout(props: EditLayoutProps): HTMLElement {
     const pickerHost = document.createElement("div");
     pickerHost.className = "ct-manage-picker-host";
 
-    const closePicker = (): void => {
-      pickerHost.replaceChildren();
-      pickBtn.setAttribute("aria-expanded", "false");
-      pickBtn.focus();
-    };
-
     pickBtn.setAttribute("aria-haspopup", "dialog");
     pickBtn.setAttribute("aria-expanded", "false");
-    pickBtn.addEventListener("click", () => {
-      if (pickerHost.firstChild) {
-        closePicker();
-        return;
+
+    // BUG B (86ca1u41m): close clears the tracker so it does NOT resurrect on
+    // the next poll-tick re-render. `focusBtn` is false during a tracker-driven
+    // restore (we must not steal focus on a passive re-render).
+    const closePicker = (focusBtn = true): void => {
+      pickerHost.replaceChildren();
+      pickBtn.setAttribute("aria-expanded", "false");
+      pickerOpenTracker?.setOpen(member.id, false);
+      if (focusBtn) {
+        pickBtn.focus();
       }
+    };
+
+    // BUG B: open records the intent in the tracker so the open survives the
+    // ~2s poll-tick `renderFull` that rebuilds the whole panel. `recordOpen`
+    // controls whether we (re)record — false during the tracker-driven restore
+    // (already recorded; avoids a redundant write).
+    const openPicker = (recordOpen = true): void => {
+      if (pickerHost.firstChild) return; // already open
       pickBtn.setAttribute("aria-expanded", "true");
+      if (recordOpen) {
+        pickerOpenTracker?.setOpen(member.id, true);
+      }
       const picker = renderCharacterPicker({
         memberId: member.id,
         display: state.display,
@@ -371,14 +396,33 @@ export function renderEditLayout(props: EditLayoutProps): HTMLElement {
           }
           postMessage(msg);
         },
-        onClose: closePicker,
+        // Select / Clear / ✕ / Esc all route here → deliberate dismiss.
+        onClose: () => closePicker(),
       });
       pickerHost.appendChild(picker);
+    };
+
+    pickBtn.addEventListener("click", () => {
+      if (pickerHost.firstChild) {
+        closePicker();
+        return;
+      }
+      openPicker();
     });
 
     controls.appendChild(pickBtn);
     controls.appendChild(status);
     controls.appendChild(pickerHost);
+
+    // BUG B restore: if the tracker says this member's picker was open before
+    // the re-render, re-open it now (without re-recording or stealing focus) so
+    // it survives the poll tick. This is the load-bearing line — without it the
+    // freshly-rebuilt row constructs an empty `pickerHost` and the picker is
+    // gone after ~2s. Mirrors menuOpenTracker's restore-on-rebuild (86ca1fjqu).
+    if (pickerOpenTracker?.isOpen(member.id)) {
+      openPicker(false);
+    }
+
     return controls;
   }
 
