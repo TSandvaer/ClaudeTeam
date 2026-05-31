@@ -90,15 +90,37 @@
   --ct-anim-frame-ms-default: 160ms;
   --ct-anim-dwell-ms-default: 400ms;
 
-  /* Light stage behind the persona sprite so the dark-outlined pixel character
-   * reads against the dark side bar (86ca23utq). HARDCODED hex — must stay
-   * light in BOTH themes (same no-theme exemption as the semantic state colors
-   * above). Kept in a token so the sponsor can tweak the exact hex live after
+  /* Light WHOLE-CARD background behind the persona sprite AND the text column,
+   * so the dark-outlined pixel character reads against the dark side bar and the
+   * card reads as one lit portrait container (86ca23utq — sponsor pivoted from
+   * the stage-only treatment to the whole agent card 2026-05-31). HARDCODED hex
+   * — must stay light in BOTH dark and light VS Code themes (same no-theme
+   * exemption as the semantic state colors above): a `var(--vscode-…)` value
+   * would go dark again under a dark theme and re-create the disappearing
+   * problem. Kept in a token so the sponsor can tweak the exact hex live after
    * previewing without touching the rule. Sponsor-picked: #ECEFF1 (Material
    * Blue-Grey 50); alternatives considered #FFFFFF (max pop) / #F5F1E8 (warm
-   * paper) per the design spec. */
-  --ct-sprite-stage-bg: #ECEFF1;
-  --ct-sprite-stage-radius: var(--ct-radius-tile);
+   * paper) per the design spec §3. */
+  --ct-card-bg: #ECEFF1;
+  --ct-card-radius: var(--ct-radius-tile);
+
+  /* Dark-on-light text + chrome tokens for the light card (86ca23utq §5). Because
+   * the card is light in BOTH themes, these are HARDCODED dark hex (NOT
+   * theme-mapped) — the default --ct-color-fg (~#cccccc light in dark theme)
+   * would fail contrast on the light card. Values + contrast ratios from the
+   * design spec §5 (against #ECEFF1):
+   *   --ct-card-fg        #1f2933  near-black slate   ≈ 13:1 (AA/AAA) — name, activity
+   *   --ct-card-fg-muted  #52606d  slate-grey         ≈ 6:1  (AA)     — role, model, count text
+   *   --ct-card-hover     rgba(0,0,0,0.06)            translucent-DARK (the default
+   *                       translucent-white hover is invisible on light)
+   * The blue SELECTED/focus border stays --ct-color-focus (unchanged). */
+  --ct-card-fg: #1f2933;
+  --ct-card-fg-muted: #52606d;
+  --ct-card-hover: rgba(0, 0, 0, 0.06);
+  /* Hairline that delineates the light card from a LIGHT VS Code theme bg (where
+   * the card and editor bg are tonally close). Subtle in dark theme, load-bearing
+   * in light theme. Hardcoded translucent-dark, theme-independent. */
+  --ct-card-hairline: rgba(0, 0, 0, 0.12);
 }
 
 /* ===========================================================================
@@ -282,16 +304,24 @@ body {
   flex-direction: column;
   gap: var(--ct-space-xs);
   padding: var(--ct-space-s);
-  border-radius: var(--ct-radius-tile);
-  background-color: transparent;
+  border-radius: var(--ct-card-radius);
+  /* 86ca23utq — whole agent card is light (sponsor pivot 2026-05-31). The light
+   * bg + hairline make the card a lit portrait container in BOTH themes; the
+   * hairline is the delineation cue in a LIGHT VS Code theme where card and
+   * editor bg are tonally close. Text/dot/chrome flipped dark-on-light below. */
+  background-color: var(--ct-card-bg);
+  border: 1px solid var(--ct-card-hairline);
   cursor: pointer;
+  /* outline reserved for the focus/hover SELECTED blue border (unchanged). */
   outline: 0 solid transparent;
   transition: none;
 }
 
 .agent-tile:hover,
 .agent-tile:focus-visible {
-  background-color: var(--ct-color-bg-hover);
+  /* Translucent-DARK hover tint (the default translucent-white is invisible on
+   * the light card) + the SAME blue selected/focus border as before, untouched. */
+  background-color: var(--ct-card-hover);
   outline: 1px solid var(--ct-color-focus);
 }
 
@@ -329,12 +359,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 86ca23utq — light stage so the dark-outlined character pops off the dark
-   * side bar. Stage-only: the text column is untouched, so no text/dot/hover
-   * color flip is needed. Idle/available dimming applies to the text rows, NOT
-   * .sprite-box, so quiet teammates' characters stay crisp (spec §6). */
-  background-color: var(--ct-sprite-stage-bg);
-  border-radius: var(--ct-sprite-stage-radius);
+  /* 86ca23utq — the WHOLE card is now light (.agent-tile / .collapsed-persona-
+   * header carry --ct-card-bg), so the sprite sits directly on the lit card with
+   * no separate stage panel. The dark-outlined character pops off the light card;
+   * a redundant inner light panel here would just double-paint the same color. */
 }
 
 .sprite-frame {
@@ -361,18 +389,21 @@ body {
   padding-left: calc(var(--ct-state-dot-size) + var(--ct-state-dot-gap));
 }
 
+/* 86ca23utq — text + chrome flipped dark-on-light for contrast on the light
+ * card (§5). --ct-card-fg / --ct-card-fg-muted are hardcoded dark so they read
+ * in BOTH themes (the card is light in both). */
 .agent-display {
   font-weight: 600;
-  color: var(--ct-color-fg);
+  color: var(--ct-card-fg);
 }
 
 .agent-role {
-  color: var(--ct-color-fg-muted);
+  color: var(--ct-card-fg-muted);
   font-size: smaller;
 }
 
 .agent-activity {
-  color: var(--ct-color-fg);
+  color: var(--ct-card-fg);
   font-family: var(--vscode-editor-font-family, monospace);
   /* Spec D1: wrap, never truncate. */
   word-break: break-word;
@@ -381,7 +412,7 @@ body {
 }
 
 .agent-model {
-  color: var(--ct-color-fg-muted);
+  color: var(--ct-card-fg-muted);
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: smaller;
 }
@@ -396,7 +427,12 @@ body {
   width: var(--ct-state-dot-size);
   height: var(--ct-state-dot-size);
   border-radius: 50%;
-  background-color: var(--ct-color-fg-muted);
+  /* 86ca23utq — the dot sits on the light card now; the default muted fg
+   * (~#858585 light in dark theme) would wash out. Use the slate muted token so
+   * the fallback dot reads dark-on-light. The four state[data-state] rules below
+   * override with their semantic hardcoded hex (which all pass ≥3:1 on #ECEFF1,
+   * verified in spec §5), so this fallback only paints the rare no-state dot. */
+  background-color: var(--ct-card-fg-muted);
 }
 
 .state-dot[data-state="running"] {
@@ -452,8 +488,10 @@ body {
  *
  * Pure CSS — two perpendicular borders rotated to form a check. No SVG, no
  * Unicode glyph (Unicode `✓` rendering varies across system fonts in the
- * webview). Stroke color is `--ct-color-bg-editor` so the check contrasts
- * against the dot fill regardless of theme.
+ * webview). 86ca23utq — stroke was `--ct-color-bg-editor` (the dark editor bg)
+ * which inverts to LIGHT under a light theme and would vanish on the BG-400
+ * `#78909c` dot. Now a hardcoded dark stroke (`--ct-card-fg`) that contrasts the
+ * mid-grey finished dot in BOTH themes.
  *
  * The opacity transition lets the check fade IN when a tile enters
  * `finished` and fade OUT when a tile leaves it. The fade-out path is
@@ -468,8 +506,8 @@ body {
   top: 1px;
   width: 3px;
   height: 6px;
-  border-right: 1.5px solid var(--ct-color-bg-editor);
-  border-bottom: 1.5px solid var(--ct-color-bg-editor);
+  border-right: 1.5px solid var(--ct-card-fg);
+  border-bottom: 1.5px solid var(--ct-card-fg);
   transform: rotate(45deg);
   opacity: 1;
   transition: opacity var(--ct-duration-state-transition) ease-out;
@@ -603,10 +641,13 @@ body {
   gap: var(--ct-state-dot-gap);
   width: 100%;
   padding: var(--ct-space-s);
-  background-color: transparent;
-  border: 0;
-  border-radius: var(--ct-radius-tile);
-  color: var(--ct-color-fg);
+  /* 86ca23utq — the collapsed-persona header IS the multi-agent persona card
+   * root (same chrome + blue focus border as .agent-tile). Light card bg +
+   * hairline so it matches the single-agent cards. */
+  background-color: var(--ct-card-bg);
+  border: 1px solid var(--ct-card-hairline);
+  border-radius: var(--ct-card-radius);
+  color: var(--ct-card-fg);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -615,7 +656,7 @@ body {
 
 .collapsed-persona-header:hover,
 .collapsed-persona-header:focus-visible {
-  background-color: var(--ct-color-bg-hover);
+  background-color: var(--ct-card-hover);
   outline: 1px solid var(--ct-color-focus);
 }
 
@@ -623,13 +664,13 @@ body {
   display: inline-block;
   width: var(--ct-state-dot-size);
   flex-shrink: 0;
-  color: var(--ct-color-fg-muted);
+  color: var(--ct-card-fg-muted);
   font-size: smaller;
 }
 
 .collapsed-persona-name {
   font-weight: 600;
-  color: var(--ct-color-fg);
+  color: var(--ct-card-fg);
 }
 
 .collapsed-persona-instances {
@@ -667,7 +708,8 @@ body {
   background-color: transparent;
   border: 0;
   border-radius: var(--ct-radius-chip);
-  color: var(--ct-color-fg-muted);
+  /* 86ca23utq — ×N badge sits on the light card header → dark muted fg. */
+  color: var(--ct-card-fg-muted);
   /* One step below the display name (which is the default body size at
    * weight 600) — the badge is secondary chrome. */
   font: inherit;
@@ -677,7 +719,7 @@ body {
 }
 
 .persona-count-badge:hover {
-  background-color: var(--ct-color-bg-hover);
+  background-color: var(--ct-card-hover);
 }
 
 .persona-count-badge:focus-visible {
@@ -687,14 +729,16 @@ body {
 .persona-count-chevron {
   display: inline-block;
   flex-shrink: 0;
-  color: var(--ct-color-fg-muted);
+  /* 86ca23utq — on the light card header → dark muted fg. */
+  color: var(--ct-card-fg-muted);
 }
 
 /* Row-4 "(N agents)" count hint — quiet multiplicity legibility before expand
- * + for SR users skimming row 4 (spec §1.2 row-4). Muted, follows the model. */
+ * + for SR users skimming row 4 (spec §1.2 row-4). Muted, follows the model.
+ * 86ca23utq — on the light card → dark muted fg. */
 .persona-count-hint {
   margin-left: var(--ct-space-xs);
-  color: var(--ct-color-fg-muted);
+  color: var(--ct-card-fg-muted);
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: smaller;
 }
@@ -782,8 +826,9 @@ body {
   /* Reads as secondary commentary on the header, not a primary identifier.
    * Muted color + smaller font matches the role / model rows in agentTile,
    * which is the closest precedent for "secondary descriptive text" in the
-   * dashboard's existing typography. */
-  color: var(--ct-color-fg-muted);
+   * dashboard's existing typography. 86ca23utq — on the light card header →
+   * dark muted fg. */
+  color: var(--ct-card-fg-muted);
   font-size: smaller;
   /* Push the hint to the right so the header reads: "● ▶ Felix ×4    all idle"
    * — count + persona name on the left (primary id), state hint on the right
