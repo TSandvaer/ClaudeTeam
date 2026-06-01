@@ -797,27 +797,101 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   }
 
   /**
+   * The ACTIVE frame window [winStart, winEnd] for the selected (char, anim),
+   * resolving the draft's `startFrame`/`endFrame` over the cascade, clamped to
+   * the live clip (86ca2w1g9). The engine only ever renders frames inside this
+   * window, so the apex picker must offer ONLY these frames — an apex outside the
+   * window is unreachable and its dwell never fires (the root cause of "Apex hold
+   * frame 0 has no effect" on M01 idle_stretch's [5,10] window). Falls back to the
+   * full clip [0, count-1] when no window is declared anywhere.
+   */
+  function activeWindow(): { start: number; end: number } {
+    const count = frameCount();
+    const lastIndex = Math.max(0, count - 1);
+    if (count === 0) return { start: 0, end: 0 };
+    // The cascade-source table exposes speed/hold/mode/apex but NOT the window
+    // fields, so resolve those straight off the layers: draft (live) wins, then
+    // per-char baked, then pose-default, then the full clip.
+    const baked =
+      manifest.characters[selectedChar]?.animations?.[selectedAnim]?.playback;
+    const poseDefault = manifest.poseDefaults?.[selectedAnim];
+    const resolve = (
+      field: "startFrame" | "endFrame",
+      clipFallback: number,
+    ): number => {
+      const raw =
+        draftOverride[field] ?? baked?.[field] ?? poseDefault?.[field] ?? clipFallback;
+      return Math.max(0, Math.min(lastIndex, Math.trunc(raw)));
+    };
+    let start = resolve("startFrame", 0);
+    let end = resolve("endFrame", lastIndex);
+    if (start > end) {
+      // Inverted window mirrors the engine's fallback to the full clip.
+      start = 0;
+      end = lastIndex;
+    }
+    return { start, end };
+  }
+
+  /**
+   * True when a frame sub-window is declared ANYWHERE in the cascade for the
+   * selected (char, anim) — draft (live), per-char baked, or pose-default. A
+   * no-window anim returns false so the preview is left full-clip (NIT 1
+   * 86ca2w1g9: only WINDOWED anims overlay startFrame/endFrame onto the preview).
+   */
+  function windowIsDeclared(): boolean {
+    const baked =
+      manifest.characters[selectedChar]?.animations?.[selectedAnim]?.playback;
+    const poseDefault = manifest.poseDefaults?.[selectedAnim];
+    const declared = (field: "startFrame" | "endFrame"): boolean =>
+      draftOverride[field] !== undefined ||
+      baked?.[field] !== undefined ||
+      poseDefault?.[field] !== undefined;
+    return declared("startFrame") || declared("endFrame");
+  }
+
+  /**
+   * The override the live preview should animate (NIT 1, 86ca2w1g9). The preview
+   * injects this as a flat one-entry `playbackTable`, and the flat-table branch of
+   * `resolvePlayback` does NO manifest merge (spritePlayer.ts:178-180) — so the
+   * window (`startFrame`/`endFrame`) the picker + shipped tile honor would be lost
+   * and the preview would play the FULL clip (0..count-1), making preview ≠ tile.
+   * For a WINDOWED anim, overlay the cascade-resolved window from `activeWindow()`
+   * so the preview animates only [startFrame..endFrame] — matching both the picker
+   * and the shipped tile. No-window anims are passed through unchanged (full clip).
+   */
+  function previewOverride(): PlaybackOverride {
+    if (!windowIsDeclared()) return draftOverride;
+    const { start, end } = activeWindow();
+    return { ...draftOverride, startFrame: start, endFrame: end };
+  }
+
+  /**
    * Repopulate the apex-frame picker for the selected (char, anim): an "Off"
-   * option (clears the hold) plus one option per frame index in [0, count). The
-   * picker is re-derived on every selection change because frame counts differ
-   * per anim (M01 vs F01) — a stale index must never exceed the live count.
-   * `preferIndex` (draft / cascade) selects that option if still in range.
+   * option (clears the hold) plus one option per frame index in the ACTIVE
+   * WINDOW [winStart, winEnd] (86ca2w1g9 — was [0, count), which let the sponsor
+   * pick an apex frame the windowed loop never renders, so the dwell silently did
+   * nothing). The picker is re-derived on every selection change because frame
+   * counts AND windows differ per anim (M01 vs F01). `preferIndex` (draft /
+   * cascade) selects that option when it is inside the window; an out-of-window
+   * prefer falls back to "Off".
    */
   function populateApexFrames(preferIndex?: number): void {
     const count = frameCount();
+    const { start, end } = activeWindow();
     apexFrameSelect.replaceChildren();
     const off = document.createElement("option");
     off.value = APEX_FRAME_OFF;
     off.textContent = "Off";
     apexFrameSelect.appendChild(off);
-    for (let i = 0; i < count; i++) {
+    for (let i = start; i <= end && i < count; i++) {
       const opt = document.createElement("option");
       opt.value = String(i);
       opt.textContent = `frame ${i}`;
       apexFrameSelect.appendChild(opt);
     }
     apexFrameSelect.value =
-      typeof preferIndex === "number" && preferIndex >= 0 && preferIndex < count
+      typeof preferIndex === "number" && preferIndex >= start && preferIndex <= end
         ? String(preferIndex)
         : APEX_FRAME_OFF;
   }
@@ -907,12 +981,16 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       previewHost.replaceChildren();
       return;
     }
+    // NIT 1 (86ca2w1g9): overlay the active window so the live preview animates
+    // only [startFrame..endFrame] for a windowed anim — matching the picker + the
+    // shipped tile (the flat playbackTable form does no manifest merge).
+    const overrideForPreview = previewOverride();
     if (preview === null) {
       preview = createPreviewController({
         char,
         animName: selectedAnim,
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
-        draftOverride,
+        draftOverride: overrideForPreview,
         ...(scheduleFrame !== undefined ? { scheduleFrame } : {}),
         ...(cancelFrame !== undefined ? { cancelFrame } : {}),
       });
@@ -922,7 +1000,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       // to the new character's sprite. (Previously only `selectedAnim` was
       // passed; the controller reused its construction-time char, so switching to
       // M01 left the preview painting F01.)
-      preview.update(char, selectedAnim, draftOverride);
+      preview.update(char, selectedAnim, overrideForPreview);
     }
     refreshPreviewNote();
   }

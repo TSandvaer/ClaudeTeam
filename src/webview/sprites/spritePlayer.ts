@@ -488,9 +488,19 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   let shownIdx = frameIdx;
   let shownDirection = direction;
 
-  // Guard against an out-of-range peak index (frame counts differ M01 vs F01;
-  // a stale index must not break the loop).
-  const peakIsValid = typeof peakIndex === "number" && peakIndex >= 0 && peakIndex <= lastIndex;
+  // Guard the peak (apex) index. It must be a real, REACHABLE frame: a finite
+  // number inside the ACTIVE WINDOW [winStart, winEnd] — NOT merely inside the
+  // full clip [0, lastIndex] (86ca2w1g9). The loop only ever renders frames in
+  // the window, so an apex outside it (e.g. dwellFrameIndex=0 on a [5,10] window)
+  // is never reached and `frameIdx === peakIndex` never becomes true — the dwell
+  // silently does nothing. Validating against the window makes that explicit: a
+  // within-window apex always fires; an out-of-window one is correctly NOT armed
+  // (the tuner constrains its frame picker to the window so the sponsor can only
+  // pick a reachable apex — see playbackTuner.populateApexFrames). With no window
+  // declared (winStart=0, winEnd=lastIndex) this is byte-identical to the old
+  // full-clip guard, so frame 0 (and any clip frame) still dwells as before.
+  const peakIsValid =
+    typeof peakIndex === "number" && peakIndex >= winStart && peakIndex <= winEnd;
 
   const tick = (): void => {
     if (disposed) return;
