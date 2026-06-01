@@ -122,12 +122,22 @@ export interface PreviewController {
   /** The stable container element the tuner mounts into its layout. */
   element: HTMLElement;
   /**
-   * Rebuild the preview with a new `(animName, draftOverride)` — disposes the
-   * running box and builds a fresh one (§5.1). Always restarts at winStart
-   * (§5.3, fresh — no position resume). Pass the same `animName` to re-apply a
-   * timing tweak, or a new `animName` to switch poses.
+   * Rebuild the preview with a new `(char, animName, draftOverride)` — disposes
+   * the running box and builds a fresh one (§5.1). Always restarts at winStart
+   * (§5.3, fresh — no position resume). Pass the same `char`/`animName` to
+   * re-apply a timing tweak, a new `animName` to switch poses, or a NEW `char`
+   * to switch characters.
+   *
+   * `char` is a REQUIRED update input (86ca2tu9t): a Character switch must rebind
+   * the preview to the new character's sprite. Before this, the controller closed
+   * over the construction-time `char` and an `update` ignored it — so switching
+   * the Character dropdown to M01 left the preview painting F01 (the open-bug).
    */
-  update(animName: string, draftOverride: PlaybackOverride): void;
+  update(
+    char: SpriteCharacter,
+    animName: string,
+    draftOverride: PlaybackOverride,
+  ): void;
   /** The canonical pose name the current box is playing (for tests / a11y). */
   pose(): string;
   /** Whether the current box rendered a sprite (false when no frames / no base). */
@@ -144,7 +154,7 @@ export interface PreviewController {
 export function createPreviewController(
   props: PreviewControllerProps,
 ): PreviewController {
-  const { char, spriteBaseUri, scheduleFrame, cancelFrame, rng } = props;
+  const { spriteBaseUri, scheduleFrame, cancelFrame, rng } = props;
 
   const wrapper = document.createElement("div");
   wrapper.className = "ct-tuner-preview-box";
@@ -153,7 +163,11 @@ export function createPreviewController(
   let currentPose = "";
   let currentHasSprite = false;
 
-  const build = (animName: string, draftOverride: PlaybackOverride): void => {
+  const build = (
+    char: SpriteCharacter,
+    animName: string,
+    draftOverride: PlaybackOverride,
+  ): void => {
     // Dispose the running box first (§5.1 step 1) — stops its timer.
     handle?.dispose();
     wrapper.replaceChildren();
@@ -187,11 +201,12 @@ export function createPreviewController(
     wrapper.appendChild(handle.element);
   };
 
-  build(props.animName, props.draftOverride);
+  build(props.char, props.animName, props.draftOverride);
 
   return {
     element: wrapper,
-    update: (animName, draftOverride) => build(animName, draftOverride),
+    update: (char, animName, draftOverride) =>
+      build(char, animName, draftOverride),
     pose: () => currentPose,
     hasSprite: () => currentHasSprite,
     dispose: () => {

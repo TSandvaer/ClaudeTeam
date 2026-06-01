@@ -326,6 +326,112 @@ describe("AC2 — preview rebuilds on a control change", () => {
 });
 
 // ===========================================================================
+// 86ca2tu9t — switching the Character dropdown REBINDS the preview to the new
+// character. The open-bug: the preview controller closed over its construction-
+// time `char` and `update(...)` ignored the new char, so switching to M01 left
+// the preview painting F01.
+//
+// NON-VACUITY (reverts that re-break this block):
+//   - Revert `preview.update(char, …)` → `preview.update(…)` (drop the char
+//     arg) in playbackTuner.ts:rebuildPreview → the preview box keeps
+//     data-character=F01 after switching back to M01 → assertions fail.
+//   - Revert PreviewController.update to ignore its char param (build using a
+//     closed-over construction char) → same failure.
+// The probe reads `.sprite-box` `data-character` (spritePlayer stamps it at
+// build time, BEFORE the no-frames early-return, so it is always present) — the
+// preview's actually-bound character, not just the dropdown value.
+// ===========================================================================
+
+describe("86ca2tu9t — Character switch rebinds the live preview", () => {
+  const previewChar = (root: HTMLElement): string | undefined =>
+    root.querySelector<HTMLElement>(".ct-tuner-preview-host .sprite-box")
+      ?.dataset.character;
+
+  it("switching to F01 then back to M01 leaves the preview on M01 (not F01)", () => {
+    const { root } = mount();
+    const charSel = q<HTMLSelectElement>(root, ".ct-tuner-char-select");
+    // Boots on the first manifest char (M01).
+    expect(previewChar(root)).toBe("ClaudeTeam-M01-Dev");
+
+    // Switch to F01 — preview must follow (a fresh controller would, but the
+    // already-built controller's `update` is the bug surface).
+    charSel.value = "ClaudeTeam-F01-Dev";
+    charSel.dispatchEvent(new Event("change"));
+    expect(previewChar(root)).toBe("ClaudeTeam-F01-Dev");
+
+    // Switch BACK to M01 — the sponsor's exact symptom. With the bug the
+    // preview stays on F01; with the fix it rebinds to M01.
+    charSel.value = "ClaudeTeam-M01-Dev";
+    charSel.dispatchEvent(new Event("change"));
+    expect(previewChar(root)).toBe("ClaudeTeam-M01-Dev");
+    // And the preview plays one of M01's poses (default idle_stretch).
+    expect(
+      root.querySelector<HTMLElement>(".ct-tuner-preview-host .sprite-box")!
+        .dataset.pose,
+    ).toBe("idle_stretch");
+  });
+
+  it("the Character switch ALSO repopulates anim options + re-seeds the draft from the new char", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      const charSel = q<HTMLSelectElement>(root, ".ct-tuner-char-select");
+
+      // Switch to F01. Anim options become F01's set (idle_coffee only).
+      charSel.value = "ClaudeTeam-F01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+      const anims = Array.from(
+        root.querySelectorAll<HTMLOptionElement>(".ct-tuner-anim-select option"),
+      ).map((o) => o.value);
+      expect(anims).toEqual(["idle_coffee"]);
+
+      // The re-seeded draft is F01's saved per-char block (none → a single-field
+      // edit emits exactly that field, scoped to F01).
+      const slider = q<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+      slider.value = "1.5";
+      slider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      const save = lastSave(posted)!;
+      expect(save.payload.characterFolder).toBe("ClaudeTeam-F01-Dev");
+      expect(save.payload.animName).toBe("idle_coffee");
+      // F01 idle_coffee has no baked playback → the draft carried ONLY the edit.
+      expect(Object.keys(save.payload.override)).toEqual(["speedMultiplier"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Sibling audit (same lifecycle class): switching the ANIMATION within a
+  // character updates the preview's bound pose + draft + cascade. This already
+  // worked (the controller's update took the anim) — the test locks it so the
+  // sibling can't silently regress alongside the char-switch fix.
+  it("switching the Animation within M01 updates the preview pose + the saved anim", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      const animSel = q<HTMLSelectElement>(root, ".ct-tuner-anim-select");
+      // M01 boots on idle_stretch; switch to idle_coffee.
+      animSel.value = "idle_coffee";
+      animSel.dispatchEvent(new Event("change"));
+      expect(
+        root.querySelector<HTMLElement>(".ct-tuner-preview-host .sprite-box")!
+          .dataset.pose,
+      ).toBe("idle_coffee");
+      // The preview stays on M01 (anim switch must not change the char).
+      expect(previewChar(root)).toBe("ClaudeTeam-M01-Dev");
+      // A subsequent edit saves against the newly-selected anim.
+      const slider = q<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+      slider.value = "1.25";
+      slider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      expect(lastSave(posted)!.payload.animName).toBe("idle_coffee");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ===========================================================================
 // AC2 — debounced save fires once with the correct payload + target
 // ===========================================================================
 

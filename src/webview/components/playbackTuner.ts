@@ -782,7 +782,11 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       });
       previewHost.replaceChildren(preview.element);
     } else {
-      preview.update(selectedAnim, draftOverride);
+      // 86ca2tu9t: pass the LIVE char so a Character switch rebinds the preview
+      // to the new character's sprite. (Previously only `selectedAnim` was
+      // passed; the controller reused its construction-time char, so switching to
+      // M01 left the preview painting F01.)
+      preview.update(char, selectedAnim, draftOverride);
     }
     refreshPreviewNote();
   }
