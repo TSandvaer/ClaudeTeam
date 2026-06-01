@@ -63,7 +63,12 @@ export const SAVE_DEBOUNCE_MS = 500;
 
 /** Slider bounds (E4 spec §3.2 / §3.3). */
 const SPEED_MIN = 0.25;
-const SPEED_MAX = 2.0;
+// Raised 2.0 → 5.0 (86ca2vpj7): the sponsor wants to dial playback past 2× for
+// fast-forward review of long idle loops. The engine applies the multiplier as
+// `FRAME_MS_DEFAULT / speedMultiplier` with only a `> 0` guard (spritePlayer.ts
+// resolveCharSprite), so 5× = 5× faster per-frame, no upper clamp / NaN. Step
+// stays 0.05 — 95 stops across 0.25..5.0 keeps fine granularity near 1×.
+const SPEED_MAX = 5.0;
 const SPEED_STEP = 0.05;
 const HOLD_MIN = 0;
 // Raised 2000 → 10000 (86ca2apxn #4): the cup-down / apex holds the sponsor
@@ -344,7 +349,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     format: (v) => `${v.toFixed(2)}×`,
     ariaText: (v) => `${v.toFixed(2)} times`,
     minLabel: "0.25×",
-    maxLabel: "2.0×",
+    maxLabel: "5.0×",
     onInput: (v) => {
       draftOverride = { ...draftOverride, speedMultiplier: round2(v) };
       onControlChange(true);
