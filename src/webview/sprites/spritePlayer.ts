@@ -132,17 +132,31 @@ export type PlaybackOverrideTable = Record<string, PlaybackOverride>;
  * Resolve the playback override for (character, canonical anim name).
  *
  * MANIFEST-FED (anim-playback epic E2, 86ca2187g). The per-anim playback fields
- * now live in each character's `animations.json` `playback` block, threaded
- * into `GENERATED_SPRITE_MANIFEST` at build time by
+ * live in each character's `animations.json` `playback` block, threaded into
+ * `GENERATED_SPRITE_MANIFEST` at build time by
  * `scripts/build-sprite-manifest.mjs` (which validates them — malformed values
- * are dropped there). This resolver reads `manifest.characters[char]
- * .animations[anim].playback`. The previous hardcoded `PLAYBACK_OVERRIDES` map
- * (M01/F01 speed + peak + idle_stretch windowing) was MIGRATED into the two
- * `animations.json` files and removed — `animations.json` is now the single
- * source of truth, editable + rebuild-driven with NO TS edit (AC1/AC3).
+ * are dropped there).
  *
- * Returns an empty override (default behavior) when the character/anim is
- * unlisted or carries no `playback`. Exported for unit-test coverage.
+ * 3-LAYER FIELD-LEVEL CASCADE (anim-playback epic E3, 86ca2187n). The resolved
+ * override is a per-FIELD merge of three layers, highest-priority last:
+ *
+ *   1. Engine default      — the absent-field behavior in the sequencer
+ *                            (no entry in either layer below → field omitted).
+ *   2. Pose-default        — `manifest.poseDefaults[anim].<field>`, shared
+ *                            across ALL characters (repo-root
+ *                            `assets/sprites/pose-defaults.json`). Sets e.g.
+ *                            `idle_stretch = pingpong + finalDwellMs` ONCE.
+ *   3. Per-character        — `manifest.characters[char].animations[anim]
+ *                            .playback.<field>` (the character's own
+ *                            `animations.json`). WINS field-by-field.
+ *
+ * The merge is `{ ...poseDefault, ...perChar }` — per-FIELD, not whole-object.
+ * A per-char override that sets ONLY `speedMultiplier` still inherits the
+ * pose-default's `playbackMode` / `finalDwellMs` (AC2). When `poseDefaults` is
+ * absent / empty the result is byte-identical to the E2 read (AC3).
+ *
+ * Returns an empty override (engine default) when neither layer lists the
+ * character/anim. Exported for unit-test coverage.
  *
  * The third arg is an optional source override for tests:
  *   - a `GeneratedSpriteManifest` (the production shape; default is the baked
@@ -150,6 +164,8 @@ export type PlaybackOverrideTable = Record<string, PlaybackOverride>;
  *   - a flat `Record<charName, PlaybackOverrideTable>` (the injected
  *     `playbackTable` form used by the `createSpriteBox` sequencer tests to
  *     drive a generic pingpong/window without depending on the shipped seed).
+ *     The flat form has NO pose-default layer — it returns the per-char entry
+ *     directly so existing sequencer tests stay unaffected.
  * The two shapes are disambiguated by the presence of a `characters` key.
  */
 export function resolvePlayback(
@@ -158,10 +174,21 @@ export function resolvePlayback(
   source: GeneratedSpriteManifest | Record<string, PlaybackOverrideTable> = GENERATED_SPRITE_MANIFEST,
 ): PlaybackOverride {
   // Injected flat override-table form (tests): `{ [char]: { [anim]: override } }`.
+  // No pose-default layer in this form — return the per-char entry directly.
   if (!isManifestSource(source)) {
     return source[characterName]?.[animName] ?? {};
   }
-  return source.characters[characterName]?.animations?.[animName]?.playback ?? {};
+  const poseDefault = source.poseDefaults?.[animName];
+  const perChar = source.characters[characterName]?.animations?.[animName]?.playback;
+  // Field-level cascade: per-char field wins over pose-default field, which
+  // wins over the engine default (absent → field omitted). Object spread merges
+  // per-field with perChar last, so a perChar field of `undefined` is NOT in
+  // the spread (the sanitizer never emits undefined-valued keys) and the
+  // pose-default field survives — exactly the AC2 inherit-mode-from-default case.
+  if (poseDefault === undefined && perChar === undefined) {
+    return {};
+  }
+  return { ...poseDefault, ...perChar };
 }
 
 /** True when `source` is a `GeneratedSpriteManifest` (has a `characters` map). */

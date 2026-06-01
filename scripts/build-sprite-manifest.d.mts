@@ -45,3 +45,17 @@ export function sanitizePlayback(
   label: string,
   raw: unknown,
 ): { playback: SanitizedPlayback | null; warnings: string[] };
+
+/**
+ * Sanitize the repo-root `pose-defaults.json` `playback` block into the
+ * pose-keyed defaults table baked onto the manifest as `poseDefaults`
+ * (anim-playback E3 86ca2187n). Each entry runs through `sanitizePlayback`'s
+ * same drop-malformed-field-and-warn policy; an entry yielding no valid field
+ * is dropped, and an absent/empty/non-object block returns `null` poseDefaults
+ * (the manifest then omits the field — byte-identical to the E2 end-state).
+ * `warnings` are surfaced by the caller as console.warn.
+ */
+export function buildPoseDefaults(rawBlock: unknown): {
+  poseDefaults: Record<string, SanitizedPlayback> | null;
+  warnings: string[];
+};

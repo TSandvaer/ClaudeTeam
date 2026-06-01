@@ -56,6 +56,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const SPRITES_SRC = path.join(ROOT, "assets", "sprites");
+const POSE_DEFAULTS_SRC = path.join(SPRITES_SRC, "pose-defaults.json");
 const DIST_SPRITES = path.join(ROOT, "dist", "webview", "sprites");
 const GENERATED_TS = path.join(
   ROOT,
@@ -213,6 +214,73 @@ export function sanitizePlayback(label, raw) {
 }
 
 /**
+ * Sanitize the repo-root `pose-defaults.json` `playback` block into the
+ * pose-default table baked onto the manifest as `poseDefaults` (anim-playback
+ * epic E3, 86ca2187n). Pure — no filesystem, exported for unit coverage.
+ *
+ * Each entry is run through `sanitizePlayback` with the SAME validation policy
+ * as a character's per-anim playback (malformed fields dropped + warned, never
+ * thrown). An entry whose object yields no valid field is dropped entirely.
+ *
+ * Returns `{ poseDefaults, warnings }`. `poseDefaults` is `null` when the block
+ * is absent / not-an-object / empty after sanitizing — so the manifest OMITS
+ * the `poseDefaults` field entirely, making an empty `pose-defaults.json`
+ * byte-identical to the E2 end-state (AC3). `warnings` are surfaced by the
+ * caller as console.warn.
+ *
+ * @param {unknown} rawBlock the `playback` block from pose-defaults.json (or undefined)
+ * @returns {{ poseDefaults: object | null, warnings: string[] }}
+ */
+export function buildPoseDefaults(rawBlock) {
+  const warnings = [];
+  if (rawBlock === undefined || rawBlock === null) {
+    return { poseDefaults: null, warnings };
+  }
+  if (typeof rawBlock !== "object" || Array.isArray(rawBlock)) {
+    warnings.push(
+      `[sprite-manifest] pose-defaults.json: playback must be an object — ignoring (got ${Array.isArray(rawBlock) ? "array" : typeof rawBlock})`,
+    );
+    return { poseDefaults: null, warnings };
+  }
+  const out = {};
+  for (const [anim, raw] of Object.entries(rawBlock)) {
+    const { playback, warnings: w } = sanitizePlayback(`pose-defaults/${anim}`, raw);
+    for (const warn of w) warnings.push(warn);
+    if (playback !== null) {
+      out[anim] = playback;
+    }
+  }
+  return { poseDefaults: Object.keys(out).length > 0 ? out : null, warnings };
+}
+
+/**
+ * Read + sanitize the repo-root `pose-defaults.json`. Returns the baked
+ * `poseDefaults` table (or null when absent / empty) plus any warnings. A
+ * missing file is NOT an error — pose-defaults are optional (AC3: no file or
+ * empty `{}` → no pose-default layer). Malformed JSON is warned + treated as
+ * absent so a typo can never break the build.
+ *
+ * @returns {Promise<{ poseDefaults: object | null, warnings: string[] }>}
+ */
+async function readPoseDefaults() {
+  if (!existsSync(POSE_DEFAULTS_SRC)) {
+    return { poseDefaults: null, warnings: [] };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(await readFile(POSE_DEFAULTS_SRC, "utf8"));
+  } catch (err) {
+    return {
+      poseDefaults: null,
+      warnings: [
+        `[sprite-manifest] pose-defaults.json: failed to parse — ignoring (${err instanceof Error ? err.message : String(err)})`,
+      ],
+    };
+  }
+  return buildPoseDefaults(parsed?.playback);
+}
+
+/**
  * Discover the animation directory inside
  * `<charDir>/_pixellab_anims/<folder>/animations/` named by `value` and return
  * its south frame paths (sorted), relative to `dist/webview/`. `value` follows
@@ -366,6 +434,14 @@ async function main() {
     }
   }
 
+  // Pose-keyed playback defaults (E3 86ca2187n) — shared across all characters,
+  // baked as a top-level sibling of `characters`. Omitted when absent / empty so
+  // an empty pose-defaults.json is byte-identical to the E2 end-state (AC3).
+  const { poseDefaults, warnings: poseWarnings } = await readPoseDefaults();
+  for (const w of poseWarnings) console.warn(w);
+
+  const manifestObj = poseDefaults !== null ? { characters, poseDefaults } : { characters };
+
   const banner = `/**
  * GENERATED FILE — do not edit by hand.
  *
@@ -377,7 +453,7 @@ async function main() {
 import type { GeneratedSpriteManifest } from "./spriteManifest.js";
 
 export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = ${JSON.stringify(
-    { characters },
+    manifestObj,
     null,
     2,
   )} as const;

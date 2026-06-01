@@ -31,7 +31,7 @@
  *           § Naming convention + § Webview wiring note
  */
 
-import type { PlaybackOverride } from "./spritePlayer.js";
+import type { PlaybackOverride, PlaybackOverrideTable } from "./spritePlayer.js";
 import { GENERATED_SPRITE_MANIFEST } from "./generatedManifest.js";
 
 /** One animation: its build-time-resolved frame paths (relative to dist/webview/). */
@@ -66,6 +66,22 @@ export interface SpriteCharacter {
 /** Shape of the generated manifest module. */
 export interface GeneratedSpriteManifest {
   characters: Record<string, SpriteCharacter>;
+  /**
+   * Pose-keyed playback DEFAULTS, shared across ALL characters (anim-playback
+   * epic E3, 86ca2187n). Baked by `scripts/build-sprite-manifest.mjs` from the
+   * repo-root `assets/sprites/pose-defaults.json` `playback` block (validated
+   * there — malformed fields dropped). Keyed by canonical anim name.
+   *
+   * Read by `resolvePlayback` as the MIDDLE layer of a 3-layer FIELD-LEVEL
+   * cascade: per-character `animations[anim].playback.<field>` wins, else this
+   * pose-default's `<field>`, else the engine default (absent-field behavior).
+   * The merge is per-field (`{ ...poseDefault, ...perChar }`), NOT whole-object
+   * — a per-char override that sets only `speedMultiplier` still inherits this
+   * pose-default's `playbackMode`/`finalDwellMs`.
+   *
+   * Absent / `{}` → byte-identical to the E2 end-state (no pose-default layer).
+   */
+  poseDefaults?: PlaybackOverrideTable;
 }
 
 /** Male "Dev" character folder. Bound to the male roster members by gender. */
