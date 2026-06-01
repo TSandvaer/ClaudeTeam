@@ -1463,3 +1463,166 @@ describe("FIX 2 (86ca2fvv9) — saved draft shows in the summary row after save-
     );
   });
 });
+
+// ===========================================================================
+// SWEEP 86ca2ut8w — lifecycle bug-hunt findings (Sage). Two confirmed defects
+// at the SEAMS between the six merged tuner PRs. Encoded `it.fails` so CI stays
+// GREEN while the bug exists (vitest treats expected-failure as pass) and FLIPS
+// RED the moment the bug is fixed — at which point Maya converts them to plain
+// `it(...)`. The body asserts the CORRECT (post-fix) behavior; the current
+// (buggy) code makes the assertion throw, which `it.fails` expects.
+//
+// BUG 1 (MAJOR — data-loss + UI-lie): the write-target radio's onChange re-seeds
+//   `draftOverride` from the new target's saved block (FIX 1 86ca2fvv9) but does
+//   NOT repaint the sliders / apex picker / mode radio / preview / summary to
+//   match. So after a flip the controls keep SHOWING the old per-char values
+//   (e.g. speed 0.50×, apex frame 4) while the draft no longer carries them; the
+//   next single edit then saves the (invisible) re-seeded draft, silently
+//   dropping every value still on screen. Same class as #168, on the
+//   write-target path that #168's fix did not cover. Repro on the real manifest:
+//   M01/idle_coffee bakes {speedMultiplier:0.5, dwellFrameIndex:4}; poseDefaults
+//   is absent, so flipping to "All characters" re-seeds to {} but leaves the
+//   controls showing 0.5× + frame 4.
+//   Suspected fix site: playbackTuner.ts buildWriteTargetControl onChange
+//   (~L424-439) — after re-seeding the draft, call seedSlidersFromSource(source)
+//   + populateApexFrames + mode.setValue + rebuildPreview + renderSourceTable,
+//   exactly as onSelectionChange does.
+//
+// BUG 2 (MINOR — honesty-surface lies): after a successful save, switching the
+//   Character (or flipping the write target) and then letting a ~2s poll tick
+//   re-apply the still-truthy `tunerSaveAck:{ok:true}` makes the banner re-name
+//   the file from the CURRENT (selectedChar, writeTarget) — claiming "Saved to
+//   <new file>" even though nothing was saved there. Inverts #168's intent (the
+//   sponsor now thinks they saved a file they did not). The next real save
+//   corrects it. Suspected fix site: clear `tunerSaveAck`/the banner success on
+//   a selection/target change (main.ts boot closure or the panel's
+//   onSelectionChange / write-target onChange resetting saveAck to null).
+// ===========================================================================
+
+describe("SWEEP 86ca2ut8w — write-target flip must repaint controls (BUG 1)", () => {
+  // A manifest where M01/idle_stretch bakes per-char speed + apex frame, and the
+  // pose-default for that anim is ABSENT — so flipping target re-seeds to {}.
+  function flipFixture(): GeneratedSpriteManifest {
+    return {
+      characters: {
+        "ClaudeTeam-M01-Dev": {
+          character: "ClaudeTeam-M01-Dev",
+          defaultIdle: "idle_stretch",
+          idlePool: ["idle_stretch"],
+          animations: {
+            idle_stretch: {
+              folder: "stretch",
+              frames: ["a.png", "b.png", "c.png", "d.png", "e.png"],
+              playback: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+            },
+          },
+        },
+      },
+      poseDefaults: {},
+    } as unknown as GeneratedSpriteManifest;
+  }
+
+  it.fails(
+    "after flipping per-char → pose-default, the controls repaint to the re-seeded draft (not the stale per-char values)",
+    () => {
+      const { root } = mount({ manifest: flipFixture() });
+      // Boot: M01/idle_stretch shows per-char speed 0.50× + apex frame 4.
+      expect(
+        q<HTMLElement>(root, ".ct-tuner-speed .ct-tuner-control-readout").textContent,
+      ).toBe("0.50×");
+      expect(q<HTMLSelectElement>(root, ".ct-tuner-apex-frame").value).toBe("4");
+
+      // Flip to "All characters" (pose-default). Draft re-seeds from poseDefaults
+      // (absent → {}). The controls MUST repaint to the new draft's effective
+      // values, NOT keep showing the old per-char speed/apex.
+      const pd = q<HTMLInputElement>(
+        root,
+        ".ct-tuner-writetarget-radio[data-target='pose-default']",
+      );
+      pd.checked = true;
+      pd.dispatchEvent(new Event("change"));
+
+      // CORRECT post-fix behavior: speed shows the engine default (1.00×) and the
+      // apex picker shows "Off" — matching the empty re-seeded draft. The current
+      // bug leaves them at 0.50× / frame 4 (the controls lie about the draft).
+      expect(
+        q<HTMLElement>(root, ".ct-tuner-speed .ct-tuner-control-readout").textContent,
+      ).toBe("1.00×");
+      expect(q<HTMLSelectElement>(root, ".ct-tuner-apex-frame").value).toBe("");
+    },
+  );
+
+  it.fails(
+    "the live preview rebuilds to the re-seeded draft on a write-target flip (not left stale)",
+    () => {
+      const { root } = mount({ manifest: flipFixture() });
+      const boxBefore = root.querySelector<HTMLElement>(
+        ".ct-tuner-preview-host .sprite-box",
+      );
+      const pd = q<HTMLInputElement>(
+        root,
+        ".ct-tuner-writetarget-radio[data-target='pose-default']",
+      );
+      pd.checked = true;
+      pd.dispatchEvent(new Event("change"));
+      const boxAfter = root.querySelector<HTMLElement>(
+        ".ct-tuner-preview-host .sprite-box",
+      );
+      // CORRECT post-fix behavior: the flip re-seeds the draft → the preview is
+      // rebuilt (a fresh box node) so it reflects the new draft. The current bug
+      // leaves the SAME box node (no rebuild on flip), so `===` holds → throw.
+      expect(boxAfter).not.toBe(boxBefore);
+    },
+  );
+});
+
+describe("SWEEP 86ca2ut8w — stale save-ack must not re-name the banner (BUG 2)", () => {
+  // Drives the REAL renderFull poll-tick path (where applySaveAck re-renders the
+  // banner from the CURRENT selectedChar). renderFull uses the baked manifest,
+  // whose first char is ClaudeTeam-F01-Dev — so we boot on F01 and switch to M01.
+  function tunerCtx(
+    mount: HTMLElement,
+    tracker: ReturnType<typeof createTunerStateTracker>,
+    ack: { ok: boolean; error?: string } | null,
+  ): RenderContext {
+    return {
+      mount,
+      postMessage: vi.fn(),
+      tunerPanelOpen: true,
+      tunerStateTracker: tracker,
+      tunerSaveAck: ack,
+      spriteBaseUri: "vscode-webview://host/dist/webview",
+    } as RenderContext;
+  }
+  const emptyTree = (): RenderableState =>
+    ({ sessions: [], rosterErrors: [] }) as unknown as RenderableState;
+
+  it.fails(
+    "a poll tick after a character switch does not re-stamp the stale success banner onto the new char's file",
+    () => {
+      const mount = document.createElement("div");
+      const tracker = createTunerStateTracker();
+
+      // Boot the panel (F01), then a successful save lands → banner names F01.
+      renderFull(tunerCtx(mount, tracker, { ok: true }), emptyTree());
+      expect(
+        q<HTMLElement>(mount, ".ct-tuner-banner-text").textContent,
+      ).toContain("ClaudeTeam-F01-Dev/animations.json");
+
+      // The sponsor switches the Character to M01. Nothing has been saved for M01.
+      const charSel = q<HTMLSelectElement>(mount, ".ct-tuner-char-select");
+      charSel.value = "ClaudeTeam-M01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+
+      // A ~2s poll tick fires, re-applying the STILL-truthy save-ack via the
+      // imperative handle → renderBanner runs against the new selectedChar.
+      renderFull(tunerCtx(mount, tracker, { ok: true }), emptyTree());
+
+      // CORRECT post-fix behavior: the banner must NOT claim a save for M01 (the
+      // save was for F01; nothing was saved for M01). The current bug re-names
+      // the banner to "Saved to ClaudeTeam-M01-Dev/animations.json".
+      const banner = q<HTMLElement>(mount, ".ct-tuner-banner-text").textContent;
+      expect(banner).not.toContain("ClaudeTeam-M01-Dev/animations.json");
+    },
+  );
+});
