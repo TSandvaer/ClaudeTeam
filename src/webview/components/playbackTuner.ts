@@ -834,6 +834,39 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   }
 
   /**
+   * True when a frame sub-window is declared ANYWHERE in the cascade for the
+   * selected (char, anim) — draft (live), per-char baked, or pose-default. A
+   * no-window anim returns false so the preview is left full-clip (NIT 1
+   * 86ca2w1g9: only WINDOWED anims overlay startFrame/endFrame onto the preview).
+   */
+  function windowIsDeclared(): boolean {
+    const baked =
+      manifest.characters[selectedChar]?.animations?.[selectedAnim]?.playback;
+    const poseDefault = manifest.poseDefaults?.[selectedAnim];
+    const declared = (field: "startFrame" | "endFrame"): boolean =>
+      draftOverride[field] !== undefined ||
+      baked?.[field] !== undefined ||
+      poseDefault?.[field] !== undefined;
+    return declared("startFrame") || declared("endFrame");
+  }
+
+  /**
+   * The override the live preview should animate (NIT 1, 86ca2w1g9). The preview
+   * injects this as a flat one-entry `playbackTable`, and the flat-table branch of
+   * `resolvePlayback` does NO manifest merge (spritePlayer.ts:178-180) — so the
+   * window (`startFrame`/`endFrame`) the picker + shipped tile honor would be lost
+   * and the preview would play the FULL clip (0..count-1), making preview ≠ tile.
+   * For a WINDOWED anim, overlay the cascade-resolved window from `activeWindow()`
+   * so the preview animates only [startFrame..endFrame] — matching both the picker
+   * and the shipped tile. No-window anims are passed through unchanged (full clip).
+   */
+  function previewOverride(): PlaybackOverride {
+    if (!windowIsDeclared()) return draftOverride;
+    const { start, end } = activeWindow();
+    return { ...draftOverride, startFrame: start, endFrame: end };
+  }
+
+  /**
    * Repopulate the apex-frame picker for the selected (char, anim): an "Off"
    * option (clears the hold) plus one option per frame index in the ACTIVE
    * WINDOW [winStart, winEnd] (86ca2w1g9 — was [0, count), which let the sponsor
@@ -948,12 +981,16 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       previewHost.replaceChildren();
       return;
     }
+    // NIT 1 (86ca2w1g9): overlay the active window so the live preview animates
+    // only [startFrame..endFrame] for a windowed anim — matching the picker + the
+    // shipped tile (the flat playbackTable form does no manifest merge).
+    const overrideForPreview = previewOverride();
     if (preview === null) {
       preview = createPreviewController({
         char,
         animName: selectedAnim,
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
-        draftOverride,
+        draftOverride: overrideForPreview,
         ...(scheduleFrame !== undefined ? { scheduleFrame } : {}),
         ...(cancelFrame !== undefined ? { cancelFrame } : {}),
       });
@@ -963,7 +1000,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       // to the new character's sprite. (Previously only `selectedAnim` was
       // passed; the controller reused its construction-time char, so switching to
       // M01 left the preview painting F01.)
-      preview.update(char, selectedAnim, draftOverride);
+      preview.update(char, selectedAnim, overrideForPreview);
     }
     refreshPreviewNote();
   }
