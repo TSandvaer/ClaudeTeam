@@ -279,6 +279,72 @@ describe("savePlaybackOverride — pose-default write target", () => {
       finalDwellMs: 800,
     });
   });
+
+  // 86ca2cg8a gap #1 — DIRECT assertion that an apex pair (dwellFrameIndex +
+  // dwellMs) save with writeTarget:"pose-default" lands on the CORRECT path
+  // (<ws>/assets/sprites/pose-defaults.json — NOT a per-char file) with the
+  // CORRECT payload. The existing apex-pair writer tests above all target
+  // per-char (line ~220); the apex→pose-default path was only TRANSITIVELY
+  // covered (a generic pose-default merge + a separate per-char apex merge).
+  // This binds the two together: apex fields THROUGH the pose-default branch.
+  //
+  // NON-VACUITY (mutation-verified 2026-06-01 against playbackOverrideWriter.ts):
+  //  - PATH probe: reverting resolvePlaybackTargetPath's pose-default branch
+  //    (line 135-137) to fall through to the per-char join makes the resolved
+  //    path assertion FAIL (it would resolve to `.../""/animations.json`).
+  //  - PAYLOAD probe: dropping dwellFrameIndex/dwellMs from TUNABLE_KEYS (line
+  //    87-94) makes the apex fields fall through to the "preserve untouched"
+  //    path — they would NOT be written into a fresh entry, failing the toEqual.
+  it("writes the apex pair (dwellFrameIndex + dwellMs) to pose-defaults.json with the correct path + payload", () => {
+    const path = seedPoseDefaults({ playback: {} });
+    // PATH assertion (gap #1): the resolved write target IS the top-level
+    // pose-defaults.json, not any per-char animations.json.
+    expect(resolvePlaybackTargetPath(ws, "pose-default")).toBe(path);
+
+    const res = savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "pose-default",
+      animName: "idle_coffee",
+      override: { dwellFrameIndex: 4, dwellMs: 2000 },
+    });
+    expect(res.ok).toBe(true);
+
+    // PAYLOAD assertion (gap #1): both apex fields persisted under the anim key
+    // in the pose-defaults top-level playback block, nothing else.
+    const pb = readJson(path).playback as Record<string, unknown>;
+    expect(pb.idle_coffee).toEqual({ dwellFrameIndex: 4, dwellMs: 2000 });
+  });
+
+  // 86ca2cg8a gap #1 (companion) — an apex pose-default merge PRESERVES other
+  // anims + a co-located non-apex field on the SAME anim entry (structured
+  // field-level merge, not whole-file replace) on the pose-default path too.
+  it("apex pose-default merge preserves other anims + co-located tunable fields", () => {
+    const path = seedPoseDefaults({
+      _note: "shared pose defaults",
+      playback: {
+        idle_stretch: { speedMultiplier: 0.5 },
+        idle_coffee: { speedMultiplier: 0.6 },
+      },
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "pose-default",
+      animName: "idle_coffee",
+      // Co-set speed + apex pair in one save → all three land; idle_stretch
+      // and the _note comment survive untouched.
+      override: { speedMultiplier: 0.6, dwellFrameIndex: 4, dwellMs: 2000 },
+    });
+    const doc = readJson(path);
+    const pb = doc.playback as Record<string, unknown>;
+    expect(pb.idle_coffee).toEqual({
+      speedMultiplier: 0.6,
+      dwellFrameIndex: 4,
+      dwellMs: 2000,
+    });
+    // The sibling anim + the document-level comment are preserved.
+    expect(pb.idle_stretch).toEqual({ speedMultiplier: 0.5 });
+    expect(doc._note).toBe("shared pose defaults");
+  });
 });
 
 // ===========================================================================

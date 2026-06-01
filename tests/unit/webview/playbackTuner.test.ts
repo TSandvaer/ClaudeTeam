@@ -667,6 +667,73 @@ describe("§3.7 — shadowing warning", () => {
     const { root } = mount();
     expect(q<HTMLElement>(root, ".ct-tuner-shadow-warning").hidden).toBe(true);
   });
+
+  // 86ca2cg8a gap #4 (DECISION: test-only, current-behavior pin — see PR body).
+  // `refreshShadowWarning` (playbackTuner.ts:1184-1203) builds its `shadowed`
+  // list from ONLY speed / hold / mode — it does NOT inspect the apex pair
+  // (dwellFrameIndex / dwellMs). So when a (char, anim)'s ONLY per-char-shadowed
+  // field is the apex pair (speed/hold/mode all inherit pose-default / engine),
+  // flipping the write target to pose-default surfaces NO warning, even though
+  // the pose-default apex the sponsor sets WON'T show for this character (the
+  // per-char apex still wins in the engine).
+  //
+  // This is a PRODUCTION-behavior gap, not a test gap: surfacing apex shadowing
+  // would require adding the two apex fields to the `shadowed` checks + the
+  // warning copy — a UI change OWNED BY MAYA, out of this test-authoring scope.
+  // The assertion below PINS the current (apex-omitted) behavior so a future
+  // production change is deliberate: when Maya adds apex to the warning, THIS
+  // test must be updated to expect the warning to fire (it will then fail loud,
+  // flagging the intended behavior flip rather than letting it slip silently).
+  //
+  // NON-VACUITY: this is a behavior-PIN, not a fix-probe — it asserts what the
+  // code does TODAY. It would change outcome only when the production omission
+  // is corrected (the gap #4 follow-up), which is exactly when we want to be
+  // forced to revisit it.
+  it("does NOT warn when only the apex pair is per-char-shadowed (gap #4 — current behavior, flagged for Maya)", () => {
+    // M01/idle_apex bakes a per-char APEX pair only; speed/hold/mode inherit the
+    // pose-default (mode/hold) or engine (speed) — so apex is the ONLY per-char
+    // field that a pose-default write would shadow.
+    const manifest = {
+      characters: {
+        "ClaudeTeam-M01-Dev": {
+          character: "ClaudeTeam-M01-Dev",
+          defaultIdle: "idle_apex",
+          idlePool: ["idle_apex"],
+          animations: {
+            idle_apex: {
+              folder: "apex",
+              frames: [
+                "sprites/m01/apex/0.png",
+                "sprites/m01/apex/1.png",
+                "sprites/m01/apex/2.png",
+              ],
+              // per-char APEX only — no speed/hold/mode here.
+              playback: { dwellFrameIndex: 1, dwellMs: 2000 },
+            },
+          },
+        },
+      },
+      poseDefaults: {
+        // mode + hold inherit from pose-default (NOT per-char → not shadowed).
+        idle_apex: { playbackMode: "pingpong", finalDwellMs: 800 },
+      },
+    } as unknown as GeneratedSpriteManifest;
+
+    const { root } = mount({ manifest });
+    // Flip the write target to pose-default (the only target that can shadow).
+    const allChars = q<HTMLInputElement>(
+      root,
+      ".ct-tuner-writetarget-radio[data-target='pose-default']",
+    );
+    allChars.checked = true;
+    allChars.dispatchEvent(new Event("change"));
+
+    const warn = q<HTMLElement>(root, ".ct-tuner-shadow-warning");
+    // CURRENT behavior: speed/hold/mode are NOT per-char here, and apex is not
+    // inspected → no fields land in `shadowed` → the warning stays hidden,
+    // despite the per-char apex actually shadowing a pose-default apex write.
+    expect(warn.hidden).toBe(true);
+  });
 });
 
 // ===========================================================================
@@ -963,6 +1030,56 @@ describe("86ca2bqe1 AC2 — apex picker + ms slider drive the saved override", (
       expect(save.payload.writeTarget).toBe("per-char");
       expect(save.payload.characterFolder).toBe("ClaudeTeam-M01-Dev");
       expect(save.payload.animName).toBe("idle_stretch");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 86ca2cg8a gap #3 — finalDwellMs (Hold-final slider) + the apex pair
+  // (dwellFrameIndex/dwellMs) COEXIST in ONE save payload built freshly from
+  // the tuner DRAFT. The writer/engine coexistence is covered (integration
+  // playbackOverrideWriter "co-located tunable fields"; spritePlayer); the
+  // TUNER-DRAFT path — sponsor drags BOTH the Hold (final) slider and the apex
+  // controls in one session, and a single debounced save carries all of them —
+  // was not. Distinct from the FIX-1 test (line ~1330) where finalDwellMs comes
+  // from a PRE-SEEDED saved override; here every value is dragged this session.
+  //
+  // NON-VACUITY (mutation-verified 2026-06-01 against playbackTuner.ts):
+  //  - Reverting the Hold-final slider's `draftOverride = {...draftOverride,
+  //    finalDwellMs}` (line ~414) drops finalDwellMs → the finalDwellMs
+  //    assertion FAILS while the apex fields stay.
+  //  - Reverting the apex wiring (onApexFrameChange / apex-ms slider, line
+  //    ~478/~962) drops the apex pair → those assertions FAIL while
+  //    finalDwellMs stays. Each half independently fails the coexistence claim.
+  it("a fresh draft with finalDwellMs + apex pair rides ONE save payload (gap #3 coexistence)", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      // Drag the Hold (final) slider to 900ms.
+      const hold = q<HTMLInputElement>(root, ".ct-tuner-hold .ct-tuner-slider");
+      hold.value = "900";
+      hold.dispatchEvent(new Event("input"));
+      // Pick apex frame 2 + drag the apex ms slider to 3000 — same session.
+      const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+      picker.value = "2";
+      picker.dispatchEvent(new Event("change"));
+      const apexMs = q<HTMLInputElement>(root, ".ct-tuner-apex-ms .ct-tuner-slider");
+      apexMs.value = "3000";
+      apexMs.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      // ONE trailing save carries finalDwellMs AND the apex pair together — the
+      // draft never drops one when the other is set.
+      const saves = posted.filter(
+        (m) => m.type === "ui:save-playback-override",
+      );
+      const save = lastSave(posted)!;
+      expect(save.payload.override.finalDwellMs).toBe(900);
+      expect(save.payload.override.dwellFrameIndex).toBe(2);
+      expect(save.payload.override.dwellMs).toBe(3000);
+      // The debounce coalesced the three drags into a single trailing save
+      // (the coexisting fields share one payload, not three racing ones).
+      expect(saves.length).toBe(1);
     } finally {
       vi.useRealTimers();
     }
