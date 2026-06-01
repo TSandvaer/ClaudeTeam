@@ -52,7 +52,10 @@ import { renderSessionBlock } from "./components/sessionBlock.js";
 import { renderEmptyState, renderNoSetupState } from "./components/emptyState.js";
 import { renderSuggestSetupCard } from "./components/suggestSetupCard.js";
 import { renderManageTeamPanel } from "./components/manageTeamPanel.js";
-import { renderPlaybackTuner } from "./components/playbackTuner.js";
+import {
+  renderPlaybackTuner,
+  getTunerPanelHandle,
+} from "./components/playbackTuner.js";
 import { showSetupBanner } from "./components/setupBanner.js";
 import {
   renderErrorChip,
@@ -460,6 +463,31 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
   // with the tuner; closing returns to the normal dashboard. Handled BEFORE the
   // Manage Team switch so the two never co-mount (a command opens exactly one).
   if (tunerPanelOpen === true) {
+    // BLOCKER B2 (86ca2e697): DON'T rebuild an already-open tuner on a poll tick.
+    //
+    // The dashboard fires `renderFull` on every ~2s `state:full` poll. B1
+    // (86ca2189v) preserved the panel's VALUES across that rebuild, but the
+    // rebuild ITSELF — `mount.replaceChildren()` + a fresh `renderPlaybackTuner`
+    // — still tore down the live DOM each tick. That closes any OPEN native
+    // `<select>` popup (apex frame / Character / Animation) and drops focus +
+    // in-progress interaction: the sponsor's report "the frame selection
+    // dropdown disappears before I can select anything."
+    //
+    // The fix: while the panel is open AND already mounted, leave its
+    // interactive DOM intact (it self-manages selection / draft / live preview
+    // in its own closure — B1 tracker + the preview controller's own frame
+    // timer) and ONLY push the latest save-ack into the banner in-place via the
+    // imperative handle. A genuine relevant change — open (no panel yet) or
+    // close (handled by the fall-through to the dashboard branch when
+    // `tunerPanelOpen` flips false) — still rebuilds. The save-ack update is
+    // idempotent: an unchanged `tunerSaveAck` re-renders the same banner text.
+    const existing = mount.querySelector<HTMLElement>(".ct-tuner-panel");
+    const handle = getTunerPanelHandle(existing);
+    if (handle) {
+      handle.applySaveAck(tunerSaveAck ?? null);
+      return;
+    }
+    // First open (no live panel) → build it.
     mount.replaceChildren();
     mount.appendChild(
       renderPlaybackTuner({

@@ -107,6 +107,35 @@ export interface PlaybackTunerProps {
   cancelFrame?: (handle: number) => void;
 }
 
+/**
+ * BLOCKER B2 (86ca2e697) — imperative handle for the LIVE (already-mounted)
+ * tuner panel. `renderFull` looks the open panel's root up in this map on a poll
+ * tick and, instead of REBUILDING the panel DOM (which tears down any open
+ * native `<select>` popup + focus + in-progress interaction — the dropdown that
+ * "disappears before I can select anything"), it leaves the panel intact and
+ * just pushes the latest save-ack into the banner in-place via `applySaveAck`.
+ *
+ * Keyed by the root element via a WeakMap so the handle is GC'd with the panel
+ * (no DOM-attribute pollution, no leak across panel closes/reopens).
+ */
+export interface TunerPanelHandle {
+  /** Update the persistence banner from a fresh save ack WITHOUT a rebuild. */
+  applySaveAck(ack: { ok: boolean; error?: string } | null): void;
+}
+
+const PANEL_HANDLES = new WeakMap<HTMLElement, TunerPanelHandle>();
+
+/**
+ * Look up the imperative handle for an already-mounted tuner panel root. Returns
+ * `undefined` for any element that isn't a live tuner panel (e.g. a stale node).
+ * `renderFull` uses this to decide rebuild-vs-update-in-place.
+ */
+export function getTunerPanelHandle(
+  el: HTMLElement | null | undefined,
+): TunerPanelHandle | undefined {
+  return el ? PANEL_HANDLES.get(el) : undefined;
+}
+
 /** Human label for a cascade layer (the source-tag chip text). */
 function layerLabel(layer: CascadeLayer): string {
   switch (layer) {
@@ -130,13 +159,18 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     spriteBaseUri,
     postMessage,
     onClose,
-    saveAck = null,
+    saveAck: initialSaveAck = null,
     stateTracker,
     schedule = (cb, ms) => window.setTimeout(cb, ms) as unknown as number,
     cancelTimer = (h) => window.clearTimeout(h),
     scheduleFrame,
     cancelFrame,
   } = props;
+
+  // B2 (86ca2e697): the latest save ack is now MUTABLE — `applySaveAck` (the
+  // imperative handle below) updates it in-place so the banner reflects a fresh
+  // ack WITHOUT the panel being rebuilt (a rebuild would close any open select).
+  let saveAck = initialSaveAck;
 
   const root = document.createElement("section");
   root.className = "ct-tuner-panel";
@@ -168,6 +202,10 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     empty.textContent = "No sprite characters available to tune.";
     root.appendChild(empty);
     root.addEventListener("keydown", onEscapeClose);
+    // B2 (86ca2e697): register a no-op handle so the skip-rebuild logic in
+    // `renderFull` treats the empty-state panel uniformly (nothing to update —
+    // there are no controls — but the panel is still "live" + must not flicker).
+    PANEL_HANDLES.set(root, { applySaveAck: () => undefined });
     return root;
   }
 
@@ -434,6 +472,15 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   // Capture the (seeded or restored) state so the very first poll tick after a
   // fresh open still has something to restore from.
   persist();
+
+  // B2 (86ca2e697): register the imperative handle so `renderFull` can refresh
+  // the banner on a poll tick WITHOUT rebuilding (and tearing down) this panel.
+  PANEL_HANDLES.set(root, {
+    applySaveAck(ack) {
+      saveAck = ack;
+      renderBanner();
+    },
+  });
 
   return root;
 

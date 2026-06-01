@@ -39,6 +39,11 @@ import {
   SAVE_DEBOUNCE_MS,
 } from "../../../src/webview/components/playbackTuner.js";
 import { createTunerStateTracker } from "../../../src/webview/tunerStateTracker.js";
+import {
+  renderFull,
+  type RenderableState,
+  type RenderContext,
+} from "../../../src/webview/render.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -935,6 +940,146 @@ describe("86ca2bqe1 AC3 — apex source-table rows render effective value + laye
     expect(
       q<HTMLElement>(apexHold, ".ct-tuner-source-effective").textContent,
     ).toBe("2000 ms");
+  });
+});
+
+// ===========================================================================
+// BLOCKER B2 (86ca2e697) — the OPEN tuner's interactive DOM survives the ~2s
+// poll-tick `renderFull` (not just its VALUES — the live DOM node itself).
+//
+// THE LOAD-BEARING test for this ticket (testing-strategy.md § Layer-2.5 —
+// REQUIRED, non-vacuous). B1 (86ca2189v) preserved the panel's VALUES across a
+// rebuild, but `renderFull` still ROOT-SWAPPED a fresh panel on every ~2s poll
+// tick — tearing down the live DOM, which closes any OPEN native `<select>`
+// popup, drops focus, and aborts an in-progress selection. Sponsor symptom: "the
+// frame selection dropdown disappears before I can select anything."
+//
+// Unlike the B1 block above (which drives `renderPlaybackTuner` directly via
+// `pollTickRemount`, simulating the OLD rebuild-and-restore behavior), this
+// block drives the REAL `renderFull` poll-tick path with `tunerPanelOpen: true`,
+// because the fix lives in `renderFull`'s rebuild-vs-skip decision. The probe is
+// DOM-NODE IDENTITY: a poll tick must NOT replace the panel element (===), nor
+// re-create the apex `<select>` (===), nor reset its in-progress `.value`.
+//
+// NON-VACUITY (verified by revert-probe): reverting the B2 fix in `render.ts` —
+// i.e. restoring the unconditional `mount.replaceChildren()` + fresh
+// `renderPlaybackTuner` — makes EVERY identity assertion below FAIL: the panel
+// node, the apex select node, and the Character select node are all rebuilt, so
+// `===` is false and the in-progress `.value` set before the tick is lost.
+// ===========================================================================
+
+describe("B2 (86ca2e697) — open tuner DOM survives the poll-tick renderFull (dropdown not torn down)", () => {
+  function tunerCtx(
+    mount: HTMLElement,
+    overrides: Partial<RenderContext> = {},
+  ): RenderContext {
+    return {
+      mount,
+      postMessage: vi.fn(),
+      tunerPanelOpen: true,
+      tunerStateTracker: createTunerStateTracker(),
+      spriteBaseUri: "vscode-webview://host/dist/webview",
+      ...overrides,
+    };
+  }
+
+  // Empty tree — the tuner branch in renderFull short-circuits before the
+  // session walk, so no live sessions are needed to drive the panel.
+  function emptyTree(): RenderableState {
+    return { sessions: [], rosterErrors: [] } as unknown as RenderableState;
+  }
+
+  it("the apex frame <select> is NOT torn down by a poll tick mid-selection", () => {
+    const mount = document.createElement("div");
+    const ctx = tunerCtx(mount);
+
+    // First render → the panel mounts.
+    renderFull(ctx, emptyTree());
+    const panelBefore = q<HTMLElement>(mount, ".ct-tuner-panel");
+    const apexBefore = q<HTMLSelectElement>(mount, ".ct-tuner-apex-frame");
+
+    // The sponsor opens the apex dropdown and is mid-selection — model the
+    // in-progress interaction by setting the select's value (the value a click
+    // on an <option> would land). jsdom has no native popup, so DOM-node
+    // identity + retained `.value` is the testable proxy for "the open dropdown
+    // and the selection-in-flight survive."
+    apexBefore.value = "1";
+
+    // ── The ~2s poll tick fires: renderFull is called again, same context. ──
+    renderFull(ctx, emptyTree());
+
+    const panelAfter = q<HTMLElement>(mount, ".ct-tuner-panel");
+    const apexAfter = q<HTMLSelectElement>(mount, ".ct-tuner-apex-frame");
+
+    // Load-bearing: the SAME nodes (no rebuild). Reverting the B2 skip makes
+    // these `===` checks fail (fresh nodes) and drops the in-progress value.
+    expect(panelAfter).toBe(panelBefore);
+    expect(apexAfter).toBe(apexBefore);
+    // The in-progress selection survived (a rebuild would reset it to "Off").
+    expect(apexAfter.value).toBe("1");
+    // Still exactly one panel — no duplicate mounted alongside the old one.
+    expect(mount.querySelectorAll(".ct-tuner-panel").length).toBe(1);
+  });
+
+  it("the Character + Animation <select>s also survive the poll tick (same class)", () => {
+    const mount = document.createElement("div");
+    const ctx = tunerCtx(mount);
+
+    renderFull(ctx, emptyTree());
+    const charBefore = q<HTMLSelectElement>(mount, ".ct-tuner-char-select");
+    const animBefore = q<HTMLSelectElement>(mount, ".ct-tuner-anim-select");
+
+    renderFull(ctx, emptyTree());
+
+    expect(q<HTMLSelectElement>(mount, ".ct-tuner-char-select")).toBe(charBefore);
+    expect(q<HTMLSelectElement>(mount, ".ct-tuner-anim-select")).toBe(animBefore);
+  });
+
+  it("a save-ack between poll ticks updates the banner IN-PLACE (no rebuild)", () => {
+    const mount = document.createElement("div");
+    const tracker = createTunerStateTracker();
+
+    // Open with no ack → neutral banner.
+    renderFull(
+      tunerCtx(mount, { tunerStateTracker: tracker, tunerSaveAck: null }),
+      emptyTree(),
+    );
+    const panelBefore = q<HTMLElement>(mount, ".ct-tuner-panel");
+    expect(
+      q<HTMLElement>(mount, ".ct-tuner-banner-text").textContent,
+    ).toContain("auto-save");
+
+    // The save-ack re-render fires (onPlaybackOverrideSaved) with ok:true.
+    renderFull(
+      tunerCtx(mount, { tunerStateTracker: tracker, tunerSaveAck: { ok: true } }),
+      emptyTree(),
+    );
+
+    // Banner updated to success — WITHOUT rebuilding the panel (same node).
+    expect(q<HTMLElement>(mount, ".ct-tuner-panel")).toBe(panelBefore);
+    const banner = q<HTMLElement>(mount, ".ct-tuner-banner");
+    expect(banner.dataset.kind).toBe("success");
+    expect(
+      q<HTMLElement>(mount, ".ct-tuner-banner-text").textContent,
+    ).toContain("animations.json");
+  });
+
+  it("closing the tuner (tunerPanelOpen=false) DOES tear the panel down", () => {
+    const mount = document.createElement("div");
+    const tracker = createTunerStateTracker();
+
+    renderFull(
+      tunerCtx(mount, { tunerStateTracker: tracker }),
+      emptyTree(),
+    );
+    expect(mount.querySelector(".ct-tuner-panel")).not.toBeNull();
+
+    // Close: the dashboard branch runs and replaces the mount contents.
+    renderFull(
+      { mount, postMessage: vi.fn(), tunerPanelOpen: false } as RenderContext,
+      emptyTree(),
+    );
+    expect(mount.querySelector(".ct-tuner-panel")).toBeNull();
   });
 });
 
