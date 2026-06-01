@@ -40,6 +40,10 @@
 
 import type { WebviewMessage } from "../../shared/messages.js";
 import type { PlaybackMode, PlaybackOverride } from "../sprites/spritePlayer.js";
+import {
+  DWELL_MS_DEFAULT,
+  PEAK_DWELL_MS_DEFAULT,
+} from "../sprites/spritePlayer.js";
 import type { GeneratedSpriteManifest } from "../sprites/spriteManifest.js";
 import { GENERATED_SPRITE_MANIFEST } from "../sprites/generatedManifest.js";
 import type { TunerStateTracker } from "../tunerStateTracker.js";
@@ -75,6 +79,13 @@ const APEX_MS_MAX = 10000;
 const APEX_MS_STEP = 50;
 /** Picker sentinel value for "no apex hold" (clears dwellFrameIndex). */
 const APEX_FRAME_OFF = "";
+
+// Engine-default field values (mirror cascadeSource.ts ENGINE_DEFAULTS) — used
+// to seed the controls for the pose-default write target, which skips per-char
+// (BUG 1 86ca2uytw).
+const ENGINE_DEFAULT_SPEED = 1;
+const ENGINE_DEFAULT_FINAL_DWELL_MS = DWELL_MS_DEFAULT;
+const ENGINE_DEFAULT_DWELL_MS = PEAK_DWELL_MS_DEFAULT;
 
 export interface PlaybackTunerProps {
   /** The baked manifest (default GENERATED_SPRITE_MANIFEST). Tests inject. */
@@ -173,6 +184,38 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   // imperative handle below) updates it in-place so the banner reflects a fresh
   // ack WITHOUT the panel being rebuilt (a rebuild would close any open select).
   let saveAck = initialSaveAck;
+  // BUG 2 (86ca2uytw — stale-ack re-stamp). The boot closure owns `tunerSaveAck`
+  // and re-pushes it through `applySaveAck` on every ~2s poll tick (#167's
+  // skip-rebuild path). After a SUCCESSFUL save, a user selection / write-target
+  // change moves the banner's (selectedChar, writeTarget) — so the next poll
+  // tick's re-push would re-stamp "Saved to <NEW file>" for a file that was
+  // never saved. `ackDismissed` latches true on any user selection / target
+  // change while a success ack is showing; while latched, `applySaveAck`
+  // suppresses an incoming success ack (renders neutral) instead of re-stamping
+  // the new file. The panel UN-latches the moment it emits a fresh save
+  // (`emitSave`), so the ack for that genuine new save is shown normally.
+  let ackDismissed = false;
+  // BUG 2 (86ca2uytw): the panel's INITIAL render calls onSelectionChange /
+  // renderForRestoredDraft to paint first-state — those must NOT dismiss the
+  // build-time ack (a fresh-build-with-ack entry is legitimate, FIX 2 86ca2fvv9).
+  // Only USER-driven selection / target changes (the event listeners, fired
+  // after construction) dismiss. This latches false once init completes.
+  let initializing = true;
+
+  /**
+   * BUG 2 (86ca2uytw). A user-driven selection / write-target change means the
+   * current success ack no longer describes what the banner now points at —
+   * latch it dismissed so a poll-tick re-push of that ack does not re-stamp the
+   * new file. A subsequent real save un-latches via `emitSave`. No-op during the
+   * panel's initial construction (a build-time ack is legitimate).
+   */
+  function dismissCurrentAck(): void {
+    if (initializing) return;
+    if (saveAck?.ok === true) {
+      ackDismissed = true;
+    }
+    saveAck = null;
+  }
 
   const root = document.createElement("section");
   root.className = "ct-tuner-panel";
@@ -423,13 +466,20 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   root.appendChild(sectionDivider("Write target"));
   const writeTargetCtl = buildWriteTargetControl(writeTarget, (t) => {
     writeTarget = t;
-    // FIX 1 (86ca2fvv9). Field-omission == clear applies PER FILE, so the draft
-    // must reflect whichever file the save now targets. Re-seed from the new
-    // target's saved block so a subsequent single-field edit preserves THAT
-    // file's other saved fields (a draft seeded from per-char would otherwise
-    // wipe the pose-default file's untouched fields, and vice-versa).
-    draftOverride = readSavedPerCharOverride(selectedChar, selectedAnim);
-    refreshShadowWarning();
+    // BUG 1 (86ca2uytw — data-loss). FIX 1 (86ca2fvv9) re-seeds `draftOverride`
+    // from the new target's saved block (field-omission == clear applies PER
+    // FILE), but it did NOT repaint the controls / preview / summary the way
+    // onSelectionChange does. Result: the sliders + apex picker + mode kept
+    // SHOWING the old per-char values while the draft no longer carried them, so
+    // the next single edit saved the (invisible) re-seeded draft and silently
+    // dropped every value still on screen. Route the write-target flip through
+    // the SAME reseed+repaint helper onSelectionChange uses so the two paths
+    // can't diverge again — the controls always reflect the live draft.
+    reseedDraftAndRepaint();
+    // BUG 2 (86ca2uytw): a target flip moves the banner's filename; dismiss any
+    // still-truthy success ack so a poll-tick re-push doesn't re-stamp it.
+    dismissCurrentAck();
+    renderBanner();
     // Changing the target alone does not change the draft's net effect on disk;
     // no auto-save until a value changes. (A target flip with no field set has
     // nothing to persist.) B1: but it DOES change survivable UI state — mirror it
@@ -488,6 +538,9 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   // Capture the (seeded or restored) state so the very first poll tick after a
   // fresh open still has something to restore from.
   persist();
+  // BUG 2 (86ca2uytw): construction done — subsequent selection / target changes
+  // are USER-driven and DO dismiss a stale success ack.
+  initializing = false;
 
   // B2 (86ca2e697): register the imperative handle so `renderFull` can refresh
   // the banner on a poll tick WITHOUT rebuilding (and tearing down) this panel.
@@ -497,6 +550,16 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   // the open panel on poll ticks (rebuilding would tear down an open dropdown).
   PANEL_HANDLES.set(root, {
     applySaveAck(ack) {
+      // BUG 2 (86ca2uytw): while a user selection / write-target change has
+      // dismissed the prior success ack, suppress an incoming success ack — it
+      // no longer describes the file the banner now points at, so re-stamping
+      // "Saved to <new file>" would lie. A genuine NEW save un-latches
+      // `ackDismissed` in `emitSave` before its ack returns, so real saves show.
+      if (ackDismissed && ack?.ok === true) {
+        saveAck = null;
+        renderBanner();
+        return;
+      }
       saveAck = ack;
       renderBanner();
       // Only a confirmed write updates the summary — an error/idle ack leaves
@@ -547,22 +610,90 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
    * rebuild the preview, refresh the source table + warnings.
    */
   function onSelectionChange(): void {
-    // FIX 1 (86ca2fvv9 — data-loss bug). Seed the draft with the EXISTING saved
-    // per-char override for this (char, anim) — NOT empty. The save payload is
-    // field-omission == clear (§4.1): the host removes any field absent from the
-    // payload. So if the draft started empty and the sponsor changed ONE field,
-    // the save emitted e.g. `{dwellFrameIndex:8}` and WIPED the pre-existing
-    // `speedMultiplier:0.5` (and every other saved field) from the json. Seeding
-    // from the persisted per-char block means a single-field edit carries the
-    // untouched saved fields along, so they survive the write.
+    reseedDraftAndRepaint();
+    // BUG 2 (86ca2uytw): a (char, anim) change moves the banner's filename;
+    // dismiss any still-truthy success ack so a poll-tick re-push of that same
+    // ack doesn't re-stamp "Saved to <new file>" for an unsaved file.
+    dismissCurrentAck();
+    renderBanner();
+    persist();
+  }
+
+  /**
+   * BUG 1 (86ca2uytw). The SHARED re-seed + full repaint used by BOTH a (char,
+   * anim) change (onSelectionChange) AND a write-target flip (the write-target
+   * onChange). Keeping the two paths on this one helper is the structural
+   * guarantee they can't diverge again — the write-target path used to re-seed
+   * the draft WITHOUT repainting, so the controls showed stale values while the
+   * draft was re-seeded → the next edit dropped the visible-but-undrafted
+   * values.
+   *
+   * FIX 1 (86ca2fvv9 — data-loss). Seed the draft with the EXISTING saved
+   * override block for this (char, anim) at the CURRENT write target — NOT
+   * empty. The save payload is field-omission == clear (§4.1): the host removes
+   * any field absent from the payload. So if the draft started empty and the
+   * sponsor changed ONE field, the save emitted e.g. `{dwellFrameIndex:8}` and
+   * WIPED the pre-existing `speedMultiplier:0.5` from the json. Seeding from the
+   * persisted block means a single-field edit carries the untouched saved fields
+   * along, so they survive the write.
+   */
+  function reseedDraftAndRepaint(): void {
     draftOverride = readSavedPerCharOverride(selectedChar, selectedAnim);
-    const source = computeCascadeSource(selectedChar, selectedAnim, manifest);
-    seedSlidersFromSource(source);
+    // The CONTROLS (sliders / apex picker / mode) reflect the editable surface
+    // for the CURRENT write target — the draft over that target's inheritance
+    // chain — so they never lie about what a save will write. The source TABLE
+    // (below) still shows the BAKED engine truth (per-char wins), with the
+    // shadow-warning explaining when a pose-default edit is masked per-char.
+    seedControlsForWriteTarget();
     rebuildPreview();
-    renderSourceTable(source);
+    renderSourceTable(computeCascadeSource(selectedChar, selectedAnim, manifest));
     refreshPreviewNote();
     refreshShadowWarning();
-    persist();
+  }
+
+  /**
+   * BUG 1 (86ca2uytw). Seed the CONTROLS to the draft-effective value for the
+   * active write target. Per field: the draft value if set, else the write
+   * target's inherited value, else the engine default. For `per-char` the chain
+   * is per-char → pose-default → engine (the full baked cascade, so the per-char
+   * behavior is unchanged — #168). For `pose-default` the chain SKIPS the
+   * per-char layer (pose-default → engine), because a pose-default edit must not
+   * be shown as the per-char value it can't actually change — flipping to
+   * "All characters" on a char whose per-char block holds 0.5× must show the
+   * pose-default/engine default (1.00×), not the masking per-char 0.5×.
+   */
+  function seedControlsForWriteTarget(): void {
+    if (writeTarget === "per-char") {
+      seedSlidersFromSource(
+        computeCascadeSource(selectedChar, selectedAnim, manifest),
+      );
+      return;
+    }
+    // pose-default: draft → pose-default → ENGINE default per field (the
+    // per-char layer is deliberately SKIPPED — a pose-default edit can't change
+    // a per-char value, so showing the per-char value would mislead).
+    const poseDefault = manifest.poseDefaults?.[selectedAnim];
+    const speedV =
+      draftOverride.speedMultiplier ??
+      poseDefault?.speedMultiplier ??
+      ENGINE_DEFAULT_SPEED;
+    const holdV =
+      draftOverride.finalDwellMs ??
+      poseDefault?.finalDwellMs ??
+      ENGINE_DEFAULT_FINAL_DWELL_MS;
+    const modeV: PlaybackMode =
+      draftOverride.playbackMode ?? poseDefault?.playbackMode ?? "loop";
+    const apexIdx =
+      draftOverride.dwellFrameIndex ?? poseDefault?.dwellFrameIndex;
+    const apexMsV =
+      draftOverride.dwellMs ??
+      poseDefault?.dwellMs ??
+      ENGINE_DEFAULT_DWELL_MS;
+    speed.setValue(speedV);
+    hold.setValue(holdV);
+    mode.setValue(modeV);
+    populateApexFrames(typeof apexIdx === "number" ? apexIdx : undefined);
+    apexMs.setValue(apexMsV);
   }
 
   /**
@@ -793,6 +924,10 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
 
   /** Post the save message (§4.1). */
   function emitSave(): void {
+    // BUG 2 (86ca2uytw): a genuine save is in flight — clear the dismiss latch
+    // so its returning ok-ack is shown (the suppression only guards the STALE
+    // ack a selection/target change orphaned, not the next real save).
+    ackDismissed = false;
     const payload: Extract<
       WebviewMessage,
       { type: "ui:save-playback-override" }

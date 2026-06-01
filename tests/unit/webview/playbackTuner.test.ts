@@ -1463,3 +1463,146 @@ describe("FIX 2 (86ca2fvv9) — saved draft shows in the summary row after save-
     );
   });
 });
+
+// ===========================================================================
+// SWEEP 86ca2ut8w — lifecycle bug-hunt findings (Sage, adopted by Maya for the
+// fix in 86ca2uytw). Two confirmed defects at the SEAMS between the six merged
+// tuner PRs. Authored by Sage as `it.fails` so CI stayed GREEN while the bug
+// existed; flipped to plain `it(...)` here because the fix in 86ca2uytw closes
+// both — they now PASS, and go RED if the fix is reverted (non-vacuous).
+//
+// BUG 1 (MAJOR — data-loss + UI-lie): the write-target radio's onChange re-seeds
+//   `draftOverride` from the new target's saved block (FIX 1 86ca2fvv9) but did
+//   NOT repaint the sliders / apex picker / mode radio / preview / summary to
+//   match. So after a flip the controls kept SHOWING the old per-char values
+//   (e.g. speed 0.50×, apex frame 4) while the draft no longer carried them; the
+//   next single edit then saved the (invisible) re-seeded draft, silently
+//   dropping every value still on screen. Fix: route the write-target flip
+//   through the SAME reseed+repaint helper onSelectionChange uses
+//   (reseedDraftAndRepaint), and seed the CONTROLS for the active write target
+//   (pose-default skips per-char) so they reflect the live draft.
+//
+// BUG 2 (MINOR — honesty-surface lies): after a successful save, switching the
+//   Character (or flipping the write target) and then letting a ~2s poll tick
+//   re-apply the still-truthy `tunerSaveAck:{ok:true}` made the banner re-name
+//   the file from the CURRENT (selectedChar, writeTarget) — claiming "Saved to
+//   <new file>" even though nothing was saved there. Fix: latch the success ack
+//   dismissed on any selection/target change (dismissCurrentAck); applySaveAck
+//   suppresses a re-pushed success ack while latched; emitSave un-latches for the
+//   next real save.
+// ===========================================================================
+
+describe("SWEEP 86ca2ut8w — write-target flip must repaint controls (BUG 1)", () => {
+  // A manifest where M01/idle_stretch bakes per-char speed + apex frame, and the
+  // pose-default for that anim is ABSENT — so flipping target re-seeds to {}.
+  function flipFixture(): GeneratedSpriteManifest {
+    return {
+      characters: {
+        "ClaudeTeam-M01-Dev": {
+          character: "ClaudeTeam-M01-Dev",
+          defaultIdle: "idle_stretch",
+          idlePool: ["idle_stretch"],
+          animations: {
+            idle_stretch: {
+              folder: "stretch",
+              frames: ["a.png", "b.png", "c.png", "d.png", "e.png"],
+              playback: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+            },
+          },
+        },
+      },
+      poseDefaults: {},
+    } as unknown as GeneratedSpriteManifest;
+  }
+
+  it("after flipping per-char → pose-default, the controls repaint to the re-seeded draft (not the stale per-char values)", () => {
+    const { root } = mount({ manifest: flipFixture() });
+    // Boot: M01/idle_stretch shows per-char speed 0.50× + apex frame 4.
+    expect(
+      q<HTMLElement>(root, ".ct-tuner-speed .ct-tuner-control-readout").textContent,
+    ).toBe("0.50×");
+    expect(q<HTMLSelectElement>(root, ".ct-tuner-apex-frame").value).toBe("4");
+
+    // Flip to "All characters" (pose-default). Draft re-seeds from poseDefaults
+    // (absent → {}). The controls MUST repaint to the new draft's effective
+    // values, NOT keep showing the old per-char speed/apex.
+    const pd = q<HTMLInputElement>(
+      root,
+      ".ct-tuner-writetarget-radio[data-target='pose-default']",
+    );
+    pd.checked = true;
+    pd.dispatchEvent(new Event("change"));
+
+    // CORRECT post-fix behavior: speed shows the engine default (1.00×) and the
+    // apex picker shows "Off" — matching the empty re-seeded draft.
+    expect(
+      q<HTMLElement>(root, ".ct-tuner-speed .ct-tuner-control-readout").textContent,
+    ).toBe("1.00×");
+    expect(q<HTMLSelectElement>(root, ".ct-tuner-apex-frame").value).toBe("");
+  });
+
+  it("the live preview rebuilds to the re-seeded draft on a write-target flip (not left stale)", () => {
+    const { root } = mount({ manifest: flipFixture() });
+    const boxBefore = root.querySelector<HTMLElement>(
+      ".ct-tuner-preview-host .sprite-box",
+    );
+    const pd = q<HTMLInputElement>(
+      root,
+      ".ct-tuner-writetarget-radio[data-target='pose-default']",
+    );
+    pd.checked = true;
+    pd.dispatchEvent(new Event("change"));
+    const boxAfter = root.querySelector<HTMLElement>(
+      ".ct-tuner-preview-host .sprite-box",
+    );
+    // CORRECT post-fix behavior: the flip re-seeds the draft → the preview is
+    // rebuilt (a fresh box node) so it reflects the new draft.
+    expect(boxAfter).not.toBe(boxBefore);
+  });
+});
+
+describe("SWEEP 86ca2ut8w — stale save-ack must not re-name the banner (BUG 2)", () => {
+  // Drives the REAL renderFull poll-tick path (where applySaveAck re-renders the
+  // banner from the CURRENT selectedChar). renderFull uses the baked manifest,
+  // whose first char is ClaudeTeam-F01-Dev — so we boot on F01 and switch to M01.
+  function tunerCtx(
+    mountEl: HTMLElement,
+    tracker: ReturnType<typeof createTunerStateTracker>,
+    ack: { ok: boolean; error?: string } | null,
+  ): RenderContext {
+    return {
+      mount: mountEl,
+      postMessage: vi.fn(),
+      tunerPanelOpen: true,
+      tunerStateTracker: tracker,
+      tunerSaveAck: ack,
+      spriteBaseUri: "vscode-webview://host/dist/webview",
+    } as RenderContext;
+  }
+  const emptyTree = (): RenderableState =>
+    ({ sessions: [], rosterErrors: [] }) as unknown as RenderableState;
+
+  it("a poll tick after a character switch does not re-stamp the stale success banner onto the new char's file", () => {
+    const mountEl = document.createElement("div");
+    const tracker = createTunerStateTracker();
+
+    // Boot the panel (F01), then a successful save lands → banner names F01.
+    renderFull(tunerCtx(mountEl, tracker, { ok: true }), emptyTree());
+    expect(
+      q<HTMLElement>(mountEl, ".ct-tuner-banner-text").textContent,
+    ).toContain("ClaudeTeam-F01-Dev/animations.json");
+
+    // The sponsor switches the Character to M01. Nothing has been saved for M01.
+    const charSel = q<HTMLSelectElement>(mountEl, ".ct-tuner-char-select");
+    charSel.value = "ClaudeTeam-M01-Dev";
+    charSel.dispatchEvent(new Event("change"));
+
+    // A ~2s poll tick fires, re-applying the STILL-truthy save-ack via the
+    // imperative handle → renderBanner runs against the new selectedChar.
+    renderFull(tunerCtx(mountEl, tracker, { ok: true }), emptyTree());
+
+    // CORRECT post-fix behavior: the banner must NOT claim a save for M01.
+    const banner = q<HTMLElement>(mountEl, ".ct-tuner-banner-text").textContent;
+    expect(banner).not.toContain("ClaudeTeam-M01-Dev/animations.json");
+  });
+});
