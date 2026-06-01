@@ -157,6 +157,22 @@ const PLAYBACK_NUMERIC_FIELDS = [
 ];
 
 /**
+ * All recognized playback field names (numeric + `playbackMode`). Used to
+ * fingerprint a "looks like a playback entry" object when detecting misplaced
+ * pose-defaults (E3 NIT 86ca292rr).
+ */
+const PLAYBACK_FIELD_NAMES = [...PLAYBACK_NUMERIC_FIELDS, "playbackMode"];
+
+/**
+ * Root keys that are legitimately allowed at the top of `pose-defaults.json`:
+ *   - `playback` — the wrapper that holds the actual pose-default entries.
+ *   - `_note` — human documentation (the file ships with one).
+ * Anything else at the root that looks like a playback entry is the editor
+ * footgun this detector warns about.
+ */
+const POSE_DEFAULTS_ROOT_KEYS = ["playback", "_note"];
+
+/**
  * Sanitize one anim's raw playback object from `animations.json` into the
  * shape baked onto the manifest (anim-playback epic E2, 86ca2187g). Pure —
  * no filesystem, exported for unit coverage.
@@ -254,6 +270,55 @@ export function buildPoseDefaults(rawBlock) {
 }
 
 /**
+ * Detect anim-looking keys placed at the JSON ROOT of `pose-defaults.json`
+ * instead of nested under the expected `playback` wrapper (E3 NIT 86ca292rr).
+ *
+ * The editor footgun: pose-default entries belong under `playback`
+ * (`{ "playback": { "idle_stretch": {...} } }`). If a sponsor writes the entry
+ * at the root (`{ "idle_stretch": {...} }`), `buildPoseDefaults` only ever reads
+ * `parsed.playback`, so the root key is SILENTLY ignored — the sponsor edits +
+ * rebuilds and nothing changes, with no signal why. This emits a build warning
+ * naming each misplaced key so the mistake is visible.
+ *
+ * Detection policy (conservative — warn only on a strong signal, never a hard
+ * failure):
+ *   - only ROOT keys that are NOT one of the legitimate root keys
+ *     (`playback`, `_note`) are candidates.
+ *   - a candidate is flagged ONLY when its value is a plain object that carries
+ *     at least one recognized playback field (`speedMultiplier`, `dwellMs`,
+ *     `playbackMode`, …). This fingerprint avoids false-positiving on arbitrary
+ *     future scalar metadata or unrelated objects — the key has to actually
+ *     look like a misplaced playback entry.
+ *
+ * Pure — no filesystem, exported for unit coverage. Returns `{ warnings }`.
+ *
+ * @param {unknown} parsed the parsed `pose-defaults.json` root object
+ * @returns {{ warnings: string[] }}
+ */
+export function detectMisplacedPoseDefaults(parsed) {
+  const warnings = [];
+  if (parsed === undefined || parsed === null) {
+    return { warnings };
+  }
+  if (typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { warnings };
+  }
+  for (const [key, value] of Object.entries(parsed)) {
+    if (POSE_DEFAULTS_ROOT_KEYS.includes(key)) continue;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      continue;
+    }
+    const looksLikePlayback = PLAYBACK_FIELD_NAMES.some((f) => f in value);
+    if (looksLikePlayback) {
+      warnings.push(
+        `[sprite-manifest] pose-defaults.json: key "${key}" looks like a playback entry but sits at the JSON root — it must be nested under "playback" (e.g. { "playback": { "${key}": {...} } }) or it is silently ignored`,
+      );
+    }
+  }
+  return { warnings };
+}
+
+/**
  * Read + sanitize the repo-root `pose-defaults.json`. Returns the baked
  * `poseDefaults` table (or null when absent / empty) plus any warnings. A
  * missing file is NOT an error — pose-defaults are optional (AC3: no file or
@@ -277,7 +342,11 @@ async function readPoseDefaults() {
       ],
     };
   }
-  return buildPoseDefaults(parsed?.playback);
+  // Warn (do NOT fail) on anim-looking keys placed at the JSON root instead of
+  // under `playback` — otherwise they are silently ignored (E3 NIT 86ca292rr).
+  const { warnings: misplaced } = detectMisplacedPoseDefaults(parsed);
+  const { poseDefaults, warnings } = buildPoseDefaults(parsed?.playback);
+  return { poseDefaults, warnings: [...misplaced, ...warnings] };
 }
 
 /**

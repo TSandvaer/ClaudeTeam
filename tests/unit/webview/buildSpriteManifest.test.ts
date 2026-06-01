@@ -24,6 +24,7 @@ import {
   pickAnimSlug,
   sanitizePlayback,
   buildPoseDefaults,
+  detectMisplacedPoseDefaults,
 } from "../../../scripts/build-sprite-manifest.mjs";
 
 describe("parseAnimValue — folder/slug value-format (AC5)", () => {
@@ -248,5 +249,73 @@ describe("buildPoseDefaults — pose-keyed defaults block (E3 86ca2187n)", () =>
     expect(buildPoseDefaults([1, 2]).warnings).toHaveLength(1);
     expect(buildPoseDefaults(42).poseDefaults).toBeNull();
     expect(buildPoseDefaults("loop").poseDefaults).toBeNull();
+  });
+});
+
+describe("detectMisplacedPoseDefaults — root-level anim footgun warn (E3 NIT 86ca292rr)", () => {
+  // Non-vacuity: each "warns" case fails if the detector is reverted (returns no
+  // warnings); each "does not warn" case fails if the detector over-fires.
+
+  it("warns on a root-level anim-looking key (playback fields at the JSON root)", () => {
+    const { warnings } = detectMisplacedPoseDefaults({
+      // MISPLACED: should be under `playback`, not at the root.
+      idle_stretch: { playbackMode: "pingpong", finalDwellMs: 800 },
+      _note: "docs",
+      playback: {},
+    });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("idle_stretch");
+    expect(warnings[0]).toContain("playback");
+  });
+
+  it("does NOT warn when the entry is correctly nested under `playback`", () => {
+    const { warnings } = detectMisplacedPoseDefaults({
+      _note: "docs",
+      playback: { idle_stretch: { playbackMode: "pingpong", finalDwellMs: 800 } },
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it("does NOT warn on the shipped empty-file shape (`_note` string + empty `playback`)", () => {
+    const { warnings } = detectMisplacedPoseDefaults({ _note: "docs", playback: {} });
+    expect(warnings).toEqual([]);
+  });
+
+  it("warns once per misplaced key (multiple root anims)", () => {
+    const { warnings } = detectMisplacedPoseDefaults({
+      idle_stretch: { playbackMode: "pingpong" },
+      idle_coffee: { speedMultiplier: 0.5 },
+      playback: {},
+    });
+    expect(warnings).toHaveLength(2);
+    expect(warnings.some((w) => w.includes("idle_stretch"))).toBe(true);
+    expect(warnings.some((w) => w.includes("idle_coffee"))).toBe(true);
+  });
+
+  it("does NOT warn on a root object that carries NO recognized playback field", () => {
+    // A root object that isn't a playback entry (no known field) is not flagged —
+    // avoids false-positiving on unrelated/future metadata objects.
+    const { warnings } = detectMisplacedPoseDefaults({
+      somethingElse: { foo: 1, bar: 2 },
+      playback: {},
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it("does NOT warn on scalar root values (a future scalar metadata key)", () => {
+    const { warnings } = detectMisplacedPoseDefaults({
+      _note: "docs",
+      version: 2,
+      label: "team-defaults",
+      playback: {},
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it("absent / null / non-object root → no warnings, never throws", () => {
+    expect(detectMisplacedPoseDefaults(undefined).warnings).toEqual([]);
+    expect(detectMisplacedPoseDefaults(null).warnings).toEqual([]);
+    expect(detectMisplacedPoseDefaults([1, 2]).warnings).toEqual([]);
+    expect(detectMisplacedPoseDefaults(42).warnings).toEqual([]);
   });
 });

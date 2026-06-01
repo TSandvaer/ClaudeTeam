@@ -59,3 +59,15 @@ export function buildPoseDefaults(rawBlock: unknown): {
   poseDefaults: Record<string, SanitizedPlayback> | null;
   warnings: string[];
 };
+
+/**
+ * Detect anim-looking keys placed at the JSON ROOT of `pose-defaults.json`
+ * instead of nested under the expected `playback` wrapper (E3 NIT 86ca292rr).
+ * A root key (other than the legitimate `playback` / `_note`) whose value is a
+ * plain object carrying at least one recognized playback field is flagged with
+ * a build warning — it would otherwise be silently ignored. Warn only; never
+ * fails the build. Pure — no filesystem.
+ */
+export function detectMisplacedPoseDefaults(parsed: unknown): {
+  warnings: string[];
+};
