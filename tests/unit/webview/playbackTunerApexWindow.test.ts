@@ -116,3 +116,109 @@ describe("apex frame picker is bounded to the active window (86ca2w1g9)", () => 
     expect(opts).toEqual(["", "0", "1", "2", "3", "4", "5", "6", "7", "8"]);
   });
 });
+
+// ===========================================================================
+// 86ca2cg8a gap #2 — an OUT-OF-RANGE baked apex frame index RESETS to "Off"
+// on picker re-bind (initial seed + char/anim change).
+//
+// The apex-window block above asserts the OPTION LIST excludes out-of-window
+// frames. This block is the DIRECT, distinct assertion the NIT called out:
+// when the CASCADE supplies a `dwellFrameIndex` that lands OUTSIDE the active
+// window, `populateApexFrames(preferIndex)` must resolve the picker's selected
+// `.value` to "Off" (APEX_FRAME_OFF) — NOT silently leave a stale, unreachable
+// frame selected (whose dwell the windowed loop never fires). Covered for both
+// an initial-mount seed AND a char-switch re-bind, and for a baked index that
+// is BELOW the window start as well as ABOVE the window end.
+//
+// NON-VACUITY (mutation-verified 2026-06-01 against playbackTuner.ts line ~944):
+//  the picker's `.value` assignment is
+//    typeof preferIndex === "number" && preferIndex >= start && preferIndex <= end
+//      ? String(preferIndex) : APEX_FRAME_OFF
+//  Reverting the bound check to `typeof preferIndex === "number" ? String(...)`
+//  (i.e. dropping the `>= start && <= end` clamp) makes the picker keep the
+//  out-of-window index selected — every assertion below FAILS (the picker would
+//  read "2" / "12" instead of "").
+// ===========================================================================
+
+/**
+ * Manifest where the BAKED apex sits OUTSIDE the active window:
+ *  - M01 idle_stretch: 11-frame clip, window [5,10], baked dwellFrameIndex 2
+ *    (BELOW winStart 5 → unreachable → must reset to "Off").
+ *  - F01 idle_drink: 8-frame clip, window [2,5], baked dwellFrameIndex 7
+ *    (ABOVE winEnd 5 → unreachable → must reset to "Off").
+ */
+function outOfWindowApexManifest(): GeneratedSpriteManifest {
+  return {
+    characters: {
+      "ClaudeTeam-M01-Dev": {
+        character: "ClaudeTeam-M01-Dev",
+        defaultIdle: "idle_stretch",
+        idlePool: ["idle_stretch"],
+        animations: {
+          idle_stretch: {
+            folder: "stretch",
+            frames: Array.from({ length: 11 }, (_, i) => `sprites/m01/stretch/${i}.png`),
+            playback: {
+              startFrame: 5,
+              endFrame: 10,
+              dwellFrameIndex: 2, // BELOW the window → unreachable
+              dwellMs: 1500,
+            },
+          },
+        },
+      },
+      "ClaudeTeam-F01-Dev": {
+        character: "ClaudeTeam-F01-Dev",
+        defaultIdle: "idle_drink",
+        idlePool: ["idle_drink"],
+        animations: {
+          idle_drink: {
+            folder: "drink",
+            frames: Array.from({ length: 8 }, (_, i) => `sprites/f01/drink/${i}.png`),
+            playback: {
+              startFrame: 2,
+              endFrame: 5,
+              dwellFrameIndex: 7, // ABOVE the window → unreachable
+              dwellMs: 1500,
+            },
+          },
+        },
+      },
+    },
+    poseDefaults: {},
+  } as unknown as GeneratedSpriteManifest;
+}
+
+function mountOutOfWindow() {
+  return renderPlaybackTuner({
+    manifest: outOfWindowApexManifest(),
+    spriteBaseUri: "vscode-webview://host/dist/webview",
+    postMessage: () => undefined,
+    scheduleFrame: () => 0,
+    cancelFrame: () => undefined,
+  });
+}
+
+describe("out-of-range baked apex frame resets to Off on re-bind (86ca2cg8a gap #2)", () => {
+  it("a baked apex BELOW the window resets the picker to Off on initial seed (M01 [5,10], idx 2)", () => {
+    const root = mountOutOfWindow();
+    const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+    // The unreachable frame 2 is NOT offered, and the picker resolves to "Off".
+    const opts = Array.from(picker.querySelectorAll("option")).map((o) => o.value);
+    expect(opts).not.toContain("2");
+    expect(picker.value).toBe("");
+  });
+
+  it("a baked apex ABOVE the window resets the picker to Off on a char switch (F01 [2,5], idx 7)", () => {
+    const root = mountOutOfWindow();
+    const charSel = q<HTMLSelectElement>(root, ".ct-tuner-char-select");
+    charSel.value = "ClaudeTeam-F01-Dev";
+    charSel.dispatchEvent(new Event("change"));
+    const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+    // Window [2,5] → "Off" + 2..5; the unreachable frame 7 is dropped and the
+    // picker re-binds to "Off" rather than keeping a stale, unreachable apex.
+    const opts = Array.from(picker.querySelectorAll("option")).map((o) => o.value);
+    expect(opts).toEqual(["", "2", "3", "4", "5"]);
+    expect(picker.value).toBe("");
+  });
+});
