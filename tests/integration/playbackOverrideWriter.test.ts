@@ -88,18 +88,46 @@ describe("mergePlaybackEntry — field-level merge + clear-on-omit", () => {
     expect(merged).toEqual({ speedMultiplier: 0.7 });
   });
 
-  it("preserves NON-tunable fields the tuner doesn't own (dwellFrameIndex, window)", () => {
+  it("preserves NON-tunable fields the tuner doesn't own (startFrame/endFrame window)", () => {
     const merged = mergePlaybackEntry(
-      { speedMultiplier: 0.5, dwellFrameIndex: 4, startFrame: 5, endFrame: 10 },
+      { speedMultiplier: 0.5, startFrame: 5, endFrame: 10 },
       { finalDwellMs: 800 },
     );
     // speedMultiplier (tunable, absent from override) cleared; the non-tunable
-    // dwellFrameIndex / startFrame / endFrame survive untouched.
+    // startFrame / endFrame window survives untouched. (86ca2bqe1: dwellFrameIndex
+    // /dwellMs are now TUNABLE — covered by the apex set/clear tests below.)
     expect(merged).toEqual({
-      dwellFrameIndex: 4,
       startFrame: 5,
       endFrame: 10,
       finalDwellMs: 800,
+    });
+  });
+
+  // 86ca2bqe1 — apex hold (dwellFrameIndex/dwellMs) is now tuner-owned: a present
+  // field is set, an absent one is CLEARED (clear → inherit), exactly like the
+  // other tunable keys. NON-VACUOUS: reverting the TUNABLE_KEYS extension makes
+  // these fields fall through to the "preserve untouched" path → the clear
+  // assertion fails (the stale dwellFrameIndex survives the override).
+  it("sets the apex pair (dwellFrameIndex + dwellMs) when present", () => {
+    const merged = mergePlaybackEntry(
+      { speedMultiplier: 0.5 },
+      { dwellFrameIndex: 3, dwellMs: 2000 },
+    );
+    // speedMultiplier cleared (absent); apex pair set.
+    expect(merged).toEqual({ dwellFrameIndex: 3, dwellMs: 2000 });
+  });
+
+  it("CLEARS a stale apex pair when the override omits it (clear → inherit)", () => {
+    const merged = mergePlaybackEntry(
+      { dwellFrameIndex: 4, dwellMs: 800, startFrame: 1, endFrame: 9 },
+      { speedMultiplier: 0.7 },
+    );
+    // The apex pair is absent from the override → cleared. The startFrame/endFrame
+    // window (still non-tunable) is preserved.
+    expect(merged).toEqual({
+      speedMultiplier: 0.7,
+      startFrame: 1,
+      endFrame: 9,
     });
   });
 
@@ -187,6 +215,33 @@ describe("savePlaybackOverride — per-char write target", () => {
     expect("idle_stretch" in pb).toBe(false);
   });
 
+  // 86ca2bqe1 AC2 — the apex pair lands in the CORRECT char's animations.json
+  // playback block (assert both payload fields + the resolved path).
+  it("writes the apex pair (dwellFrameIndex + dwellMs) to the per-char file", () => {
+    const path = seedAnimationsJson("ClaudeTeam-F01-Dev", {
+      character: "ClaudeTeam-F01-Dev",
+      animations: { idle_coffee: "drink_slug" },
+      playback: {},
+    });
+    // The resolved write path is the F01 animations.json (AC2 path assertion).
+    expect(
+      resolvePlaybackTargetPath(ws, "per-char", "ClaudeTeam-F01-Dev"),
+    ).toBe(path);
+
+    const res = savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-F01-Dev",
+      animName: "idle_coffee",
+      override: { dwellFrameIndex: 3, dwellMs: 2500 },
+    });
+    expect(res.ok).toBe(true);
+
+    const pb = readJson(path).playback as Record<string, unknown>;
+    // AC2 payload assertion: both apex fields persisted under the anim key.
+    expect(pb.idle_coffee).toEqual({ dwellFrameIndex: 3, dwellMs: 2500 });
+  });
+
   it("creates a playback block when none existed in the file", () => {
     const path = seedAnimationsJson("ClaudeTeam-F01-Dev", {
       animations: { idle_coffee: "z" },
@@ -259,6 +314,31 @@ describe("schema compatibility — written json round-trips through sanitizePlay
       finalDwellMs: 800,
       playbackMode: "pingpong",
     });
+  });
+
+  // 86ca2bqe1 — the written apex pair survives the build script's E2 reader too
+  // (build-sprite-manifest already validates dwellFrameIndex/dwellMs as finite
+  // numbers, so no engine/build change was needed — this proves round-trip).
+  it("the written apex pair survives sanitizePlayback verbatim", async () => {
+    const path = seedAnimationsJson("ClaudeTeam-F01-Dev", {
+      animations: { idle_coffee: "x" },
+      playback: {},
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-F01-Dev",
+      animName: "idle_coffee",
+      override: { dwellFrameIndex: 3, dwellMs: 2500 },
+    });
+    const written = (readJson(path).playback as Record<string, unknown>)
+      .idle_coffee;
+    const { sanitizePlayback } = await import(
+      "../../scripts/build-sprite-manifest.mjs"
+    );
+    const { playback, warnings } = sanitizePlayback("test/idle_coffee", written);
+    expect(warnings).toEqual([]);
+    expect(playback).toEqual({ dwellFrameIndex: 3, dwellMs: 2500 });
   });
 });
 

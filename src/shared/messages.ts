@@ -324,8 +324,9 @@ export type OpenManageTeamPanelMessage = {
 // =============================================================================
 // Anim-playback tuner epic — host ↔ webview (E5, 86ca2189v).
 // LOCKED vocabulary (anim-playback-epic-backlog § Vocabulary): controls bind to
-// `speedMultiplier` / `finalDwellMs` / `playbackMode` ("loop"|"pingpong"). New
-// types ADDED (never overload — messages.ts rule). All payloads JSON-safe.
+// `speedMultiplier` / `finalDwellMs` / `playbackMode` ("loop"|"pingpong") +
+// `dwellFrameIndex` / `dwellMs` (apex hold, 86ca2bqe1). New types ADDED (never
+// overload — messages.ts rule). All payloads JSON-safe.
 // =============================================================================
 
 /**
@@ -368,6 +369,15 @@ export type SavePlaybackOverrideMessage = {
       speedMultiplier?: number;
       finalDwellMs?: number;
       playbackMode?: "loop" | "pingpong";
+      /**
+       * Mid-sequence apex-hold frame index (86ca2bqe1 — "Hold (apex)"). The
+       * engine (spritePlayer.ts) already applies `dwellFrameIndex`+`dwellMs`;
+       * the tuner now writes them through the same field-level merge as the
+       * other tunable keys. Absent → no apex hold (inherits / off).
+       */
+      dwellFrameIndex?: number;
+      /** Extra ms to hold the apex frame (86ca2bqe1). Absent → inherits / off. */
+      dwellMs?: number;
     };
   };
 };
