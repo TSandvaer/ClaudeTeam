@@ -167,6 +167,33 @@ describe("AC1 — controls render", () => {
     }
   });
 
+  // 86ca2vpj7 — the Speed slider ceiling was raised 2.0 → 5.0× so the sponsor can
+  // fast-forward long idle loops past 2×. NON-VACUOUS: reverting SPEED_MAX to 2.0
+  // fails the `max` assertion AND clamps the 5.0 input back to 2.0, failing the
+  // readout + save assertions.
+  it("Speed slider accepts up to 5.0× (raised from 2.0)", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      const slider = q<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+      expect(slider.max).toBe("5");
+      // The max-bound label reflects the new ceiling.
+      const bounds = q<HTMLElement>(root, ".ct-tuner-speed .ct-tuner-bounds");
+      expect(bounds.textContent).toContain("5.0×");
+      // A value above the OLD 2.0 ceiling is now accepted (not clamped down).
+      slider.value = "5";
+      slider.dispatchEvent(new Event("input"));
+      expect(
+        q<HTMLElement>(root, ".ct-tuner-speed .ct-tuner-control-readout").textContent,
+      ).toBe("5.00×");
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      const save = lastSave(posted)!;
+      expect(save.payload.override.speedMultiplier).toBe(5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("populates the character + animation selectors from the manifest", () => {
     const { root } = mount();
     const chars = Array.from(
