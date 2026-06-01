@@ -797,27 +797,68 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   }
 
   /**
+   * The ACTIVE frame window [winStart, winEnd] for the selected (char, anim),
+   * resolving the draft's `startFrame`/`endFrame` over the cascade, clamped to
+   * the live clip (86ca2w1g9). The engine only ever renders frames inside this
+   * window, so the apex picker must offer ONLY these frames — an apex outside the
+   * window is unreachable and its dwell never fires (the root cause of "Apex hold
+   * frame 0 has no effect" on M01 idle_stretch's [5,10] window). Falls back to the
+   * full clip [0, count-1] when no window is declared anywhere.
+   */
+  function activeWindow(): { start: number; end: number } {
+    const count = frameCount();
+    const lastIndex = Math.max(0, count - 1);
+    if (count === 0) return { start: 0, end: 0 };
+    // The cascade-source table exposes speed/hold/mode/apex but NOT the window
+    // fields, so resolve those straight off the layers: draft (live) wins, then
+    // per-char baked, then pose-default, then the full clip.
+    const baked =
+      manifest.characters[selectedChar]?.animations?.[selectedAnim]?.playback;
+    const poseDefault = manifest.poseDefaults?.[selectedAnim];
+    const resolve = (
+      field: "startFrame" | "endFrame",
+      clipFallback: number,
+    ): number => {
+      const raw =
+        draftOverride[field] ?? baked?.[field] ?? poseDefault?.[field] ?? clipFallback;
+      return Math.max(0, Math.min(lastIndex, Math.trunc(raw)));
+    };
+    let start = resolve("startFrame", 0);
+    let end = resolve("endFrame", lastIndex);
+    if (start > end) {
+      // Inverted window mirrors the engine's fallback to the full clip.
+      start = 0;
+      end = lastIndex;
+    }
+    return { start, end };
+  }
+
+  /**
    * Repopulate the apex-frame picker for the selected (char, anim): an "Off"
-   * option (clears the hold) plus one option per frame index in [0, count). The
-   * picker is re-derived on every selection change because frame counts differ
-   * per anim (M01 vs F01) — a stale index must never exceed the live count.
-   * `preferIndex` (draft / cascade) selects that option if still in range.
+   * option (clears the hold) plus one option per frame index in the ACTIVE
+   * WINDOW [winStart, winEnd] (86ca2w1g9 — was [0, count), which let the sponsor
+   * pick an apex frame the windowed loop never renders, so the dwell silently did
+   * nothing). The picker is re-derived on every selection change because frame
+   * counts AND windows differ per anim (M01 vs F01). `preferIndex` (draft /
+   * cascade) selects that option when it is inside the window; an out-of-window
+   * prefer falls back to "Off".
    */
   function populateApexFrames(preferIndex?: number): void {
     const count = frameCount();
+    const { start, end } = activeWindow();
     apexFrameSelect.replaceChildren();
     const off = document.createElement("option");
     off.value = APEX_FRAME_OFF;
     off.textContent = "Off";
     apexFrameSelect.appendChild(off);
-    for (let i = 0; i < count; i++) {
+    for (let i = start; i <= end && i < count; i++) {
       const opt = document.createElement("option");
       opt.value = String(i);
       opt.textContent = `frame ${i}`;
       apexFrameSelect.appendChild(opt);
     }
     apexFrameSelect.value =
-      typeof preferIndex === "number" && preferIndex >= 0 && preferIndex < count
+      typeof preferIndex === "number" && preferIndex >= start && preferIndex <= end
         ? String(preferIndex)
         : APEX_FRAME_OFF;
   }

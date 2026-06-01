@@ -168,6 +168,127 @@ describe("spritePlayer windowed pingpong (E1 86ca21876)", () => {
 });
 
 /**
+ * Apex-dwell at frame 0 — and the window-exclusion bug (86ca2w1g9).
+ *
+ * SPONSOR SYMPTOM: M01 idle_stretch (baked window [5,10], pingpong, finalDwell)
+ * + a draft Apex frame=0 / hold=9100ms produced NO apex pause — only the
+ * finalDwell at frame 10 fired. ROOT CAUSE: the engine's apex guard validated
+ * dwellFrameIndex against the FULL clip [0, lastIndex], but the loop only renders
+ * frames in the active window [winStart, winEnd]; frame 0 is outside [5,10] so
+ * `frameIdx === peakIndex` never became true and the dwell silently did nothing.
+ * FIX: validate the apex against [winStart, winEnd] — a within-window apex fires,
+ * an out-of-window apex is correctly NOT armed (and the tuner constrains its
+ * frame picker to the window so the sponsor can only pick a reachable apex).
+ *
+ * NON-VACUITY (mutation-verified 2026-06-01 against spritePlayer.ts — mutating
+ * the guard's lower bound `peakIndex >= winStart` to `peakIndex > winStart`
+ * fails the first three tests below; this is the exact off-by-one the orchestrator
+ * flagged — winStart must be an INCLUSIVE, valid apex):
+ *  - "frame-0 apex dwells (loop, no window)" + "(pingpong, no window)": FAIL under
+ *    `> winStart` (winStart=0 → frame 0 dropped) — also fails any truthiness guard
+ *    `peakIndex && …` / `peakIndex > 0`. Frame 0 would get only the base ms.
+ *  - "within-window apex (winStart=5) dwells": FAIL under `> winStart` — frame 5
+ *    (the window start, the arms-down rest of the rest→up slice) would not arm.
+ *  - "out-of-window apex does NOT dwell": the apex (frame 0) is outside [5,10] so
+ *    it is never RENDERED regardless of the guard, so this assertion alone is
+ *    guard-insensitive; non-vacuity comes from the COMPANION assertion that the
+ *    within-window finalDwell at winEnd STILL fires (proves the loop actually ran)
+ *    PLUS the picker-side test in playbackTunerApexWindow.test.ts (the picker is
+ *    the real fix — it prevents the sponsor from ever selecting an unreachable
+ *    apex; mutating its window-bound back to the full clip fails that test).
+ */
+describe("spritePlayer apex dwell at frame 0 + window exclusion (86ca2w1g9)", () => {
+  it("frame-0 apex dwells in LOOP mode with no window", () => {
+    // 5-frame clip, loop, apex frame 0 hold 9100. finalDwellMs:0 isolates the
+    // apex hold from the final-frame idle dwell. Frame 0 must carry base+9100.
+    const { idx, ms } = driveSequence(
+      { playbackMode: "loop", dwellFrameIndex: 0, dwellMs: 9100, finalDwellMs: 0 },
+      5,
+      12,
+    );
+    idx.forEach((frame, i) => {
+      if (frame === 0) {
+        expect(ms[i]).toBe(FRAME_MS_DEFAULT + 9100);
+      } else {
+        expect(ms[i]).toBe(FRAME_MS_DEFAULT);
+      }
+    });
+    // Frame 0 was actually rendered (guard against a vacuous all-pass).
+    expect(idx).toContain(0);
+    expect(ms.filter((m) => m === FRAME_MS_DEFAULT + 9100).length).toBeGreaterThan(0);
+  });
+
+  it("frame-0 apex dwells in PINGPONG mode with no window (start AND reverse arrival)", () => {
+    // 11-frame clip, pingpong, apex 0 hold 9100. finalDwellMs:0 so the only long
+    // hold is the apex. Frame 0 is the pingpong start and the reverse-turnaround
+    // — both renders must carry the apex hold.
+    const { idx, ms } = driveSequence(
+      { playbackMode: "pingpong", dwellFrameIndex: 0, dwellMs: 9100, finalDwellMs: 0 },
+      11,
+      24,
+    );
+    idx.forEach((frame, i) => {
+      if (frame === 0) expect(ms[i]).toBe(FRAME_MS_DEFAULT + 9100);
+    });
+    const apexHolds = ms.filter((m) => m === FRAME_MS_DEFAULT + 9100).length;
+    const frameZeroRenders = idx.filter((f) => f === 0).length;
+    expect(apexHolds).toBe(frameZeroRenders);
+    expect(apexHolds).toBeGreaterThan(0);
+  });
+
+  it("within-window apex (winStart) dwells under a [5,10] pingpong window", () => {
+    // Apex at the window START (5) — reachable, must fire. Validates the
+    // window-aware guard arms an apex inside the window even when winStart>0.
+    const { idx, ms } = driveSequence(
+      {
+        startFrame: 5,
+        endFrame: 10,
+        playbackMode: "pingpong",
+        dwellFrameIndex: 5,
+        dwellMs: 9100,
+      },
+      11,
+      22,
+    );
+    idx.forEach((frame, i) => {
+      if (frame === 5) expect(ms[i]).toBe(FRAME_MS_DEFAULT + 9100);
+    });
+    expect(ms.filter((m) => m === FRAME_MS_DEFAULT + 9100).length).toBeGreaterThan(0);
+    // The loop never escaped the window.
+    expect(Math.min(...idx)).toBe(5);
+    expect(Math.max(...idx)).toBe(10);
+  });
+
+  it("out-of-window apex (frame 0) does NOT dwell under a [5,10] window — the sponsor's exact config", () => {
+    // M01 idle_stretch baked window [5,10] + sponsor draft Apex frame=0 / 9100ms
+    // + finalDwell 6450ms. Frame 0 is outside [5,10] → unreachable → no apex pause.
+    // The finalDwell at winEnd(10) STILL fires (proves the loop actually ran —
+    // this is what makes the "no apex hold anywhere" assertion non-vacuous).
+    const { idx, ms } = driveSequence(
+      {
+        speedMultiplier: 0.5,
+        startFrame: 5,
+        endFrame: 10,
+        playbackMode: "pingpong",
+        dwellFrameIndex: 0,
+        dwellMs: 9100,
+        finalDwellMs: 6450,
+      },
+      11,
+      22,
+    );
+    const frameMs = FRAME_MS_DEFAULT / 0.5; // 320
+    // Frame 0 is never rendered (outside the window).
+    expect(idx).not.toContain(0);
+    // No frame ever carries the 9100ms apex hold (it's unreachable).
+    expect(ms.some((m) => m >= frameMs + 9100)).toBe(false);
+    // …but the finalDwell at winEnd(10) DID fire — the loop ran (non-vacuity).
+    const finalHold = frameMs + 6450;
+    expect(ms.filter((m) => m === finalHold).length).toBeGreaterThan(0);
+  });
+});
+
+/**
  * Pose-rotation boundary: the full cycle (raise → apex → LOWER → settle) must
  * complete across the ~2s poll re-render, NOT restart at the window start each
  * tick. This is the regression test for the live-preview bug (86ca2c4t8): the

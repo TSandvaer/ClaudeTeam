@@ -449,6 +449,7 @@ ENTRY-2026-05-29T19:58:08Z: 86ca1mw40 -> in review (Sage TS-04 QA PR opened — 
 ENTRY-2026-05-30T09:30:00Z: 86ca1tv41 -> in review (Felix PR opened — fix(host): emit roster:loaded so Manage Team reaches edit layout + webview-URI picker thumbnails; both root causes confirmed; 1085 unit + 153 integration green incl. new rosterLoadedEmit + toWebRootRelative + panel-layout-by-config tests; reviewer Maya webview-facing)
 ENTRY-2026-05-30T00:00:00Z: 86ca1tv41 -> in review
 ENTRY-2026-05-30T10:30:00Z: 86ca1u41m -> in review
+ENTRY-2026-06-01T20:36:00Z: 86ca2w1g9 -> in progress (Maya accepted dispatch — apex hold has no effect when dwellFrameIndex falls outside the active window; root cause = apex picker offers full-clip frames while the loop only renders [startFrame,endFrame]; fix = picker bounded to active window + engine apex guard made window-aware/inclusive-of-winStart; branch maya/86ca2w1g9-apex-frame0)
 
 ## Team-setup EPIC — ticket-creation requests (Nora away-mode shaping 2026-05-29)
 
