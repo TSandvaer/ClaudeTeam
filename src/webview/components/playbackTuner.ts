@@ -59,7 +59,11 @@ const SPEED_MIN = 0.25;
 const SPEED_MAX = 2.0;
 const SPEED_STEP = 0.05;
 const HOLD_MIN = 0;
-const HOLD_MAX = 2000;
+// Raised 2000 → 10000 (86ca2apxn #4): the cup-down / apex holds the sponsor
+// tunes can want a multi-second beat (F01 idle_coffee shipped finalDwellMs 2000
+// already, and the sponsor wanted to push it higher); a 2000 ceiling clamped
+// the control below the values they were trying to dial in.
+const HOLD_MAX = 10000;
 const HOLD_STEP = 50;
 
 export interface PlaybackTunerProps {
@@ -272,7 +276,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     format: (v) => `${Math.round(v)} ms`,
     ariaText: (v) => `${Math.round(v)} milliseconds`,
     minLabel: "0 ms",
-    maxLabel: "2000 ms",
+    maxLabel: "10000 ms",
     onInput: (v) => {
       draftOverride = { ...draftOverride, finalDwellMs: Math.round(v) };
       onControlChange(true);

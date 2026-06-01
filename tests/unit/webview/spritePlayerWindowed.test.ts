@@ -261,26 +261,31 @@ describe("spritePlayer pose-rotation boundary — full cycle survives re-render 
       finalDwellMs: 800,
     };
     const b1 = buildBox(override, 11);
-    // Render frame 5 (construction) then step 5 more → renders 6,7,8,9,10. The
-    // tick that renders the apex (10) flips direction to descend and advances to
-    // frame 9, so the live position is (9, -1): about to lower.
+    // Render frame 5 (construction) then step 5 more → renders 6,7,8,9,10. Frame
+    // 10 (the apex) is now ON SCREEN holding its dwell. `currentFrame()` reports
+    // the DISPLAYED position (10, travelling +1) — NOT the already-advanced next
+    // frame — so a re-render that lands mid-dwell resumes the apex frame and
+    // finishes its hold instead of skipping it (86ca2apxn #1).
     b1.step(5);
     expect(b1.seq).toEqual([5, 6, 7, 8, 9, 10]);
     const pos = b1.handle.currentFrame();
-    // After rendering the apex the loop has flipped to descend.
-    expect(pos.direction).toBe(-1);
-    expect(pos.frameIdx).toBe(9);
+    // The displayed apex frame, captured travelling forward (the endpoint flip
+    // governs the NEXT advance, not the displayed position).
+    expect(pos.frameIdx).toBe(10);
+    expect(pos.direction).toBe(1);
     b1.handle.dispose();
 
     // The ~2s poll re-render: a NEW box for the SAME pose, threading the prior
-    // position. It must CONTINUE the descent (9,8,7,6,5…), not restart at 5.
+    // position. It re-renders the apex (10) to finish its interrupted dwell, then
+    // CONTINUES the descent (10,9,8,7,6,5…) — it does NOT restart at the rest
+    // frame 5, and does NOT skip the on-screen apex frame.
     const b2 = buildBox(override, 11, {
       pose: "idle_stretch",
       frameIdx: pos.frameIdx,
       direction: pos.direction,
     });
-    b2.step(4);
-    expect(b2.seq).toEqual([9, 8, 7, 6, 5]);
+    b2.step(5);
+    expect(b2.seq).toEqual([10, 9, 8, 7, 6, 5]);
     // It did NOT snap back to the rest frame and re-raise — descent ran fully.
     expect(b2.seq[0]).not.toBe(5);
     b2.handle.dispose();
@@ -333,5 +338,145 @@ describe("spritePlayer pose-rotation boundary — full cycle survives re-render 
     b.step(1);
     expect(b.seq[0]).toBe(10);
     b.handle.dispose();
+  });
+});
+
+/**
+ * 86ca2apxn #1 — a poll re-render that lands WHILE a frame is on screen part-way
+ * through a long dwell must NOT skip that frame. At slow speed the cup-at-mouth
+ * peak dwell (PEAK_DWELL_MS_DEFAULT 600) and the cup-down final dwell (2000)
+ * exceed the ~2s poll interval, so the re-render is guaranteed to interrupt a
+ * frame mid-dwell. Before the fix, `currentFrame()` returned the already-advanced
+ * NEXT position, so the resume skipped the on-screen frame and dropped the rest
+ * of its hold — the sponsor saw "the loop restarts before completing".
+ *
+ * Build a box, step it until a dwell frame is on screen, capture the resume
+ * position, build the next box from it, and assert: (a) the resumed box's FIRST
+ * rendered frame is the one that was on screen (not the next), and (b) that frame
+ * is scheduled with its full dwell again. The mid-dwell interruption is modelled
+ * by reading `currentFrame()` between ticks (exactly when the dispose fires).
+ *
+ * NON-VACUITY (mutation-verified): reverting `currentFrame()` to return the
+ * advanced `{ frameIdx, direction }` makes "re-shows the interrupted dwell frame"
+ * FAIL — the resumed first frame becomes the NEXT one (skip) and the dwell is
+ * not re-applied.
+ */
+function buildWithMs(
+  override: PlaybackOverride,
+  frameCount: number,
+  prior?: { pose: string; frameIdx: number; direction: number },
+) {
+  const char = {
+    character: "TEST-CHAR",
+    defaultIdle: "idle_coffee",
+    idlePool: ["idle_coffee"],
+    animations: {
+      idle_coffee: {
+        folder: "idle_coffee",
+        frames: Array.from({ length: frameCount }, (_, i) => `f${i}.png`),
+      },
+    },
+  };
+  const table: Record<string, PlaybackOverrideTable> = {
+    "TEST-CHAR": { idle_coffee: override },
+  };
+  let pending: (() => void) | null = null;
+  let nextMs = 0;
+  const handle = createSpriteBox({
+    char,
+    state: "idle",
+    activity: "idle 30s",
+    spriteBaseUri: "base",
+    priorIdlePick: "idle_coffee",
+    rng: () => 0,
+    scheduleFrame: (cb, m) => {
+      pending = cb;
+      nextMs = m;
+      return 1;
+    },
+    cancelFrame: () => undefined,
+    playbackTable: table,
+    ...(prior
+      ? { priorPose: prior.pose, priorFrameIdx: prior.frameIdx, priorDirection: prior.direction }
+      : {}),
+  });
+  const img = handle.element.querySelector("img.sprite-frame") as HTMLImageElement;
+  const readIdx = (): number => {
+    const m = /f(\d+)\.png$/.exec(img.getAttribute("src") ?? "");
+    return m ? Number(m[1]) : -1;
+  };
+  const seq: number[] = [readIdx()];
+  const ms: number[] = [nextMs];
+  const step = (n: number): void => {
+    for (let i = 0; i < n; i++) {
+      const cb = pending as (() => void) | null;
+      pending = null;
+      if (!cb) break;
+      cb();
+      seq.push(readIdx());
+      ms.push(nextMs);
+    }
+  };
+  return { handle, step, seq, ms };
+}
+
+describe("spritePlayer #1 — mid-dwell poll re-render must not skip the on-screen frame (86ca2apxn)", () => {
+  // F01 idle_coffee live config: 9 frames [0,8], peak f4 (cup-at-mouth),
+  // finalDwell at f8 (cup-down), pingpong, slow speed.
+  const COFFEE: PlaybackOverride = {
+    speedMultiplier: 0.55,
+    dwellFrameIndex: 4,
+    finalDwellMs: 2000,
+    playbackMode: "pingpong",
+  };
+  const frameMs = FRAME_MS_DEFAULT / 0.55; // ~290.9
+
+  it("re-shows the interrupted PEAK (cup-at-mouth) frame and re-applies its dwell", () => {
+    // Step to the apex frame 4 ON SCREEN (construction renders 0, then 1,2,3,4).
+    const b1 = buildWithMs(COFFEE, 9);
+    b1.step(4);
+    expect(b1.seq).toEqual([0, 1, 2, 3, 4]);
+    // Frame 4 is on screen, holding peak dwell (frameMs + 600). The re-render
+    // fires NOW — currentFrame() must report frame 4 (the displayed one).
+    const pos = b1.handle.currentFrame();
+    expect(pos.frameIdx).toBe(4);
+    b1.handle.dispose();
+
+    const b2 = buildWithMs(COFFEE, 9, {
+      pose: "idle_coffee",
+      frameIdx: pos.frameIdx,
+      direction: pos.direction,
+    });
+    // The resumed box's FIRST frame is the interrupted one (4), NOT the next (5).
+    expect(b2.seq[0]).toBe(4);
+    // …and it is scheduled with the FULL peak dwell again (frameMs + 600), so the
+    // cup-at-mouth hold completes instead of being cut short.
+    expect(b2.ms[0]).toBe(frameMs + 600);
+  });
+
+  it("re-shows the interrupted cup-down FINAL-dwell frame and re-applies its 2000ms hold", () => {
+    // Step to frame 8 ON SCREEN (0..8 = 8 steps).
+    const b1 = buildWithMs(COFFEE, 9);
+    b1.step(8);
+    expect(b1.seq[b1.seq.length - 1]).toBe(8);
+    const pos = b1.handle.currentFrame();
+    // Displayed frame 8, captured travelling forward (the endpoint flip governs
+    // the NEXT advance, not the displayed position).
+    expect(pos.frameIdx).toBe(8);
+    expect(pos.direction).toBe(1);
+    b1.handle.dispose();
+
+    const b2 = buildWithMs(COFFEE, 9, {
+      pose: "idle_coffee",
+      frameIdx: pos.frameIdx,
+      direction: pos.direction,
+    });
+    expect(b2.seq[0]).toBe(8);
+    // The 2000ms final dwell re-applies (frameMs + 2000) — the long cup-down hold
+    // is NOT dropped by the re-render.
+    expect(b2.ms[0]).toBe(frameMs + 2000);
+    // Then it descends (pingpong reverse): 8 → 7 → 6 …
+    b2.step(2);
+    expect(b2.seq.slice(0, 3)).toEqual([8, 7, 6]);
   });
 });

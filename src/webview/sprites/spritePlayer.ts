@@ -473,6 +473,21 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   let handle: number | null = null;
   let disposed = false;
 
+  // The frame CURRENTLY DISPLAYED + the direction it was travelling when shown.
+  // Distinct from the working `frameIdx`/`direction`, which `tick()` advances to
+  // the NEXT frame before scheduling. A poll re-render can dispose this box at
+  // ANY wall-clock moment — including WHILE a frame is still on screen part-way
+  // through its (possibly long) dwell. Resuming from the already-advanced NEXT
+  // position would SKIP the on-screen frame and drop the remainder of its dwell;
+  // the bug surfaces hardest at slow speed, where the cup-at-mouth peak dwell
+  // (600ms) and the cup-down final dwell (2000ms) each exceed the ~2s poll
+  // interval, so the re-render is GUARANTEED to land mid-dwell and the long hold
+  // never completes — "the loop restarts before completing" (86ca2apxn #1).
+  // `currentFrame()` reports the DISPLAYED position so a resuming box re-renders
+  // the same frame and re-applies its dwell, continuing the cycle without a skip.
+  let shownIdx = frameIdx;
+  let shownDirection = direction;
+
   // Guard against an out-of-range peak index (frame counts differ M01 vs F01;
   // a stale index must not break the loop).
   const peakIsValid = typeof peakIndex === "number" && peakIndex >= 0 && peakIndex <= lastIndex;
@@ -480,6 +495,11 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   const tick = (): void => {
     if (disposed) return;
     img.src = frameUris[frameIdx];
+    // Capture the displayed position BEFORE the endpoint flip / advance below so
+    // `currentFrame()` reports the frame actually on screen (+ the direction it
+    // was travelling when rendered), not the next one.
+    shownIdx = frameIdx;
+    shownDirection = direction;
     // Base per-frame duration (speed-scaled).
     let ms = frameMs;
     // Final-frame idle dwell before turnaround/wrap (idle poses only — active
@@ -539,10 +559,12 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     idlePick,
     isActive,
     pose: canonicalName,
-    // After each `tick()` the local `frameIdx`/`direction` already point at the
-    // NEXT frame to render, so a resuming box that starts at this position
-    // continues the cycle seamlessly (no re-shown or skipped frame). Live —
-    // reads the current value whenever the next render asks for it.
-    currentFrame: () => ({ frameIdx, direction }),
+    // Report the DISPLAYED frame + the direction it was travelling when shown
+    // (NOT the already-advanced next position). A resuming box re-renders this
+    // frame and re-runs the SAME dwell+advance logic, so a frame interrupted
+    // mid-dwell by a poll re-render finishes its hold instead of being skipped
+    // (86ca2apxn #1). Live — reads the current value whenever the next render
+    // asks for it.
+    currentFrame: () => ({ frameIdx: shownIdx, direction: shownDirection }),
   };
 }

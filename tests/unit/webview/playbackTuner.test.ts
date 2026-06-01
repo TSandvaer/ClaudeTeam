@@ -134,6 +134,33 @@ describe("AC1 — controls render", () => {
     expect(root.querySelectorAll(".ct-tuner-writetarget-radio").length).toBe(2);
   });
 
+  // 86ca2apxn #4 — the Hold (final) slider ceiling was raised 2000 → 10000ms so
+  // the sponsor can dial in multi-second cup-down / apex holds. NON-VACUOUS:
+  // reverting HOLD_MAX to 2000 fails the `max` assertion AND clamps the 8000ms
+  // input back to 2000, failing the readout + save assertions.
+  it("Hold (final) slider accepts up to 10000ms (raised from 2000)", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      const slider = q<HTMLInputElement>(root, ".ct-tuner-hold .ct-tuner-slider");
+      expect(slider.max).toBe("10000");
+      // The max-bound label reflects the new ceiling.
+      const bounds = q<HTMLElement>(root, ".ct-tuner-hold .ct-tuner-bounds");
+      expect(bounds.textContent).toContain("10000 ms");
+      // A value above the OLD 2000 ceiling is now accepted (not clamped down).
+      slider.value = "8000";
+      slider.dispatchEvent(new Event("input"));
+      expect(
+        q<HTMLElement>(root, ".ct-tuner-hold .ct-tuner-control-readout").textContent,
+      ).toBe("8000 ms");
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      const save = lastSave(posted)!;
+      expect(save.payload.override.finalDwellMs).toBe(8000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("populates the character + animation selectors from the manifest", () => {
     const { root } = mount();
     const chars = Array.from(
