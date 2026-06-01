@@ -46,6 +46,7 @@ import type { TunerStateTracker } from "../tunerStateTracker.js";
 import { createPreviewController } from "./playbackTunerPreview.js";
 import {
   computeCascadeSource,
+  APEX_FRAME_NONE,
   type CascadeLayer,
   type CascadeSourceTable,
 } from "../sprites/cascadeSource.js";
@@ -65,6 +66,13 @@ const HOLD_MIN = 0;
 // the control below the values they were trying to dial in.
 const HOLD_MAX = 10000;
 const HOLD_STEP = 50;
+// Apex hold (86ca2bqe1). The ms slider mirrors Hold (final)'s 0..10000 range so
+// the sponsor can dial a multi-second apex beat (e.g. cup-at-mouth "drinking").
+const APEX_MS_MIN = 0;
+const APEX_MS_MAX = 10000;
+const APEX_MS_STEP = 50;
+/** Picker sentinel value for "no apex hold" (clears dwellFrameIndex). */
+const APEX_FRAME_OFF = "";
 
 export interface PlaybackTunerProps {
   /** The baked manifest (default GENERATED_SPRITE_MANIFEST). Tests inject. */
@@ -295,6 +303,70 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     "Final-frame hold applies to idle poses; in pingpong it fires only on the forward arrival at the window end.";
   root.appendChild(holdHelp);
 
+  // ── Hold (apex) control group (86ca2bqe1) ─────────────────────────────────
+  // A mid-sequence dwell: pause on ONE chosen frame (the gesture apex — e.g. the
+  // cup at the lips) for a set ms. Writes the engine's EXISTING `dwellFrameIndex`
+  // + `dwellMs` fields (NO engine change — spritePlayer.ts already applies them).
+  // The frame-index PICKER is bounded to the live anim's frame count + repopulated
+  // on every (char, anim) change; the ms SLIDER mirrors Hold (final)'s 0..10000.
+  const apexGroup = document.createElement("div");
+  apexGroup.className = "ct-tuner-control ct-tuner-apex";
+
+  const apexLabelRow = document.createElement("div");
+  apexLabelRow.className = "ct-tuner-control-labelrow";
+  const apexCaption = document.createElement("span");
+  apexCaption.className = "ct-tuner-control-caption";
+  apexCaption.textContent = "Hold (apex)";
+  apexLabelRow.appendChild(apexCaption);
+  const apexResetBtn = document.createElement("button");
+  apexResetBtn.type = "button";
+  apexResetBtn.className = "ct-tuner-reset ct-tuner-apex-reset";
+  apexResetBtn.textContent = "reset";
+  apexResetBtn.setAttribute("aria-label", "Reset Hold (apex)");
+  apexResetBtn.addEventListener("click", () => onApexReset());
+  apexLabelRow.appendChild(apexResetBtn);
+  apexGroup.appendChild(apexLabelRow);
+
+  // Frame-index picker (bounded to the anim's frame count; "Off" clears it).
+  const apexFrameSelect = document.createElement("select");
+  apexFrameSelect.className = "ct-tuner-select ct-tuner-apex-frame";
+  apexFrameSelect.setAttribute("aria-label", "Apex hold frame");
+  const apexFrameField = labeledField("Frame", apexFrameSelect);
+  apexFrameField.classList.add("ct-tuner-apex-frame-field");
+  apexGroup.appendChild(apexFrameField);
+  apexFrameSelect.addEventListener("change", () => onApexFrameChange());
+
+  root.appendChild(apexGroup);
+
+  // Apex ms slider → dwellMs (only meaningful once a frame is picked).
+  const apexMs = buildSlider({
+    cls: "ct-tuner-apex-ms",
+    label: "Apex hold",
+    min: APEX_MS_MIN,
+    max: APEX_MS_MAX,
+    step: APEX_MS_STEP,
+    format: (v) => `${Math.round(v)} ms`,
+    ariaText: (v) => `${Math.round(v)} milliseconds`,
+    minLabel: "0 ms",
+    maxLabel: "10000 ms",
+    onInput: (v) => {
+      draftOverride = { ...draftOverride, dwellMs: Math.round(v) };
+      onControlChange(true);
+    },
+    onReset: () => {
+      draftOverride = omitField(draftOverride, "dwellMs");
+      reseedApexMsFromCascade();
+      onControlChange(false);
+    },
+  });
+  apexGroup.appendChild(apexMs.element);
+
+  const apexHelp = document.createElement("p");
+  apexHelp.className = "ct-tuner-help";
+  apexHelp.textContent =
+    "Pick the apex frame (the gesture's peak — e.g. cup at the lips) to hold it longer mid-loop. Off = no apex hold.";
+  root.appendChild(apexHelp);
+
   // Mode radio → playbackMode.
   const mode = buildModeControl((m) => {
     if (m === "loop") {
@@ -434,6 +506,13 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     if (draftOverride.finalDwellMs !== undefined) {
       hold.setValue(draftOverride.finalDwellMs);
     }
+    // Overlay the restored apex draft (picker + ms) onto the seeded values.
+    if (draftOverride.dwellFrameIndex !== undefined) {
+      populateApexFrames(draftOverride.dwellFrameIndex);
+    }
+    if (draftOverride.dwellMs !== undefined) {
+      apexMs.setValue(draftOverride.dwellMs);
+    }
     mode.setValue(draftOverride.playbackMode ?? (source.playbackMode.value as PlaybackMode));
     rebuildPreview();
     renderSourceTable(source);
@@ -460,6 +539,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     speed.setValue(source.speedMultiplier.value as number);
     hold.setValue(source.finalDwellMs.value as number);
     mode.setValue(source.playbackMode.value as PlaybackMode);
+    seedApexFromSource(source);
   }
 
   /** Re-read the speed slider position from the cascade after a [reset]. */
@@ -470,6 +550,82 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   function reseedHoldFromCascade(): void {
     const source = computeCascadeSource(selectedChar, selectedAnim, manifest);
     hold.setValue(source.finalDwellMs.value as number);
+  }
+  function reseedApexMsFromCascade(): void {
+    const source = computeCascadeSource(selectedChar, selectedAnim, manifest);
+    apexMs.setValue(source.dwellMs.value as number);
+  }
+
+  /** Frame count of the selected (char, anim) — bounds the apex-frame picker. */
+  function frameCount(): number {
+    return manifest.characters[selectedChar]?.animations[selectedAnim]?.frames
+      .length ?? 0;
+  }
+
+  /**
+   * Repopulate the apex-frame picker for the selected (char, anim): an "Off"
+   * option (clears the hold) plus one option per frame index in [0, count). The
+   * picker is re-derived on every selection change because frame counts differ
+   * per anim (M01 vs F01) — a stale index must never exceed the live count.
+   * `preferIndex` (draft / cascade) selects that option if still in range.
+   */
+  function populateApexFrames(preferIndex?: number): void {
+    const count = frameCount();
+    apexFrameSelect.replaceChildren();
+    const off = document.createElement("option");
+    off.value = APEX_FRAME_OFF;
+    off.textContent = "Off";
+    apexFrameSelect.appendChild(off);
+    for (let i = 0; i < count; i++) {
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = `frame ${i}`;
+      apexFrameSelect.appendChild(opt);
+    }
+    apexFrameSelect.value =
+      typeof preferIndex === "number" && preferIndex >= 0 && preferIndex < count
+        ? String(preferIndex)
+        : APEX_FRAME_OFF;
+  }
+
+  /** Apex-frame picker changed. "Off" clears the pair; a frame sets the index. */
+  function onApexFrameChange(): void {
+    const raw = apexFrameSelect.value;
+    if (raw === APEX_FRAME_OFF) {
+      // Off clears BOTH apex fields (an index-less dwellMs has nothing to hold).
+      draftOverride = omitField(
+        omitField(draftOverride, "dwellFrameIndex"),
+        "dwellMs",
+      );
+    } else {
+      draftOverride = {
+        ...draftOverride,
+        dwellFrameIndex: Number(raw),
+      };
+    }
+    // Discrete change → rebuild preview immediately (not debounced).
+    onControlChange(false);
+  }
+
+  /** [reset] on the apex group clears BOTH apex fields + re-seeds from cascade. */
+  function onApexReset(): void {
+    draftOverride = omitField(
+      omitField(draftOverride, "dwellFrameIndex"),
+      "dwellMs",
+    );
+    const source = computeCascadeSource(selectedChar, selectedAnim, manifest);
+    seedApexFromSource(source);
+    onControlChange(false);
+  }
+
+  /**
+   * Position the apex frame picker + ms slider at the effective resolved values
+   * from the cascade. A `"none"` frame index → the picker shows "Off".
+   */
+  function seedApexFromSource(source: CascadeSourceTable): void {
+    const idx = source.dwellFrameIndex.value;
+    populateApexFrames(idx === APEX_FRAME_NONE ? undefined : (idx as number));
+    apexMs.setValue(source.dwellMs.value as number);
   }
 
   /**
@@ -555,6 +711,19 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     addSourceRow(sourceTable, "speed", formatSpeed(source.speedMultiplier.value), source.speedMultiplier.layer);
     addSourceRow(sourceTable, "hold", formatHold(source.finalDwellMs.value), source.finalDwellMs.layer);
     addSourceRow(sourceTable, "mode", String(source.playbackMode.value), source.playbackMode.layer);
+    // Apex hold (86ca2bqe1): per-field effective + source, like the others.
+    addSourceRow(
+      sourceTable,
+      "apex frame",
+      formatApexFrame(source.dwellFrameIndex.value),
+      source.dwellFrameIndex.layer,
+    );
+    addSourceRow(
+      sourceTable,
+      "apex hold",
+      formatHold(source.dwellMs.value),
+      source.dwellMs.layer,
+    );
   }
 
   /**
@@ -666,18 +835,27 @@ function round2(v: number): number {
 /** Return a copy of `o` with `key` removed (field-omission == clear, §4.1). */
 function omitField(
   o: PlaybackOverride,
-  key: "speedMultiplier" | "finalDwellMs" | "playbackMode",
+  key:
+    | "speedMultiplier"
+    | "finalDwellMs"
+    | "playbackMode"
+    | "dwellFrameIndex"
+    | "dwellMs",
 ): PlaybackOverride {
   const copy: PlaybackOverride = { ...o };
   delete copy[key];
   return copy;
 }
 
-function formatSpeed(v: number | PlaybackMode): string {
+function formatSpeed(v: number | PlaybackMode | string): string {
   return typeof v === "number" ? `${v.toFixed(2)}×` : String(v);
 }
-function formatHold(v: number | PlaybackMode): string {
+function formatHold(v: number | PlaybackMode | string): string {
   return typeof v === "number" ? `${Math.round(v)} ms` : String(v);
+}
+/** Apex-frame readout: a frame index, or "none" (no apex hold) — 86ca2bqe1. */
+function formatApexFrame(v: number | PlaybackMode | string): string {
+  return typeof v === "number" ? `frame ${v}` : String(v);
 }
 
 /** A captioned label wrapping a control (selector). */

@@ -9,7 +9,10 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeCascadeSource } from "../../../src/webview/sprites/cascadeSource.js";
+import {
+  computeCascadeSource,
+  APEX_FRAME_NONE,
+} from "../../../src/webview/sprites/cascadeSource.js";
 import type { GeneratedSpriteManifest } from "../../../src/webview/sprites/spriteManifest.js";
 
 function manifest(
@@ -99,5 +102,56 @@ describe("computeCascadeSource — per-field effective value + layer (AC3)", () 
     const src = computeCascadeSource("nope", "also-nope", manifest());
     expect(src.speedMultiplier.layer).toBe("engine default");
     expect(src.playbackMode.value).toBe("loop");
+  });
+});
+
+// ===========================================================================
+// 86ca2bqe1 — apex hold (dwellFrameIndex / dwellMs) per-field resolution
+//
+// NON-VACUOUS: the "none" sentinel test fails if dwellFrameIndex were given a
+// numeric engine default (it has none — absent means the hold is OFF); the
+// dwellMs default test fails if PEAK_DWELL_MS_DEFAULT (600) isn't the fallback.
+// ===========================================================================
+
+describe("computeCascadeSource — apex hold fields (dwellFrameIndex / dwellMs)", () => {
+  it("no layer sets the apex → frame index is the 'none' sentinel, ms is the 600 default", () => {
+    const src = computeCascadeSource("ClaudeTeam-M01-Dev", "idle_stretch", manifest());
+    expect(src.dwellFrameIndex).toEqual({
+      value: APEX_FRAME_NONE,
+      layer: "engine default",
+    });
+    // dwellMs engine default = PEAK_DWELL_MS_DEFAULT (600).
+    expect(src.dwellMs).toEqual({ value: 600, layer: "engine default" });
+  });
+
+  it("a per-char apex pair wins and is tagged per-char", () => {
+    const src = computeCascadeSource(
+      "ClaudeTeam-M01-Dev",
+      "idle_stretch",
+      manifest({ perChar: { dwellFrameIndex: 2, dwellMs: 2500 } }),
+    );
+    expect(src.dwellFrameIndex).toEqual({ value: 2, layer: "per-char" });
+    expect(src.dwellMs).toEqual({ value: 2500, layer: "per-char" });
+  });
+
+  it("a pose-default apex frame is used (tagged pose-default) when per-char absent", () => {
+    const src = computeCascadeSource(
+      "ClaudeTeam-M01-Dev",
+      "idle_stretch",
+      manifest({ poseDefault: { dwellFrameIndex: 1 } }),
+    );
+    expect(src.dwellFrameIndex).toEqual({ value: 1, layer: "pose-default" });
+    // dwellMs still falls back to the engine default since no layer set it.
+    expect(src.dwellMs).toEqual({ value: 600, layer: "engine default" });
+  });
+
+  it("FIELD-LEVEL: apex frame per-char while apex ms inherits engine default", () => {
+    const src = computeCascadeSource(
+      "ClaudeTeam-M01-Dev",
+      "idle_stretch",
+      manifest({ perChar: { dwellFrameIndex: 3 } }),
+    );
+    expect(src.dwellFrameIndex).toEqual({ value: 3, layer: "per-char" });
+    expect(src.dwellMs.layer).toBe("engine default");
   });
 });

@@ -2177,6 +2177,17 @@ body {
   font-size: 0.65rem;
   color: var(--ct-color-fg-muted);
 }
+/* Hold (apex) group (86ca2bqe1): the frame-index picker stacks above the ms
+ * slider inside the shared .ct-tuner-control flex column. The picker reuses
+ * .ct-tuner-select; this just lays its inner field caption + select on a row. */
+.ct-tuner-apex-frame-field {
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--ct-space-s);
+}
+.ct-tuner-apex-frame {
+  flex: 1 1 auto;
+}
 .ct-tuner-radio-group {
   display: flex;
   flex-direction: column;

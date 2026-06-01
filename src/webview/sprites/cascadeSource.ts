@@ -2,15 +2,19 @@
  * cascadeSource — per-field effective-value + originating-layer resolution for
  * the Playback Tuner's source table (E5 86ca2189v / E4 spec §3.5, AC3).
  *
- * The tuner must show, for EACH of the three tunable fields (`speedMultiplier`,
- * `finalDwellMs`, `playbackMode`), the EFFECTIVE resolved value AND which cascade
+ * The tuner must show, for EACH tunable field (`speedMultiplier`,
+ * `finalDwellMs`, `playbackMode`, and — 86ca2bqe1 — the apex-hold pair
+ * `dwellFrameIndex`/`dwellMs`), the EFFECTIVE resolved value AND which cascade
  * layer it came from. This is load-bearing: the sponsor must understand why a
  * value is what it is before tweaking it.
  *
  * The 3-layer cascade (per `resolvePlayback`, E3):
  *   1. per-char      — `manifest.characters[char].animations[anim].playback.<field>` (wins)
  *   2. pose-default  — `manifest.poseDefaults[anim].<field>` (shared across chars)
- *   3. engine default — the absent-field behavior (speed→1.0, finalDwell→400, mode→"loop")
+ *   3. engine default — the absent-field behavior (speed→1.0, finalDwell→400,
+ *      mode→"loop", dwellMs→PEAK_DWELL_MS_DEFAULT). `dwellFrameIndex` has NO
+ *      numeric engine default — absent across all layers means the apex hold is
+ *      OFF, surfaced as the `"none"` sentinel.
  *
  * **Field-level (not whole-object):** each field is resolved INDEPENDENTLY — a
  * per-char entry that sets only `speedMultiplier` still inherits `playbackMode` /
@@ -28,6 +32,7 @@
 
 import {
   DWELL_MS_DEFAULT,
+  PEAK_DWELL_MS_DEFAULT,
   type PlaybackMode,
 } from "./spritePlayer.js";
 import type { GeneratedSpriteManifest } from "./spriteManifest.js";
@@ -36,13 +41,28 @@ import { GENERATED_SPRITE_MANIFEST } from "./generatedManifest.js";
 /** Which cascade layer an effective field value originated from. */
 export type CascadeLayer = "per-char" | "pose-default" | "engine default";
 
-/** The three tunable fields the tuner surfaces (LOCKED vocabulary). */
-export type TunableField = "speedMultiplier" | "finalDwellMs" | "playbackMode";
+/** The tunable fields the tuner surfaces (LOCKED vocabulary + apex hold). */
+export type TunableField =
+  | "speedMultiplier"
+  | "finalDwellMs"
+  | "playbackMode"
+  | "dwellFrameIndex"
+  | "dwellMs";
+
+/** Sentinel for an apex-hold frame index that no cascade layer sets (hold OFF). */
+export const APEX_FRAME_NONE = "none";
+
+/**
+ * A field's effective value. Numbers for speed/hold/apex-ms, the mode literal
+ * for playbackMode, and `"none"` (APEX_FRAME_NONE) for an apex frame index no
+ * layer sets — i.e. the apex hold is OFF for this (char, anim).
+ */
+export type FieldValue = number | PlaybackMode | typeof APEX_FRAME_NONE;
 
 /** One field's effective value + originating layer. */
 export interface FieldSource {
-  /** The resolved effective value (number for speed/hold, literal for mode). */
-  value: number | PlaybackMode;
+  /** The resolved effective value. */
+  value: FieldValue;
   /** Which layer supplied it. */
   layer: CascadeLayer;
 }
@@ -52,6 +72,17 @@ export interface CascadeSourceTable {
   speedMultiplier: FieldSource;
   finalDwellMs: FieldSource;
   playbackMode: FieldSource;
+  /**
+   * Apex-hold frame index (86ca2bqe1). `value` is the frame index number, or
+   * `APEX_FRAME_NONE` when no layer sets it (hold OFF).
+   */
+  dwellFrameIndex: FieldSource;
+  /**
+   * Apex-hold duration (ms, 86ca2bqe1). Engine default = PEAK_DWELL_MS_DEFAULT.
+   * Note: when `dwellFrameIndex` is `"none"` this value is moot (no apex hold
+   * fires) — the tuner only shows it as actionable once a frame index is set.
+   */
+  dwellMs: FieldSource;
 }
 
 /** Engine-default values (the absent-field behavior — mirrors spritePlayer). */
@@ -59,6 +90,7 @@ const ENGINE_DEFAULTS = {
   speedMultiplier: 1,
   finalDwellMs: DWELL_MS_DEFAULT,
   playbackMode: "loop" as PlaybackMode,
+  dwellMs: PEAK_DWELL_MS_DEFAULT,
 };
 
 /**
@@ -80,6 +112,24 @@ function resolveField<T extends number | PlaybackMode>(
     return { value: poseDefault, layer: "pose-default" };
   }
   return { value: engineDefault, layer: "engine default" };
+}
+
+/**
+ * Resolve `dwellFrameIndex` (86ca2bqe1). Unlike the other fields it has NO
+ * numeric engine default — absent across all layers means the apex hold is OFF,
+ * which we surface as the `APEX_FRAME_NONE` sentinel tagged `engine default`.
+ */
+function resolveApexFrame(
+  perChar: number | undefined,
+  poseDefault: number | undefined,
+): FieldSource {
+  if (perChar !== undefined) {
+    return { value: perChar, layer: "per-char" };
+  }
+  if (poseDefault !== undefined) {
+    return { value: poseDefault, layer: "pose-default" };
+  }
+  return { value: APEX_FRAME_NONE, layer: "engine default" };
 }
 
 /**
@@ -114,6 +164,15 @@ export function computeCascadeSource(
       perChar?.playbackMode,
       poseDefault?.playbackMode,
       ENGINE_DEFAULTS.playbackMode,
+    ),
+    dwellFrameIndex: resolveApexFrame(
+      perChar?.dwellFrameIndex,
+      poseDefault?.dwellFrameIndex,
+    ),
+    dwellMs: resolveField(
+      perChar?.dwellMs,
+      poseDefault?.dwellMs,
+      ENGINE_DEFAULTS.dwellMs,
     ),
   };
 }

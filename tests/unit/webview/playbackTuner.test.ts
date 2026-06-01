@@ -173,6 +173,32 @@ describe("AC1 — controls render", () => {
     );
   });
 
+  // 86ca2bqe1 — the apex-hold group renders a frame-index PICKER (bounded to the
+  // anim's frame count + an "Off" option) and an apex-ms SLIDER.
+  it("renders the Hold (apex) frame picker + ms slider", () => {
+    const { root } = mount();
+    const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+    // idle_stretch has 3 frames → "Off" + frame 0/1/2 = 4 options.
+    const opts = Array.from(picker.querySelectorAll("option")).map((o) => o.value);
+    expect(opts).toEqual(["", "0", "1", "2"]);
+    // Picker defaults to "Off" (no apex hold baked on the fixture).
+    expect(picker.value).toBe("");
+    expect(root.querySelector(".ct-tuner-apex-ms .ct-tuner-slider")).not.toBeNull();
+  });
+
+  // 86ca2bqe1 — the picker is BOUNDED to the live anim's frame count and
+  // re-derived when the (char, anim) changes (M01 stretch=3 frames, F01 coffee=2).
+  it("re-bounds the apex frame picker to the new anim's frame count on char change", () => {
+    const { root } = mount();
+    const charSel = q<HTMLSelectElement>(root, ".ct-tuner-char-select");
+    charSel.value = "ClaudeTeam-F01-Dev";
+    charSel.dispatchEvent(new Event("change"));
+    const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+    // F01 idle_coffee has 2 frames → "Off" + frame 0/1.
+    const opts = Array.from(picker.querySelectorAll("option")).map((o) => o.value);
+    expect(opts).toEqual(["", "0", "1"]);
+  });
+
   it("re-populates the animation selector when the character changes", () => {
     const { root } = mount();
     const charSel = q<HTMLSelectElement>(root, ".ct-tuner-char-select");
@@ -760,5 +786,209 @@ describe("B1 (86ca2189v) — open tuner state survives the ~2s poll-tick renderF
     expect(
       q<HTMLSelectElement>(reopened, ".ct-tuner-char-select").value,
     ).toBe("ClaudeTeam-M01-Dev");
+  });
+});
+
+// ===========================================================================
+// 86ca2bqe1 — Hold (apex): frame picker + ms slider → dwellFrameIndex/dwellMs
+//
+// AC1 render is covered above. These cover AC2 (picker + slider drive the save
+// with the apex pair on the correct target), AC3 (cascade source rows for the
+// two new fields), AC4 (non-vacuous DOM-interaction — a mutation probe fails
+// them), and B1 survivability (the apex draft survives a poll-tick remount).
+//
+// NON-VACUITY notes per block below state the revert that breaks each.
+// ===========================================================================
+
+describe("86ca2bqe1 AC2 — apex picker + ms slider drive the saved override", () => {
+  it("picking a frame + dragging the ms slider saves dwellFrameIndex + dwellMs", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      // Pick apex frame 1.
+      const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+      picker.value = "1";
+      picker.dispatchEvent(new Event("change"));
+      // Drag the apex ms slider to 2500.
+      const slider = q<HTMLInputElement>(root, ".ct-tuner-apex-ms .ct-tuner-slider");
+      slider.value = "2500";
+      slider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      const save = lastSave(posted)!;
+      // Load-bearing: both apex fields ride on the override with the right target.
+      // Reverting the dwellFrameIndex / dwellMs wiring drops them from the payload.
+      expect(save.payload.override.dwellFrameIndex).toBe(1);
+      expect(save.payload.override.dwellMs).toBe(2500);
+      expect(save.payload.writeTarget).toBe("per-char");
+      expect(save.payload.characterFolder).toBe("ClaudeTeam-M01-Dev");
+      expect(save.payload.animName).toBe("idle_stretch");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("choosing 'Off' CLEARS both apex fields from the saved override", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+      // First set an apex hold (frame 2 + ms).
+      picker.value = "2";
+      picker.dispatchEvent(new Event("change"));
+      const slider = q<HTMLInputElement>(root, ".ct-tuner-apex-ms .ct-tuner-slider");
+      slider.value = "1500";
+      slider.dispatchEvent(new Event("input"));
+      // Then turn it Off.
+      picker.value = "";
+      picker.dispatchEvent(new Event("change"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      const save = lastSave(posted)!;
+      // Load-bearing: Off clears BOTH (an index-less dwellMs has nothing to hold).
+      // Reverting the Off→clear path leaves a stale dwellFrameIndex/dwellMs.
+      expect("dwellFrameIndex" in save.payload.override).toBe(false);
+      expect("dwellMs" in save.payload.override).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("apex [reset] clears both fields from the payload", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+      picker.value = "1";
+      picker.dispatchEvent(new Event("change"));
+      q<HTMLButtonElement>(root, ".ct-tuner-apex-reset").click();
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      const save = lastSave(posted)!;
+      expect("dwellFrameIndex" in save.payload.override).toBe(false);
+      expect("dwellMs" in save.payload.override).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("picking an apex frame rebuilds the live preview (AC1 — drives preview)", () => {
+    vi.useFakeTimers();
+    try {
+      const { root } = mount();
+      const box = () =>
+        root.querySelector<HTMLElement>(".ct-tuner-preview-host .sprite-box");
+      expect(box()).not.toBeNull();
+      const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+      picker.value = "1";
+      picker.dispatchEvent(new Event("change"));
+      // Discrete change → immediate rebuild; a fresh box still plays the anim.
+      expect(box()).not.toBeNull();
+      expect(box()!.dataset.pose).toBe("idle_stretch");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("86ca2bqe1 AC3 — apex source-table rows render effective value + layer", () => {
+  it("no baked apex → 'apex frame' row shows none (engine default); 'apex hold' shows 600 ms", () => {
+    const { root } = mount();
+    const rows = Array.from(
+      root.querySelectorAll<HTMLElement>(".ct-tuner-source-value"),
+    );
+    const byField = new Map<string, HTMLElement>();
+    for (const r of rows) byField.set(r.dataset.field!, r);
+
+    const apexFrame = byField.get("apex frame")!;
+    expect(apexFrame.dataset.layer).toBe("engine default");
+    expect(
+      q<HTMLElement>(apexFrame, ".ct-tuner-source-effective").textContent,
+    ).toBe("none");
+
+    const apexHold = byField.get("apex hold")!;
+    expect(apexHold.dataset.layer).toBe("engine default");
+    expect(
+      q<HTMLElement>(apexHold, ".ct-tuner-source-effective").textContent,
+    ).toBe("600 ms");
+  });
+
+  it("a baked per-char apex pair surfaces value + per-char tag", () => {
+    const manifest = fixtureManifest();
+    manifest.characters["ClaudeTeam-M01-Dev"].animations.idle_stretch.playback = {
+      dwellFrameIndex: 2,
+      dwellMs: 2000,
+    };
+    const { root } = mount({ manifest });
+    const rows = Array.from(
+      root.querySelectorAll<HTMLElement>(".ct-tuner-source-value"),
+    );
+    const byField = new Map<string, HTMLElement>();
+    for (const r of rows) byField.set(r.dataset.field!, r);
+
+    const apexFrame = byField.get("apex frame")!;
+    expect(apexFrame.dataset.layer).toBe("per-char");
+    expect(
+      q<HTMLElement>(apexFrame, ".ct-tuner-source-effective").textContent,
+    ).toBe("frame 2");
+    const apexHold = byField.get("apex hold")!;
+    expect(
+      q<HTMLElement>(apexHold, ".ct-tuner-source-effective").textContent,
+    ).toBe("2000 ms");
+  });
+});
+
+describe("86ca2bqe1 B1 — apex draft survives the ~2s poll-tick renderFull", () => {
+  it("the picked apex frame + ms survive a poll-tick remount and ride the next save", () => {
+    vi.useFakeTimers();
+    try {
+      const tracker = createTunerStateTracker();
+      const first = renderPlaybackTuner({
+        manifest: fixtureManifest(),
+        spriteBaseUri: "vscode-webview://host/dist/webview",
+        postMessage: () => undefined,
+        stateTracker: tracker,
+        scheduleFrame: () => 0,
+        cancelFrame: () => undefined,
+      });
+      // Tune an apex hold on M01/idle_stretch: frame 2 + 3000 ms.
+      const picker = q<HTMLSelectElement>(first, ".ct-tuner-apex-frame");
+      picker.value = "2";
+      picker.dispatchEvent(new Event("change"));
+      const slider = q<HTMLInputElement>(first, ".ct-tuner-apex-ms .ct-tuner-slider");
+      slider.value = "3000";
+      slider.dispatchEvent(new Event("input"));
+
+      // ── Poll tick: a fresh tuner is built with the SAME tracker. ──
+      const { root: second, posted } = pollTickRemount(tracker);
+
+      // The restored picker shows the drafted frame; the ms readout the drafted ms.
+      expect(
+        q<HTMLSelectElement>(second, ".ct-tuner-apex-frame").value,
+      ).toBe("2");
+      expect(
+        q<HTMLElement>(second, ".ct-tuner-apex-ms .ct-tuner-control-readout")
+          .textContent,
+      ).toBe("3000 ms");
+
+      // A new save (nudge speed) carries the SURVIVED apex pair — proving the
+      // draft (not just the control surface) round-tripped through the tracker.
+      // NON-VACUOUS: reverting the tracker carrying dwellFrameIndex/dwellMs (they
+      // ride inside draftOverride, which the tracker clones) drops them here.
+      const speedSlider = q<HTMLInputElement>(
+        second,
+        ".ct-tuner-speed .ct-tuner-slider",
+      );
+      speedSlider.value = "1.25";
+      speedSlider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      const save = lastSave(posted)!;
+      expect(save.payload.override.dwellFrameIndex).toBe(2);
+      expect(save.payload.override.dwellMs).toBe(3000);
+      expect(save.payload.override.speedMultiplier).toBe(1.25);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -11,8 +11,9 @@
  * ## Field-level structured merge (NOT whole-file replace) — load-bearing
  *
  * The write is a structured FIELD-LEVEL merge into the EXISTING file: load the
- * current json, set/delete the three tunable playback fields (`speedMultiplier`,
- * `finalDwellMs`, `playbackMode`) for `animName` under the file's `playback`
+ * current json, set/delete the tunable playback fields (`speedMultiplier`,
+ * `finalDwellMs`, `playbackMode`, and — 86ca2bqe1 — the apex-hold pair
+ * `dwellFrameIndex`/`dwellMs`) for `animName` under the file's `playback`
  * block, re-serialize, write. Everything else — the `animations` name→folder map,
  * other anims' playback entries, the `_note` / `_playback_note` comments, the
  * `idle_pool`, etc. — is preserved untouched.
@@ -29,13 +30,13 @@
  * manifest.mjs`, which reads the SAME schema (E2): per-char `animations.json`
  * has a top-level `playback` block keyed by canonical anim name; `pose-defaults.
  * json` has a top-level `playback` block keyed by anim name. The build script's
- * `sanitizePlayback` validates `speedMultiplier`/`finalDwellMs` as finite numbers
- * and `playbackMode` as `"loop"|"pingpong"` — this writer emits exactly those
- * three fields with those types, so a written value survives the rebuild verbatim.
- * This writer does NOT touch the other playback fields the build script also
- * understands (`dwellFrameIndex`/`dwellMs`/`startFrame`/`endFrame`) — they are
- * out of scope for the tuner (§10) and are PRESERVED if already present, since
- * the merge is per-field on the three tunable keys only.
+ * `sanitizePlayback` validates the numeric fields (`speedMultiplier`/
+ * `finalDwellMs`/`dwellFrameIndex`/`dwellMs`) as finite numbers and
+ * `playbackMode` as `"loop"|"pingpong"` — this writer emits exactly those
+ * tunable fields with those types, so a written value survives the rebuild
+ * verbatim. The remaining window fields (`startFrame`/`endFrame`) are NOT
+ * touched by the tuner — they are out of scope (§10) and are PRESERVED if
+ * already present, since the merge is per-field on the tunable keys only.
  *
  * NEVER throws — every failure (no workspace, malformed existing json, fs error)
  * surfaces as `{ ok: false, error }` so the caller acks `playback:override-saved
@@ -50,11 +51,20 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** The three tunable fields the tuner persists (LOCKED vocabulary). */
+/** The tunable fields the tuner persists (LOCKED vocabulary). */
 export interface TunablePlaybackOverride {
   speedMultiplier?: number;
   finalDwellMs?: number;
   playbackMode?: "loop" | "pingpong";
+  /**
+   * Apex-hold frame index (86ca2bqe1 — "Hold (apex)"). Now tuner-owned: a
+   * field-level merge sets it when present and CLEARS it when absent, exactly
+   * like the other tunable keys. The engine already applies it (spritePlayer.ts
+   * `dwellFrameIndex`); no engine change.
+   */
+  dwellFrameIndex?: number;
+  /** Apex-hold duration in ms (86ca2bqe1). Tuner-owned alongside dwellFrameIndex. */
+  dwellMs?: number;
 }
 
 /** Args for a save. */
@@ -73,17 +83,24 @@ export interface SavePlaybackOverrideArgs {
 /** Result mirrors the `playback:override-saved` ack. NEVER throws. */
 export type WritePlaybackResult = { ok: true } | { ok: false; error: string };
 
-/** The three keys this writer owns (it never touches other playback fields). */
-const TUNABLE_KEYS = ["speedMultiplier", "finalDwellMs", "playbackMode"] as const;
+/** The keys this writer owns (it never touches other playback fields). */
+const TUNABLE_KEYS = [
+  "speedMultiplier",
+  "finalDwellMs",
+  "playbackMode",
+  // 86ca2bqe1 — apex hold is now tuner-owned (set/clear field-level merge).
+  "dwellFrameIndex",
+  "dwellMs",
+] as const;
 
 /**
  * Merge the override into an existing per-anim playback entry (field-level).
  *
  *   - A field PRESENT in `override` → set on the entry.
- *   - A field ABSENT from `override` (among the three tunable keys) → DELETED
+ *   - A field ABSENT from `override` (among the tunable keys) → DELETED
  *     from the entry (clear → inherit).
- *   - Any OTHER field already on the entry (e.g. `dwellFrameIndex`, window) →
- *     preserved untouched (out of tuner scope, §10).
+ *   - Any OTHER field already on the entry (e.g. `startFrame`/`endFrame` window)
+ *     → preserved untouched (out of tuner scope, §10).
  *
  * Returns the merged entry, or `null` when the entry is empty after merge (the
  * caller then removes the whole `playback["<anim>"]` key so the file stays lean).
