@@ -80,6 +80,7 @@ import type {
 import type { SpriteTracker } from "./spriteTracker.js";
 import type { PickerOpenTracker } from "./pickerOpenTracker.js";
 import type { TunerStateTracker } from "./tunerStateTracker.js";
+import type { LiveManifestOverlay } from "./liveManifestOverlay.js";
 
 /** Persistent error state stored on the dashboard. */
 export interface DashboardErrorState {
@@ -310,6 +311,14 @@ export interface RenderContext {
    * tests (the panel starts at its first-char defaults each mount).
    */
   tunerStateTracker?: TunerStateTracker;
+  /**
+   * 86ca2wrnq — webview-local store of confirmed in-session Playback Tuner saves,
+   * overlaid onto the baked manifest so the tuner's re-seed (char/anim switch,
+   * close+reopen) reflects in-session saves WITHOUT a rebuild. Owned by the boot
+   * closure in main.ts; survives panel close+reopen within a webview boot.
+   * Optional — absent in component tests that don't drive a save round-trip.
+   */
+  liveManifestOverlay?: LiveManifestOverlay;
 }
 
 /**
@@ -456,6 +465,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     tunerSaveAck,
     onCloseTunerPanel,
     tunerStateTracker,
+    liveManifestOverlay,
   } = ctx;
 
   // ── Playback Tuner panel (E5 86ca2189v) — full-pane on-demand surface,
@@ -496,6 +506,9 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         ...(tunerSaveAck !== undefined ? { saveAck: tunerSaveAck } : {}),
         ...(onCloseTunerPanel ? { onClose: onCloseTunerPanel } : {}),
         ...(tunerStateTracker !== undefined ? { stateTracker: tunerStateTracker } : {}),
+        ...(liveManifestOverlay !== undefined
+          ? { liveOverlay: liveManifestOverlay }
+          : {}),
       }),
     );
     return;

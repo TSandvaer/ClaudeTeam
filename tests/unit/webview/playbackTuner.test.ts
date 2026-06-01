@@ -40,6 +40,7 @@ import {
   SAVE_DEBOUNCE_MS,
 } from "../../../src/webview/components/playbackTuner.js";
 import { createTunerStateTracker } from "../../../src/webview/tunerStateTracker.js";
+import { createLiveManifestOverlay } from "../../../src/webview/liveManifestOverlay.js";
 import {
   renderFull,
   type RenderableState,
@@ -1631,5 +1632,199 @@ describe("SWEEP 86ca2ut8w — stale save-ack must not re-name the banner (BUG 2)
     // CORRECT post-fix behavior: the banner must NOT claim a save for M01.
     const banner = q<HTMLElement>(mountEl, ".ct-tuner-banner-text").textContent;
     expect(banner).not.toContain("ClaudeTeam-M01-Dev/animations.json");
+  });
+});
+
+// ===========================================================================
+// 86ca2wrnq — re-seed reflects in-session SAVES (stale-manifest re-seed bug)
+// ===========================================================================
+//
+// THE BUG (sponsor, verbatim): "i tuned almost all the M01 animations, then i
+// clicked to see F01 and when I went back to M01 all the tuning was reset."
+//
+// CONFIRMED root cause: the tuner seeds its controls from the BAKED
+// `GENERATED_SPRITE_MANIFEST` — a build-time snapshot the host never updates
+// in-memory on save. So `readSavedPerCharOverride` / `computeCascadeSource` /
+// `seedControlsForWriteTarget` read the LOAD-TIME value on a re-seed
+// (char/anim switch, close+reopen), not the in-session save. The data WAS safe
+// on disk; only the control re-seed showed the stale value — and re-tuning while
+// the stale value showed risked writing it back over the good on-disk value.
+//
+// THE FIX: a webview-local `liveManifestOverlay` records each CONFIRMED save and
+// overlays it onto the baked manifest, so the tuner reads an EFFECTIVE manifest
+// that includes in-session saves on every re-seed.
+//
+// NON-VACUITY (the load-bearing requirement): each block REQUIRES the prior
+// repro of feeding a fresh manifest reflecting the save. These tests deliberately
+// NEVER re-feed a fresh manifest — the same baked fixture is used throughout, so
+// the ONLY way the re-seed can show the saved value is the overlay. Reverting the
+// fix (drop `liveOverlay` / `manifest = overlay.apply(baked)` → read raw baked)
+// makes every "shows the saved value after switching back" assertion FAIL: the
+// re-seed reads the baked 0.50×, exactly the shipped bug.
+describe("86ca2wrnq — re-seed reflects in-session saves (stale-manifest re-seed)", () => {
+  const q2 = <T extends HTMLElement>(el: ParentNode, sel: string): T =>
+    el.querySelector<T>(sel)!;
+
+  const speedReadout = (root: HTMLElement): string =>
+    q2<HTMLElement>(root, ".ct-tuner-speed .ct-tuner-control-readout").textContent ??
+    "";
+
+  it("save M01 speed → switch to F01 → back to M01: the slider shows the SAVED value (one panel instance, no rebuild)", () => {
+    vi.useFakeTimers();
+    try {
+      const overlay = createLiveManifestOverlay();
+      const tracker = createTunerStateTracker();
+      const baked = fixtureManifest();
+      // M01/idle_stretch bakes per-char speed 0.5 → the slider opens at 0.50×.
+      const { root, posted } = mount({
+        manifest: baked,
+        liveOverlay: overlay,
+        stateTracker: tracker,
+      });
+      expect(speedReadout(root)).toBe("0.50×");
+
+      // The sponsor tunes M01/idle_stretch speed to 2.00× and the debounced save
+      // fires.
+      const slider = q2<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+      slider.value = "2";
+      slider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      const save = lastSave(posted)!;
+      expect(save.payload.override.speedMultiplier).toBe(2);
+
+      // The host confirms the write → ack lands via the in-place handle (the #167
+      // skip-rebuild path; same instance stays mounted). This commits the save
+      // into the live overlay.
+      getTunerPanelHandle(root)!.applySaveAck({ ok: true });
+
+      // The sponsor clicks to view F01, then switches BACK to M01 — all in the
+      // SAME panel instance (no rebuild; no fresh manifest re-fed).
+      const charSel = q2<HTMLSelectElement>(root, ".ct-tuner-char-select");
+      charSel.value = "ClaudeTeam-F01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+      charSel.value = "ClaudeTeam-M01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+
+      // LOAD-BEARING: the speed slider re-seeds to the SAVED 2.00×, NOT the stale
+      // baked 0.50×. Reverting the overlay reads the baked manifest → "0.50×".
+      expect(speedReadout(root)).toBe("2.00×");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("re-tuning after switching back carries the SAVED value forward (no stale-over-good data loss)", () => {
+    vi.useFakeTimers();
+    try {
+      const overlay = createLiveManifestOverlay();
+      const baked = fixtureManifest();
+      const { root, posted } = mount({
+        manifest: baked,
+        liveOverlay: overlay,
+        stateTracker: createTunerStateTracker(),
+      });
+
+      // Save M01/idle_stretch with BOTH speed 2.0 and hold 1500 (two fields).
+      const speed = q2<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+      speed.value = "2";
+      speed.dispatchEvent(new Event("input"));
+      const hold = q2<HTMLInputElement>(root, ".ct-tuner-hold .ct-tuner-slider");
+      hold.value = "1500";
+      hold.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      getTunerPanelHandle(root)!.applySaveAck({ ok: true });
+
+      // Switch away + back (same instance).
+      const charSel = q2<HTMLSelectElement>(root, ".ct-tuner-char-select");
+      charSel.value = "ClaudeTeam-F01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+      charSel.value = "ClaudeTeam-M01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+
+      // Now re-tune ONLY hold to 2000. The next save must carry the SAVED speed 2
+      // (re-seeded from the overlay), not drop it back to the baked 0.5 — the
+      // near-data-loss the bug created. (readSavedPerCharOverride seeds the draft
+      // from the effective manifest, so the untouched speed rides along.)
+      hold.value = "2000";
+      hold.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      const save = lastSave(posted)!;
+      expect(save.payload.override.finalDwellMs).toBe(2000);
+      // LOAD-BEARING: speed survives at the SAVED 2 (not the baked 0.5). Reverting
+      // the overlay re-seeds the draft from baked → speedMultiplier 0.5 here.
+      expect(save.payload.override.speedMultiplier).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("close + reopen (fresh panel, SAME baked manifest, SAME overlay) re-seeds to the saved value", () => {
+    vi.useFakeTimers();
+    try {
+      const overlay = createLiveManifestOverlay();
+      const baked = fixtureManifest();
+
+      // First panel: save M01/idle_stretch speed 3.0.
+      const first = mount({
+        manifest: baked,
+        liveOverlay: overlay,
+        stateTracker: createTunerStateTracker(),
+      });
+      const slider = q2<HTMLInputElement>(
+        first.root,
+        ".ct-tuner-speed .ct-tuner-slider",
+      );
+      slider.value = "3";
+      slider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      getTunerPanelHandle(first.root)!.applySaveAck({ ok: true });
+
+      // Panel closes; the boot closure keeps the overlay (data is real on-disk
+      // state for the rest of this boot). A fresh panel mounts on reopen with the
+      // SAME baked fixture (NOT re-fed with the save) + the SAME overlay.
+      const second = mount({
+        manifest: baked,
+        liveOverlay: overlay,
+        stateTracker: createTunerStateTracker(),
+      });
+
+      // LOAD-BEARING: the reopened panel seeds M01/idle_stretch speed at the
+      // SAVED 3.00×. Reverting the overlay reads baked → "0.50×".
+      expect(speedReadout(second.root)).toBe("3.00×");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an ERROR ack does NOT commit to the overlay — the re-seed stays at the baked value", () => {
+    vi.useFakeTimers();
+    try {
+      const overlay = createLiveManifestOverlay();
+      const baked = fixtureManifest();
+      const { root } = mount({
+        manifest: baked,
+        liveOverlay: overlay,
+        stateTracker: createTunerStateTracker(),
+      });
+
+      const slider = q2<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+      slider.value = "2";
+      slider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      // The write FAILED — nothing landed on disk, so the overlay must NOT record.
+      getTunerPanelHandle(root)!.applySaveAck({ ok: false, error: "disk full" });
+
+      const charSel = q2<HTMLSelectElement>(root, ".ct-tuner-char-select");
+      charSel.value = "ClaudeTeam-F01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+      charSel.value = "ClaudeTeam-M01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+
+      // The re-seed reads the baked 0.50× — the overlay never recorded the failed
+      // write, so it can't diverge from disk.
+      expect(speedReadout(root)).toBe("0.50×");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

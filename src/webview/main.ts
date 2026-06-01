@@ -56,6 +56,7 @@ import { createExpandedGroupsTracker } from "./expandedGroupsTracker.js";
 import { createMenuOpenTracker } from "./menuOpenTracker.js";
 import { createPickerOpenTracker } from "./pickerOpenTracker.js";
 import { createTunerStateTracker } from "./tunerStateTracker.js";
+import { createLiveManifestOverlay } from "./liveManifestOverlay.js";
 import { createSpriteTracker } from "./spriteTracker.js";
 import { MemberDirectory } from "./memberDirectory.js";
 
@@ -359,6 +360,22 @@ function boot(): void {
    * RESET file, not the saved one.
    */
   const tunerStateTracker = createTunerStateTracker();
+  /**
+   * 86ca2wrnq — webview-local store of CONFIRMED in-session Playback Tuner saves.
+   * The baked `GENERATED_SPRITE_MANIFEST` is a build-time snapshot the host never
+   * updates in-memory on save, so the tuner's re-seed (char/anim switch,
+   * close+reopen) read the STALE load-time value (sponsor: "tuned M01, viewed
+   * F01, went back to M01 — tuning reset"). The data WAS safe on disk; only the
+   * control re-seed showed stale values. This overlay mirrors each confirmed
+   * write onto the baked manifest so a re-seed reads the latest authoritative
+   * override without a rebuild. Owned by the boot closure so it survives panel
+   * close+reopen WITHIN this webview boot — and deliberately NOT reset on panel
+   * open/close (the saved values are real on-disk state for the rest of this
+   * boot). A reload re-imports the bundle (overlay gone) but a real `npm run
+   * build` bakes the values into the fresh manifest, so reload-after-build reads
+   * them from the manifest itself.
+   */
+  const liveManifestOverlay = createLiveManifestOverlay();
 
   /** Workspace-folder seed for the wizard/preview "Team:" line. */
   const teamNameSeed = (): string => {
@@ -419,6 +436,7 @@ function boot(): void {
     tunerPanelOpen,
     tunerSaveAck,
     tunerStateTracker,
+    liveManifestOverlay,
     onCloseTunerPanel: () => {
       tunerPanelOpen = false;
       // Closing discards the last save ack — a fresh open starts on the neutral

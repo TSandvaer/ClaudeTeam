@@ -47,6 +47,7 @@ import {
 import type { GeneratedSpriteManifest } from "../sprites/spriteManifest.js";
 import { GENERATED_SPRITE_MANIFEST } from "../sprites/generatedManifest.js";
 import type { TunerStateTracker } from "../tunerStateTracker.js";
+import type { LiveManifestOverlay } from "../liveManifestOverlay.js";
 import { createPreviewController } from "./playbackTunerPreview.js";
 import {
   computeCascadeSource,
@@ -115,6 +116,17 @@ export interface PlaybackTunerProps {
    * that mount once (the panel starts at its first-char defaults).
    */
   stateTracker?: TunerStateTracker;
+  /**
+   * 86ca2wrnq — webview-local store of CONFIRMED in-session saves, overlaid onto
+   * the baked `manifest` so the tuner's re-seed (character switch, animation
+   * switch, close+reopen) reflects in-session saves WITHOUT a rebuild. The baked
+   * manifest is a build-time snapshot the host never updates in-memory on save;
+   * this overlay mirrors each confirmed write so a re-seed reads the latest
+   * authoritative override, not the stale load-time value. Owned by the boot
+   * closure (survives panel close+reopen within a webview boot). Optional —
+   * absent in component tests that mount once without a save round-trip.
+   */
+  liveOverlay?: LiveManifestOverlay;
   /** Debounce timer scheduler (tests). Defaults to window.setTimeout. */
   schedule?: (cb: () => void, ms: number) => number;
   /** Debounce timer canceller (tests). Defaults to window.clearTimeout. */
@@ -173,17 +185,42 @@ function layerLabel(layer: CascadeLayer): string {
  */
 export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   const {
-    manifest = GENERATED_SPRITE_MANIFEST,
+    manifest: bakedManifest = GENERATED_SPRITE_MANIFEST,
     spriteBaseUri,
     postMessage,
     onClose,
     saveAck: initialSaveAck = null,
     stateTracker,
+    liveOverlay,
     schedule = (cb, ms) => window.setTimeout(cb, ms) as unknown as number,
     cancelTimer = (h) => window.clearTimeout(h),
     scheduleFrame,
     cancelFrame,
   } = props;
+
+  // 86ca2wrnq: the EFFECTIVE manifest the panel reads for ALL seed / cascade /
+  // window computations = the baked manifest with in-session saves overlaid. The
+  // baked snapshot is frozen in the bundle and never updated on save, so without
+  // the overlay a re-seed (char/anim switch, reopen) reads the stale load-time
+  // value. Recomputed via `refreshManifest()` after every confirmed save so a
+  // subsequent re-seed reads the just-written override. No overlay (component
+  // tests) → equals the baked manifest unchanged.
+  let manifest: GeneratedSpriteManifest = liveOverlay
+    ? liveOverlay.apply(bakedManifest)
+    : bakedManifest;
+  function refreshManifest(): void {
+    manifest = liveOverlay ? liveOverlay.apply(bakedManifest) : bakedManifest;
+  }
+  // The override most recently EMITTED (debounced save fired) but not yet
+  // confirmed. On an ok-ack we commit it into the live overlay so subsequent
+  // re-seeds read it; an error ack discards it (the overlay never diverges from
+  // disk). Carries the full save coordinates so the overlay key matches the host.
+  let pendingSave: {
+    writeTarget: "per-char" | "pose-default";
+    characterFolder?: string;
+    animName: string;
+    override: PlaybackOverride;
+  } | null = null;
 
   // B2 (86ca2e697): the latest save ack is now MUTABLE — `applySaveAck` (the
   // imperative handle below) updates it in-place so the banner reflects a fresh
@@ -555,6 +592,20 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   // the open panel on poll ticks (rebuilding would tear down an open dropdown).
   PANEL_HANDLES.set(root, {
     applySaveAck(ack) {
+      // 86ca2wrnq: a CONFIRMED write means the on-disk file now carries the
+      // emitted override — mirror it into the live overlay so a subsequent
+      // re-seed (char/anim switch, reopen) reads it, not the stale baked value.
+      // Commit BEFORE the dismiss-suppression branch below so the overlay updates
+      // even when the banner is suppressed (the file was still written). An
+      // error/idle ack discards the pending save so the overlay never diverges
+      // from disk. Recompute `manifest` so any seed after this point sees it.
+      if (ack?.ok === true && pendingSave !== null && liveOverlay) {
+        liveOverlay.record(pendingSave);
+        refreshManifest();
+      }
+      // The ack resolves the in-flight save either way — drop the pending copy so
+      // a later poll-tick re-push of the same ack can't double-record it.
+      pendingSave = null;
       // BUG 2 (86ca2uytw): while a user selection / write-target change has
       // dismissed the prior success ack, suppress an incoming success ack — it
       // no longer describes the file the banner now points at, so re-stamping
@@ -1021,6 +1072,17 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       ...(writeTarget === "per-char"
         ? { characterFolder: selectedChar }
         : {}),
+    };
+    // 86ca2wrnq: remember exactly what we asked the host to write, keyed by the
+    // SAME (writeTarget, char, anim) the host writes. On a confirmed ok-ack we
+    // commit this into the live overlay so a subsequent re-seed reads it instead
+    // of the stale baked value. Captured at emit time so the coordinates can't
+    // drift if the user changes selection while the ack is in flight.
+    pendingSave = {
+      writeTarget,
+      ...(writeTarget === "per-char" ? { characterFolder: selectedChar } : {}),
+      animName: selectedAnim,
+      override: { ...draftOverride },
     };
     postMessage({ type: "ui:save-playback-override", payload });
   }
