@@ -49,6 +49,8 @@ import {
   APEX_FRAME_NONE,
   type CascadeLayer,
   type CascadeSourceTable,
+  type FieldSource,
+  type FieldValue,
 } from "../sprites/cascadeSource.js";
 
 /** Debounce windows (E4 spec §6). Overridable for tests. */
@@ -421,11 +423,18 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   root.appendChild(sectionDivider("Write target"));
   const writeTargetCtl = buildWriteTargetControl(writeTarget, (t) => {
     writeTarget = t;
+    // FIX 1 (86ca2fvv9). Field-omission == clear applies PER FILE, so the draft
+    // must reflect whichever file the save now targets. Re-seed from the new
+    // target's saved block so a subsequent single-field edit preserves THAT
+    // file's other saved fields (a draft seeded from per-char would otherwise
+    // wipe the pose-default file's untouched fields, and vice-versa).
+    draftOverride = readSavedPerCharOverride(selectedChar, selectedAnim);
     refreshShadowWarning();
-    // Changing the target alone does not change the draft; no auto-save until a
-    // value changes. (A target flip with no field set has nothing to persist
-    // to disk.) B1: but it DOES change survivable UI state — mirror it into the
-    // tracker so the choice (and the banner filename) survive the next poll tick.
+    // Changing the target alone does not change the draft's net effect on disk;
+    // no auto-save until a value changes. (A target flip with no field set has
+    // nothing to persist.) B1: but it DOES change survivable UI state — mirror it
+    // into the tracker so the choice (and the banner filename) survive the next
+    // poll tick.
     persist();
   });
   root.appendChild(writeTargetCtl.element);
@@ -469,16 +478,32 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     onSelectionChange();
   }
   renderBanner();
+  // FIX 2 (86ca2fvv9): if the panel is BUILT with a successful ack already in
+  // hand (the rare fresh-build-with-ack entry — production normally routes the
+  // ack through the in-place `applySaveAck` handle below), reflect the saved
+  // draft in the summary row too, so both entry paths agree.
+  if (saveAck?.ok === true) {
+    renderSourceTable(computeSourceReflectingSavedDraft());
+  }
   // Capture the (seeded or restored) state so the very first poll tick after a
   // fresh open still has something to restore from.
   persist();
 
   // B2 (86ca2e697): register the imperative handle so `renderFull` can refresh
   // the banner on a poll tick WITHOUT rebuilding (and tearing down) this panel.
+  // FIX 2 (86ca2fvv9): a SUCCESSFUL save-ack also refreshes the summary/source
+  // row in-place to reflect the just-saved draft — done via THIS imperative
+  // handle (NOT a panel rebuild), because #167 made `renderFull` skip rebuilding
+  // the open panel on poll ticks (rebuilding would tear down an open dropdown).
   PANEL_HANDLES.set(root, {
     applySaveAck(ack) {
       saveAck = ack;
       renderBanner();
+      // Only a confirmed write updates the summary — an error/idle ack leaves
+      // the row reflecting the baked manifest (nothing was persisted).
+      if (ack?.ok === true) {
+        renderSourceTable(computeSourceReflectingSavedDraft());
+      }
     },
   });
 
@@ -522,11 +547,15 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
    * rebuild the preview, refresh the source table + warnings.
    */
   function onSelectionChange(): void {
-    // Re-seed draft to empty — the source table reflects baked state; the
-    // sliders open at the cascade-resolved EFFECTIVE values (read below). The
-    // draft starts empty (nothing set away from inherited) so a save right after
-    // opening clears nothing unexpectedly.
-    draftOverride = {};
+    // FIX 1 (86ca2fvv9 — data-loss bug). Seed the draft with the EXISTING saved
+    // per-char override for this (char, anim) — NOT empty. The save payload is
+    // field-omission == clear (§4.1): the host removes any field absent from the
+    // payload. So if the draft started empty and the sponsor changed ONE field,
+    // the save emitted e.g. `{dwellFrameIndex:8}` and WIPED the pre-existing
+    // `speedMultiplier:0.5` (and every other saved field) from the json. Seeding
+    // from the persisted per-char block means a single-field edit carries the
+    // untouched saved fields along, so they survive the write.
+    draftOverride = readSavedPerCharOverride(selectedChar, selectedAnim);
     const source = computeCascadeSource(selectedChar, selectedAnim, manifest);
     seedSlidersFromSource(source);
     rebuildPreview();
@@ -601,6 +630,28 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   function reseedApexMsFromCascade(): void {
     const source = computeCascadeSource(selectedChar, selectedAnim, manifest);
     apexMs.setValue(source.dwellMs.value as number);
+  }
+
+  /**
+   * FIX 1 (86ca2fvv9). Read the EXISTING saved override block for the current
+   * (char, anim) from the WRITE TARGET the save will hit, so a single-field edit
+   * preserves the other already-saved fields (field-omission == clear, §4.1,
+   * applies per file). Per-char → the char's `animations[anim].playback`;
+   * pose-default → `poseDefaults[anim]`. Absent block → empty draft (nothing
+   * saved yet; a first edit sets exactly one field, which is correct).
+   *
+   * Returns a fresh copy (never the manifest's own object) so the draft can be
+   * mutated freely without aliasing the baked manifest.
+   */
+  function readSavedPerCharOverride(
+    char: string,
+    anim: string,
+  ): PlaybackOverride {
+    const saved =
+      writeTarget === "per-char"
+        ? manifest.characters[char]?.animations?.[anim]?.playback
+        : manifest.poseDefaults?.[anim];
+    return saved ? { ...saved } : {};
   }
 
   /** Frame count of the selected (char, anim) — bounds the apex-frame picker. */
@@ -771,6 +822,50 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       formatHold(source.dwellMs.value),
       source.dwellMs.layer,
     );
+  }
+
+  /**
+   * FIX 2 (86ca2fvv9 — summary reflects the saved draft). After a SUCCESSFUL
+   * save, overlay the just-saved `draftOverride` onto the baked cascade so the
+   * source/summary row shows the saved value (+ source) IMMEDIATELY, instead of
+   * the stale baked value until the next `npm run build`. The sponsor read the
+   * unchanged baked value as "my save wasn't picked up."
+   *
+   * The overlay respects the cascade precedence at the WRITE TARGET's layer:
+   *   - per-char save → a drafted field becomes `per-char` (wins over all).
+   *   - pose-default save → a drafted field becomes `pose-default` ONLY when no
+   *     per-char value already shadows it; a per-char value still wins (so the
+   *     row keeps showing the per-char effective value, matching the engine).
+   *
+   * This changes ONLY the summary row. The live dashboard tiles still need a
+   * rebuild — the persistence banner keeps saying so (§3.6 unchanged).
+   */
+  function computeSourceReflectingSavedDraft(): CascadeSourceTable {
+    const baked = computeCascadeSource(selectedChar, selectedAnim, manifest);
+    const overlayLayer: CascadeLayer =
+      writeTarget === "per-char" ? "per-char" : "pose-default";
+    const overlay = <V extends FieldValue>(
+      field: FieldSource,
+      draftValue: V | undefined,
+    ): FieldSource => {
+      if (draftValue === undefined) return field;
+      // pose-default write must not override a field a per-char value already
+      // wins (the engine resolves per-char first) — keep the baked per-char row.
+      if (overlayLayer === "pose-default" && field.layer === "per-char") {
+        return field;
+      }
+      return { value: draftValue, layer: overlayLayer };
+    };
+    return {
+      speedMultiplier: overlay(baked.speedMultiplier, draftOverride.speedMultiplier),
+      finalDwellMs: overlay(baked.finalDwellMs, draftOverride.finalDwellMs),
+      playbackMode: overlay(baked.playbackMode, draftOverride.playbackMode),
+      dwellFrameIndex: overlay(
+        baked.dwellFrameIndex,
+        draftOverride.dwellFrameIndex,
+      ),
+      dwellMs: overlay(baked.dwellMs, draftOverride.dwellMs),
+    };
   }
 
   /**

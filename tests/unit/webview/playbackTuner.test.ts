@@ -35,6 +35,7 @@ import type { WebviewMessage } from "../../../src/shared/messages.js";
 import type { GeneratedSpriteManifest } from "../../../src/webview/sprites/spriteManifest.js";
 import {
   renderPlaybackTuner,
+  getTunerPanelHandle,
   PREVIEW_DEBOUNCE_MS,
   SAVE_DEBOUNCE_MS,
 } from "../../../src/webview/components/playbackTuner.js";
@@ -1135,5 +1136,224 @@ describe("86ca2bqe1 B1 — apex draft survives the ~2s poll-tick renderFull", ()
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ===========================================================================
+// FIX 1 (86ca2fvv9) — data-loss bug: a single-field edit must PRESERVE the
+// other already-saved per-char fields.
+//
+// THE LOAD-BEARING test for FIX 1 (testing-strategy.md § Layer-2.5 — REQUIRED,
+// non-vacuous). Before the fix, `onSelectionChange` reset `draftOverride = {}`
+// and only seeded the SLIDERS visually from the cascade — the draft itself was
+// empty. So changing ONE field then saving emitted e.g. `{dwellFrameIndex:8}`,
+// and because field-omission == clear (§4.1) the host WIPED the pre-existing
+// `speedMultiplier:0.5` (+ every other saved field) from the json. The fix
+// seeds the draft from the EXISTING saved per-char override on selection change,
+// so a single-field edit carries the untouched fields along.
+//
+// NON-VACUITY (mutation probe): reverting the seed back to `draftOverride = {}`
+// in `onSelectionChange` makes the save payload carry ONLY the touched field —
+// the `speedMultiplier`/`playbackMode` retention assertions below FAIL (the
+// untouched fields get wiped). The fixture's saved override has ≥2 fields
+// precisely so the probe bites.
+// ===========================================================================
+
+/**
+ * A manifest whose M01/idle_stretch carries a saved per-char override with
+ * THREE fields (speed + mode + finalDwell). Editing one must not wipe the rest.
+ */
+function multiFieldSavedManifest(): GeneratedSpriteManifest {
+  return {
+    characters: {
+      "ClaudeTeam-M01-Dev": {
+        character: "ClaudeTeam-M01-Dev",
+        defaultIdle: "idle_stretch",
+        idlePool: ["idle_stretch"],
+        animations: {
+          idle_stretch: {
+            folder: "stretch",
+            frames: [
+              "sprites/m01/stretch/0.png",
+              "sprites/m01/stretch/1.png",
+              "sprites/m01/stretch/2.png",
+            ],
+            // ≥2 saved fields — the data-loss probe target.
+            playback: {
+              speedMultiplier: 0.5,
+              finalDwellMs: 1200,
+              playbackMode: "pingpong",
+            },
+          },
+        },
+      },
+    },
+    poseDefaults: {},
+  } as unknown as GeneratedSpriteManifest;
+}
+
+describe("FIX 1 (86ca2fvv9) — single-field edit preserves the other saved per-char fields", () => {
+  it("changing ONLY the apex frame retains the saved speedMultiplier + finalDwellMs + playbackMode", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount({ manifest: multiFieldSavedManifest() });
+
+      // The selection landed on M01/idle_stretch (the only char/anim). Change
+      // exactly ONE field: pick apex frame 1 — nothing else touched.
+      const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+      picker.value = "1";
+      picker.dispatchEvent(new Event("change"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      const save = lastSave(posted)!;
+      // The edited field is present.
+      expect(save.payload.override.dwellFrameIndex).toBe(1);
+      // LOAD-BEARING: the three untouched saved fields ride along (not wiped).
+      // Reverting the seed (draftOverride = {}) drops all three here.
+      expect(save.payload.override.speedMultiplier).toBe(0.5);
+      expect(save.payload.override.finalDwellMs).toBe(1200);
+      expect(save.payload.override.playbackMode).toBe("pingpong");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a per-char [reset] of ONE field still preserves the other saved fields", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount({ manifest: multiFieldSavedManifest() });
+
+      // Reset ONLY speed → it clears (inherits); the rest of the saved fields
+      // must survive into the payload (a single reset must not wipe everything).
+      q<HTMLButtonElement>(root, ".ct-tuner-speed .ct-tuner-reset").click();
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      const save = lastSave(posted)!;
+      // Speed cleared (the reset's intent).
+      expect("speedMultiplier" in save.payload.override).toBe(false);
+      // The other two saved fields are retained — NON-VACUOUS w.r.t. the seed.
+      expect(save.payload.override.finalDwellMs).toBe(1200);
+      expect(save.payload.override.playbackMode).toBe("pingpong");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ===========================================================================
+// FIX 2 (86ca2fvv9) — summary/source row reflects the SAVED draft on save-ack.
+//
+// THE LOAD-BEARING test for FIX 2 (testing-strategy.md § Layer-2.5 — REQUIRED,
+// non-vacuous). The summary row reads the BAKED manifest by design (§3.5), so a
+// just-saved value kept showing the baked value until rebuild — the sponsor read
+// that as "not picked up." The fix promotes the saved draft into the summary row
+// on a successful save-ack, via the in-place `TunerPanelHandle.applySaveAck`
+// (#167: the open panel is NOT rebuilt on poll ticks, so the update must be
+// imperative, not a re-render). The "rebuild to apply to live tiles" banner
+// stays — only the summary row changes.
+//
+// This block drives the REAL `renderFull` poll-tick path with `tunerPanelOpen:
+// true` (the fix lives on the save-ack branch through the imperative handle),
+// asserting the panel is NOT rebuilt (same node) AND the summary row updated.
+//
+// NON-VACUITY (revert probe): removing the `renderSourceTable(
+// computeSourceReflectingSavedDraft())` call from `applySaveAck` makes the
+// summary row keep showing the BAKED speed (0.50× / per-char baked value) — the
+// "shows the saved value" assertion FAILS.
+// ===========================================================================
+
+describe("FIX 2 (86ca2fvv9) — saved draft shows in the summary row after save-ack (panel open, no rebuild)", () => {
+  const summaryRow = (mount: ParentNode, field: string): HTMLElement => {
+    const rows = Array.from(
+      mount.querySelectorAll<HTMLElement>(".ct-tuner-source-value"),
+    );
+    return rows.find((r) => r.dataset.field === field)!;
+  };
+
+  it("a successful save-ack (via the imperative handle) updates the speed summary row to the saved value + per-char source", () => {
+    // Drive the panel directly with the fixture (deterministic) — M01/idle_stretch
+    // bakes per-char speed 0.5, so the summary speed row starts at "0.50×".
+    const { root } = mount();
+    expect(
+      q<HTMLElement>(
+        summaryRow(root, "speed"),
+        ".ct-tuner-source-effective",
+      ).textContent,
+    ).toBe("0.50×");
+
+    // The sponsor drags speed to 1.50× — the draft now carries speed 1.5, but
+    // the summary row STILL reads the baked 0.50× until the save is confirmed.
+    const slider = q<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+    slider.value = "1.5";
+    slider.dispatchEvent(new Event("input"));
+    expect(
+      q<HTMLElement>(
+        summaryRow(root, "speed"),
+        ".ct-tuner-source-effective",
+      ).textContent,
+    ).toBe("0.50×");
+
+    // The save-ack lands via the in-place handle (the #167 path — NO rebuild).
+    const handle = getTunerPanelHandle(root)!;
+    handle.applySaveAck({ ok: true });
+
+    // LOAD-BEARING: the summary speed row now shows the SAVED value + per-char
+    // source — immediately, without a rebuild. Reverting FIX 2 keeps "0.50×".
+    const speedRow = summaryRow(root, "speed");
+    expect(
+      q<HTMLElement>(speedRow, ".ct-tuner-source-effective").textContent,
+    ).toBe("1.50×");
+    expect(speedRow.dataset.layer).toBe("per-char");
+
+    // The "rebuild to apply to live tiles" banner is KEPT (semantics unchanged).
+    expect(
+      q<HTMLElement>(root, ".ct-tuner-banner-text").textContent,
+    ).toContain("Rebuild");
+  });
+
+  it("an ERROR save-ack does NOT mutate the summary row (nothing persisted)", () => {
+    const { root } = mount();
+    const slider = q<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+    slider.value = "1.5";
+    slider.dispatchEvent(new Event("input"));
+
+    getTunerPanelHandle(root)!.applySaveAck({ ok: false, error: "disk full" });
+
+    // Error ack → the summary row keeps the baked value (the write failed).
+    expect(
+      q<HTMLElement>(
+        summaryRow(root, "speed"),
+        ".ct-tuner-source-effective",
+      ).textContent,
+    ).toBe("0.50×");
+  });
+
+  it("the open panel is NOT rebuilt by the save-ack poll tick (renderFull in-place path)", () => {
+    const mount = document.createElement("div");
+    const tracker = createTunerStateTracker();
+    const ctx = (ack: { ok: boolean; error?: string } | null): RenderContext =>
+      ({
+        mount,
+        postMessage: vi.fn(),
+        tunerPanelOpen: true,
+        tunerStateTracker: tracker,
+        tunerSaveAck: ack,
+        spriteBaseUri: "vscode-webview://host/dist/webview",
+      }) as RenderContext;
+    const emptyTree = (): RenderableState =>
+      ({ sessions: [], rosterErrors: [] }) as unknown as RenderableState;
+
+    renderFull(ctx(null), emptyTree());
+    const panelBefore = q<HTMLElement>(mount, ".ct-tuner-panel");
+    const speedSelectBefore = q<HTMLSelectElement>(mount, ".ct-tuner-char-select");
+
+    // Save-ack re-render — render.ts routes through the imperative handle.
+    renderFull(ctx({ ok: true }), emptyTree());
+
+    // Same panel node + same select node → the open dropdown survives (#167).
+    expect(q<HTMLElement>(mount, ".ct-tuner-panel")).toBe(panelBefore);
+    expect(q<HTMLSelectElement>(mount, ".ct-tuner-char-select")).toBe(
+      speedSelectBefore,
+    );
   });
 });
