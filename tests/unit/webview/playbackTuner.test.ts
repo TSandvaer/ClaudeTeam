@@ -38,6 +38,7 @@ import {
   PREVIEW_DEBOUNCE_MS,
   SAVE_DEBOUNCE_MS,
 } from "../../../src/webview/components/playbackTuner.js";
+import { createTunerStateTracker } from "../../../src/webview/tunerStateTracker.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -494,5 +495,243 @@ describe("close affordance", () => {
     const { root } = mount({ onClose });
     q<HTMLButtonElement>(root, ".ct-tuner-close").click();
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ===========================================================================
+// BLOCKER B1 (86ca2189v) — poll-tick survivability of the open tuner's state
+//
+// THE LOAD-BEARING test (testing-strategy.md § Layer-2.5 — REQUIRED, non-vacuous).
+// The dashboard polls every ~2s; each `state:full` fires `renderFull`, which
+// (with tunerPanelOpen===true) ROOT-SWAPS a fresh `renderPlaybackTuner`. Before
+// the fix every tick reset selection→first-char, draft→{}, writeTarget→per-char,
+// sliders→cascade-defaults, and the post-save banner named the RESET file — so
+// the panel was unusable. The fix hoists the four survivable fields
+// (selectedChar / selectedAnim / draftOverride / writeTarget) into a webview-
+// local `tunerStateTracker` that the boot closure threads through every render;
+// the freshly-built tuner SEEDS from it on mount and WRITES BACK on every change.
+//
+// NON-VACUITY (verified by revert-probe): reverting the B1 fix — i.e. NOT
+// seeding the fresh mount from the tracker (`renderPlaybackTuner`'s
+// `persistedValid` seed → first-char defaults) — makes EVERY assertion below
+// FAIL: the remounted panel reverts to ClaudeTeam-M01-Dev / idle_stretch /
+// per-char / empty-draft, and the banner names M01's file instead of F01's.
+// (Re-running with the seed deleted: char select reverts to M01, anim to
+// idle_stretch, slider readout to the cascade default, draft assertions fail,
+// banner names the wrong file.)
+// ===========================================================================
+
+/**
+ * Simulate the ~2s poll-tick root-swap: `renderFull` builds a FRESH tuner with
+ * the SAME tracker instance (mirroring main.ts/render.ts threading the boot-
+ * closure tracker through every render). Returns the new root.
+ */
+function pollTickRemount(
+  tracker: ReturnType<typeof createTunerStateTracker>,
+  overrides: Partial<Parameters<typeof renderPlaybackTuner>[0]> = {},
+): { root: HTMLElement; posted: WebviewMessage[] } {
+  const posted: WebviewMessage[] = [];
+  const root = renderPlaybackTuner({
+    manifest: fixtureManifest(),
+    spriteBaseUri: "vscode-webview://host/dist/webview",
+    postMessage: (m) => posted.push(m),
+    stateTracker: tracker,
+    scheduleFrame: () => 0,
+    cancelFrame: () => undefined,
+    ...overrides,
+  });
+  return { root, posted };
+}
+
+describe("B1 (86ca2189v) — open tuner state survives the ~2s poll-tick renderFull", () => {
+  it("selection + draft + writeTarget + slider positions ALL survive a poll-tick remount", () => {
+    vi.useFakeTimers();
+    try {
+      const tracker = createTunerStateTracker();
+
+      // First mount with the tracker (the open panel).
+      const first = renderPlaybackTuner({
+        manifest: fixtureManifest(),
+        spriteBaseUri: "vscode-webview://host/dist/webview",
+        postMessage: () => undefined,
+        stateTracker: tracker,
+        scheduleFrame: () => 0,
+        cancelFrame: () => undefined,
+      });
+
+      // The sponsor tunes: pick F01, set the write target to pose-default,
+      // drag speed to 1.5×, drag hold to 1000ms, choose pingpong.
+      const charSel = q<HTMLSelectElement>(first, ".ct-tuner-char-select");
+      charSel.value = "ClaudeTeam-F01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+
+      const poseDefault = q<HTMLInputElement>(
+        first,
+        ".ct-tuner-writetarget-radio[data-target='pose-default']",
+      );
+      poseDefault.checked = true;
+      poseDefault.dispatchEvent(new Event("change"));
+
+      const speedSlider = q<HTMLInputElement>(
+        first,
+        ".ct-tuner-speed .ct-tuner-slider",
+      );
+      speedSlider.value = "1.5";
+      speedSlider.dispatchEvent(new Event("input"));
+
+      const holdSlider = q<HTMLInputElement>(
+        first,
+        ".ct-tuner-hold .ct-tuner-slider",
+      );
+      holdSlider.value = "1000";
+      holdSlider.dispatchEvent(new Event("input"));
+
+      const pingpong = q<HTMLInputElement>(
+        first,
+        ".ct-tuner-mode-radio[data-mode='pingpong']",
+      );
+      pingpong.checked = true;
+      pingpong.dispatchEvent(new Event("change"));
+
+      // ── The poll tick fires: renderFull root-swaps a fresh tuner. ──
+      const { root: second } = pollTickRemount(tracker);
+
+      // Selection survived.
+      expect(q<HTMLSelectElement>(second, ".ct-tuner-char-select").value).toBe(
+        "ClaudeTeam-F01-Dev",
+      );
+      expect(q<HTMLSelectElement>(second, ".ct-tuner-anim-select").value).toBe(
+        "idle_coffee",
+      );
+
+      // Write target survived (the pose-default radio is still checked).
+      expect(
+        q<HTMLInputElement>(
+          second,
+          ".ct-tuner-writetarget-radio[data-target='pose-default']",
+        ).checked,
+      ).toBe(true);
+
+      // Slider positions survived (the readouts reflect the drafted values).
+      expect(
+        q<HTMLElement>(second, ".ct-tuner-speed .ct-tuner-control-readout")
+          .textContent,
+      ).toBe("1.50×");
+      expect(
+        q<HTMLElement>(second, ".ct-tuner-hold .ct-tuner-control-readout")
+          .textContent,
+      ).toBe("1000 ms");
+
+      // Mode survived (pingpong radio still checked).
+      expect(
+        q<HTMLInputElement>(
+          second,
+          ".ct-tuner-mode-radio[data-mode='pingpong']",
+        ).checked,
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the restored draft is what the NEXT save emits (draft survives, not just the controls)", () => {
+    vi.useFakeTimers();
+    try {
+      const tracker = createTunerStateTracker();
+
+      const first = renderPlaybackTuner({
+        manifest: fixtureManifest(),
+        spriteBaseUri: "vscode-webview://host/dist/webview",
+        postMessage: () => undefined,
+        stateTracker: tracker,
+        scheduleFrame: () => 0,
+        cancelFrame: () => undefined,
+      });
+      // Set speed on M01/idle_stretch.
+      const speedSlider = q<HTMLInputElement>(
+        first,
+        ".ct-tuner-speed .ct-tuner-slider",
+      );
+      speedSlider.value = "1.75";
+      speedSlider.dispatchEvent(new Event("input"));
+
+      // Poll tick — fresh tuner.
+      const { root: second, posted } = pollTickRemount(tracker);
+
+      // Without touching anything, change hold so a save fires; the save must
+      // carry BOTH the restored speed AND the new hold — proving the draft
+      // (not just the slider readout) survived into the new closure.
+      const holdSlider = q<HTMLInputElement>(
+        second,
+        ".ct-tuner-hold .ct-tuner-slider",
+      );
+      holdSlider.value = "500";
+      holdSlider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      const save = lastSave(posted)!;
+      expect(save.payload.override.speedMultiplier).toBe(1.75);
+      expect(save.payload.override.finalDwellMs).toBe(500);
+      // Still targeting M01 per-char (selection survived).
+      expect(save.payload.characterFolder).toBe("ClaudeTeam-M01-Dev");
+      expect(save.payload.animName).toBe("idle_stretch");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("post-save banner names the CORRECT file after the save-ack re-render (B1 symptom 2)", () => {
+    const tracker = createTunerStateTracker();
+
+    // First mount: the sponsor selects F01 (per-char target).
+    const first = renderPlaybackTuner({
+      manifest: fixtureManifest(),
+      spriteBaseUri: "vscode-webview://host/dist/webview",
+      postMessage: () => undefined,
+      stateTracker: tracker,
+      scheduleFrame: () => 0,
+      cancelFrame: () => undefined,
+    });
+    const charSel = q<HTMLSelectElement>(first, ".ct-tuner-char-select");
+    charSel.value = "ClaudeTeam-F01-Dev";
+    charSel.dispatchEvent(new Event("change"));
+
+    // The save-ack arrives → onPlaybackOverrideSaved fires renderFull, which
+    // root-swaps a fresh tuner with saveAck:{ok:true}. The banner filename is
+    // computed from the RESTORED selectedChar — so it must name F01, not the
+    // reset first-char (M01).
+    const { root: second } = pollTickRemount(tracker, {
+      saveAck: { ok: true },
+    });
+
+    const bannerText = q<HTMLElement>(
+      second,
+      ".ct-tuner-banner-text",
+    ).textContent;
+    expect(bannerText).toContain("ClaudeTeam-F01-Dev/animations.json");
+    expect(bannerText).not.toContain("ClaudeTeam-M01-Dev/animations.json");
+  });
+
+  it("a fresh open (tracker reset) starts at first-char defaults — no stale restore", () => {
+    const tracker = createTunerStateTracker();
+    // Prior session left F01 selected.
+    const first = renderPlaybackTuner({
+      manifest: fixtureManifest(),
+      spriteBaseUri: "vscode-webview://host/dist/webview",
+      postMessage: () => undefined,
+      stateTracker: tracker,
+      scheduleFrame: () => 0,
+      cancelFrame: () => undefined,
+    });
+    const charSel = q<HTMLSelectElement>(first, ".ct-tuner-char-select");
+    charSel.value = "ClaudeTeam-F01-Dev";
+    charSel.dispatchEvent(new Event("change"));
+
+    // Panel close → boot closure resets the tracker. Re-open builds fresh.
+    tracker.reset();
+    const { root: reopened } = pollTickRemount(tracker);
+    expect(
+      q<HTMLSelectElement>(reopened, ".ct-tuner-char-select").value,
+    ).toBe("ClaudeTeam-M01-Dev");
   });
 });

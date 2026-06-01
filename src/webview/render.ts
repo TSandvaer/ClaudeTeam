@@ -76,6 +76,7 @@ import type {
 } from "./menuOpenTracker.js";
 import type { SpriteTracker } from "./spriteTracker.js";
 import type { PickerOpenTracker } from "./pickerOpenTracker.js";
+import type { TunerStateTracker } from "./tunerStateTracker.js";
 
 /** Persistent error state stored on the dashboard. */
 export interface DashboardErrorState {
@@ -297,6 +298,15 @@ export interface RenderContext {
   tunerSaveAck?: { ok: boolean; error?: string } | null;
   /** Called when the user closes the Playback Tuner panel (caller flips the flag). */
   onCloseTunerPanel?: () => void;
+  /**
+   * BLOCKER B1 (86ca2189v) — webview-local tuner editing-state tracker. Threaded
+   * into `renderPlaybackTuner` so the panel's selection / draft / writeTarget
+   * survive the ~2s poll-tick `renderFull` that root-swaps a fresh tuner (the
+   * SAME poll-tick-survivability class as `pickerOpenTracker`). Owned by the boot
+   * closure in main.ts; reset on panel close. Optional — absent in component
+   * tests (the panel starts at its first-char defaults each mount).
+   */
+  tunerStateTracker?: TunerStateTracker;
 }
 
 /**
@@ -442,6 +452,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     tunerPanelOpen,
     tunerSaveAck,
     onCloseTunerPanel,
+    tunerStateTracker,
   } = ctx;
 
   // ── Playback Tuner panel (E5 86ca2189v) — full-pane on-demand surface,
@@ -456,6 +467,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
         ...(tunerSaveAck !== undefined ? { saveAck: tunerSaveAck } : {}),
         ...(onCloseTunerPanel ? { onClose: onCloseTunerPanel } : {}),
+        ...(tunerStateTracker !== undefined ? { stateTracker: tunerStateTracker } : {}),
       }),
     );
     return;

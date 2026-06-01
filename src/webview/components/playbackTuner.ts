@@ -42,6 +42,7 @@ import type { WebviewMessage } from "../../shared/messages.js";
 import type { PlaybackMode, PlaybackOverride } from "../sprites/spritePlayer.js";
 import type { GeneratedSpriteManifest } from "../sprites/spriteManifest.js";
 import { GENERATED_SPRITE_MANIFEST } from "../sprites/generatedManifest.js";
+import type { TunerStateTracker } from "../tunerStateTracker.js";
 import { createPreviewController } from "./playbackTunerPreview.js";
 import {
   computeCascadeSource,
@@ -75,6 +76,15 @@ export interface PlaybackTunerProps {
    * `pendingBanner` survival pattern). `null` → neutral idle banner.
    */
   saveAck?: { ok: boolean; error?: string } | null;
+  /**
+   * BLOCKER B1 (86ca2189v) — webview-local editing-state tracker. The panel's
+   * live state (selectedChar / selectedAnim / draftOverride / writeTarget) is
+   * SEEDED from this tracker on mount and WRITTEN BACK on every change, so it
+   * survives the ~2s poll-tick `renderFull` that root-swaps a fresh tuner.
+   * Owned by the boot closure in main.ts. Optional — absent in component tests
+   * that mount once (the panel starts at its first-char defaults).
+   */
+  stateTracker?: TunerStateTracker;
   /** Debounce timer scheduler (tests). Defaults to window.setTimeout. */
   schedule?: (cb: () => void, ms: number) => number;
   /** Debounce timer canceller (tests). Defaults to window.clearTimeout. */
@@ -109,6 +119,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     postMessage,
     onClose,
     saveAck = null,
+    stateTracker,
     schedule = (cb, ms) => window.setTimeout(cb, ms) as unknown as number,
     cancelTimer = (h) => window.clearTimeout(h),
     scheduleFrame,
@@ -149,12 +160,28 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   }
 
   // ── Selection state ───────────────────────────────────────────────────────
-  let selectedChar = charKeys[0];
+  // B1 (86ca2189v): seed from the persisted tracker so the panel survives the
+  // ~2s poll-tick `renderFull` that root-swaps a fresh tuner. A persisted entry
+  // is validated against the live manifest (a char/anim that no longer exists
+  // falls back to defaults). Absent tracker / no persisted state → first-char
+  // defaults, exactly as before.
+  const persisted = stateTracker?.get() ?? null;
+  const persistedValid =
+    persisted !== null &&
+    Object.prototype.hasOwnProperty.call(
+      manifest.characters,
+      persisted.selectedChar,
+    );
+  let selectedChar = persistedValid ? persisted!.selectedChar : charKeys[0];
   let selectedAnim = "";
   // Draft override — ONLY the SET fields (field-omission == clear, §4.1).
-  let draftOverride: PlaybackOverride = {};
+  let draftOverride: PlaybackOverride = persistedValid
+    ? { ...persisted!.draftOverride }
+    : {};
   // Write target (§3.7) — default "per-char" (narrower, safer scope).
-  let writeTarget: "per-char" | "pose-default" = "per-char";
+  let writeTarget: "per-char" | "pose-default" = persistedValid
+    ? persisted!.writeTarget
+    : "per-char";
 
   // Debounce handles.
   let previewTimer: number | null = null;
@@ -173,6 +200,8 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     opt.textContent = key;
     charSelect.appendChild(opt);
   }
+  // B1: reflect the (possibly restored) selectedChar in the <select>.
+  charSelect.value = selectedChar;
   const charField = labeledField("Character", charSelect);
   selectorsRow.appendChild(charField);
 
@@ -276,11 +305,14 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
 
   // ── Write target (§3.7) ───────────────────────────────────────────────────
   root.appendChild(sectionDivider("Write target"));
-  const writeTargetCtl = buildWriteTargetControl((t) => {
+  const writeTargetCtl = buildWriteTargetControl(writeTarget, (t) => {
     writeTarget = t;
     refreshShadowWarning();
     // Changing the target alone does not change the draft; no auto-save until a
-    // value changes. (A target flip with no field set has nothing to persist.)
+    // value changes. (A target flip with no field set has nothing to persist
+    // to disk.) B1: but it DOES change survivable UI state — mirror it into the
+    // tracker so the choice (and the banner filename) survive the next poll tick.
+    persist();
   });
   root.appendChild(writeTargetCtl.element);
 
@@ -311,9 +343,21 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   root.addEventListener("keydown", onEscapeClose);
 
   // Initial population + render.
-  populateAnims();
-  onSelectionChange();
+  // B1: when restoring from a persisted session, populate the anim list for the
+  // restored char + prefer the restored anim, then render the panel reflecting
+  // the restored DRAFT (do NOT wipe it as a user-driven selection change would).
+  // Fresh open → default-idle selection + empty draft, exactly as before.
+  if (persistedValid) {
+    populateAnims(persisted!.selectedAnim);
+    renderForRestoredDraft();
+  } else {
+    populateAnims();
+    onSelectionChange();
+  }
   renderBanner();
+  // Capture the (seeded or restored) state so the very first poll tick after a
+  // fresh open still has something to restore from.
+  persist();
 
   return root;
 
@@ -321,8 +365,13 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   // Behavior
   // ===========================================================================
 
-  /** Repopulate the animation <select> for the selected character (§3.1). */
-  function populateAnims(): void {
+  /**
+   * Repopulate the animation <select> for the selected character (§3.1).
+   * `preferAnim` (B1 restore) — when supplied AND present in the char's anim
+   * set, select it instead of the default-idle; otherwise fall back to the
+   * default-idle / first-anim heuristic.
+   */
+  function populateAnims(preferAnim?: string): void {
     const char = manifest.characters[selectedChar];
     const animNames = char ? Object.keys(char.animations) : [];
     animSelect.replaceChildren();
@@ -332,11 +381,14 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       opt.textContent = name;
       animSelect.appendChild(opt);
     }
-    // Default = defaultIdle if present in the set, else first anim.
+    // B1 restore: honor a persisted anim if it still exists. Else default =
+    // defaultIdle if present in the set, else first anim.
     const preferred =
-      char?.defaultIdle && animNames.includes(char.defaultIdle)
-        ? char.defaultIdle
-        : animNames[0] ?? "";
+      preferAnim && animNames.includes(preferAnim)
+        ? preferAnim
+        : char?.defaultIdle && animNames.includes(char.defaultIdle)
+          ? char.defaultIdle
+          : animNames[0] ?? "";
     selectedAnim = preferred;
     animSelect.value = preferred;
   }
@@ -358,6 +410,45 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     renderSourceTable(source);
     refreshPreviewNote();
     refreshShadowWarning();
+    persist();
+  }
+
+  /**
+   * B1 restore-render: rebuild the panel surfaces for the RESTORED draft without
+   * wiping it (the user-driven `onSelectionChange` resets the draft; this path
+   * does not). Slider thumbs show the drafted values where the user set a field,
+   * the cascade-resolved effective value elsewhere — so the panel looks exactly
+   * as the user left it before the poll tick.
+   */
+  function renderForRestoredDraft(): void {
+    const source = computeCascadeSource(selectedChar, selectedAnim, manifest);
+    seedSlidersFromSource(source);
+    // Overlay the restored draft onto the seeded thumbs.
+    if (draftOverride.speedMultiplier !== undefined) {
+      speed.setValue(draftOverride.speedMultiplier);
+    }
+    if (draftOverride.finalDwellMs !== undefined) {
+      hold.setValue(draftOverride.finalDwellMs);
+    }
+    mode.setValue(draftOverride.playbackMode ?? (source.playbackMode.value as PlaybackMode));
+    rebuildPreview();
+    renderSourceTable(source);
+    refreshPreviewNote();
+    refreshShadowWarning();
+  }
+
+  /**
+   * B1: mirror the current survivable editing state into the webview-local
+   * tracker so the next poll-tick `renderFull` (which root-swaps a fresh tuner)
+   * can restore it. No-op when no tracker is threaded (component tests).
+   */
+  function persist(): void {
+    stateTracker?.set({
+      selectedChar,
+      selectedAnim,
+      draftOverride: { ...draftOverride },
+      writeTarget,
+    });
   }
 
   /** Position the slider thumbs / mode radio at the effective resolved values. */
@@ -390,6 +481,9 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     }
     scheduleSave();
     refreshShadowWarning();
+    // B1: every control change mutated `draftOverride` — mirror it into the
+    // tracker so a poll tick mid-drag restores the in-progress draft.
+    persist();
   }
 
   /** Short-debounced preview rebuild (§6 ~120ms). */
@@ -771,6 +865,7 @@ interface WriteTargetHandle {
 
 /** Build the per-char / pose-default write-target radio group (§3.7). */
 function buildWriteTargetControl(
+  initial: "per-char" | "pose-default",
   onChange: (t: "per-char" | "pose-default") => void,
 ): WriteTargetHandle {
   const row = document.createElement("div");
@@ -794,7 +889,7 @@ function buildWriteTargetControl(
     input.value = opt.value;
     input.className = "ct-tuner-writetarget-radio";
     input.dataset.target = opt.value;
-    input.checked = opt.value === "per-char"; // default per-char (§3.7)
+    input.checked = opt.value === initial; // default per-char (§3.7); B1 restores
     input.addEventListener("change", () => {
       if (input.checked) onChange(opt.value);
     });
