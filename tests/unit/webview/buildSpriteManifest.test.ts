@@ -23,6 +23,7 @@ import {
   parseAnimValue,
   pickAnimSlug,
   sanitizePlayback,
+  buildPoseDefaults,
 } from "../../../scripts/build-sprite-manifest.mjs";
 
 describe("parseAnimValue — folder/slug value-format (AC5)", () => {
@@ -191,5 +192,61 @@ describe("sanitizePlayback — playback-field validation + threading (E2 86ca218
     });
     expect(playback).toEqual({ speedMultiplier: 0.7 });
     expect(warnings).toEqual([]);
+  });
+});
+
+describe("buildPoseDefaults — pose-keyed defaults block (E3 86ca2187n)", () => {
+  it("AC3: an empty {} block → null poseDefaults (manifest omits the field, byte-identical to E2)", () => {
+    expect(buildPoseDefaults({})).toEqual({ poseDefaults: null, warnings: [] });
+  });
+
+  it("AC3: absent / null block → null poseDefaults, no warning", () => {
+    expect(buildPoseDefaults(undefined)).toEqual({ poseDefaults: null, warnings: [] });
+    expect(buildPoseDefaults(null)).toEqual({ poseDefaults: null, warnings: [] });
+  });
+
+  it("sanitizes each entry through the same policy as per-char playback", () => {
+    const { poseDefaults, warnings } = buildPoseDefaults({
+      idle_stretch: { playbackMode: "pingpong", finalDwellMs: 800 },
+      idle_coffee: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+    });
+    expect(poseDefaults).toEqual({
+      idle_stretch: { playbackMode: "pingpong", finalDwellMs: 800 },
+      idle_coffee: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it("drops a malformed field within an entry + warns (entry survives with its good fields)", () => {
+    const { poseDefaults, warnings } = buildPoseDefaults({
+      idle_stretch: { playbackMode: "bounce", finalDwellMs: 800 },
+    });
+    expect(poseDefaults).toEqual({ idle_stretch: { finalDwellMs: 800 } });
+    expect(warnings.some((w) => w.includes("pose-defaults/idle_stretch") && w.includes("bounce"))).toBe(
+      true,
+    );
+  });
+
+  it("drops an entry whose object yields no valid field entirely", () => {
+    const { poseDefaults } = buildPoseDefaults({
+      idle_yawn: { playbackMode: "wat", speedMultiplier: "nope" },
+    });
+    // The only entry produced nothing valid → whole block collapses to null.
+    expect(poseDefaults).toBeNull();
+  });
+
+  it("keeps the valid entries when ONE entry is all-invalid", () => {
+    const { poseDefaults } = buildPoseDefaults({
+      idle_yawn: { playbackMode: "wat" }, // dropped entirely
+      idle_hips: { speedMultiplier: 0.5 }, // kept
+    });
+    expect(poseDefaults).toEqual({ idle_hips: { speedMultiplier: 0.5 } });
+  });
+
+  it("a non-object block (array / scalar) → null + warn, never throws", () => {
+    expect(buildPoseDefaults([1, 2]).poseDefaults).toBeNull();
+    expect(buildPoseDefaults([1, 2]).warnings).toHaveLength(1);
+    expect(buildPoseDefaults(42).poseDefaults).toBeNull();
+    expect(buildPoseDefaults("loop").poseDefaults).toBeNull();
   });
 });

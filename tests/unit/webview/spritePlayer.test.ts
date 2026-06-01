@@ -609,6 +609,118 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
     expect(resolvePlayback("Synth-A", "nope", synthManifest)).toEqual({});
   });
 
+  // ── E3 (86ca2187n): 3-layer field-level pose-default cascade ──────────────
+  //
+  // Non-vacuity (revert checklist):
+  //   - "AC1 pose-default applies to all chars": dropping the `...poseDefault`
+  //     spread reverts to per-char-only → the no-per-char-entry char resolves to
+  //     {} and the AC1 assertion FAILS.
+  //   - "AC2 field-level merge": reverting `{ ...poseDefault, ...perChar }` to a
+  //     whole-object pick (perChar ?? poseDefault) drops the inherited fields →
+  //     the inherit-mode-from-default assertion FAILS.
+  //   - "AC4 precedence": swapping the spread order (perChar first) lets the
+  //     pose-default win → the per-char-wins assertion FAILS.
+  describe("E3 — 3-layer field-level pose-default cascade (AC1/AC2/AC4)", () => {
+    // Manifest with a pose-default for idle_stretch + two characters: one with a
+    // per-char override on idle_stretch (speed-only), one with NONE.
+    const cascadeManifest = {
+      poseDefaults: {
+        idle_stretch: { playbackMode: "pingpong" as const, finalDwellMs: 800 },
+        idle_coffee: { speedMultiplier: 0.5 },
+      },
+      characters: {
+        "Has-PerChar": {
+          character: "Has-PerChar",
+          defaultIdle: "idle_stretch",
+          idlePool: ["idle_stretch"],
+          animations: {
+            // per-char sets ONLY speedMultiplier → must inherit mode + dwell.
+            idle_stretch: {
+              folder: "f",
+              frames: ["a/0.png"],
+              playback: { speedMultiplier: 0.7 as number },
+            },
+            // per-char OVERRIDES a field the pose-default also sets.
+            idle_coffee: {
+              folder: "g",
+              frames: ["a/0.png"],
+              playback: { speedMultiplier: 0.9 as number },
+            },
+          },
+        },
+        "No-PerChar": {
+          character: "No-PerChar",
+          defaultIdle: "idle_stretch",
+          idlePool: ["idle_stretch"],
+          animations: {
+            // NO playback at all → pose-default is the whole result.
+            idle_stretch: { folder: "f", frames: ["a/0.png"] },
+            idle_plain: { folder: "h", frames: ["a/0.png"] },
+          },
+        },
+      },
+    };
+
+    it("AC1: a pose-default applies to a character with NO per-char edit", () => {
+      expect(resolvePlayback("No-PerChar", "idle_stretch", cascadeManifest)).toEqual({
+        playbackMode: "pingpong",
+        finalDwellMs: 800,
+      });
+    });
+
+    it("AC2: a per-char speed-only override INHERITS mode + dwell from the pose-default (field-level)", () => {
+      // speedMultiplier from per-char; playbackMode + finalDwellMs from pose-default.
+      expect(resolvePlayback("Has-PerChar", "idle_stretch", cascadeManifest)).toEqual({
+        speedMultiplier: 0.7,
+        playbackMode: "pingpong",
+        finalDwellMs: 800,
+      });
+    });
+
+    it("AC4: per-char field WINS over a pose-default field of the same name (precedence)", () => {
+      // Both layers set speedMultiplier; per-char (0.9) must win over default (0.5).
+      expect(resolvePlayback("Has-PerChar", "idle_coffee", cascadeManifest).speedMultiplier).toBe(0.9);
+    });
+
+    it("AC4: pose-default fills a field the per-char layer omits (engine default is the floor)", () => {
+      // No-PerChar idle_coffee has no per-char entry → pose-default speed 0.5;
+      // a field NEITHER layer sets (playbackMode) stays absent (engine default).
+      const o = resolvePlayback("No-PerChar", "idle_coffee", cascadeManifest);
+      expect(o.speedMultiplier).toBe(0.5);
+      expect(o.playbackMode).toBeUndefined();
+    });
+
+    it("an anim with no pose-default AND no per-char entry → empty override (engine default)", () => {
+      expect(resolvePlayback("No-PerChar", "idle_plain", cascadeManifest)).toEqual({});
+    });
+
+    it("an anim with a per-char entry but NO pose-default → per-char only (E2-equivalent)", () => {
+      const noPoseDefault = {
+        characters: cascadeManifest.characters,
+        poseDefaults: { idle_stretch: { playbackMode: "pingpong" as const } },
+      };
+      // idle_coffee has a per-char entry on Has-PerChar but no pose-default here.
+      expect(resolvePlayback("Has-PerChar", "idle_coffee", noPoseDefault)).toEqual({
+        speedMultiplier: 0.9,
+      });
+    });
+
+    it("AC3: a manifest with NO poseDefaults key resolves exactly as E2 (per-char only)", () => {
+      const e2Shape = { characters: cascadeManifest.characters };
+      expect(resolvePlayback("Has-PerChar", "idle_stretch", e2Shape)).toEqual({
+        speedMultiplier: 0.7,
+      });
+      expect(resolvePlayback("No-PerChar", "idle_stretch", e2Shape)).toEqual({});
+    });
+
+    it("the flat injected playbackTable form has NO pose-default layer (sequencer-test contract)", () => {
+      // The flat form is used by createSpriteBox sequencer tests; it must return
+      // the per-char entry verbatim with no merge so those tests stay unaffected.
+      const flat = { "Some-Char": { idle_yawn: { playbackMode: "pingpong" as const } } };
+      expect(resolvePlayback("Some-Char", "idle_yawn", flat)).toEqual({ playbackMode: "pingpong" });
+    });
+  });
+
   it("NO-REGRESSION: the shipped manifest resolves M01/F01 to their migrated values", () => {
     // The former hardcoded PLAYBACK_OVERRIDES map (M01/F01) was migrated into
     // animations.json + baked into GENERATED_SPRITE_MANIFEST. resolvePlayback's
