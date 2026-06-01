@@ -32,6 +32,8 @@ import type {
   SetupCharactersMessage,
   SetupConfigSavedMessage,
   OpenManageTeamPanelMessage,
+  OpenPlaybackTunerMessage,
+  PlaybackOverrideSavedMessage,
 } from "../shared/messages.js";
 
 /** One handler per HostMessage `type` discriminator. All optional. */
@@ -66,6 +68,20 @@ export interface HostMessageHandlers {
    * the existing detection + config state.
    */
   onOpenManageTeamPanel?(msg: OpenManageTeamPanelMessage): void;
+  /**
+   * Host asked the webview to open the Playback Tuner panel (E5 86ca2189v —
+   * `tuner:open-playback-tuner`). Driven by the `claudeteam.openPlaybackTuner`
+   * command (title-bar button + Command Palette). The handler flips the
+   * webview-local `tunerPanelOpen` flag + re-renders. Mirrors
+   * `onOpenManageTeamPanel`.
+   */
+  onOpenPlaybackTuner?(msg: OpenPlaybackTunerMessage): void;
+  /**
+   * Host acked a `ui:save-playback-override` write (E5 86ca2189v —
+   * `playback:override-saved`). The tuner shows the saved banner on
+   * `ok:true`, or the error banner (keeping the draft) on `ok:false`.
+   */
+  onPlaybackOverrideSaved?(msg: PlaybackOverrideSavedMessage): void;
   /**
    * Called when the incoming message's `type` did not match any known
    * discriminator. Defaults to console.warn if not supplied; tests can override
@@ -108,7 +124,9 @@ function isHostMessage(raw: unknown): raw is HostMessage {
     t === "setup:detection" ||
     t === "setup:characters" ||
     t === "setup:config-saved" ||
-    t === "setup:open-manage-team"
+    t === "setup:open-manage-team" ||
+    t === "tuner:open-playback-tuner" ||
+    t === "playback:override-saved"
   );
 }
 
@@ -158,6 +176,12 @@ export function initMessageReceiver(
         return;
       case "setup:open-manage-team":
         handlers.onOpenManageTeamPanel?.(data);
+        return;
+      case "tuner:open-playback-tuner":
+        handlers.onOpenPlaybackTuner?.(data);
+        return;
+      case "playback:override-saved":
+        handlers.onPlaybackOverrideSaved?.(data);
         return;
     }
   };

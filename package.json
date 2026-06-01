@@ -66,6 +66,11 @@
         "command": "claudeteam.manageTeam",
         "title": "ClaudeTeam: Manage Team",
         "icon": "$(organization)"
+      },
+      {
+        "command": "claudeteam.openPlaybackTuner",
+        "title": "ClaudeTeam: Open Playback Tuner",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -74,6 +79,11 @@
           "command": "claudeteam.manageTeam",
           "when": "view == claudeteam.dashboard",
           "group": "navigation@1"
+        },
+        {
+          "command": "claudeteam.openPlaybackTuner",
+          "when": "view == claudeteam.dashboard",
+          "group": "navigation@2"
         },
         {
           "command": "claudeteam.openSettings",

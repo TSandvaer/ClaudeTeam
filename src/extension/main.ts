@@ -50,6 +50,8 @@ import { startAgentWatcher } from "./roster/agentWatcher.js";
 import { SetupController } from "./setupController.js";
 import { registerOpenSettingsCommand } from "./commands/openSettings.js";
 import { registerManageTeamCommand } from "./commands/manageTeam.js";
+import { registerOpenPlaybackTunerCommand } from "./commands/openPlaybackTuner.js";
+import { savePlaybackOverride } from "./sprites/playbackOverrideWriter.js";
 import {
   postState,
   postRosterLoaded,
@@ -57,6 +59,8 @@ import {
   postSetupCharacters,
   postSetupDetection,
   postOpenManageTeam,
+  postOpenPlaybackTuner,
+  postPlaybackOverrideSaved,
 } from "./messageBus.js";
 import { cwdToSlug } from "../shared/slug.js";
 import {
@@ -559,6 +563,29 @@ export function activate(context: vscode.ExtensionContext): void {
         void removedMembersStore.remove(msg.payload.teamId, msg.payload.memberId);
         watcherHandle?.forceRefresh();
       },
+      // E5 86ca2189v: Playback Tuner save → structured field-level json merge
+      // into `<workspace>/assets/sprites/<char>/animations.json` (per-char) or
+      // `pose-defaults.json` (pose-default), then ack `playback:override-saved`.
+      // The tuner reads the BAKED manifest for its UI, so no tick/forceRefresh is
+      // needed — the live dashboard tiles only reflect the change after the next
+      // `npm run build` + reload (the tuner's persistence banner says so). The
+      // host write does NOT regenerate the manifest.
+      onSavePlaybackOverride: (msg) => {
+        const res = savePlaybackOverride({
+          ...(workspaceFolderPath !== undefined ? { workspaceFolderPath } : {}),
+          writeTarget: msg.payload.writeTarget,
+          ...(msg.payload.characterFolder !== undefined
+            ? { characterFolder: msg.payload.characterFolder }
+            : {}),
+          animName: msg.payload.animName,
+          override: msg.payload.override,
+        });
+        void postPlaybackOverrideSaved(
+          webview,
+          res.ok,
+          res.ok ? undefined : res.error,
+        );
+      },
     };
     provider.setMessageHandlers(handlers);
   });
@@ -608,6 +635,29 @@ export function activate(context: vscode.ExtensionContext): void {
       postOpenPanel: () => {
         const wv = provider.view?.webview;
         if (wv) void postOpenManageTeam(wv);
+      },
+    };
+  });
+
+  // `claudeteam.openPlaybackTuner` (E5 86ca2189v) — "Playback Tuner" button in
+  // the Dashboard view title bar (contributes.menus → view/title) + Command
+  // Palette entry. Opens the on-demand Playback Tuner panel (a render-state of
+  // the single dashboard webview, mirroring Manage Team). depsFactory runs PER
+  // INVOCATION so it closes over the CURRENT webview (replaced on every resolve).
+  registerOpenPlaybackTunerCommand(context, () => {
+    const view = provider.view;
+    return {
+      revealView: async () => {
+        if (view) {
+          view.show(true);
+        } else {
+          await vscode.commands.executeCommand("claudeteam.dashboard.focus");
+        }
+      },
+      getWebview: () => provider.view?.webview,
+      postOpenPanel: () => {
+        const wv = provider.view?.webview;
+        if (wv) void postOpenPlaybackTuner(wv);
       },
     };
   });

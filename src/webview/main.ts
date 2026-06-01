@@ -339,6 +339,14 @@ function boot(): void {
   // as the reset's completion and does NOT raise a (misleading) "Saved" /
   // "Team created" banner — the panel has already flipped to the wizard.
   let resetPending = false;
+  // Playback Tuner panel open flag (E5 86ca2189v) — ephemeral webview-local UI
+  // (E4 spec §2). Opened by `tuner:open-playback-tuner` (the
+  // `claudeteam.openPlaybackTuner` command); closed by the panel's close
+  // affordance. Mirrors `managePanelOpen`.
+  let tunerPanelOpen = false;
+  // Latest playback-override save ack (E5) — drives the tuner's persistence
+  // banner. Null until the first save in this panel session. Reset on close.
+  let tunerSaveAck: { ok: boolean; error?: string } | null = null;
 
   /** Workspace-folder seed for the wizard/preview "Team:" line. */
   const teamNameSeed = (): string => {
@@ -394,6 +402,16 @@ function boot(): void {
       // The success banner's auto-dismiss timer fired and cleared the slot —
       // drop the persisted copy so it does not resurrect on the next re-render.
       pendingBanner = null;
+    },
+    // Playback Tuner panel (E5 86ca2189v).
+    tunerPanelOpen,
+    tunerSaveAck,
+    onCloseTunerPanel: () => {
+      tunerPanelOpen = false;
+      // Closing discards the last save ack — a fresh open starts on the neutral
+      // banner (the ack was a transient confirmation of the prior save).
+      tunerSaveAck = null;
+      renderFull(buildCtx(), currentState);
     },
     ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
   });
@@ -482,6 +500,23 @@ function boot(): void {
     // vs edit) is unchanged: it's decided by setupDetection + manageConfig.
     onOpenManageTeamPanel: () => {
       managePanelOpen = true;
+      renderFull(buildCtx(), currentState);
+    },
+    // E5 86ca2189v: host-driven open of the Playback Tuner panel (the
+    // `claudeteam.openPlaybackTuner` command's title-bar button + Command
+    // Palette). Mirrors `onOpenManageTeamPanel` — the host has no other way to
+    // flip this webview-local flag. A fresh open starts on the neutral banner.
+    onOpenPlaybackTuner: () => {
+      tunerPanelOpen = true;
+      tunerSaveAck = null;
+      renderFull(buildCtx(), currentState);
+    },
+    // E5 86ca2189v: ack for a `ui:save-playback-override` write. Thread the ack
+    // into `tunerSaveAck` so the tuner's persistence banner reflects ok/error on
+    // the re-render. The panel keeps the draft regardless (the draft lives in the
+    // tuner's own closure; this only updates the banner surface).
+    onPlaybackOverrideSaved: (msg) => {
+      tunerSaveAck = msg.payload;
       renderFull(buildCtx(), currentState);
     },
     onSetupConfigSaved: (msg) => {

@@ -36,6 +36,7 @@ import type {
   RemoveMemberMessage,
   ResetTeamMessage,
   RunSetupMessage,
+  SavePlaybackOverrideMessage,
   SaveTeamMessage,
   ShowAllHiddenMessage,
   ShowMemberMessage,
@@ -107,6 +108,13 @@ export interface WebviewMessageHandlers {
    * forces a tick so the panel returns to the wizard + the dashboard clears.
    */
   onResetTeam?(msg: ResetTeamMessage): void;
+  /**
+   * User saved a playback override from the Playback Tuner (E5 86ca2189v
+   * `ui:save-playback-override`). Host performs a structured field-level json
+   * merge into `animations.json` (per-char) or `pose-defaults.json` + acks via
+   * `playback:override-saved`.
+   */
+  onSavePlaybackOverride?(msg: SavePlaybackOverrideMessage): void;
   /** Called for messages that don't match a known discriminator. */
   onUnknown?(raw: unknown): void;
 }
@@ -239,6 +247,9 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
         return;
       case "ui:reset-team":
         this._messageHandlers.onResetTeam?.(raw);
+        return;
+      case "ui:save-playback-override":
+        this._messageHandlers.onSavePlaybackOverride?.(raw);
         return;
     }
   }
@@ -402,6 +413,33 @@ export function isWebviewMessage(raw: unknown): raw is WebviewMessage {
     if (typeof p !== "object" || p === null) return false;
     const { memberId } = p as { memberId?: unknown };
     return typeof memberId === "string";
+  }
+  // ui:save-playback-override (E5 86ca2189v) — structural guard: writeTarget is
+  // one of the two literals, animName is a string, override is an object.
+  // characterFolder is required only for the per-char target. Deep field
+  // validation (number / mode literal) is the host writer's job (mirroring how
+  // ui:save-team only checks version+teams shape, not each member).
+  if (t === "ui:save-playback-override") {
+    const p = (raw as { payload?: unknown }).payload;
+    if (typeof p !== "object" || p === null) return false;
+    const { writeTarget, characterFolder, animName, override } = p as {
+      writeTarget?: unknown;
+      characterFolder?: unknown;
+      animName?: unknown;
+      override?: unknown;
+    };
+    if (writeTarget !== "per-char" && writeTarget !== "pose-default") {
+      return false;
+    }
+    if (typeof animName !== "string") return false;
+    if (typeof override !== "object" || override === null) return false;
+    if (
+      writeTarget === "per-char" &&
+      typeof characterFolder !== "string"
+    ) {
+      return false;
+    }
+    return true;
   }
   return false;
 }

@@ -321,6 +321,69 @@ export type OpenManageTeamPanelMessage = {
   type: "setup:open-manage-team";
 };
 
+// =============================================================================
+// Anim-playback tuner epic — host ↔ webview (E5, 86ca2189v).
+// LOCKED vocabulary (anim-playback-epic-backlog § Vocabulary): controls bind to
+// `speedMultiplier` / `finalDwellMs` / `playbackMode` ("loop"|"pingpong"). New
+// types ADDED (never overload — messages.ts rule). All payloads JSON-safe.
+// =============================================================================
+
+/**
+ * Host asks the webview to OPEN the Playback Tuner panel (E5 / E4 spec §2).
+ *
+ * Mirrors `setup:open-manage-team` exactly: the tuner panel's open/closed state
+ * is webview-LOCAL (the `tunerPanelOpen` flag in `src/webview/main.ts`). The new
+ * `claudeteam.openPlaybackTuner` command (Command Palette + dashboard title-bar
+ * button) posts this so the panel opens on demand; the webview sets
+ * `tunerPanelOpen = true` + re-renders the tuner as a full-dashboard-root
+ * overlay. No payload.
+ */
+export type OpenPlaybackTunerMessage = {
+  type: "tuner:open-playback-tuner";
+};
+
+/**
+ * Webview → host: persist a playback override (E4 spec §4.1). Live preview is
+ * webview-local (it injects a `playbackTable` into `createSpriteBox`); THIS is
+ * the SEPARATE persistence round-trip that writes the json so the value survives
+ * a real rebuild and applies to the actual dashboard tiles.
+ *
+ * `override` carries ONLY the fields the sponsor has SET away from inherited/
+ * default. **Field-omission == clear:** the host MERGES set fields into the json
+ * entry, and a field ABSENT from the payload is REMOVED from the json entry (so
+ * `[reset]` truly unsets it, restoring inheritance). All values JSON-safe (no
+ * `undefined` on the wire — omit keys instead; messages.ts JSON constraint).
+ */
+export type SavePlaybackOverrideMessage = {
+  type: "ui:save-playback-override";
+  payload: {
+    /** Which json file the write lands in. */
+    writeTarget: "per-char" | "pose-default";
+    /** Manifest char key — REQUIRED when writeTarget === "per-char". */
+    characterFolder?: string;
+    /** Canonical anim name (the playback-block key). */
+    animName: string;
+    /** Only the SET fields (field-omission == clear). */
+    override: {
+      speedMultiplier?: number;
+      finalDwellMs?: number;
+      playbackMode?: "loop" | "pingpong";
+    };
+  };
+};
+
+/**
+ * Host → webview: ack for `ui:save-playback-override` (E4 spec §4.2). Distinct
+ * type from `setup:config-saved` to avoid coupling to the team-setup flow.
+ *   - `ok: true`  → tuner shows the §3.6 saved banner.
+ *   - `ok: false` → tuner shows the error banner, keeps the draft.
+ * `error` is a human-readable string (omitted on success). JSON-safe.
+ */
+export type PlaybackOverrideSavedMessage = {
+  type: "playback:override-saved";
+  payload: { ok: boolean; error?: string };
+};
+
 /** Union of all host → webview messages. */
 export type HostMessage =
   | StateFullMessage
@@ -331,7 +394,9 @@ export type HostMessage =
   | SetupDetectionMessage
   | SetupCharactersMessage
   | SetupConfigSavedMessage
-  | OpenManageTeamPanelMessage;
+  | OpenManageTeamPanelMessage
+  | OpenPlaybackTunerMessage
+  | PlaybackOverrideSavedMessage;
 
 // =============================================================================
 // Webview → Host
@@ -582,4 +647,5 @@ export type WebviewMessage =
   | AssignCharacterMessage
   | ConfirmOrphanDeleteMessage
   | DismissSetupSuggestionMessage
-  | ResetTeamMessage;
+  | ResetTeamMessage
+  | SavePlaybackOverrideMessage;

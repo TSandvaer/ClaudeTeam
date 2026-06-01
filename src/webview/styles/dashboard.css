@@ -2024,3 +2024,216 @@ body {
 .ct-character-origin--user {
   color: var(--ct-color-state-idle);
 }
+
+/* ===========================================================================
+ * Playback Tuner panel (E5 86ca2189v — Iris E4 spec §8 tokens).
+ * Theme-aware: all chrome uses --vscode-* / --ct-* tokens; the tuner encodes no
+ * semantic state color (no hardcoded hex). Mirrors the Manage Team panel chrome.
+ * =========================================================================== */
+.ct-tuner-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-m);
+  padding: var(--ct-space-l);
+  color: var(--ct-color-fg);
+}
+.ct-tuner-header {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+}
+.ct-tuner-title {
+  margin: 0;
+  font-size: 1.1rem;
+  flex: 1 1 auto;
+}
+.ct-tuner-close {
+  font: inherit;
+  color: var(--ct-color-fg-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: var(--ct-space-xs);
+  line-height: 1;
+}
+.ct-tuner-close:hover {
+  color: var(--ct-color-fg);
+}
+.ct-tuner-empty {
+  margin: 0;
+  color: var(--ct-color-fg-muted);
+}
+.ct-tuner-selectors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-space-m);
+}
+.ct-tuner-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ct-tuner-field-caption {
+  font-size: smaller;
+  color: var(--ct-color-fg-muted);
+}
+.ct-tuner-select {
+  font: inherit;
+  color: var(--vscode-settings-dropdownForeground, var(--ct-color-fg));
+  background-color: var(--vscode-settings-dropdownBackground, var(--ct-color-bg-editor));
+  border: 1px solid var(--vscode-settings-dropdownBorder, var(--ct-color-border));
+  border-radius: var(--ct-radius-chip);
+  padding: var(--ct-space-xs) var(--ct-space-s);
+}
+.ct-tuner-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--ct-space-l);
+}
+.ct-tuner-preview-host,
+.ct-tuner-preview-box {
+  flex: 0 0 auto;
+}
+.ct-tuner-preview-note {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+}
+.ct-tuner-source-table {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--ct-space-s);
+  margin: 0;
+  flex: 1 1 auto;
+  align-content: start;
+}
+.ct-tuner-source-label {
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+}
+.ct-tuner-source-value {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+  margin: 0;
+}
+.ct-tuner-source-effective {
+  font-variant-numeric: tabular-nums;
+}
+.ct-tuner-source-tag {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: var(--ct-radius-chip);
+  background-color: var(--vscode-badge-background, var(--ct-color-bg-hover));
+  color: var(--vscode-badge-foreground, var(--ct-color-fg));
+}
+.ct-tuner-section {
+  margin: var(--ct-space-s) 0 0 0;
+  padding-top: var(--ct-space-s);
+  border-top: 1px solid var(--vscode-panel-border, var(--ct-color-border));
+  font-size: 0.85rem;
+  color: var(--ct-color-fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ct-tuner-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+}
+.ct-tuner-control-labelrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-space-s);
+}
+.ct-tuner-control-caption {
+  flex: 0 0 auto;
+}
+.ct-tuner-control-readout {
+  flex: 1 1 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-descriptionForeground, var(--ct-color-fg-muted));
+}
+.ct-tuner-reset {
+  font: inherit;
+  font-size: smaller;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground, var(--ct-color-state-idle));
+}
+.ct-tuner-reset:hover {
+  text-decoration: underline;
+}
+.ct-tuner-slider {
+  width: 100%;
+  accent-color: var(--vscode-button-background, var(--ct-color-state-running));
+}
+.ct-tuner-bounds {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: var(--ct-color-fg-muted);
+}
+.ct-tuner-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+}
+.ct-tuner-radio {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+  cursor: pointer;
+}
+.ct-tuner-help {
+  margin: 0;
+  color: var(--ct-color-fg-muted);
+  font-size: smaller;
+}
+/* Shadowing warning — flex + [hidden]-toggled -> MANDATORY [hidden] guard
+ * (mirrors .ct-manage-orphan-confirm[hidden]). The author display:flex beats the
+ * UA [hidden]{display:none}, so the warning would render OPEN without this. */
+.ct-tuner-shadow-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+  margin: 0;
+  padding: var(--ct-space-s);
+  border-radius: var(--ct-radius-chip);
+  color: var(--vscode-inputValidation-warningForeground, var(--ct-color-fg));
+  background-color: var(
+    --vscode-inputValidation-warningBackground,
+    var(--ct-color-bg-hover)
+  );
+  border: 1px solid
+    var(--vscode-inputValidation-warningBorder, var(--ct-color-border));
+  font-size: smaller;
+}
+.ct-tuner-shadow-warning[hidden] {
+  display: none;
+}
+.ct-tuner-banner {
+  padding: var(--ct-space-s) var(--ct-space-m);
+  border-radius: var(--ct-radius-chip);
+  border: 1px solid var(--ct-color-border);
+  color: var(--ct-color-fg-muted);
+}
+.ct-tuner-banner--success {
+  color: var(--ct-color-fg);
+  background-color: var(--vscode-editor-inlineHint-background, var(--ct-color-bg-hover));
+  border-color: var(--ct-color-state-running);
+}
+.ct-tuner-banner--error {
+  color: var(--vscode-inputValidation-errorForeground, var(--ct-color-fg));
+  background-color: var(
+    --vscode-inputValidation-errorBackground,
+    rgba(90, 29, 29, 0.4)
+  );
+  border-color: var(--ct-color-state-error);
+}
+.ct-tuner-banner-text {
+  display: inline;
+}
