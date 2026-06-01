@@ -254,3 +254,43 @@ export function postSetupConfigSaved(
     "postSetupConfigSaved",
   );
 }
+
+// =============================================================================
+// Anim-playback tuner epic — host → webview posts (E5 86ca2189v).
+// =============================================================================
+
+/**
+ * Post `tuner:open-playback-tuner` — ask the webview to OPEN the Playback Tuner
+ * panel (E5). Posted by the `claudeteam.openPlaybackTuner` command (title-bar
+ * button + Command Palette). The webview flips its local `tunerPanelOpen` flag +
+ * re-renders. Mirrors `postOpenManageTeam`. No payload.
+ */
+export function postOpenPlaybackTuner(
+  webview: vscode.Webview,
+): Thenable<boolean> {
+  return safePost(
+    webview,
+    { type: "tuner:open-playback-tuner" },
+    "postOpenPlaybackTuner",
+  );
+}
+
+/**
+ * Post `playback:override-saved` — ack for `ui:save-playback-override` (E5). On
+ * `ok: true` the tuner shows the §3.6 saved banner; on `ok: false` it shows the
+ * error banner and keeps the draft.
+ */
+export function postPlaybackOverrideSaved(
+  webview: vscode.Webview,
+  ok: boolean,
+  error?: string,
+): Thenable<boolean> {
+  return safePost(
+    webview,
+    {
+      type: "playback:override-saved",
+      payload: error !== undefined ? { ok, error } : { ok },
+    },
+    "postPlaybackOverrideSaved",
+  );
+}

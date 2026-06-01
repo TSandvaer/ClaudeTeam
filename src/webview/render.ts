@@ -52,6 +52,7 @@ import { renderSessionBlock } from "./components/sessionBlock.js";
 import { renderEmptyState, renderNoSetupState } from "./components/emptyState.js";
 import { renderSuggestSetupCard } from "./components/suggestSetupCard.js";
 import { renderManageTeamPanel } from "./components/manageTeamPanel.js";
+import { renderPlaybackTuner } from "./components/playbackTuner.js";
 import { showSetupBanner } from "./components/setupBanner.js";
 import {
   renderErrorChip,
@@ -75,6 +76,7 @@ import type {
 } from "./menuOpenTracker.js";
 import type { SpriteTracker } from "./spriteTracker.js";
 import type { PickerOpenTracker } from "./pickerOpenTracker.js";
+import type { TunerStateTracker } from "./tunerStateTracker.js";
 
 /** Persistent error state stored on the dashboard. */
 export interface DashboardErrorState {
@@ -279,6 +281,32 @@ export interface RenderContext {
    * re-render would resurrect the dismissed banner). Optional.
    */
   onPendingBannerDismiss?: () => void;
+  /**
+   * Playback Tuner epic (E5 86ca2189v / E4 spec §2). When true, the Playback
+   * Tuner panel is open and REPLACES the dashboard body (full-pane on-demand
+   * surface mirroring Manage Team). Driven by `tuner:open-playback-tuner` (the
+   * `claudeteam.openPlaybackTuner` command) → the webview-local `tunerPanelOpen`
+   * flag in main.ts. Highest precedence alongside the Manage Team panel.
+   */
+  tunerPanelOpen?: boolean;
+  /**
+   * Playback Tuner: the most recent host save ack (`playback:override-saved`),
+   * threaded so the persistence banner reflects ok/error. Mirrors the Manage
+   * Team `pendingBanner` survival pattern — re-applied on every panel re-render.
+   * `null` → neutral idle banner. Optional.
+   */
+  tunerSaveAck?: { ok: boolean; error?: string } | null;
+  /** Called when the user closes the Playback Tuner panel (caller flips the flag). */
+  onCloseTunerPanel?: () => void;
+  /**
+   * BLOCKER B1 (86ca2189v) — webview-local tuner editing-state tracker. Threaded
+   * into `renderPlaybackTuner` so the panel's selection / draft / writeTarget
+   * survive the ~2s poll-tick `renderFull` that root-swaps a fresh tuner (the
+   * SAME poll-tick-survivability class as `pickerOpenTracker`). Owned by the boot
+   * closure in main.ts; reset on panel close. Optional — absent in component
+   * tests (the panel starts at its first-char defaults each mount).
+   */
+  tunerStateTracker?: TunerStateTracker;
 }
 
 /**
@@ -421,7 +449,29 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     pickerOpenTracker,
     pendingBanner,
     onPendingBannerDismiss,
+    tunerPanelOpen,
+    tunerSaveAck,
+    onCloseTunerPanel,
+    tunerStateTracker,
   } = ctx;
+
+  // ── Playback Tuner panel (E5 86ca2189v) — full-pane on-demand surface,
+  // highest precedence (mirrors Manage Team). Open → replace the dashboard body
+  // with the tuner; closing returns to the normal dashboard. Handled BEFORE the
+  // Manage Team switch so the two never co-mount (a command opens exactly one).
+  if (tunerPanelOpen === true) {
+    mount.replaceChildren();
+    mount.appendChild(
+      renderPlaybackTuner({
+        postMessage,
+        ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(tunerSaveAck !== undefined ? { saveAck: tunerSaveAck } : {}),
+        ...(onCloseTunerPanel ? { onClose: onCloseTunerPanel } : {}),
+        ...(tunerStateTracker !== undefined ? { stateTracker: tunerStateTracker } : {}),
+      }),
+    );
+    return;
+  }
 
   // ── Team-setup surface switch (spec §1, §2, §4) ─────────────────────────────
   // These are full-pane surfaces that REPLACE the dashboard body. Handle them

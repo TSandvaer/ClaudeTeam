@@ -55,6 +55,7 @@ import { createPrevStateTracker } from "./prevStateTracker.js";
 import { createExpandedGroupsTracker } from "./expandedGroupsTracker.js";
 import { createMenuOpenTracker } from "./menuOpenTracker.js";
 import { createPickerOpenTracker } from "./pickerOpenTracker.js";
+import { createTunerStateTracker } from "./tunerStateTracker.js";
 import { createSpriteTracker } from "./spriteTracker.js";
 import { MemberDirectory } from "./memberDirectory.js";
 
@@ -339,6 +340,25 @@ function boot(): void {
   // as the reset's completion and does NOT raise a (misleading) "Saved" /
   // "Team created" banner — the panel has already flipped to the wizard.
   let resetPending = false;
+  // Playback Tuner panel open flag (E5 86ca2189v) — ephemeral webview-local UI
+  // (E4 spec §2). Opened by `tuner:open-playback-tuner` (the
+  // `claudeteam.openPlaybackTuner` command); closed by the panel's close
+  // affordance. Mirrors `managePanelOpen`.
+  let tunerPanelOpen = false;
+  // Latest playback-override save ack (E5) — drives the tuner's persistence
+  // banner. Null until the first save in this panel session. Reset on close.
+  let tunerSaveAck: { ok: boolean; error?: string } | null = null;
+  /**
+   * BLOCKER B1 (86ca2189v) — webview-local tuner editing-state tracker. Single
+   * instance per webview boot. Persists the open tuner's selection / draft /
+   * writeTarget across the ~2s poll-tick `renderFull` that root-swaps a fresh
+   * `renderPlaybackTuner` (the SAME poll-tick-survivability class the picker /
+   * menu / expanded-group trackers solve). Reset on panel open + close (a fresh
+   * open starts clean at first-char). Without it the panel snaps back to
+   * first-char every poll tick → unusable; and the post-save banner names the
+   * RESET file, not the saved one.
+   */
+  const tunerStateTracker = createTunerStateTracker();
 
   /** Workspace-folder seed for the wizard/preview "Team:" line. */
   const teamNameSeed = (): string => {
@@ -394,6 +414,20 @@ function boot(): void {
       // The success banner's auto-dismiss timer fired and cleared the slot —
       // drop the persisted copy so it does not resurrect on the next re-render.
       pendingBanner = null;
+    },
+    // Playback Tuner panel (E5 86ca2189v).
+    tunerPanelOpen,
+    tunerSaveAck,
+    tunerStateTracker,
+    onCloseTunerPanel: () => {
+      tunerPanelOpen = false;
+      // Closing discards the last save ack — a fresh open starts on the neutral
+      // banner (the ack was a transient confirmation of the prior save).
+      tunerSaveAck = null;
+      // B1: discard the in-progress editing state too — a fresh open starts at
+      // first-char defaults, not wherever the prior session left off.
+      tunerStateTracker.reset();
+      renderFull(buildCtx(), currentState);
     },
     ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
   });
@@ -482,6 +516,26 @@ function boot(): void {
     // vs edit) is unchanged: it's decided by setupDetection + manageConfig.
     onOpenManageTeamPanel: () => {
       managePanelOpen = true;
+      renderFull(buildCtx(), currentState);
+    },
+    // E5 86ca2189v: host-driven open of the Playback Tuner panel (the
+    // `claudeteam.openPlaybackTuner` command's title-bar button + Command
+    // Palette). Mirrors `onOpenManageTeamPanel` — the host has no other way to
+    // flip this webview-local flag. A fresh open starts on the neutral banner.
+    onOpenPlaybackTuner: () => {
+      tunerPanelOpen = true;
+      tunerSaveAck = null;
+      // B1: a fresh open starts clean — clear any leftover editing state from a
+      // prior tuner session so the panel opens at first-char defaults.
+      tunerStateTracker.reset();
+      renderFull(buildCtx(), currentState);
+    },
+    // E5 86ca2189v: ack for a `ui:save-playback-override` write. Thread the ack
+    // into `tunerSaveAck` so the tuner's persistence banner reflects ok/error on
+    // the re-render. The panel keeps the draft regardless (the draft lives in the
+    // tuner's own closure; this only updates the banner surface).
+    onPlaybackOverrideSaved: (msg) => {
+      tunerSaveAck = msg.payload;
       renderFull(buildCtx(), currentState);
     },
     onSetupConfigSaved: (msg) => {

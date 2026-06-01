@@ -180,18 +180,21 @@ describe("M2-06 AC7(e) — context.subscriptions.length is bounded across 3 reso
     // After activate: subscriptions should hold exactly:
     //   1. cleanup wrapper (registered once)
     //   2. registerWebviewViewProvider's disposable
-    //   3-7. five command registrations (refresh, openAgentTranscript,
+    //   3-8. six command registrations (refresh, openAgentTranscript,
     //        openDiagnosticPanel — 86c9zn7tm, openSettings — 86ca16r2d
-    //        settings gear, manageTeam — 86ca1u0nf Manage Team button)
+    //        settings gear, manageTeam — 86ca1u0nf Manage Team button,
+    //        openPlaybackTuner — 86ca2189v Playback Tuner button)
     //
     // 86ca1gdbp removed `toggleHideFinished` + `toggleHideIdle` (9 → 7).
     // TS-02 (Decision 1) removed `claudeteam.openRoster` (the dropped global
     // roster command), dropping the count from 7 → 6.
     // 86ca1u0nf added `claudeteam.manageTeam` (the Manage Team entry point),
     // bringing the count from 6 → 7.
-    // Total expected: 7 entries.
+    // 86ca2189v added `claudeteam.openPlaybackTuner` (the Playback Tuner entry
+    // point), bringing the count from 7 → 8.
+    // Total expected: 8 entries.
     const afterActivate = ctx.subscriptions.length;
-    expect(afterActivate).toBe(7);
+    expect(afterActivate).toBe(8);
 
     const provider = getRegisteredProvider();
     expect(provider).not.toBeNull();
