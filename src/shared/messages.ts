@@ -378,6 +378,15 @@ export type SavePlaybackOverrideMessage = {
       dwellFrameIndex?: number;
       /** Extra ms to hold the apex frame (86ca2bqe1). Absent → inherits / off. */
       dwellMs?: number;
+      /**
+       * Inclusive lower bound of the playback window (86ca2wj6u — "Window"
+       * control). The dual-handle range slider writes it through the same
+       * field-level merge as the other tunable keys; the host writer now owns it
+       * (playbackOverrideWriter.ts TUNABLE_KEYS). Absent → full clip (cleared).
+       */
+      startFrame?: number;
+      /** Inclusive upper bound of the playback window (86ca2wj6u). Absent → full clip (cleared). */
+      endFrame?: number;
     };
   };
 };

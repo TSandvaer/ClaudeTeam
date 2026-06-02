@@ -88,19 +88,41 @@ describe("mergePlaybackEntry — field-level merge + clear-on-omit", () => {
     expect(merged).toEqual({ speedMultiplier: 0.7 });
   });
 
-  it("preserves NON-tunable fields the tuner doesn't own (startFrame/endFrame window)", () => {
+  it("preserves a NON-tunable field the tuner doesn't own (e.g. an unknown future key)", () => {
     const merged = mergePlaybackEntry(
-      { speedMultiplier: 0.5, startFrame: 5, endFrame: 10 },
+      { speedMultiplier: 0.5, customFutureKey: "preserved" },
       { finalDwellMs: 800 },
     );
-    // speedMultiplier (tunable, absent from override) cleared; the non-tunable
-    // startFrame / endFrame window survives untouched. (86ca2bqe1: dwellFrameIndex
-    // /dwellMs are now TUNABLE — covered by the apex set/clear tests below.)
+    // speedMultiplier (tunable, absent from override) cleared; the unknown
+    // non-tunable key survives untouched. (86ca2wj6u: startFrame/endFrame are NOW
+    // tunable — covered by the window set/clear tests below.)
     expect(merged).toEqual({
-      startFrame: 5,
-      endFrame: 10,
+      customFutureKey: "preserved",
       finalDwellMs: 800,
     });
+  });
+
+  // 86ca2wj6u — the window pair (startFrame/endFrame) is now tuner-owned: a
+  // present field is set, an absent one is CLEARED (clear → full clip), exactly
+  // like the other tunable keys. NON-VACUOUS: reverting the TUNABLE_KEYS
+  // extension makes these fields fall through to the "preserve untouched" path →
+  // the clear assertion fails (the stale startFrame survives the override).
+  it("sets the window pair (startFrame + endFrame) when present", () => {
+    const merged = mergePlaybackEntry(
+      { speedMultiplier: 0.5 },
+      { startFrame: 4, endFrame: 9 },
+    );
+    // speedMultiplier cleared (absent); window pair set.
+    expect(merged).toEqual({ startFrame: 4, endFrame: 9 });
+  });
+
+  it("CLEARS a stale window pair when the override omits it (clear → full clip)", () => {
+    const merged = mergePlaybackEntry(
+      { startFrame: 5, endFrame: 10, speedMultiplier: 0.5 },
+      { speedMultiplier: 0.7 },
+    );
+    // The window pair is absent from the override → cleared (full clip).
+    expect(merged).toEqual({ speedMultiplier: 0.7 });
   });
 
   // 86ca2bqe1 — apex hold (dwellFrameIndex/dwellMs) is now tuner-owned: a present
@@ -119,15 +141,15 @@ describe("mergePlaybackEntry — field-level merge + clear-on-omit", () => {
 
   it("CLEARS a stale apex pair when the override omits it (clear → inherit)", () => {
     const merged = mergePlaybackEntry(
-      { dwellFrameIndex: 4, dwellMs: 800, startFrame: 1, endFrame: 9 },
+      { dwellFrameIndex: 4, dwellMs: 800, customFutureKey: "kept" },
       { speedMultiplier: 0.7 },
     );
-    // The apex pair is absent from the override → cleared. The startFrame/endFrame
-    // window (still non-tunable) is preserved.
+    // The apex pair is absent from the override → cleared. An unknown non-tunable
+    // key is preserved. (86ca2wj6u: startFrame/endFrame are now tunable, so they
+    // would NOT survive an omitting override — see the window clear test above.)
     expect(merged).toEqual({
       speedMultiplier: 0.7,
-      startFrame: 1,
-      endFrame: 9,
+      customFutureKey: "kept",
     });
   });
 
@@ -213,6 +235,47 @@ describe("savePlaybackOverride — per-char write target", () => {
     });
     const pb = readJson(path).playback as Record<string, unknown>;
     expect("idle_stretch" in pb).toBe(false);
+  });
+
+  // 86ca2wj6u — the playback window now persists to disk end-to-end (the spec
+  // §0.1 gap: before the TUNABLE_KEYS promotion, a newly-set window was silently
+  // dropped — the control previewed but never persisted). NON-VACUOUS: reverting
+  // the TUNABLE_KEYS extension makes startFrame/endFrame fall through to "preserve
+  // if already present" — a NEW window (none on disk) is dropped, failing this.
+  it("PERSISTS a newly-set window (startFrame/endFrame) to disk", () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { idle_stretch: "x" },
+      playback: { idle_stretch: { speedMultiplier: 0.5 } },
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_stretch",
+      override: { speedMultiplier: 0.5, startFrame: 4, endFrame: 9 },
+    });
+    const pb = readJson(path).playback as Record<string, unknown>;
+    expect(pb.idle_stretch).toEqual({
+      speedMultiplier: 0.5,
+      startFrame: 4,
+      endFrame: 9,
+    });
+  });
+
+  it("CLEARS a previously-saved window when the override omits it (reset → full clip)", () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { idle_stretch: "x" },
+      playback: { idle_stretch: { speedMultiplier: 0.5, startFrame: 4, endFrame: 9 } },
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_stretch",
+      override: { speedMultiplier: 0.5 }, // window omitted → cleared
+    });
+    const pb = readJson(path).playback as Record<string, unknown>;
+    expect(pb.idle_stretch).toEqual({ speedMultiplier: 0.5 });
   });
 
   // 86ca2bqe1 AC2 — the apex pair lands in the CORRECT char's animations.json
