@@ -451,6 +451,8 @@ ENTRY-2026-05-30T00:00:00Z: 86ca1tv41 -> in review
 ENTRY-2026-05-30T10:30:00Z: 86ca1u41m -> in review
 ENTRY-2026-06-01T20:36:00Z: 86ca2w1g9 -> in progress (Maya accepted dispatch — apex hold has no effect when dwellFrameIndex falls outside the active window; root cause = apex picker offers full-clip frames while the loop only renders [startFrame,endFrame]; fix = picker bounded to active window + engine apex guard made window-aware/inclusive-of-winStart; branch maya/86ca2w1g9-apex-frame0)
 ENTRY-2026-06-01T20:50:00Z: 86ca2w1g9 -> in review (Maya PR #173 opened — fix(webview): tuner apex hold honors the active frame window; apex picker bounded to [startFrame..endFrame] + engine apex guard window-aware/inclusive-of-winStart; 1276 unit green, typecheck+build clean; Self-Test Report in PR body; reviewer Felix)
+ENTRY-2026-06-02T00:00:00Z: 86ca2wj6u -> in progress (Iris accepted dispatch — UX spec for editable playback-window startFrame/endFrame control in the tuner; branch iris/86ca2wj6u-window-control)
+ENTRY-2026-06-02T00:00:01Z: 86ca2wj6u -> in review (Iris PR opened — spec(webview): playback-window editable control — dual-handle frame range slider, placed Window-section-first; flags the host-writer owned-key gap startFrame/endFrame must be added to TUNABLE_KEYS or saves silently drop; reviewer Maya)
 
 ## Team-setup EPIC — ticket-creation requests (Nora away-mode shaping 2026-05-29)
 
