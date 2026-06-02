@@ -34,9 +34,11 @@
  * `finalDwellMs`/`dwellFrameIndex`/`dwellMs`) as finite numbers and
  * `playbackMode` as `"loop"|"pingpong"` — this writer emits exactly those
  * tunable fields with those types, so a written value survives the rebuild
- * verbatim. The remaining window fields (`startFrame`/`endFrame`) are NOT
- * touched by the tuner — they are out of scope (§10) and are PRESERVED if
- * already present, since the merge is per-field on the tunable keys only.
+ * verbatim. The window fields (`startFrame`/`endFrame`) are NOW tuner-owned too
+ * (86ca2wj6u): the playback-window control writes them through the SAME
+ * field-level merge as the other tunable keys. `sanitizePlayback` already
+ * validates them (finite number → passed through), so they round-trip the
+ * rebuild verbatim.
  *
  * NEVER throws — every failure (no workspace, malformed existing json, fs error)
  * surfaces as `{ ok: false, error }` so the caller acks `playback:override-saved
@@ -65,6 +67,19 @@ export interface TunablePlaybackOverride {
   dwellFrameIndex?: number;
   /** Apex-hold duration in ms (86ca2bqe1). Tuner-owned alongside dwellFrameIndex. */
   dwellMs?: number;
+  /**
+   * Inclusive lower bound of the playback window (86ca2wj6u — "Window" control).
+   * Now tuner-owned: the dual-handle range slider writes it through the same
+   * field-level merge as the other tunable keys (set when present, CLEAR when
+   * absent). The engine already applies it (spritePlayer.ts `startFrame`); the
+   * build script already validates it. Absent → full clip (inherits / start 0).
+   */
+  startFrame?: number;
+  /**
+   * Inclusive upper bound of the playback window (86ca2wj6u). Tuner-owned
+   * alongside `startFrame`. Absent → full clip (inherits / last frame).
+   */
+  endFrame?: number;
 }
 
 /** Args for a save. */
@@ -91,16 +106,23 @@ const TUNABLE_KEYS = [
   // 86ca2bqe1 — apex hold is now tuner-owned (set/clear field-level merge).
   "dwellFrameIndex",
   "dwellMs",
+  // 86ca2wj6u — the playback window is now tuner-owned (set/clear field-level
+  // merge), via the dual-handle range slider. Without these in the owned set the
+  // writer would silently DROP a newly-set window (neither set nor preserved),
+  // so the control would preview-move but never persist (spec §0.1 gap).
+  "startFrame",
+  "endFrame",
 ] as const;
 
 /**
  * Merge the override into an existing per-anim playback entry (field-level).
  *
  *   - A field PRESENT in `override` → set on the entry.
- *   - A field ABSENT from `override` (among the tunable keys) → DELETED
- *     from the entry (clear → inherit).
- *   - Any OTHER field already on the entry (e.g. `startFrame`/`endFrame` window)
- *     → preserved untouched (out of tuner scope, §10).
+ *   - A field ABSENT from `override` (among the tunable keys — now including the
+ *     window `startFrame`/`endFrame`, 86ca2wj6u) → DELETED from the entry
+ *     (clear → inherit / full clip).
+ *   - Any OTHER field already on the entry not in TUNABLE_KEYS → preserved
+ *     untouched (out of tuner scope).
  *
  * Returns the merged entry, or `null` when the entry is empty after merge (the
  * caller then removes the whole `playback["<anim>"]` key so the file stays lean).

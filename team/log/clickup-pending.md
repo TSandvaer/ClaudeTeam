@@ -506,3 +506,10 @@ NEW-TICKET-REQUEST-2026-05-29T18:00:00Z (TS-03): CREATE child of the EPIC in lis
 - OOS: engine semantics (E1); schema/plumbing (E2); cascade (E3).
 - done-when: jsdom interaction tests (slider→preview, slider→correct-json-write); webview-smoke; green CI; Sage sign-off.
 - files: TBD by E4 spec (tuner view + test; host file-write path crosses webview↔host → webview-smoke gate).
+
+## STATUS FLIP — 86ca2wj6u (Maya, 2026-06-02)
+
+Maya has NO ClickUp MCP. Orchestrator: flip ticket `86ca2wj6u` `to do → in progress → in review` (PR #182 open). After merge: `in review → complete`.
+- PR: https://github.com/TSandvaer/ClaudeTeam/pull/182
+- branch: `maya/86ca2wj6u-window-control-impl`
+- Reviewer: Felix.

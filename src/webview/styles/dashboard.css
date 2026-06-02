@@ -2188,6 +2188,44 @@ body {
 .ct-tuner-apex-frame {
   flex: 1 1 auto;
 }
+/* Window control (86ca2wj6u) — dual-handle frame range slider. Two native
+ * single-thumb ranges overlapped on one track (native range is single-thumb).
+ * The track is relative; both inputs are absolutely stacked so the two thumbs
+ * sit on the same line. `pointer-events` is disabled on the track and re-enabled
+ * on each thumb so a click hits the nearest thumb, not the (transparent) track. */
+.ct-tuner-window-track {
+  position: relative;
+  height: 1.4rem;
+}
+.ct-tuner-window-track .ct-tuner-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+}
+/* Only the thumbs are interactive (the overlapped tracks would otherwise eat
+ * each other's clicks). WebKit + Firefox thumb pseudo-elements re-enable it. */
+.ct-tuner-window-track .ct-tuner-slider::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+.ct-tuner-window-track .ct-tuner-slider::-moz-range-thumb {
+  pointer-events: auto;
+}
+.ct-tuner-window-readout {
+  font-variant-numeric: tabular-nums;
+}
+.ct-tuner-window-fullclip,
+.ct-tuner-window-coupling,
+.ct-tuner-window-single-note,
+.ct-tuner-window-apex-note {
+  margin: 0;
+}
+/* All [hidden]-toggled window helpers are inline <p> (UA [hidden]{display:none}
+ * works for block/inline) — no display:flex|grid, so NO explicit guard needed
+ * per the vscode-extension-conventions [hidden]-guard rule. */
 .ct-tuner-radio-group {
   display: flex;
   flex-direction: column;

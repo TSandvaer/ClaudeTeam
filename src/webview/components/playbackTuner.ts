@@ -372,6 +372,34 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
 
   root.appendChild(previewRow);
 
+  // ── Window (86ca2wj6u) ────────────────────────────────────────────────────
+  // Placed FIRST (before Controls, spec §2): the window is STRUCTURAL — it
+  // defines WHICH frames exist for this loop — while Speed/Hold/Mode tune HOW
+  // those frames play. Window-first makes the apex↔window coupling read
+  // top-to-bottom (set the window, THEN the Hold (apex) picker below offers only
+  // in-window frames). The control writes draftOverride.startFrame/endFrame; the
+  // existing previewOverride() + populateApexFrames() already consume them.
+  root.appendChild(sectionDivider("Window"));
+  const windowSlider = buildWindowSlider({
+    onChange: (start, end, isDrag) => onWindowChange(start, end, isDrag),
+    onReset: () => onWindowReset(),
+  });
+  root.appendChild(windowSlider.element);
+  // §3 coupling helper — pre-explains why the apex picker shrinks when a window
+  // narrower than the full clip is active. Visibility tracks windowIsDeclared().
+  const windowCouplingHelp = document.createElement("p");
+  windowCouplingHelp.className = "ct-tuner-help ct-tuner-window-coupling";
+  windowCouplingHelp.textContent =
+    "The Hold (apex) frame picker below offers only frames in this window.";
+  windowCouplingHelp.hidden = true;
+  root.appendChild(windowCouplingHelp);
+
+  // Out-of-window apex note (spec §4.4) — quiet, one-shot per clear.
+  const windowApexNote = document.createElement("p");
+  windowApexNote.className = "ct-tuner-help ct-tuner-window-apex-note";
+  windowApexNote.hidden = true;
+  root.appendChild(windowApexNote);
+
   // ── Controls (§3.2-§3.4) ──────────────────────────────────────────────────
   const controlsDivider = sectionDivider("Controls");
   root.appendChild(controlsDivider);
@@ -701,6 +729,13 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     // (below) still shows the BAKED engine truth (per-char wins), with the
     // shadow-warning explaining when a pose-default edit is masked per-char.
     seedControlsForWriteTarget();
+    // 86ca2wj6u — seed the window thumbs from the cascade-resolved active window
+    // (clamped to the live clip) + refresh the apex-coupling helper. activeWindow()
+    // resolves draft → per-char → pose-default → full clip, so the thumbs reflect
+    // the editable surface. Re-binds the clip length so a window from a longer
+    // clip doesn't dangle on a shorter anim (spec §4.5).
+    seedWindowFromActive();
+    refreshWindowCouplingHelp();
     rebuildPreview();
     renderSourceTable(computeCascadeSource(selectedChar, selectedAnim, manifest));
     refreshPreviewNote();
@@ -777,6 +812,11 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       apexMs.setValue(draftOverride.dwellMs);
     }
     mode.setValue(draftOverride.playbackMode ?? (source.playbackMode.value as PlaybackMode));
+    // 86ca2wj6u — restore the window thumbs from the resolved active window
+    // (activeWindow already reads draftOverride.startFrame/endFrame first) so the
+    // panel looks exactly as the user left it before the poll tick.
+    seedWindowFromActive();
+    refreshWindowCouplingHelp();
     rebuildPreview();
     renderSourceTable(source);
     refreshPreviewNote();
@@ -966,6 +1006,91 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     onControlChange(false);
   }
 
+  /**
+   * 86ca2wj6u — a window thumb settled. Set the draft's startFrame/endFrame
+   * UNLESS the window is the full clip (spec §4.3 omit-on-full-clip: a full-clip
+   * window is the absent-field default, so persisting `0..last` is noise that
+   * would shadow a pose-default window). After updating the draft, re-bound the
+   * apex picker to the new window and auto-clear an apex now outside it (§4.4),
+   * then run the standard control-change (preview re-window + debounced save).
+   */
+  function onWindowChange(start: number, end: number, isDrag: boolean): void {
+    const lastIndex = Math.max(0, frameCount() - 1);
+    if (start <= 0 && end >= lastIndex) {
+      // Dragged back to the full clip → clear both (absent == full clip).
+      draftOverride = omitField(omitField(draftOverride, "startFrame"), "endFrame");
+    } else {
+      draftOverride = { ...draftOverride, startFrame: start, endFrame: end };
+    }
+    rebindApexToWindow();
+    refreshWindowCouplingHelp();
+    onControlChange(isDrag);
+  }
+
+  /**
+   * 86ca2wj6u — [reset] on the Window section clears BOTH window fields so the
+   * window inherits (full clip if no layer declares one), re-seeds the thumbs
+   * from the cascade-resolved window, re-bounds the apex picker, and queues a
+   * save. Mirrors every other control's [reset] (omit → inherit, §4.3).
+   */
+  function onWindowReset(): void {
+    draftOverride = omitField(omitField(draftOverride, "startFrame"), "endFrame");
+    seedWindowFromActive();
+    rebindApexToWindow();
+    refreshWindowCouplingHelp();
+    onControlChange(false);
+  }
+
+  /**
+   * 86ca2wj6u — position the window thumbs at the cascade-resolved active window
+   * (clamped to the live clip) WITHOUT firing onChange. Called on mount, char/
+   * anim switch, write-target flip, and reset. Re-binds the clip length too so a
+   * window from a longer clip doesn't dangle on a shorter anim (spec §4.5).
+   */
+  function seedWindowFromActive(): void {
+    const lastIndex = Math.max(0, frameCount() - 1);
+    const { start, end } = activeWindow();
+    windowSlider.reseed(lastIndex, start, end);
+  }
+
+  /**
+   * 86ca2wj6u — keep the apex picker honest on every window change (spec §4.4).
+   * Re-derive the picker options from the new window. If the current apex
+   * (`dwellFrameIndex`) now falls OUTSIDE [start,end], AUTO-CLEAR it (omit the
+   * pair + show a quiet note) rather than leaving a dangling no-op apex on disk
+   * — a persisted out-of-window apex is a latent footgun (re-fires if the window
+   * later re-widens). `populateApexFrames` already resolves an out-of-window
+   * preferIndex to "Off"; we detect that transition to clear the draft + note.
+   */
+  function rebindApexToWindow(): void {
+    const prevApex = draftOverride.dwellFrameIndex;
+    const { start, end } = activeWindow();
+    const nowOutside =
+      typeof prevApex === "number" && (prevApex < start || prevApex > end);
+    populateApexFrames(prevApex);
+    if (nowOutside) {
+      draftOverride = omitField(
+        omitField(draftOverride, "dwellFrameIndex"),
+        "dwellMs",
+      );
+      windowApexNote.hidden = false;
+      windowApexNote.textContent =
+        `Apex frame ${prevApex} is outside the new window — apex hold cleared.`;
+    } else {
+      windowApexNote.hidden = true;
+      windowApexNote.textContent = "";
+    }
+  }
+
+  /**
+   * 86ca2wj6u — show the apex-coupling helper only when a window narrower than
+   * the full clip is active (spec §3), so the sponsor sees the cause (window)
+   * above the effect (shrunken apex picker) in reading order.
+   */
+  function refreshWindowCouplingHelp(): void {
+    windowCouplingHelp.hidden = !windowIsDeclared();
+  }
+
   /** [reset] on the apex group clears BOTH apex fields + re-seeds from cascade. */
   function onApexReset(): void {
     draftOverride = omitField(
@@ -1106,6 +1231,52 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       formatHold(source.dwellMs.value),
       source.dwellMs.layer,
     );
+    // 86ca2wj6u (spec §5.4): the window is now tunable + cascades like the
+    // others, so surface it in the explain-table. Resolved independently of the
+    // 5 other rows (field-level, per cascadeSource doctrine) — draft is excluded
+    // here exactly like the other rows (the table reflects the BAKED truth).
+    const win = windowSourceRow();
+    addSourceRow(sourceTable, "window", win.text, win.layer);
+  }
+
+  /**
+   * 86ca2wj6u (spec §5.4) — resolve the EFFECTIVE window + its originating layer
+   * for the source table, walking the BAKED cascade (per-char → pose-default →
+   * full clip = engine default). Excludes the draft (the table reflects baked
+   * truth, mirroring computeCascadeSource). Returns a readout like `5 – 10` or
+   * `full clip` and the layer tag.
+   */
+  function windowSourceRow(): { text: string; layer: CascadeLayer } {
+    const count = frameCount();
+    const lastIndex = Math.max(0, count - 1);
+    const baked =
+      manifest.characters[selectedChar]?.animations?.[selectedAnim]?.playback;
+    const poseDefault = manifest.poseDefaults?.[selectedAnim];
+    const declaredPerChar =
+      baked?.startFrame !== undefined || baked?.endFrame !== undefined;
+    const declaredPose =
+      poseDefault?.startFrame !== undefined ||
+      poseDefault?.endFrame !== undefined;
+    const layer: CascadeLayer = declaredPerChar
+      ? "per-char"
+      : declaredPose
+        ? "pose-default"
+        : "engine default";
+    const clamp = (v: number): number =>
+      Math.max(0, Math.min(lastIndex, Math.trunc(v)));
+    const resolve = (
+      field: "startFrame" | "endFrame",
+      fallback: number,
+    ): number => clamp(baked?.[field] ?? poseDefault?.[field] ?? fallback);
+    let start = resolve("startFrame", 0);
+    let end = resolve("endFrame", lastIndex);
+    if (start > end) {
+      start = 0;
+      end = lastIndex;
+    }
+    const isFullClip =
+      layer === "engine default" || (start <= 0 && end >= lastIndex);
+    return { text: isFullClip ? "full clip" : `${start} – ${end}`, layer };
   }
 
   /**
@@ -1271,7 +1442,9 @@ function omitField(
     | "finalDwellMs"
     | "playbackMode"
     | "dwellFrameIndex"
-    | "dwellMs",
+    | "dwellMs"
+    | "startFrame"
+    | "endFrame",
 ): PlaybackOverride {
   const copy: PlaybackOverride = { ...o };
   delete copy[key];
@@ -1417,6 +1590,176 @@ function buildSlider(props: SliderProps): SliderHandle {
 
 function clampNum(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
+}
+
+// =============================================================================
+// Dual-handle frame range slider (86ca2wj6u — the "Window" control).
+// =============================================================================
+
+interface WindowSliderProps {
+  /**
+   * Fired whenever EITHER thumb settles on a new value (clamped so start ≤ end).
+   * `isDrag` true → continuous slider input (preview-debounce); false → discrete.
+   */
+  onChange: (start: number, end: number, isDrag: boolean) => void;
+  /** Fired when the [reset] link is clicked (clears the window → full clip). */
+  onReset: () => void;
+}
+
+interface WindowSliderHandle {
+  element: HTMLElement;
+  /**
+   * Re-bind the slider to a new clip length + set both thumbs WITHOUT firing
+   * `onChange` (programmatic seed on char/anim switch + reset). `lastIndex` is
+   * the clip's last frame (max thumb value); the bounds helper shows `0–N`.
+   */
+  reseed(lastIndex: number, start: number, end: number): void;
+  /** Update the single-frame note visibility WITHOUT a reseed. */
+  refreshNote(start: number, end: number): void;
+}
+
+/**
+ * A two-thumb frame range slider built from two overlapped native
+ * `input[type=range]` (native range is single-thumb only — spec §1 tradeoff).
+ * The left thumb is `startFrame`, the right thumb is `endFrame`; the thumbs are
+ * COUPLED so start can never pass end (spec §4.1 — inverted window prevented at
+ * the UI). Both thumbs span `0 … lastIndex`; an out-of-range value is unreachable.
+ *
+ * The control reports values via `onChange(start, end, isDrag)`. The caller owns
+ * the omit-on-full-clip decision (spec §4.3) and the apex re-bound (spec §4.4).
+ */
+function buildWindowSlider(props: WindowSliderProps): WindowSliderHandle {
+  const row = document.createElement("div");
+  row.className = "ct-tuner-control ct-tuner-window";
+
+  // Label row: caption "Frames" + the start–end readout + [reset].
+  const labelRow = document.createElement("div");
+  labelRow.className = "ct-tuner-control-labelrow";
+  const caption = document.createElement("span");
+  caption.className = "ct-tuner-control-caption";
+  caption.textContent = "Frames";
+  labelRow.appendChild(caption);
+  const readout = document.createElement("span");
+  readout.className = "ct-tuner-control-readout ct-tuner-window-readout";
+  labelRow.appendChild(readout);
+  const resetBtn = document.createElement("button");
+  resetBtn.type = "button";
+  resetBtn.className = "ct-tuner-reset ct-tuner-window-reset";
+  resetBtn.textContent = "reset";
+  resetBtn.setAttribute("aria-label", "Reset to full clip");
+  resetBtn.addEventListener("click", () => props.onReset());
+  labelRow.appendChild(resetBtn);
+  row.appendChild(labelRow);
+
+  // The two overlapped range inputs share a track wrapper.
+  const track = document.createElement("div");
+  track.className = "ct-tuner-window-track";
+
+  const startInput = document.createElement("input");
+  startInput.type = "range";
+  startInput.className = "ct-tuner-slider ct-tuner-window-start";
+  startInput.setAttribute("aria-label", "Window start frame");
+
+  const endInput = document.createElement("input");
+  endInput.type = "range";
+  endInput.className = "ct-tuner-slider ct-tuner-window-end";
+  endInput.setAttribute("aria-label", "Window end frame");
+
+  track.appendChild(startInput);
+  track.appendChild(endInput);
+  row.appendChild(track);
+
+  // Bounds + helper text (full-clip range + the coupling/single-frame notes).
+  const bounds = document.createElement("div");
+  bounds.className = "ct-tuner-bounds ct-tuner-window-bounds";
+  const minB = document.createElement("span");
+  minB.textContent = "0";
+  const maxB = document.createElement("span");
+  maxB.className = "ct-tuner-window-max";
+  bounds.appendChild(minB);
+  bounds.appendChild(maxB);
+  row.appendChild(bounds);
+
+  const fullClip = document.createElement("p");
+  fullClip.className = "ct-tuner-help ct-tuner-window-fullclip";
+  row.appendChild(fullClip);
+
+  const help = document.createElement("p");
+  help.className = "ct-tuner-help";
+  help.textContent =
+    "Trim the loop to a slice of the clip. Frames before the start and after the end are skipped.";
+  row.appendChild(help);
+
+  // Single-frame note (spec §4.2) — quiet, shown only when start == end.
+  const singleNote = document.createElement("p");
+  singleNote.className = "ct-tuner-help ct-tuner-window-single-note";
+  singleNote.hidden = true;
+  row.appendChild(singleNote);
+
+  let lastIndex = 0;
+
+  const applyReadout = (start: number, end: number): void => {
+    readout.textContent = `${start} – ${end}`;
+    startInput.setAttribute("aria-valuetext", `frame ${start}`);
+    endInput.setAttribute("aria-valuetext", `frame ${end}`);
+    refreshNote(start, end);
+  };
+
+  function refreshNote(start: number, end: number): void {
+    if (start === end) {
+      singleNote.hidden = false;
+      singleNote.textContent =
+        `Single-frame window — the loop holds on frame ${start} (timing/mode have no visible effect).`;
+    } else {
+      singleNote.hidden = true;
+      singleNote.textContent = "";
+    }
+  }
+
+  // Coupling: clamp the moved thumb against its sibling, then report.
+  const onStartInput = (): void => {
+    let start = Number(startInput.value);
+    const end = Number(endInput.value);
+    if (start > end) {
+      start = end;
+      startInput.value = String(start);
+    }
+    applyReadout(start, end);
+    props.onChange(start, end, true);
+  };
+  const onEndInput = (): void => {
+    const start = Number(startInput.value);
+    let end = Number(endInput.value);
+    if (end < start) {
+      end = start;
+      endInput.value = String(end);
+    }
+    applyReadout(start, end);
+    props.onChange(start, end, true);
+  };
+  startInput.addEventListener("input", onStartInput);
+  endInput.addEventListener("input", onEndInput);
+
+  return {
+    element: row,
+    reseed(nextLastIndex, start, end): void {
+      lastIndex = Math.max(0, nextLastIndex);
+      const s = clampNum(Math.trunc(start), 0, lastIndex);
+      const e = clampNum(Math.trunc(end), s, lastIndex);
+      startInput.min = "0";
+      startInput.max = String(lastIndex);
+      startInput.step = "1";
+      endInput.min = "0";
+      endInput.max = String(lastIndex);
+      endInput.step = "1";
+      startInput.value = String(s);
+      endInput.value = String(e);
+      maxB.textContent = String(lastIndex);
+      fullClip.textContent = `Full clip: 0–${lastIndex}`;
+      applyReadout(s, e);
+    },
+    refreshNote,
+  };
 }
 
 interface ModeHandle {
