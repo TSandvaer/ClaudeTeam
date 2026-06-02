@@ -668,28 +668,20 @@ describe("§3.7 — shadowing warning", () => {
     expect(q<HTMLElement>(root, ".ct-tuner-shadow-warning").hidden).toBe(true);
   });
 
-  // 86ca2cg8a gap #4 (DECISION: test-only, current-behavior pin — see PR body).
-  // `refreshShadowWarning` (playbackTuner.ts:1184-1203) builds its `shadowed`
-  // list from ONLY speed / hold / mode — it does NOT inspect the apex pair
-  // (dwellFrameIndex / dwellMs). So when a (char, anim)'s ONLY per-char-shadowed
-  // field is the apex pair (speed/hold/mode all inherit pose-default / engine),
-  // flipping the write target to pose-default surfaces NO warning, even though
-  // the pose-default apex the sponsor sets WON'T show for this character (the
-  // per-char apex still wins in the engine).
+  // 86ca2x6q1 — apex shadowing IS now surfaced (flips the 86ca2cg8a gap #4 pin).
+  // `refreshShadowWarning` (playbackTuner.ts) now inspects the apex pair
+  // (dwellFrameIndex / dwellMs) alongside speed / hold / mode. So when a
+  // (char, anim)'s ONLY per-char-shadowed field is the apex pair (speed/hold/mode
+  // all inherit pose-default / engine), flipping the write target to pose-default
+  // surfaces the warning AND names the apex field(s) — the pose-default apex the
+  // sponsor sets WON'T show for this character (the per-char apex still wins).
   //
-  // This is a PRODUCTION-behavior gap, not a test gap: surfacing apex shadowing
-  // would require adding the two apex fields to the `shadowed` checks + the
-  // warning copy — a UI change OWNED BY MAYA, out of this test-authoring scope.
-  // The assertion below PINS the current (apex-omitted) behavior so a future
-  // production change is deliberate: when Maya adds apex to the warning, THIS
-  // test must be updated to expect the warning to fire (it will then fail loud,
-  // flagging the intended behavior flip rather than letting it slip silently).
-  //
-  // NON-VACUITY: this is a behavior-PIN, not a fix-probe — it asserts what the
-  // code does TODAY. It would change outcome only when the production omission
-  // is corrected (the gap #4 follow-up), which is exactly when we want to be
-  // forced to revisit it.
-  it("does NOT warn when only the apex pair is per-char-shadowed (gap #4 — current behavior, flagged for Maya)", () => {
+  // NON-VACUITY (revert-probe): stripping the apex-surface change from
+  // refreshShadowWarning (the two `source.dwell*.layer === "per-char"` pushes)
+  // leaves `shadowed` EMPTY for this fixture — speed/hold/mode are not per-char —
+  // so the warning stays hidden and BOTH assertions below fail. The test only
+  // passes when the apex fields are actually inspected + named.
+  it("warns and names the apex field(s) when only the apex pair is per-char-shadowed (86ca2x6q1)", () => {
     // M01/idle_apex bakes a per-char APEX pair only; speed/hold/mode inherit the
     // pose-default (mode/hold) or engine (speed) — so apex is the ONLY per-char
     // field that a pose-default write would shadow.
@@ -729,10 +721,10 @@ describe("§3.7 — shadowing warning", () => {
     allChars.dispatchEvent(new Event("change"));
 
     const warn = q<HTMLElement>(root, ".ct-tuner-shadow-warning");
-    // CURRENT behavior: speed/hold/mode are NOT per-char here, and apex is not
-    // inspected → no fields land in `shadowed` → the warning stays hidden,
-    // despite the per-char apex actually shadowing a pose-default apex write.
-    expect(warn.hidden).toBe(true);
+    // The per-char apex now lands in `shadowed` → the warning fires and names
+    // the apex field(s), exactly like speed/hold/mode do.
+    expect(warn.hidden).toBe(false);
+    expect(warn.textContent).toContain("apex");
   });
 });
 
