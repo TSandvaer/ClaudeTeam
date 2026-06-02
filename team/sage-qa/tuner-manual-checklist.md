@@ -101,3 +101,72 @@ Build first: `npm run build` (or `npm run dev:install`) then `Ctrl+Shift+P` →
 23. Pick a char/anim that has a per-char override, switch write target to
     "All characters". **Expect:** the ⚠ shadow warning appears naming the shadowed
     field(s). Switch back to "This character". **Expect:** warning disappears.
+
+---
+
+# Dashboard-tile sprite PLAYBACK — manual reload checklist (sweep 86ca3bm87)
+
+These cover the **dashboard tile sprites themselves** (NOT the tuner panel) —
+the re-render-resume / idle-advance behavior that produced the 5-bug cluster
+(speed-cap #172, apex-window #173, manifest-staleness #174, hold-final-on-active
+86ca2apxn, idle-freeze-under-poll #179). The jsdom Layer-2.5 harness asserts the
+read→thread→write-back resume WIRING and the engine math, but it cannot judge the
+on-screen MOTION across real `performance.now()` time. Run these against a fresh
+`npm run dev:install` + `Developer: Reload Window` (NOT bare `npm run build` —
+that does not reinstall the running extension; see vscode-extension-conventions
+§ Install workflow). Watch real persona tiles on the dashboard while a team runs.
+
+> Why a live build matters here: the sprite box's on-screen clock reads
+> `performance.now()` in production (the tile does not forward an injectable
+> clock), so the freeze-under-poll behavior (#179) is only observable on a real
+> reload over real time — the headless test covers the wiring, your eyes cover
+> the motion.
+
+## P. Idle pose advances (does NOT freeze) — #179 regression
+
+P1. Let several rostered members go **idle** (no active sub-agents) and watch each
+    tile for ~15 s. **Expect:** every idle sprite visibly CYCLES through its frames
+    (raise/lower, cup to mouth, etc.) — NONE freezes on a single frame. The freeze
+    bug re-rolled which tiles were affected each reload, so reload 2-3× and re-watch
+    a different idle pick each time.
+P2. While idle sprites are mid-cycle, trigger a burst of dashboard activity (start /
+    stop a sub-agent elsewhere) so the **out-of-band file-event poll** fires faster
+    than the ~2s scheduled tick. **Expect:** the idle sprites keep advancing — they
+    do NOT stick on whatever frame the fast re-render landed on (the exact #179
+    repro: poll cadence shorter than the slow 320ms frame hold).
+
+## Q. Dwell feel — peak + final holds read as deliberate, not janky
+
+Q3. Watch a **coffee / snack** idle pose (apex = cup/hand at mouth, frame 4).
+    **Expect:** a clear PAUSE at the apex (cup-at-mouth held ~0.6s+) then it
+    continues — the hold should read as a deliberate beat, not a stutter or a skip.
+Q4. Watch the **M01 idle_stretch** (windowed pingpong [5,10], 800ms apex hold).
+    **Expect:** RAISE → HOLD at the top → LOWER → settle, as ONE continuous motion.
+    It must NOT snap back to the rest frame mid-raise, and must NOT skip the lower
+    (the 86ca2c4t8 + 86ca2apxn symptoms). The full raise+hold+lower spans more than
+    one ~2s poll, so confirm it completes across re-renders.
+Q5. Watch any tile transition **idle → running → idle**. **Expect:** while running,
+    the pose loops at a uniform cadence with NO final-frame dwell (continuous typing/
+    reading feel); the dwell only appears on idle poses (hold-final-on-active fix).
+
+## R. Idle-episode stickiness + char-switch persistence
+
+R6. Watch one idle tile across several poll ticks (~10 s). **Expect:** it keeps the
+    SAME idle pose for the whole idle episode — it does NOT re-roll coffee→snack→
+    phone every 2 s. A new pick is only allowed after a running stint (fresh episode).
+R7. If the Manage Team character picker is in play: assign a member a DIFFERENT
+    character, Save, and let the dashboard re-render. **Expect:** the tile's sprite
+    switches to the new character and KEEPS animating (no freeze, no broken image);
+    the new pose cycles normally.
+R8. Toggle OS / VS Code **reduced-motion** ON. **Expect:** every sprite shows a
+    single static frame (frame 0), no motion. Toggle OFF + reload. **Expect:** motion
+    resumes.
+
+## S. Manifest-staleness (#174) — saved tuning shows on the TILE after rebuild
+
+S9. Tune an animation in the tuner, Save, then `npm run dev:install` + reload.
+    **Expect:** the dashboard TILE for that character now plays the tuned values
+    (speed / dwell / window). The banner always says a rebuild is needed — confirm
+    the tile changes only AFTER the dev:install, never reverts to baked on a later
+    poll tick. (Bare `npm run build` + reload keeps the OLD install — see the note
+    above; that is NOT a bug, it is the wrong reinstall path.)
