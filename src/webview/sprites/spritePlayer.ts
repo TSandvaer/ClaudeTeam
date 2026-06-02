@@ -236,6 +236,13 @@ export interface SpriteBoxProps {
   /** Clear a scheduled frame — defaults to window.clearTimeout. */
   cancelFrame?: (handle: number) => void;
   /**
+   * Monotonic clock (ms) for measuring how long the displayed frame has been on
+   * screen (86ca3a7x3 freeze fix). Defaults to `performance.now()` (falling back
+   * to `Date.now()`). Tests inject a virtual clock so the elapsed-on-screen time
+   * is deterministic and decoupled from real wall time.
+   */
+  nowMs?: () => number;
+  /**
    * Override the per-character playback table (tests only). Defaults to the
    * baked-in PLAYBACK_OVERRIDES. Lets a test drive a generic pingpong / window
    * without depending on the shipped idle_stretch seed.
@@ -266,6 +273,24 @@ export interface SpriteBoxProps {
   /** Prior advance direction (+1 / -1) for pingpong resume. See `priorFrameIdx`. */
   priorDirection?: number;
   /**
+   * Wall-clock ms the resumed frame had ALREADY been on screen in the prior box
+   * (now − the time the prior box last painted the displayed frame). 86ca3a7x3
+   * freeze fix: the resuming box re-shows the frame but CARRIES this value
+   * forward — it back-dates the new box's frame clock and shortens the frame's
+   * remaining hold by the already-served time. So the on-screen time ACCUMULATES
+   * across the poll re-render instead of resetting to 0. Without it, when the
+   * re-render cadence is shorter than the frame's hold (fast out-of-band
+   * file-event ticks, or a long peak/final dwell that exceeds the ~2s poll) each
+   * fresh box's timer never fires before the next disposal → the frame is
+   * re-shown forever (frozen). With it, the remaining hold shrinks each
+   * re-render until the timer fires and the loop advances normally — while a
+   * frame's full configured dwell is still respected (just spread across the
+   * re-renders it takes to elapse). Absent → 0 (the frame's clock starts fresh —
+   * the first-render / pose-change default). Only consulted when the resume
+   * actually fires (pose match + finite index).
+   */
+  priorElapsedMs?: number;
+  /**
    * The canonical pose name the prior render was playing. Resume only fires when
    * it equals the pose this render resolves to (same window math). See
    * `priorFrameIdx`.
@@ -293,8 +318,17 @@ export interface SpriteBoxHandle {
    * direction the loop is heading. Read at re-render time so the next box
    * resumes the in-flight cycle instead of restarting at `winStart`. For a
    * disposed/static box this is the frame it stopped on. (E1 fix 86ca2c4t8.)
+   *
+   * `elapsedMs` (86ca3a7x3) — wall-clock ms the displayed frame has been on
+   * screen (now − the time `tick()` last painted it). The resuming box steps
+   * PAST the frame when this is `>= frameMs` (it got its full base hold), which
+   * guarantees forward progress per re-render even when this box was disposed
+   * before its own frame timer fired (fast out-of-band re-render cadence — the
+   * freeze). When `< frameMs` the frame was interrupted before completing its
+   * base hold, so the resuming box re-shows it + re-arms its dwell (preserves
+   * the 86ca2apxn #1 mid-dwell fix).
    */
-  currentFrame(): { frameIdx: number; direction: number };
+  currentFrame(): { frameIdx: number; direction: number; elapsedMs: number };
 }
 
 function prefersReducedMotion(override?: boolean): boolean {
@@ -328,6 +362,8 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     priorFrameIdx,
     priorDirection,
     priorPose,
+    priorElapsedMs,
+    nowMs,
   } = props;
 
   // ── Pose selection (AC2) ────────────────────────────────────────────────
@@ -370,7 +406,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       idlePick,
       isActive,
       pose: canonicalName,
-      currentFrame: () => ({ frameIdx: 0, direction: 1 }),
+      currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
     };
   }
 
@@ -389,7 +425,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       idlePick,
       isActive,
       pose: canonicalName,
-      currentFrame: () => ({ frameIdx: 0, direction: 1 }),
+      currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
     };
   }
 
@@ -443,6 +479,11 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // Advance direction (+1 forward / -1 reverse). Only meaningful in pingpong
   // mode; loop mode never sets it to -1 so the advance stays historic.
   let direction = 1;
+  // On-screen time the RESUMED frame had already accrued in the prior box when
+  // it was re-shown without stepping past (elapsed < frameMs). Back-dates the
+  // first tick's `shownAtMs` so accumulated on-screen time survives the box
+  // swap and a sub-frame re-render cadence still eventually advances (86ca3a7x3).
+  let carryElapsedMs = 0;
 
   // ── Playback-position RESUME across re-renders (E1 live-preview fix
   // 86ca2c4t8) ────────────────────────────────────────────────────────────
@@ -468,6 +509,27 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     if (priorDirection === -1 || priorDirection === 1) {
       direction = priorDirection;
     }
+    // 86ca3a7x3 — the "frozen on one frame" fix. The prior box reports how long
+    // its displayed frame had been ON SCREEN (`priorElapsedMs`). The resuming
+    // box re-shows that frame (preserving the 86ca2apxn #1 mid-dwell hold) but
+    // CARRIES FORWARD the already-served on-screen time as `carryElapsedMs`. The
+    // first tick then (a) back-dates `shownAtMs` so the measured on-screen time
+    // keeps ACCUMULATING across the box swap, and (b) shortens the scheduled
+    // hold by the already-served time. That is what kills the freeze: when the
+    // re-render cadence is SHORTER than the frame's hold (fast out-of-band
+    // file-event ticks, or a long peak/final dwell that exceeds the ~2s poll),
+    // the prior box is disposed before its OWN timer fires — so WITHOUT the
+    // carry every fresh box resets the clock to 0, the remaining hold never
+    // shrinks, and the timer never fires before the next disposal → the frame
+    // is re-shown forever (frozen). With the carry, the remaining hold shrinks
+    // by the elapsed each re-render, so after enough accumulated on-screen time
+    // the timer fires and `tick()` advances normally — for ANY pose the tile
+    // lands on (the bug is per-POSE, not per-character) — while a frame's full
+    // configured dwell (peak/final) is still respected, just spread across the
+    // re-renders it takes to elapse.
+    const elapsed =
+      typeof priorElapsedMs === "number" && priorElapsedMs >= 0 ? priorElapsedMs : 0;
+    carryElapsedMs = elapsed;
   }
 
   let handle: number | null = null;
@@ -487,6 +549,18 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // the same frame and re-applies its dwell, continuing the cycle without a skip.
   let shownIdx = frameIdx;
   let shownDirection = direction;
+  // Monotonic clock — wall-clock ms reader used to measure how long the
+  // currently-displayed frame has been on screen (86ca3a7x3). `currentFrame()`
+  // reports `now − shownAtMs` so the NEXT box can step past a frame that already
+  // got its full base hold, independent of whether this box's frame timer ever
+  // fired (the freeze the prior fired-timer-only signal could not catch).
+  const clock: () => number =
+    nowMs ??
+    (typeof performance !== "undefined" && typeof performance.now === "function"
+      ? () => performance.now()
+      : () => Date.now());
+  // Wall-clock ms when `tick()` last painted the displayed frame.
+  let shownAtMs = clock();
 
   // Guard the peak (apex) index. It must be a real, REACHABLE frame: a finite
   // number inside the ACTIVE WINDOW [winStart, winEnd] — NOT merely inside the
@@ -502,15 +576,29 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   const peakIsValid =
     typeof peakIndex === "number" && peakIndex >= winStart && peakIndex <= winEnd;
 
+  // True only for the synchronous construction tick (the box's first paint).
+  // The first paint may RESUME a frame the prior box re-showed without finishing
+  // its base hold — `carryElapsedMs` is the time already accrued, applied once
+  // here to (a) back-date `shownAtMs` so `currentFrame().elapsedMs` keeps
+  // accumulating across the box swap and (b) shorten the scheduled hold by the
+  // already-served time so the total on-screen duration is unchanged (86ca3a7x3).
+  let firstTick = true;
+
   const tick = (): void => {
     if (disposed) return;
     img.src = frameUris[frameIdx];
     // Capture the displayed position BEFORE the endpoint flip / advance below so
     // `currentFrame()` reports the frame actually on screen (+ the direction it
-    // was travelling when rendered), not the next one.
+    // was travelling when rendered), not the next one. Stamp the paint time so
+    // a resuming box can tell how long this frame has been shown (86ca3a7x3).
+    // On the first paint, back-date by any carried-over elapsed so accumulated
+    // on-screen time survives the box swap.
     shownIdx = frameIdx;
     shownDirection = direction;
-    // Base per-frame duration (speed-scaled).
+    const carry = firstTick ? carryElapsedMs : 0;
+    shownAtMs = clock() - carry;
+    // Base per-frame duration (speed-scaled), minus any already-served time on
+    // a resumed-and-re-shown frame so the TOTAL hold is unchanged.
     let ms = frameMs;
     // Final-frame idle dwell before turnaround/wrap (idle poses only — active
     // poses loop at uniform cadence so typing/reading feels continuous). Fires
@@ -525,6 +613,14 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     if (peakIsValid && frameIdx === peakIndex) {
       ms += peakDwellMs;
     }
+    // Subtract already-served time on a resumed-and-re-shown frame so the TOTAL
+    // hold (across the box swap) equals the configured frameMs+dwell, then floor
+    // at a minimal positive delay so the timer still fires (86ca3a7x3). Only the
+    // first paint can carry; later ticks have carry === 0.
+    if (carry > 0) {
+      ms = Math.max(1, ms - carry);
+    }
+    firstTick = false;
     // Advance to the next frame WITHIN the window.
     if (isPingpong && winEnd > winStart) {
       // Reverse direction AT each window endpoint (naive endpoint-hold: winStart
@@ -551,7 +647,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       idlePick,
       isActive,
       pose: canonicalName,
-      currentFrame: () => ({ frameIdx: 0, direction: 1 }),
+      currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
     };
   }
 
@@ -574,7 +670,14 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     // frame and re-runs the SAME dwell+advance logic, so a frame interrupted
     // mid-dwell by a poll re-render finishes its hold instead of being skipped
     // (86ca2apxn #1). Live — reads the current value whenever the next render
-    // asks for it.
-    currentFrame: () => ({ frameIdx: shownIdx, direction: shownDirection }),
+    // asks for it. `elapsedMs` tells the next box how long the displayed frame
+    // has been on screen: ≥ frameMs ⇒ it got its base hold ⇒ STEP PAST it (kills
+    // the freeze regardless of timer firing); < frameMs ⇒ re-show + re-arm its
+    // dwell so an interrupted hold finishes — 86ca3a7x3 freeze fix.
+    currentFrame: () => ({
+      frameIdx: shownIdx,
+      direction: shownDirection,
+      elapsedMs: Math.max(0, clock() - shownAtMs),
+    }),
   };
 }

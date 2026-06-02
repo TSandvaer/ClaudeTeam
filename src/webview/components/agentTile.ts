@@ -291,6 +291,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
                     priorPose: pp.pose,
                     priorFrameIdx: pp.frameIdx,
                     priorDirection: pp.direction,
+                    priorElapsedMs: pp.elapsedMs,
                   }
                 : {}),
             };

@@ -294,6 +294,7 @@ export function renderMultiAgentPersonaTile(
                     priorPose: pp.pose,
                     priorFrameIdx: pp.frameIdx,
                     priorDirection: pp.direction,
+                    priorElapsedMs: pp.elapsedMs,
                   }
                 : {}),
             };
