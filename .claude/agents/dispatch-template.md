@@ -110,6 +110,8 @@ Include this verbatim as the final action of every dispatch brief, alongside the
 
 Every dispatched agent inherits project `CLAUDE.md` rule 10 "Never fabricate, never guess, never extrapolate" — this section enumerates concrete sourcing commands so agents don't have to look them up. Orchestrators do NOT need to paste this inline into briefs; agents read it as part of the dispatch-template preload.
 
+**Hard pre-write rule (the most-violated one — strengthened 2026-05-31).** Before writing ANY concrete value (SHA, ticket ID, PR#, branch name, file:line, URL, run-id, test count, path) into a PR body / comment / commit / report / code, it MUST come from a command run THIS task — never from memory, a sibling's pattern, or "it looks right." This rule now also lives in EACH persona's standing system prompt (`felix.md` / `maya.md` / `sage.md` / `nora.md` / `iris.md` / `bram.md` § Anti-fabrication), so it applies even when this template isn't pasted into the brief. Inventing a value and writing it as fact — or inventing an instruction and acting on it ("confabulation") — is the same failure as fabricating a URL. (Multiple agents hit this on 2026-05-31: invented SHAs in PR comments, fabricated ticket IDs before the create-API returned them. The guard is the persona-file block + this paragraph.)
+
 **Concrete values that must be fetched, not invented:**
 
 - **PR URLs:** `gh pr view <num> --json url -q .url`, or capture the URL printed by `gh pr create` at creation.
