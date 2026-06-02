@@ -207,6 +207,24 @@ GitHub Actions runs Layer 1 + Layer 2 on every push. Layer 3 runs on PRs targeti
 
 The orchestrator admin-merges with `gh pr merge --admin --squash --delete-branch`.
 
+### `.mjs` build-script exports and the `.d.mts` shadow rule
+
+`allowJs` is **off** in `tsconfig.json`. So `npm run typecheck` (full-project `tsc --noEmit`, the CI gate) resolves an import of a `.mjs` build script through its hand-written sibling `.d.mts` declaration file (e.g. `scripts/build-sprite-manifest.d.mts`) — NOT the `.mjs` source. Vitest runs the real `.mjs` at runtime, so `npm test` stays green even when the `.d.mts` is stale. **Local `npm test` GREEN does NOT imply CI typecheck GREEN.**
+
+**Rule:** any new export added to a `.mjs` build script (e.g. `scripts/build-sprite-manifest.mjs`) that is imported from a `.ts`/`.test.ts` file MUST also be declared — with its exact return shape — in the sibling `.d.mts`. Omitting it produces, only under `typecheck`:
+
+- `TS2305` — Module has no exported member `<name>`
+- `TS7006` — Parameter `<x>` implicitly has an `any` type (cascade: the unresolved import leaves derived values untyped)
+
+**Verify before pushing** with the CI command, not the test runner:
+
+```
+npm run typecheck   # mirrors CI's tsc --noEmit — catches this class
+# NOT npm test      # vitest passes even when the .d.mts is wrong
+```
+
+**Precedent:** E3 PR #162 — `buildPoseDefaults` added to `build-sprite-manifest.mjs` without updating the `.d.mts`; CI run 26734265312 failed `buildSpriteManifest.test.ts(26,3)` TS2305 + `(225,27)` TS7006; fixed by declaring the return shape `{ poseDefaults; warnings: string[] }` in `scripts/build-sprite-manifest.d.mts`; green on run 26734342532 / commit `873d2e4`.
+
 ## Test fixtures
 
 `tests/fixtures/` contains captured real-world data:
