@@ -1191,6 +1191,11 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     if (source.speedMultiplier.layer === "per-char") shadowed.push("speed");
     if (source.finalDwellMs.layer === "per-char") shadowed.push("hold");
     if (source.playbackMode.layer === "per-char") shadowed.push("mode");
+    // 86ca2x6q1 — apex pair (dwellFrameIndex/dwellMs) is shadowable like the
+    // others: a per-char apex hold overriding a pose-default write won't show
+    // for this character, so name it the same way (source-table labels).
+    if (source.dwellFrameIndex.layer === "per-char") shadowed.push("apex frame");
+    if (source.dwellMs.layer === "per-char") shadowed.push("apex hold");
     if (shadowed.length === 0) {
       shadowWarn.hidden = true;
       shadowWarn.textContent = "";
