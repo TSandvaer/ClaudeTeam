@@ -32,7 +32,7 @@ interface SpriteEntry {
   /** Canonical pose the prior box played (for resume pose-match guard). */
   pose: string;
   /** Reads the prior box's live playback position at re-render time. */
-  currentFrame: () => { frameIdx: number; direction: number };
+  currentFrame: () => { frameIdx: number; direction: number; elapsedMs: number };
 }
 
 /**
@@ -45,6 +45,13 @@ export interface PriorPlayback {
   pose: string;
   frameIdx: number;
   direction: number;
+  /**
+   * Wall-clock ms the prior box's displayed frame had already been on screen,
+   * read at re-render time. Threaded so the next box can step PAST a frame that
+   * already got its full base hold (≥ frameMs) instead of re-showing it forever
+   * — the 86ca3a7x3 freeze fix. See spritePlayer `SpriteBoxHandle.currentFrame`.
+   */
+  elapsedMs: number;
 }
 
 export interface SpriteTracker {
@@ -71,7 +78,7 @@ export interface SpriteTracker {
       isActive: boolean;
       dispose: () => void;
       pose: string;
-      currentFrame: () => { frameIdx: number; direction: number };
+      currentFrame: () => { frameIdx: number; direction: number; elapsedMs: number };
     },
   ): void;
   /**
@@ -99,8 +106,8 @@ export function createSpriteTracker(): SpriteTracker {
     priorPlayback(sessionId, memberId) {
       const e = entries.get(`${sessionId}:${memberId}`);
       if (!e) return undefined;
-      const { frameIdx, direction } = e.currentFrame();
-      return { pose: e.pose, frameIdx, direction };
+      const { frameIdx, direction, elapsedMs } = e.currentFrame();
+      return { pose: e.pose, frameIdx, direction, elapsedMs };
     },
     register(sessionId, memberId, entry) {
       const key: SpriteKey = `${sessionId}:${memberId}`;

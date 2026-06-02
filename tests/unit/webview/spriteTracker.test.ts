@@ -16,6 +16,7 @@ function entry(over: {
   pose?: string;
   frameIdx?: number;
   direction?: number;
+  elapsedMs?: number;
 }) {
   return {
     idlePick: over.idlePick ?? null,
@@ -25,6 +26,7 @@ function entry(over: {
     currentFrame: () => ({
       frameIdx: over.frameIdx ?? 0,
       direction: over.direction ?? 1,
+      elapsedMs: over.elapsedMs ?? 0,
     }),
   };
 }
@@ -74,10 +76,15 @@ describe("spriteTracker", () => {
     t.register(
       "s1",
       "felix",
-      entry({ pose: "idle_stretch", frameIdx: 8, direction: -1 }),
+      entry({ pose: "idle_stretch", frameIdx: 8, direction: -1, elapsedMs: 120 }),
     );
     const pp = t.priorPlayback("s1", "felix");
-    expect(pp).toEqual({ pose: "idle_stretch", frameIdx: 8, direction: -1 });
+    expect(pp).toEqual({
+      pose: "idle_stretch",
+      frameIdx: 8,
+      direction: -1,
+      elapsedMs: 120,
+    });
   });
 
   it("priorPlayback reads currentFrame LIVE (not a snapshot taken at register time)", () => {
@@ -90,7 +97,7 @@ describe("spriteTracker", () => {
       isActive: false,
       dispose: () => undefined,
       pose: "idle_stretch",
-      currentFrame: () => ({ frameIdx: live, direction: 1 }),
+      currentFrame: () => ({ frameIdx: live, direction: 1, elapsedMs: 0 }),
     });
     expect(t.priorPlayback("s1", "felix")?.frameIdx).toBe(5);
     live = 9; // the loop advanced
