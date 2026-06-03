@@ -15,6 +15,8 @@
 import { describe, it, expect } from "vitest";
 import {
   spriteForMember,
+  sceneForId,
+  defaultScene,
   MEMBER_SPRITE_BINDING,
   type GeneratedSpriteManifest,
 } from "../../../src/webview/sprites/spriteManifest.js";
@@ -146,4 +148,65 @@ describe("read-at-screen wiring (regenerated manifest) — AC4 + AC5", () => {
       expect(book.frames.length).toBeGreaterThan(0);
     },
   );
+});
+
+describe("scene-bg accessors — sceneForId / defaultScene (86ca3kjyk)", () => {
+  const sceneManifest: GeneratedSpriteManifest = {
+    characters: {},
+    scenes: {
+      defaultSceneId: "room3",
+      byId: {
+        room3: { id: "room3", image: "sprites/scenes/room3.png" },
+        studio: { id: "studio", image: "sprites/scenes/studio.png" },
+      },
+    },
+  };
+
+  it("sceneForId resolves a known scene by id", () => {
+    expect(sceneForId("room3", sceneManifest)).toEqual({
+      id: "room3",
+      image: "sprites/scenes/room3.png",
+    });
+    expect(sceneForId("studio", sceneManifest)).toEqual({
+      id: "studio",
+      image: "sprites/scenes/studio.png",
+    });
+  });
+
+  it("sceneForId returns null for an unknown id (degrade → flat card)", () => {
+    expect(sceneForId("no-such-scene", sceneManifest)).toBeNull();
+  });
+
+  it("sceneForId returns null when the manifest has no scenes registry", () => {
+    expect(sceneForId("room3", { characters: {} })).toBeNull();
+  });
+
+  it("defaultScene resolves the registry's defaultSceneId", () => {
+    expect(defaultScene(sceneManifest)).toEqual({
+      id: "room3",
+      image: "sprites/scenes/room3.png",
+    });
+  });
+
+  it("defaultScene returns null when no scenes registry (flat-card degrade)", () => {
+    expect(defaultScene({ characters: {} })).toBeNull();
+  });
+
+  it("defaultScene returns null if defaultSceneId points at a missing entry", () => {
+    expect(
+      defaultScene({
+        characters: {},
+        scenes: { defaultSceneId: "ghost", byId: {} },
+      }),
+    ).toBeNull();
+  });
+
+  it("the SHIPPED generated manifest carries the room3 scene as default", () => {
+    // Binds to the real regenerated manifest — fails if the build script stops
+    // emitting the scenes registry or the room3 asset is removed.
+    const scene = defaultScene(GENERATED_SPRITE_MANIFEST);
+    expect(scene).not.toBeNull();
+    expect(scene!.id).toBe("room3");
+    expect(scene!.image).toBe("sprites/scenes/room3.png");
+  });
 });

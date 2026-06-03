@@ -71,3 +71,33 @@ export function buildPoseDefaults(rawBlock: unknown): {
 export function detectMisplacedPoseDefaults(parsed: unknown): {
   warnings: string[];
 };
+
+/** One resolved scene backdrop (scene-bg feature, 86ca3kjyk). */
+export interface ResolvedScene {
+  /** Scene id — the PNG basename without extension (e.g. `"room3"`). */
+  id: string;
+  /** Path relative to `dist/webview/` (e.g. `"sprites/scenes/room3.png"`). */
+  image: string;
+}
+
+/**
+ * Resolve a single static scene-image filename from `assets/sprites/scenes/`
+ * into its `{ id, image }` (scene-bg feature, 86ca3kjyk). The SCENE-plane
+ * counterpart of the frame-sequence `resolveAnimFrames`: a scene is ONE flat
+ * PNG, not a `frames[]` array. Returns `null` for a non-`.png` filename so the
+ * caller skips it. Pure — no filesystem.
+ */
+export function resolveStaticImage(fileName: string): ResolvedScene | null;
+
+/**
+ * Build the manifest `scenes` registry from the scenes-dir filenames (scene-bg
+ * feature, 86ca3kjyk). Returns `null` scenes when no `.png` resolved (manifest
+ * omits the field → degrade to today's flat card). Otherwise
+ * `{ defaultSceneId, byId }` keyed by scene id; when the default scene PNG is
+ * missing but other scenes exist, the alphabetically-first id becomes the
+ * default with a warning. Pure — no filesystem.
+ */
+export function buildScenes(fileNames: string[]): {
+  scenes: { defaultSceneId: string; byId: Record<string, ResolvedScene> } | null;
+  warnings: string[];
+};

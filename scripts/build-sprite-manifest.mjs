@@ -58,6 +58,25 @@ const ROOT = path.resolve(__dirname, "..");
 const SPRITES_SRC = path.join(ROOT, "assets", "sprites");
 const POSE_DEFAULTS_SRC = path.join(SPRITES_SRC, "pose-defaults.json");
 const DIST_SPRITES = path.join(ROOT, "dist", "webview", "sprites");
+
+/**
+ * Scene backdrops (scene-bg feature, 86ca3kjyk). Static single-image rooms live
+ * in `assets/sprites/scenes/*.png` (NOT a per-character `_pixellab_anims` tree —
+ * a scene is a flat image, not a frame sequence). They are copied into
+ * `dist/webview/sprites/scenes/` so they sit under the existing `dist/webview`
+ * localResourceRoot (same CSP/served-path posture as sprite frames). The baked
+ * manifest emits a `scenes` registry of id → relative path; the webview prefixes
+ * the path with the host-injected sprite base URI exactly like a frame path.
+ */
+const SCENES_SRC = path.join(SPRITES_SRC, "scenes");
+const DIST_SCENES = path.join(DIST_SPRITES, "scenes");
+/**
+ * The shared default scene id (scene-bg V1 ships ONE scene for all tiles — see
+ * Iris spec §FIRM.3 "start SHARED, architect per-role"). The id is the scene
+ * PNG's basename without extension. Per-role is a DATA-ONLY upgrade: drop more
+ * PNGs in `scenes/` and point a future member/character field at their id.
+ */
+const DEFAULT_SCENE_ID = "room3";
 const GENERATED_TS = path.join(
   ROOT,
   "src",
@@ -404,6 +423,71 @@ async function resolveAnimFrames(charName, value) {
   );
 }
 
+/**
+ * Resolve a single static scene image filename into its webview-relative path
+ * (scene-bg feature, 86ca3kjyk). The counterpart of `resolveAnimFrames` for the
+ * SCENE plane: where `resolveAnimFrames` discovers a frame SEQUENCE under an
+ * `animations/<slug>/south/` tree, `resolveStaticImage` handles a FLAT single
+ * PNG that lives directly in `assets/sprites/scenes/`.
+ *
+ * Pure (takes the already-listed filename, no filesystem access) so it is
+ * unit-testable. Returns `{ id, image }` where:
+ *   - `id`   — the basename without the `.png` extension (the scene's stable id).
+ *   - `image`— the path relative to `dist/webview/` (the localResourceRoot base
+ *              the webview prefixes), IDENTICAL convention to frame paths.
+ * Returns `null` for a non-`.png` filename so the caller skips non-image files.
+ *
+ * @param {string} fileName a filename from `assets/sprites/scenes/`
+ * @returns {{ id: string, image: string } | null}
+ */
+export function resolveStaticImage(fileName) {
+  const m = /^(.+)\.png$/i.exec(fileName);
+  if (m === null) {
+    return null;
+  }
+  return { id: m[1], image: `sprites/scenes/${fileName}` };
+}
+
+/**
+ * Build the manifest `scenes` registry from the list of files in the scenes dir
+ * (scene-bg feature, 86ca3kjyk). Pure: takes the already-listed filenames so it
+ * is unit-testable without a real filesystem.
+ *
+ * Returns `{ scenes, warnings }`. `scenes` is `null` when no `.png` resolved
+ * (manifest then OMITS the field — degrade path: no scene → today's flat card,
+ * Iris spec §FIRM.3). Otherwise `{ defaultSceneId, byId }` where `byId` is keyed
+ * by each scene's id. When the `DEFAULT_SCENE_ID` PNG is missing but other
+ * scenes exist, the alphabetically-first id is used as the default + a warning
+ * is emitted (so a renamed/removed `room3.png` never silently yields a registry
+ * whose `defaultSceneId` resolves to nothing).
+ *
+ * @param {string[]} fileNames filenames listed from `assets/sprites/scenes/`
+ * @returns {{ scenes: { defaultSceneId: string, byId: Record<string, {id:string,image:string}> } | null, warnings: string[] }}
+ */
+export function buildScenes(fileNames) {
+  const warnings = [];
+  const byId = {};
+  for (const name of [...fileNames].sort()) {
+    const resolved = resolveStaticImage(name);
+    if (resolved === null) {
+      continue;
+    }
+    byId[resolved.id] = resolved;
+  }
+  const ids = Object.keys(byId);
+  if (ids.length === 0) {
+    return { scenes: null, warnings };
+  }
+  let defaultSceneId = DEFAULT_SCENE_ID;
+  if (!(DEFAULT_SCENE_ID in byId)) {
+    defaultSceneId = ids[0]; // ids are sorted (byId built from sorted names)
+    warnings.push(
+      `[sprite-manifest] scenes: default scene "${DEFAULT_SCENE_ID}.png" not found — falling back to "${defaultSceneId}" as the default`,
+    );
+  }
+  return { scenes: { defaultSceneId, byId }, warnings };
+}
+
 async function buildCharacter(charName) {
   const manifestPath = path.join(SPRITES_SRC, charName, "animations.json");
   if (!existsSync(manifestPath)) {
@@ -509,7 +593,37 @@ async function main() {
   const { poseDefaults, warnings: poseWarnings } = await readPoseDefaults();
   for (const w of poseWarnings) console.warn(w);
 
-  const manifestObj = poseDefaults !== null ? { characters, poseDefaults } : { characters };
+  // Scene backdrops (scene-bg feature, 86ca3kjyk) — static single-image rooms in
+  // `assets/sprites/scenes/`, copied into `dist/webview/sprites/scenes/` and
+  // emitted as a top-level `scenes` registry. Omitted entirely when the dir has
+  // no PNGs (degrade → flat card, Iris spec §FIRM.3).
+  let scenes = null;
+  if (existsSync(SCENES_SRC)) {
+    const sceneFiles = (await readdir(SCENES_SRC, { withFileTypes: true }))
+      .filter((e) => e.isFile())
+      .map((e) => e.name);
+    const { scenes: built, warnings: sceneWarnings } = buildScenes(sceneFiles);
+    for (const w of sceneWarnings) console.warn(w);
+    scenes = built;
+    if (scenes !== null) {
+      // Copy every resolved scene PNG into dist/webview/sprites/scenes/ so it
+      // sits under the existing dist/webview localResourceRoot.
+      await mkdir(DIST_SCENES, { recursive: true });
+      for (const scene of Object.values(scenes.byId)) {
+        const fileName = path.basename(scene.image);
+        await copyFile(
+          path.join(SCENES_SRC, fileName),
+          path.join(DIST_SCENES, fileName),
+        );
+      }
+    }
+  }
+
+  const manifestObj = {
+    characters,
+    ...(poseDefaults !== null ? { poseDefaults } : {}),
+    ...(scenes !== null ? { scenes } : {}),
+  };
 
   const banner = `/**
  * GENERATED FILE — do not edit by hand.
@@ -536,8 +650,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = ${JSON.stringi
     (sum, c) => sum + Object.keys(c.animations).length,
     0,
   );
+  const sceneCount = scenes !== null ? Object.keys(scenes.byId).length : 0;
   console.log(
-    `[sprite-manifest] wrote ${charCount} character(s), ${animCount} animation(s) → ${path.relative(ROOT, GENERATED_TS)}`,
+    `[sprite-manifest] wrote ${charCount} character(s), ${animCount} animation(s), ${sceneCount} scene(s) → ${path.relative(ROOT, GENERATED_TS)}`,
   );
 }
 
