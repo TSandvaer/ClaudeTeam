@@ -514,10 +514,11 @@ Maya has NO ClickUp MCP. Orchestrator: flip ticket `86ca2wj6u` `to do → in pro
 - branch: `maya/86ca2wj6u-window-control-impl`
 - Reviewer: Felix.
 
-## STATUS FLIP — 86ca3kjyk (Iris, 2026-06-03)
+## STATUS FLIP — 86ca3bm0g (Felix, 2026-06-03)
 
-Iris has NO ClickUp MCP this dispatch. Orchestrator: flip ticket `86ca3kjyk` `to do → in progress → in review` (PR open — scene-bg full-bleed + scrim firming spec). After merge: `in review → complete`.
-- branch: `iris/86ca3kjyk-scene-bg-spec`
-- spec: `team/iris-ux/scene-bg-design-spec.md` § FIRM (appended)
-- Reviewer: Maya (visuals).
-- PR URL: https://github.com/TSandvaer/ClaudeTeam/pull/184
+Felix has NO ClickUp MCP. Orchestrator: flip ticket `86ca3bm0g` `to do → in progress → in review` (PR #183 open). After merge: `in review → complete`.
+- PR: https://github.com/TSandvaer/ClaudeTeam/pull/183
+- branch: `felix/86ca3bm0g-dup-key`
+- HEAD: `bedfb7c`
+- CI run: `26862732832` (in_progress at push time)
+- Reviewer: Maya.
