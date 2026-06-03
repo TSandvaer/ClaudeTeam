@@ -38,7 +38,7 @@ import type {
   WebviewMessage,
 } from "../../shared/messages.js";
 import { formatFreshness } from "../../shared/freshness.js";
-import { spriteForMember } from "../sprites/spriteManifest.js";
+import { spriteForMember, defaultScene } from "../sprites/spriteManifest.js";
 import { createSpriteBox } from "../sprites/spritePlayer.js";
 import type { SpriteTracker } from "../spriteTracker.js";
 import type { MenuOpenTracker } from "../menuOpenTracker.js";
@@ -269,6 +269,32 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
       : null;
   if (char && spriteBaseUri !== undefined) {
     article.dataset.hasSprite = "true";
+
+    // ── Scene backdrop (scene-bg feature 86ca3kjyk · Iris spec §FIRM) ────────
+    // Resolve the DEFAULT scene (V1 ships ONE shared room; per-role is a
+    // data-only upgrade that swaps the resolved id, not this call site).
+    // `defaultScene()` returns null when the baked manifest has no scene
+    // registry (degrade path §FIRM.3) — in that case we set neither
+    // `data-scene-bg` nor `--ct-scene-url`, so the scene + scrim CSS selectors
+    // don't match and the tile renders today's flat card. When a scene
+    // resolves we set the gate attribute + the inline `--ct-scene-url` custom
+    // property; the scene image path is dist-relative (e.g.
+    // `sprites/scenes/room3.png`) and is prefixed with the host-injected
+    // `spriteBaseUri` (the asWebviewUri of dist/webview) exactly like sprite
+    // frame paths (see spritePlayer.ts). The scene is co-gated with the sprite
+    // (only sprite-bearing tiles get a scene per §FIRM.3) — resolving it inside
+    // this block guarantees `[data-has-sprite="true"]` is always present too.
+    const scene = defaultScene();
+    if (scene !== null) {
+      const sceneBase = spriteBaseUri.replace(/\/+$/, "");
+      const sceneImage = scene.image.replace(/^\/+/, "");
+      article.dataset.sceneBg = "";
+      article.style.setProperty(
+        "--ct-scene-url",
+        `url('${sceneBase}/${sceneImage}')`,
+      );
+    }
+
     const handle = createSpriteBox({
       char,
       state: tile.state,
