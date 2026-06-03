@@ -252,4 +252,46 @@ describe("scene-bg — scrim CSS exists + is gated (source-derived)", () => {
       /\[data-scene-bg\]\s*>\s*\.persona-instances\s*\{[^}]*--ct-card-bg/,
     );
   });
+
+  // ── Kebab-pin regression (Felix caught) ──────────────────────────────────
+  // The content-lift rule gives scene-tile content children `position:
+  // relative; z-index: 1` so text + sprite composite above the scrim bands.
+  // `.agent-tile-overflow` ([⋯] kebab) is ALREADY `position: absolute` (its
+  // top-right pin); if it gets swept into the content-lift selector, the added
+  // `position: relative` clobbers the absolute pin and the kebab drops into
+  // grid flow on scene tiles. The fix EXCLUDES it from the content-lift
+  // selector and gives it z-index ALONE (absolute already honors z-index).
+  //
+  // jsdom cannot assert the rendered top-right position, so this is a
+  // source-derived structural assertion of the bug-class wiring (positioning
+  // itself stays a manual reload check — see the scene-bg manual checklist).
+  //
+  // NON-VACUITY (revert-probe): adding `> .agent-tile-overflow` to the
+  // content-lift selector FAILS test 1; deleting the z-index-only overflow
+  // rule FAILS test 2.
+  it("the content-lift selector does NOT include .agent-tile-overflow (kebab pin preserved)", () => {
+    // The content-lift rule sets `position: relative` on lifted children. The
+    // overflow control must NOT be among them, or its absolute top-right pin
+    // is clobbered. Match the content-lift rule body and assert the selector
+    // list lacks `.agent-tile-overflow`.
+    const liftRule =
+      /(\.agent-tile\[data-has-sprite="true"\]\[data-scene-bg\]\s*>\s*\.tile-row[^{]*)\{[^}]*position:\s*relative/;
+    const m = liftRule.exec(css);
+    expect(m).not.toBeNull();
+    // The selector list of the content-lift rule must not pin the overflow
+    // control with position:relative.
+    expect(m![1]).not.toContain(".agent-tile-overflow");
+  });
+
+  it("the [⋯] overflow control on a scene tile gets z-index only (no position clobber)", () => {
+    // A separate rule lifts ONLY the overflow control's stacking (z-index)
+    // without a `position` swap, so it stays `position: absolute` (its pin).
+    const overflowZ =
+      /\.agent-tile\[data-has-sprite="true"\]\[data-scene-bg\]\s*>\s*\.agent-tile-overflow\s*\{([^}]*)\}/;
+    const m = overflowZ.exec(css);
+    expect(m).not.toBeNull();
+    expect(m![1]).toMatch(/z-index:\s*1/);
+    // Must NOT re-declare position here — that would re-introduce the clobber.
+    expect(m![1]).not.toMatch(/position\s*:/);
+  });
 });
