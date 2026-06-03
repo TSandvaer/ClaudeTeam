@@ -22,6 +22,7 @@ function baked(): GeneratedSpriteManifest {
         character: "ClaudeTeam-M01-Dev",
         defaultIdle: "idle_stretch",
         idlePool: ["idle_stretch", "idle_coffee"],
+        activePool: [],
         animations: {
           idle_stretch: {
             folder: "stretch",
@@ -36,6 +37,7 @@ function baked(): GeneratedSpriteManifest {
         character: "ClaudeTeam-F01-Dev",
         defaultIdle: "idle_coffee",
         idlePool: ["idle_coffee"],
+        activePool: [],
         animations: {
           idle_coffee: { folder: "coffee", frames: ["a.png", "b.png"] },
         },

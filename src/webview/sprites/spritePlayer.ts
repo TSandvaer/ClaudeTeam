@@ -49,7 +49,7 @@
 import type { AgentState } from "../../shared/types.js";
 import type { GeneratedSpriteManifest, SpriteCharacter } from "./spriteManifest.js";
 import { GENERATED_SPRITE_MANIFEST } from "./generatedManifest.js";
-import { pickIdle, poseNameForTile, resolvePose } from "./posePicker.js";
+import { pickActive, pickIdle, poseNameForTile, resolvePose } from "./posePicker.js";
 
 /** Default slow per-frame duration (ms) — mirrors --ct-anim-frame-ms-default. */
 export const FRAME_MS_DEFAULT = 160;
@@ -215,9 +215,20 @@ export interface SpriteBoxProps {
    */
   priorIdlePick?: string;
   /**
+   * The active-pool pick from the PRIOR render of this tile (if it was an
+   * active working pose). Threaded by the caller so an ACTIVE episode keeps the
+   * same working anim across the ~2s poll re-renders rather than re-rolling
+   * every tick — the active analogue of `priorIdlePick` (ticket 86ca3mge9).
+   * Undefined on first render, when the prior pose was idle, or when the prior
+   * active pose was `active_read` (which is not pool-drawn).
+   */
+  priorActivePick?: string;
+  /**
    * Whether the prior render was an ACTIVE pose. Combined with the current
    * pose to decide if this is a "fresh idle episode" (active→idle) that may
-   * re-roll the idle pick. Defaults to false (first render).
+   * re-roll the idle pick — AND, symmetrically, a "fresh active episode"
+   * (idle→active) that may re-roll the active pick. Defaults to false (first
+   * render).
    */
   priorWasActive?: boolean;
   /** Injected RNG for deterministic idle picks in tests. Defaults Math.random. */
@@ -305,6 +316,12 @@ export interface SpriteBoxHandle {
   dispose(): void;
   /** The idle-pool pick used (or null if the pose was active). For re-render threading. */
   idlePick: string | null;
+  /**
+   * The active-pool pick used (or null if the pose was idle, an `active_read`,
+   * or the character has no active pool). Threaded back on re-render so an
+   * active working episode keeps the same anim (ticket 86ca3mge9).
+   */
+  activePick: string | null;
   /** Whether the rendered pose is an active pose. For re-render threading. */
   isActive: boolean;
   /**
@@ -353,6 +370,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     activity,
     spriteBaseUri,
     priorIdlePick,
+    priorActivePick,
     priorWasActive,
     rng = Math.random,
     reducedMotion,
@@ -367,18 +385,37 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   } = props;
 
   // ── Pose selection (AC2) ────────────────────────────────────────────────
-  // Decide the idle pick FIRST (needed even for the idle branch of poseName).
-  // Stickiness: keep the prior idle pick UNLESS this is a fresh idle episode
-  // (the prior render was active OR there was no prior pick).
+  // Decide the idle / active pick FIRST (needed for the corresponding branch of
+  // poseName). Stickiness mirrors on both sides:
+  //   - idle pick: keep the prior idle pick UNLESS this is a fresh idle episode
+  //     (the prior render was active OR there was no prior idle pick).
+  //   - active pick (ticket 86ca3mge9): keep the prior active pick UNLESS this
+  //     is a fresh active episode (the prior render was NOT active OR there was
+  //     no prior active pick). One pick per active episode → the working anim
+  //     loops for the whole episode and only re-rolls on idle→active.
   const wantActive = state === "running";
   let idlePick: string | null = null;
+  let activePick: string | null = null;
   if (!wantActive) {
-    const freshEpisode = priorWasActive === true || priorIdlePick === undefined;
-    idlePick = freshEpisode ? pickIdle(char, rng) : priorIdlePick;
+    const freshIdleEpisode = priorWasActive === true || priorIdlePick === undefined;
+    idlePick = freshIdleEpisode ? pickIdle(char, rng) : priorIdlePick;
+  } else {
+    const freshActiveEpisode =
+      priorWasActive !== true || priorActivePick === undefined;
+    activePick = freshActiveEpisode ? pickActive(char, rng) : priorActivePick;
   }
 
-  const { name, isActive } = poseNameForTile(state, activity, idlePick);
+  const { name, isActive } = poseNameForTile(state, activity, idlePick, activePick);
   const anim = resolvePose(char, name);
+
+  // Normalize the active pick so the handle only reports a pick that was
+  // actually played as a POOL working anim (ticket 86ca3mge9). When the running
+  // tile resolved to `active_read` (tool == Read), the read pose is NOT a pool
+  // member — drop the pick so the read→work transition correctly re-rolls and
+  // the threaded value never mislabels a read episode as a working pick.
+  if (isActive && name !== activePick) {
+    activePick = null;
+  }
 
   // Canonical pose name for this render (active name or idle pick). Used for
   // playback-position resume (E1 fix 86ca2c4t8) and exposed on the handle so a
@@ -404,6 +441,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       element: box,
       dispose: () => undefined,
       idlePick,
+      activePick,
       isActive,
       pose: canonicalName,
       currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
@@ -423,6 +461,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       element: box,
       dispose: () => undefined,
       idlePick,
+      activePick,
       isActive,
       pose: canonicalName,
       currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
@@ -645,6 +684,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       element: box,
       dispose: () => undefined,
       idlePick,
+      activePick,
       isActive,
       pose: canonicalName,
       currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
@@ -663,6 +703,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       }
     },
     idlePick,
+    activePick,
     isActive,
     pose: canonicalName,
     // Report the DISPLAYED frame + the direction it was travelling when shown

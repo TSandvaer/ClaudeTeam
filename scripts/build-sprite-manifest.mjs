@@ -536,10 +536,18 @@ async function buildCharacter(charName) {
   const idlePool = (animMap.idle_pool ?? []).filter(
     (name) => animations[name] !== undefined,
   );
+  // active_pool (ticket 86ca3mge9) — the 3 working anims the webview cycles
+  // through per active episode (running + tool != Read), mirroring idle_pool.
+  // Filtered to anims that actually resolved to frames so a stale/missing pose
+  // never reaches the picker.
+  const activePool = (animMap.active_pool ?? []).filter(
+    (name) => animations[name] !== undefined,
+  );
   return {
     character: charName,
     defaultIdle: animMap.default_idle ?? idlePool[0] ?? null,
     idlePool,
+    activePool,
     animations,
   };
 }

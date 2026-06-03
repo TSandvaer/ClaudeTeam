@@ -27,6 +27,8 @@ type SpriteKey = `${string}:${string}`;
 
 interface SpriteEntry {
   idlePick: string | null;
+  /** Active-pool pick the prior box used (null if idle / active_read / no pool). */
+  activePick: string | null;
   isActive: boolean;
   dispose: () => void;
   /** Canonical pose the prior box played (for resume pose-match guard). */
@@ -57,6 +59,12 @@ export interface PriorPlayback {
 export interface SpriteTracker {
   /** Prior idle pick for this member (undefined if none / prior was active). */
   priorIdlePick(sessionId: string, memberId: string): string | undefined;
+  /**
+   * Prior active-pool pick for this member (undefined if none / prior was idle /
+   * prior was `active_read`). Threaded so an active working episode keeps the
+   * same anim across re-renders (ticket 86ca3mge9).
+   */
+  priorActivePick(sessionId: string, memberId: string): string | undefined;
   /** Whether the prior render's pose for this member was active. */
   priorWasActive(sessionId: string, memberId: string): boolean;
   /**
@@ -75,6 +83,7 @@ export interface SpriteTracker {
     memberId: string,
     entry: {
       idlePick: string | null;
+      activePick: string | null;
       isActive: boolean;
       dispose: () => void;
       pose: string;
@@ -98,6 +107,10 @@ export function createSpriteTracker(): SpriteTracker {
     priorIdlePick(sessionId, memberId) {
       const e = entries.get(`${sessionId}:${memberId}`);
       return e ? (e.idlePick ?? undefined) : undefined;
+    },
+    priorActivePick(sessionId, memberId) {
+      const e = entries.get(`${sessionId}:${memberId}`);
+      return e ? (e.activePick ?? undefined) : undefined;
     },
     priorWasActive(sessionId, memberId) {
       const e = entries.get(`${sessionId}:${memberId}`);

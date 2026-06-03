@@ -69,6 +69,7 @@ describe("spriteForMember — 6-member gender binding (E-07b) / AC6", () => {
           character: "ClaudeTeam-M01-Dev",
           defaultIdle: null,
           idlePool: [],
+          activePool: [],
           animations: {},
         },
       },

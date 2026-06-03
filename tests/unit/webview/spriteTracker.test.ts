@@ -11,6 +11,7 @@ import { createSpriteTracker } from "../../../src/webview/spriteTracker.js";
 /** Minimal register entry with the required pose/currentFrame fields defaulted. */
 function entry(over: {
   idlePick?: string | null;
+  activePick?: string | null;
   isActive?: boolean;
   dispose?: () => void;
   pose?: string;
@@ -20,6 +21,7 @@ function entry(over: {
 }) {
   return {
     idlePick: over.idlePick ?? null,
+    activePick: over.activePick ?? null,
     isActive: over.isActive ?? false,
     dispose: over.dispose ?? (() => undefined),
     pose: over.pose ?? "idle_coffee",
@@ -42,8 +44,31 @@ describe("spriteTracker", () => {
   it("returns undefined / false for an unseen member", () => {
     const t = createSpriteTracker();
     expect(t.priorIdlePick("s1", "ghost")).toBeUndefined();
+    expect(t.priorActivePick("s1", "ghost")).toBeUndefined();
     expect(t.priorWasActive("s1", "ghost")).toBe(false);
     expect(t.priorPlayback("s1", "ghost")).toBeUndefined();
+  });
+
+  it("remembers the prior active pick per member (ticket 86ca3mge9)", () => {
+    const t = createSpriteTracker();
+    t.register(
+      "s1",
+      "felix",
+      entry({ activePick: "work_cycle", isActive: true, pose: "work_cycle" }),
+    );
+    expect(t.priorActivePick("s1", "felix")).toBe("work_cycle");
+    expect(t.priorWasActive("s1", "felix")).toBe(true);
+  });
+
+  it("priorActivePick is undefined when the prior box stored a null pick", () => {
+    const t = createSpriteTracker();
+    // An active_read episode (or no-pool character) registers activePick: null.
+    t.register(
+      "s1",
+      "felix",
+      entry({ activePick: null, isActive: true, pose: "active_read" }),
+    );
+    expect(t.priorActivePick("s1", "felix")).toBeUndefined();
   });
 
   it("disposes the prior handle when re-registering the same key", () => {
@@ -94,6 +119,7 @@ describe("spriteTracker", () => {
     let live = 5;
     t.register("s1", "felix", {
       idlePick: "idle_stretch",
+      activePick: null,
       isActive: false,
       dispose: () => undefined,
       pose: "idle_stretch",

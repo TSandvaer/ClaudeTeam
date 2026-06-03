@@ -1,5 +1,5 @@
 {
-  "_note": "Canonical animation-name → sprite map (sponsor-locked naming 2026-05-29). PixelLab does NOT export the semantic animation_name passed at generation; its metadata.json keys by an action-description slug + folder. This file is the authoritative map the webview trigger logic + manifest generator (scripts/build-sprite-manifest.mjs) consume. VALUE FORMAT: a bare folder name `<state_folder>` means that folder holds exactly ONE animation (resolve animations/<sole-slug>/south/frame_*.png — legacy default); a `<state_folder>/<anim_slug>` value names a SPECIFIC animation inside a folder holding MORE THAN ONE. active_work + active_read now SHARE sitting_at_a_desk_fa (same desk posture → no book↔desk flip during active sessions), so both use the folder/slug form. Idle pool = all idle_* (webview picks at random); active_work fires on tool != Read, active_read on tool == Read.",
+  "_note": "Canonical animation-name → sprite map (sponsor-locked naming 2026-05-29). PixelLab does NOT export the semantic animation_name passed at generation; its metadata.json keys by an action-description slug + folder. This file is the authoritative map the webview trigger logic + manifest generator (scripts/build-sprite-manifest.mjs) consume. VALUE FORMAT: a bare folder name `<state_folder>` means that folder holds exactly ONE animation (resolve animations/<sole-slug>/south/frame_*.png — legacy default); a `<state_folder>/<anim_slug>` value names a SPECIFIC animation inside a folder holding MORE THAN ONE. active_work + active_read SHARE sitting_at_a_desk_fa (same desk posture → no book↔desk flip during active sessions), so both use the folder/slug form. Idle pool = all idle_* (webview picks at random). ACTIVE POOL (ticket 86ca3mge9): for running + tool != Read the webview now picks ONE of `active_pool` (typing / work_cycle / work_focus, baked on new grounded mouse-desk poses) per active EPISODE and loops it, mirroring idle-episode stickiness; active_work remains the single-pose fallback for a character with no active_pool. active_read (tool == Read) is unchanged and never pool-drawn.",
   "character": "ClaudeTeam-M01-Dev",
   "group_id": "ee57907c-dfa7-419f-bf77-071bc99e54fd",
   "base_id": "7282cc3d-f822-492c-a790-08b3b5d2b27e",
@@ -26,6 +26,11 @@
     "active_work": "tool != Read",
     "active_read": "tool == Read"
   },
+  "active_pool": [
+    "typing",
+    "work_cycle",
+    "work_focus"
+  ],
   "animations": {
     "idle_coffee": "holding_a_coffee_cup",
     "idle_snack": "holding_a_small_snac",
@@ -42,12 +47,18 @@
     "idle_wave": "standing_upright_wit",
     "idle_reading_book": "reading_an_open_book",
     "active_work": "sitting_at_a_desk_fa/the_character_stays_seated_and_completely_still_th-a1b98373",
-    "active_read": "sitting_at_a_desk_fa/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2"
+    "active_read": "sitting_at_a_desk_fa/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2",
+    "typing": "typing_at_a_mouse_desk",
+    "work_cycle": "working_cycle_at_a_mouse_desk",
+    "work_focus": "working_focused_at_a_mouse_desk"
   },
   "_playback_note": "Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Keyed by canonical anim name (must exist in `animations`). Fields (all optional): speedMultiplier (fraction of default frame RATE; 0.5 = half speed = 2x per-frame ms), dwellFrameIndex (mid-sequence apex frame held longer), dwellMs (apex hold add-on), finalDwellMs (final-frame hold before loop restart; default 400), playbackMode (\"loop\"|\"pingpong\"; default loop), startFrame/endFrame (inclusive frame sub-window). Malformed values are dropped + warned by scripts/build-sprite-manifest.mjs (unknown playbackMode falls back to loop). Migrated from the former hardcoded PLAYBACK_OVERRIDES map (E2). Edit + `npm run build` + reload to retune — no TS edit.",
   "playback": {
     "active_work": { "speedMultiplier": 0.5 },
     "active_read": { "speedMultiplier": 0.5 },
+    "typing": { "speedMultiplier": 0.5 },
+    "work_cycle": { "speedMultiplier": 0.5 },
+    "work_focus": { "speedMultiplier": 0.5 },
     "idle_coffee": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
     "idle_snack": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
     "idle_stretch": {

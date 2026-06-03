@@ -526,3 +526,8 @@ Felix has NO ClickUp MCP. Orchestrator: flip ticket `86ca3bm0g` `to do → in pr
 ## STATUS FLIP — 86ca3kjyk (Maya, 2026-06-03): flip `to do -> in progress -> in review` (scene-bg webview lane, branch `maya/86ca3kjyk-scene-webview`); reviewer Felix; after merge `in review -> complete`.
 
 ## STATUS FLIP — 86ca3kyzq (Maya, 2026-06-03): flip `to do -> in progress -> in review` (scene-bg per-label chips; supersedes §FIRM bands; branch `maya/86ca3kyzq-scene-label-chips`); reviewer Felix; after merge `in review -> complete`.
+
+## STATUS FLIP — 86ca3mge9 (Maya, 2026-06-03): flip `to do -> in progress -> in review` (active_work POOL — asset bake + active-pool webview; branch `maya/86ca3mge9-active-work-pool`); reviewer Felix, then Sage QA; after merge `in review -> complete`.
+- PR: https://github.com/TSandvaer/ClaudeTeam/pull/190
+- HEAD: `20b2321`
+- CI runs (at push): `26890240262`, `26890209210` (in_progress at push time)

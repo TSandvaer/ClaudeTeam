@@ -326,6 +326,10 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
             const pp = spriteTracker.priorPlayback(sessionId, tile.memberId);
             return {
               priorIdlePick: spriteTracker.priorIdlePick(sessionId, tile.memberId),
+              priorActivePick: spriteTracker.priorActivePick(
+                sessionId,
+                tile.memberId,
+              ),
               priorWasActive: spriteTracker.priorWasActive(
                 sessionId,
                 tile.memberId,
@@ -353,6 +357,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     if (spriteTracker) {
       spriteTracker.register(sessionId, tile.memberId, {
         idlePick: handle.idlePick,
+        activePick: handle.activePick,
         isActive: handle.isActive,
         dispose: handle.dispose,
         pose: handle.pose,

@@ -309,6 +309,10 @@ export function renderMultiAgentPersonaTile(
                 sessionId,
                 tile.memberId,
               ),
+              priorActivePick: spriteTracker.priorActivePick(
+                sessionId,
+                tile.memberId,
+              ),
               priorWasActive: spriteTracker.priorWasActive(
                 sessionId,
                 tile.memberId,
@@ -335,6 +339,7 @@ export function renderMultiAgentPersonaTile(
     if (spriteTracker) {
       spriteTracker.register(sessionId, tile.memberId, {
         idlePick: handle.idlePick,
+        activePick: handle.activePick,
         isActive: handle.isActive,
         dispose: handle.dispose,
         pose: handle.pose,

@@ -78,6 +78,7 @@ function makeChar(frameCount: number) {
     character: "TEST-CHAR",
     defaultIdle: "idle_coffee",
     idlePool: ["idle_coffee"],
+    activePool: [],
     animations: {
       idle_coffee: {
         folder: "idle_coffee",
