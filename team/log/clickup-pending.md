@@ -524,3 +524,5 @@ Felix has NO ClickUp MCP. Orchestrator: flip ticket `86ca3bm0g` `to do → in pr
 - Reviewer: Maya.
 
 ## STATUS FLIP — 86ca3kjyk (Maya, 2026-06-03): flip `to do -> in progress -> in review` (scene-bg webview lane, branch `maya/86ca3kjyk-scene-webview`); reviewer Felix; after merge `in review -> complete`.
+
+## STATUS FLIP — 86ca3kyzq (Maya, 2026-06-03): flip `to do -> in progress -> in review` (scene-bg per-label chips; supersedes §FIRM bands; branch `maya/86ca3kyzq-scene-label-chips`); reviewer Felix; after merge `in review -> complete`.
