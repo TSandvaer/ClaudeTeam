@@ -43,6 +43,16 @@ import { createSpriteBox } from "../sprites/spritePlayer.js";
 import type { SpriteTracker } from "../spriteTracker.js";
 import type { MenuOpenTracker } from "../menuOpenTracker.js";
 
+/**
+ * Marker class added to every meta-label span when a scene resolves for the
+ * tile (86ca3kyzq). The CSS rule
+ * `.agent-tile[data-has-sprite="true"][data-scene-bg] .ct-scene-chip` paints the
+ * per-label semi-transparent chip backing so each label reads over the busy
+ * scene. Absent on non-scene tiles → flat-card behavior unchanged (degrade path
+ * §FIRM.3). Exported so `multiAgentPersonaTile` + tests use the identical token.
+ */
+export const CHIP_CLASS = "ct-scene-chip";
+
 /** Human-readable label per state — used in aria-label and title tooltip. */
 const STATE_LABEL: Record<AgentState, string> = {
   running: "Running",
@@ -263,6 +273,13 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   // tile's `character` field (a CharacterSource id, or null = text tile) over
   // the legacy gender binding. `undefined` (pre-team-setup roster) falls back
   // to the gender binding inside `spriteForMember`.
+  // Tracks whether a scene resolved for THIS tile — drives the per-label chip
+  // marker class (86ca3kyzq). Scene resolution lives inside the sprite block
+  // (scene is co-gated with the sprite), so capture it here and consult it when
+  // building each label span below. `false` when no sprite OR no scene → labels
+  // get NO chip marker → flat-card behavior unchanged (degrade path §FIRM.3).
+  let sceneResolved = false;
+
   const char =
     spriteBaseUri !== undefined
       ? spriteForMember(tile.memberId, tile.character)
@@ -293,6 +310,10 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
         "--ct-scene-url",
         `url('${sceneBase}/${sceneImage}')`,
       );
+      // 86ca3kyzq: a scene resolved → every meta label below gets the
+      // `ct-scene-chip` marker class so its per-label chip backing paints over
+      // the busy room (supersedes the §FIRM zone-bands).
+      sceneResolved = true;
     }
 
     const handle = createSpriteBox({
@@ -389,13 +410,14 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   const displaySpan = document.createElement("span");
   displaySpan.className = "agent-display";
   displaySpan.textContent = tile.display;
+  if (sceneResolved) displaySpan.classList.add(CHIP_CLASS);
   primaryRow.appendChild(displaySpan);
 
   article.appendChild(primaryRow);
 
   // Row 2 — role.
   article.appendChild(
-    buildRow("tile-row--role", "agent-role", tile.role),
+    buildRow("tile-row--role", "agent-role", tile.role, sceneResolved),
   );
 
   // Row 3 — activity (no truncation, CSS wraps).
@@ -425,6 +447,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     const activitySpan = document.createElement("span");
     activitySpan.className = "agent-activity";
     activitySpan.textContent = activityText;
+    if (sceneResolved) activitySpan.classList.add(CHIP_CLASS);
     if (activityTitle !== undefined) {
       activitySpan.setAttribute("title", activityTitle);
     }
@@ -448,7 +471,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
   // dashboard renders the visual absence. OOS: changing `resolveModel`.
   if (tile.model !== "model:?") {
     article.appendChild(
-      buildRow("tile-row--model", "agent-model", tile.model),
+      buildRow("tile-row--model", "agent-model", tile.model, sceneResolved),
     );
   }
 
@@ -794,11 +817,18 @@ function buildRow(
   rowClass: string,
   innerClass: string,
   text: string,
+  /**
+   * 86ca3kyzq: when true (a scene resolved for this tile), tag the inner label
+   * span with the `ct-scene-chip` marker class so its per-label chip backing
+   * paints over the busy room. Default false → no marker → flat-card behavior.
+   */
+  chip = false,
 ): HTMLDivElement {
   const row = document.createElement("div");
   row.className = `tile-row ${rowClass}`;
   const span = document.createElement("span");
   span.className = innerClass;
+  if (chip) span.classList.add(CHIP_CLASS);
   span.textContent = text;
   row.appendChild(span);
   return row;

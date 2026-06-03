@@ -75,7 +75,7 @@ import type { SpriteTracker } from "../spriteTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
 import type { MenuOpenTracker } from "../menuOpenTracker.js";
 import type { FinishedTracker } from "../finishedTracker.js";
-import { buildOverflowMenu, type PostMessageFn } from "./agentTile.js";
+import { buildOverflowMenu, CHIP_CLASS, type PostMessageFn } from "./agentTile.js";
 
 /** Human-readable label per state — mirrors agentTile.ts STATE_LABEL. */
 const STATE_LABEL: Record<AgentState, string> = {
@@ -261,6 +261,11 @@ export function renderMultiAgentPersonaTile(
   // Per-member character (team-setup spec §5.3) drives the wrapper's single
   // persona sprite; `tile.character` (CharacterSource id / null) takes
   // precedence over the legacy gender binding, `undefined` falls back to it.
+  // Tracks whether a scene resolved for THIS header tile — drives the per-label
+  // chip marker class (86ca3kyzq). Same role as agentTile.ts; the instance rows
+  // below stay flat (no chips, their own --ct-card-bg repaint).
+  let sceneResolved = false;
+
   const char =
     spriteBaseUri !== undefined
       ? spriteForMember(tile.memberId, tile.character)
@@ -270,11 +275,12 @@ export function renderMultiAgentPersonaTile(
 
     // ── Scene backdrop (scene-bg feature 86ca3kjyk · Iris spec §FIRM) ────────
     // The collapsed persona header is a sprite-bearing `.agent-tile`, so it gets
-    // the same full-bleed scene + scrim as the single tile (§FIRM.3 row 1). The
-    // `.persona-instances` expand rows below stay flat (their own --ct-card-bg
-    // repaint in dashboard.css). `defaultScene()` null → no attribute → flat
-    // card (degrade §FIRM.3). Same dist-relative-path + spriteBaseUri prefix
-    // convention as the single tile + sprite frames (spritePlayer.ts).
+    // the same full-bleed scene + per-label chips as the single tile (§FIRM.3
+    // row 1; chips supersede the bands per 86ca3kyzq). The `.persona-instances`
+    // expand rows below stay flat (their own --ct-card-bg repaint in
+    // dashboard.css) — no chips there. `defaultScene()` null → no attribute →
+    // flat card (degrade §FIRM.3). Same dist-relative-path + spriteBaseUri
+    // prefix convention as the single tile + sprite frames (spritePlayer.ts).
     const scene = defaultScene();
     if (scene !== null) {
       const sceneBase = spriteBaseUri.replace(/\/+$/, "");
@@ -284,6 +290,7 @@ export function renderMultiAgentPersonaTile(
         "--ct-scene-url",
         `url('${sceneBase}/${sceneImage}')`,
       );
+      sceneResolved = true;
     }
 
     const handle = createSpriteBox({
@@ -350,6 +357,7 @@ export function renderMultiAgentPersonaTile(
   const displaySpan = document.createElement("span");
   displaySpan.className = "agent-display";
   displaySpan.textContent = tile.display;
+  if (sceneResolved) displaySpan.classList.add(CHIP_CLASS);
   primaryRow.appendChild(displaySpan);
 
   // The ×N badge IS the expand toggle (spec §1.3). A real <button> so
@@ -359,6 +367,8 @@ export function renderMultiAgentPersonaTile(
   const badge = document.createElement("button");
   badge.type = "button";
   badge.className = "persona-count-badge";
+  // 86ca3kyzq: on a scene tile the ×N agent-count gets a chip backing too.
+  if (sceneResolved) badge.classList.add(CHIP_CLASS);
   badge.setAttribute("aria-expanded", String(initiallyExpanded));
   badge.setAttribute("aria-controls", regionId);
   badge.setAttribute(
@@ -381,7 +391,9 @@ export function renderMultiAgentPersonaTile(
   article.appendChild(primaryRow);
 
   // ── Row 2 — role ──────────────────────────────────────────────────────────
-  article.appendChild(buildRow("tile-row--role", "agent-role", tile.role));
+  article.appendChild(
+    buildRow("tile-row--role", "agent-role", tile.role, sceneResolved),
+  );
 
   // ── Row 3 — headline activity (spec §2.4) ─────────────────────────────────
   // Skip the row entirely on the `tool:?` sentinel, matching agentTile.ts
@@ -392,6 +404,7 @@ export function renderMultiAgentPersonaTile(
     const activitySpan = document.createElement("span");
     activitySpan.className = "agent-activity";
     activitySpan.textContent = tile.headlineActivity;
+    if (sceneResolved) activitySpan.classList.add(CHIP_CLASS);
     activityRow.appendChild(activitySpan);
     article.appendChild(activityRow);
   }
@@ -407,11 +420,17 @@ export function renderMultiAgentPersonaTile(
   modelSpan.className = "agent-model";
   if (tile.headlineModel !== "model:?") {
     modelSpan.textContent = tile.headlineModel;
+    // Chip ONLY when the model carries text — an empty chip would paint a tiny
+    // floating box on the scene (the `model:?` sentinel leaves the span empty).
+    if (sceneResolved) modelSpan.classList.add(CHIP_CLASS);
   }
   modelRow.appendChild(modelSpan);
   const countHint = document.createElement("span");
   countHint.className = "persona-count-hint";
   countHint.textContent = `(${count} agents)`;
+  // 86ca3kyzq: the "(N agents)" count chip — always rendered, always chipped on
+  // a scene tile so the agent-count reads over the room.
+  if (sceneResolved) countHint.classList.add(CHIP_CLASS);
   modelRow.appendChild(countHint);
   article.appendChild(modelRow);
 
@@ -621,11 +640,18 @@ function buildRow(
   rowClass: string,
   innerClass: string,
   text: string,
+  /**
+   * 86ca3kyzq: when true (a scene resolved), tag the inner label span with the
+   * `ct-scene-chip` marker class so its per-label chip backing paints over the
+   * scene. Default false → no marker → flat-card behavior.
+   */
+  chip = false,
 ): HTMLDivElement {
   const row = document.createElement("div");
   row.className = `tile-row ${rowClass}`;
   const span = document.createElement("span");
   span.className = innerClass;
+  if (chip) span.classList.add(CHIP_CLASS);
   span.textContent = text;
   row.appendChild(span);
   return row;
