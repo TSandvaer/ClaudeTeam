@@ -1698,10 +1698,36 @@ function buildWindowSlider(props: WindowSliderProps): WindowSliderHandle {
 
   let lastIndex = 0;
 
+  /**
+   * BUG 1 + BUG 2 (86ca3kz05) — paint the in-window bar.
+   *
+   * The two overlapped native ranges inherit `accent-color`, which fills each
+   * input's track from `min` (0) up to ITS thumb. So the START input filled the
+   * 0→start segment with the accent color too — making the out-of-window LEFT
+   * segment look IN-window (right-of-end stayed correctly un-filled). Net: the
+   * sponsor read the M01 idle_stretch window as `0–10` even though the thumbs +
+   * readout + apex picker correctly sat at `5–10` (the per-input accent fill, NOT
+   * the data, was wrong). Both bugs share this one cause.
+   *
+   * Fix: stop relying on the native per-input accent fill (turned off in CSS for
+   * the window inputs) and drive ONE custom track fill via two percentages set
+   * here. The CSS overlay paints the full track dimmed, then the in-window slice
+   * `[start,end]` filled — so BOTH out-of-window segments (left of start AND right
+   * of end) render identically dimmed, and the filled bar reads `[start,end]`.
+   */
+  const paintWindowFill = (start: number, end: number): void => {
+    const span = lastIndex > 0 ? lastIndex : 1;
+    const startPct = (clampNum(start, 0, lastIndex) / span) * 100;
+    const endPct = (clampNum(end, 0, lastIndex) / span) * 100;
+    track.style.setProperty("--ct-win-start-pct", `${startPct}%`);
+    track.style.setProperty("--ct-win-end-pct", `${endPct}%`);
+  };
+
   const applyReadout = (start: number, end: number): void => {
     readout.textContent = `${start} – ${end}`;
     startInput.setAttribute("aria-valuetext", `frame ${start}`);
     endInput.setAttribute("aria-valuetext", `frame ${end}`);
+    paintWindowFill(start, end);
     refreshNote(start, end);
   };
 

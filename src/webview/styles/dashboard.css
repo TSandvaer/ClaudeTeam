@@ -2340,6 +2340,41 @@ body {
 .ct-tuner-window-track {
   position: relative;
   height: 1.4rem;
+  /* BUG 1 + BUG 2 (86ca3kz05) — in-window fill percentages, set by
+   * paintWindowFill() in playbackTuner.ts on seed / drag / reseed. Default to a
+   * full-clip bar so the track reads correctly before the first paint. */
+  --ct-win-start-pct: 0%;
+  --ct-win-end-pct: 100%;
+}
+/* BUG 1 + BUG 2 (86ca3kz05) — single custom track fill so BOTH out-of-window
+ * segments render IDENTICALLY dimmed. The base layer is the dimmed (out-of-
+ * window) track; the in-window slice [start,end] is the filled accent bar. This
+ * replaces the per-input `accent-color` fill (turned off below for the window
+ * inputs), which only filled 0→thumb on EACH input — wrongly painting the
+ * left-of-start segment in-window while the right-of-end stayed correctly dim. */
+.ct-tuner-window-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 0.25rem;
+  border-radius: 0.125rem;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted)) 0,
+    var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted))
+      var(--ct-win-start-pct),
+    var(--vscode-button-background, var(--ct-color-state-running))
+      var(--ct-win-start-pct),
+    var(--vscode-button-background, var(--ct-color-state-running))
+      var(--ct-win-end-pct),
+    var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted))
+      var(--ct-win-end-pct),
+    var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted)) 100%
+  );
 }
 .ct-tuner-window-track .ct-tuner-slider {
   position: absolute;
@@ -2349,6 +2384,9 @@ body {
   margin: 0;
   background: transparent;
   pointer-events: none;
+  /* The custom ::before bar (above) IS the window fill now — kill the native
+   * per-input accent fill so it can't double-paint the left-of-start segment. */
+  accent-color: transparent;
 }
 /* Only the thumbs are interactive (the overlapped tracks would otherwise eat
  * each other's clicks). WebKit + Firefox thumb pseudo-elements re-enable it. */

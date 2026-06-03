@@ -308,6 +308,99 @@ describe("source-table window row (§5.4)", () => {
   });
 });
 
+/**
+ * A multi-anim M01 mirroring the REAL manifest shape: defaultIdle is a NO-window
+ * anim (idle_coffee, 8 frames), and the windowed anim (idle_stretch, 11 frames,
+ * window 5–10) is reached only by SWITCHING the animation dropdown. This is the
+ * exact path the sponsor hit for BUG 1 (86ca3kz05): a fresh open lands on the
+ * default anim, so the windowed anim's seed runs through onSelectionChange, not
+ * the fresh-mount default.
+ */
+function multiAnimWindowedManifest(): GeneratedSpriteManifest {
+  return {
+    characters: {
+      "ClaudeTeam-M01-Dev": {
+        character: "ClaudeTeam-M01-Dev",
+        defaultIdle: "idle_coffee",
+        idlePool: ["idle_coffee", "idle_stretch"],
+        animations: {
+          idle_coffee: {
+            folder: "coffee",
+            frames: Array.from({ length: 8 }, (_, i) => `sprites/m01/coffee/${i}.png`),
+            playback: {},
+          },
+          idle_stretch: {
+            folder: "stretch",
+            frames: Array.from({ length: 11 }, (_, i) => `sprites/m01/stretch/${i}.png`),
+            playback: {
+              speedMultiplier: 0.5,
+              finalDwellMs: 800,
+              startFrame: 5,
+              endFrame: 10,
+              playbackMode: "pingpong",
+            },
+          },
+        },
+      },
+    },
+    poseDefaults: {},
+  } as unknown as GeneratedSpriteManifest;
+}
+
+/** Switch the animation dropdown to `name` (fires the change handler). */
+function switchAnim(root: HTMLElement, name: string): void {
+  const animSelect = q<HTMLSelectElement>(root, ".ct-tuner-anim-select");
+  animSelect.value = name;
+  animSelect.dispatchEvent(new Event("change"));
+}
+
+describe("BUG 1 (86ca3kz05) — slider seeds to the SAVED window, not 0..lastIndex", () => {
+  it("switching to a windowed anim seeds the thumbs to 5..10 (not 0..10)", () => {
+    const root = mount({ manifest: multiAnimWindowedManifest() });
+    // Fresh mount lands on defaultIdle=idle_coffee (no window): 0..7.
+    expect(q<HTMLInputElement>(root, ".ct-tuner-window-start").value).toBe("0");
+    switchAnim(root, "idle_stretch");
+    const start = q<HTMLInputElement>(root, ".ct-tuner-window-start");
+    const end = q<HTMLInputElement>(root, ".ct-tuner-window-end");
+    // The thumbs + readout reflect the saved window — matching the apex picker +
+    // summary the sponsor confirmed. (Mutation guard: revert seedWindowFromActive
+    // and the thumbs stay at the idle_coffee 0..7, failing this.)
+    expect(start.value).toBe("5");
+    expect(end.value).toBe("10");
+    expect(q<HTMLElement>(root, ".ct-tuner-window-readout").textContent).toBe("5 – 10");
+  });
+
+  it("the in-window fill bar spans [start,end] — both out-of-window ends dimmed identically", () => {
+    const root = mount({ manifest: multiAnimWindowedManifest() });
+    switchAnim(root, "idle_stretch");
+    const track = q<HTMLElement>(root, ".ct-tuner-window-track");
+    // 11 frames → lastIndex 10; window 5..10 → start 50%, end 100%.
+    // (Mutation guard: revert paintWindowFill and these vars stay at the CSS
+    // defaults 0%/100%, failing the start-pct assertion.)
+    expect(track.style.getPropertyValue("--ct-win-start-pct")).toBe("50%");
+    expect(track.style.getPropertyValue("--ct-win-end-pct")).toBe("100%");
+  });
+
+  it("DATA-LOSS GUARD: an UNTOUCHED window + a save on another field preserves 5..10", () => {
+    const posted: WebviewMessage[] = [];
+    const { schedule, cancelTimer } = syncSchedule();
+    const root = mount({ manifest: multiAnimWindowedManifest(), posted, schedule, cancelTimer });
+    switchAnim(root, "idle_stretch");
+    // Touch an UNRELATED field (Speed) — never touch the window thumbs.
+    const speed = q<HTMLInputElement>(root, ".ct-tuner-speed .ct-tuner-slider");
+    drag(speed, 1.5);
+    const save = lastSave(posted);
+    expect(save).toBeDefined();
+    // The save payload must STILL carry the untouched window — field-omission ==
+    // clear means an omitted startFrame/endFrame would DELETE the saved 5..10 from
+    // animations.json. The draft is seeded from the saved block so they ride along.
+    // (Mutation guard: revert reseedDraftAndRepaint's readSavedPerCharOverride seed
+    // to an empty draft and these become undefined → host clobbers the window.)
+    expect(save!.payload.override.startFrame).toBe(5);
+    expect(save!.payload.override.endFrame).toBe(10);
+  });
+});
+
 describe("window survives the ~2s poll re-render (poll-tick survivability)", () => {
   it("a narrowed window survives a second renderFull via the tracker", () => {
     const tracker = createTunerStateTracker();
