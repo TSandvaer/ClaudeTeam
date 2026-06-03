@@ -513,3 +513,12 @@ Maya has NO ClickUp MCP. Orchestrator: flip ticket `86ca2wj6u` `to do → in pro
 - PR: https://github.com/TSandvaer/ClaudeTeam/pull/182
 - branch: `maya/86ca2wj6u-window-control-impl`
 - Reviewer: Felix.
+
+## STATUS FLIP — 86ca3bm0g (Felix, 2026-06-03)
+
+Felix has NO ClickUp MCP. Orchestrator: flip ticket `86ca3bm0g` `to do → in progress → in review` (PR #183 open). After merge: `in review → complete`.
+- PR: https://github.com/TSandvaer/ClaudeTeam/pull/183
+- branch: `felix/86ca3bm0g-dup-key`
+- HEAD: `bedfb7c`
+- CI run: `26862732832` (in_progress at push time)
+- Reviewer: Maya.
