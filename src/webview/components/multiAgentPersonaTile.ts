@@ -69,7 +69,7 @@ import type {
 } from "../../shared/types.js";
 import type { OpenTranscriptMessage } from "../../shared/messages.js";
 import { formatFreshness } from "../../shared/freshness.js";
-import { spriteForMember } from "../sprites/spriteManifest.js";
+import { spriteForMember, defaultScene } from "../sprites/spriteManifest.js";
 import { createSpriteBox } from "../sprites/spritePlayer.js";
 import type { SpriteTracker } from "../spriteTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
@@ -267,6 +267,25 @@ export function renderMultiAgentPersonaTile(
       : null;
   if (char && spriteBaseUri !== undefined) {
     article.dataset.hasSprite = "true";
+
+    // ── Scene backdrop (scene-bg feature 86ca3kjyk · Iris spec §FIRM) ────────
+    // The collapsed persona header is a sprite-bearing `.agent-tile`, so it gets
+    // the same full-bleed scene + scrim as the single tile (§FIRM.3 row 1). The
+    // `.persona-instances` expand rows below stay flat (their own --ct-card-bg
+    // repaint in dashboard.css). `defaultScene()` null → no attribute → flat
+    // card (degrade §FIRM.3). Same dist-relative-path + spriteBaseUri prefix
+    // convention as the single tile + sprite frames (spritePlayer.ts).
+    const scene = defaultScene();
+    if (scene !== null) {
+      const sceneBase = spriteBaseUri.replace(/\/+$/, "");
+      const sceneImage = scene.image.replace(/^\/+/, "");
+      article.dataset.sceneBg = "";
+      article.style.setProperty(
+        "--ct-scene-url",
+        `url('${sceneBase}/${sceneImage}')`,
+      );
+    }
+
     const handle = createSpriteBox({
       char,
       // One sprite per persona regardless of N — pose follows the aggregate

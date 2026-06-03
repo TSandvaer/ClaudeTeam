@@ -156,6 +156,36 @@
    * the card and editor bg are tonally close). Subtle in dark theme, load-bearing
    * in light theme. Hardcoded translucent-dark, theme-independent. */
   --ct-card-hairline: rgba(0, 0, 0, 0.12);
+
+  /* Scene-bg tokens (scene-bg feature 86ca3kjyk; Iris spec §FIRM.4). These gate
+   * the full-bleed pixel-art room behind sprite tiles + the two text-scrim bands
+   * that keep Zone A / Zone C legible over the busy scene. ALL three are
+   * HARDCODED + theme-independent — same no-theme exemption as --ct-card-bg
+   * (the card is intentionally light in BOTH themes; a var(--vscode-…) here would
+   * go dark under a dark theme and re-create the disappearing-text problem the
+   * card-light work fixed). Scene paint + scrim only apply on
+   * `.agent-tile[data-has-sprite="true"][data-scene-bg]`; absent attribute =
+   * today's flat card (the load-bearing degrade path, §FIRM.3).
+   *
+   *   --ct-scene-scrim        rgba(236,239,241,0.88)  = #ECEFF1 (--ct-card-bg) @ 0.88α.
+   *     The text-band surface: "the card color, 88% opaque, scene faintly bleeding
+   *     through." At 0.88α the composited surface stays ≈88% of the proven flat
+   *     #ECEFF1, so --ct-card-fg (13:1) / --ct-card-fg-muted (6:1) retain
+   *     essentially their proven ratios. α is the SINGLE readability lever — raise
+   *     toward 1.0 if a live reload shows muted text struggling over the dark
+   *     bookshelf strip (§FIRM.5 Q1; sponsor feel-gate).
+   *   --ct-scene-scrim-hover  rgba(225,228,230,0.90)  = #E1E4E6 (--ct-card-hover) @ 0.90α.
+   *     On a scene tile the flat hover-fill would wash over the scene, so hover
+   *     darkens the SCRIM bands instead — the affordance lands on the text
+   *     surfaces, the scene itself doesn't change (§FIRM.3 hover row).
+   *   --ct-scene-anchor-y     bottom  background-position Y; pins the room's floor
+   *     band to the card's bottom edge so the sprite's feet meet the floor. The
+   *     render-tunable if feet float on extreme panel widths (§FIRM.1 / §FIRM.5 Q2)
+   *     — tune HERE on the scene layer, never via a per-sprite offset (which would
+   *     desync idle vs desk poses). */
+  --ct-scene-scrim: rgba(236, 239, 241, 0.88);
+  --ct-scene-scrim-hover: rgba(225, 228, 230, 0.9);
+  --ct-scene-anchor-y: bottom;
 }
 
 /* ===========================================================================
@@ -445,6 +475,111 @@ body {
  * §4 EXPANDED / §8.2 — the hero stays held, the instance list flows below.) */
 .agent-tile[data-has-sprite="true"] > .persona-instances {
   grid-column: 1 / -1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Scene backdrop + text scrim (scene-bg feature 86ca3kjyk · Iris spec §FIRM)
+ *
+ * FULL-BLEED: a pixel-art room fills the WHOLE sprite-bearing card behind the
+ * character; two same-color-as-the-card scrim bands ride behind Zone A
+ * (name/role) + Zone C (model/activity) so the meta text keeps a near-flat
+ * contrast surface; the hero zone (Zone B) is UNscrimmed so the room shows
+ * cleanly behind the sprite. All gated by the `data-scene-bg` attribute the
+ * component sets ONLY when a scene resolves (`--ct-scene-url` carries the
+ * resolved image). NO attribute = today's flat card (degrade, §FIRM.3).
+ *
+ * Vocabulary (LOCKED, §FIRM.4): attribute `data-scene-bg`, custom prop
+ * `--ct-scene-url`, tokens `--ct-scene-scrim` / `--ct-scene-scrim-hover` /
+ * `--ct-scene-anchor-y`. No `.scene-layer` / `.scrim` element — scene is a
+ * background-image on the existing `.agent-tile`, scrims are two pseudo-bands.
+ * ------------------------------------------------------------------------- */
+
+/* Scene paint — REPLACES the flat --ct-card-bg fill on scene tiles (don't
+ * double-paint: the flat color would show in any letterbox gap). `cover` +
+ * `center var(--ct-scene-anchor-y)` pins the floor to the card bottom so the
+ * sprite's feet land on it (§FIRM.1). `image-rendering: pixelated` keeps the
+ * room crisp at every scale. The scene is the card's own background-image
+ * (paint layer), so it never intercepts the tile's click target — clicks pass
+ * straight to the existing article handler, no pointer-events change needed. */
+.agent-tile[data-has-sprite="true"][data-scene-bg] {
+  background-image: var(--ct-scene-url);
+  background-size: cover;
+  background-position: center var(--ct-scene-anchor-y);
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+/* Scrim bands — Shape A (§FIRM.2, recommended): two pseudo-elements on the
+ * card, placed by grid-area into row 1 (Zone A) and row 3 (Zone C) so they
+ * span BOTH columns + track each row's actual extent (collapse to zero height
+ * if a row's content is absent — e.g. the `model:?`/`tool:?` hidden rows).
+ * `z-index: 0` lifts them above the background-image paint but below the text
+ * rows (which establish their own stacking via grid placement; the bands paint
+ * first in source order anyway). `pointer-events: none` keeps clicks reaching
+ * the tile. The hero row (row 2) has NO band → scene shows behind the sprite.
+ *
+ * The bands stretch to the card edges via negative margins equal to the card
+ * padding (--ct-space-s) so they reach flush to the left/right/top (Zone A) and
+ * left/right/bottom (Zone C) edges — a per-cell scrim would leave the card
+ * padding + the column-gap on bare scene and look patchy (§FIRM.2). */
+.agent-tile[data-has-sprite="true"][data-scene-bg]::before,
+.agent-tile[data-has-sprite="true"][data-scene-bg]::after {
+  content: "";
+  grid-column: 1 / -1;
+  background: var(--ct-scene-scrim);
+  z-index: 0;
+  pointer-events: none;
+  /* Bleed the band out past the card padding to the card edge on all sides
+   * except the hero-facing one. --ct-space-s matches `.agent-tile` padding. */
+  margin-left: calc(-1 * var(--ct-space-s));
+  margin-right: calc(-1 * var(--ct-space-s));
+}
+.agent-tile[data-has-sprite="true"][data-scene-bg]::before {
+  grid-row: 1; /* Zone A — name / role */
+  margin-top: calc(-1 * var(--ct-space-s));
+}
+.agent-tile[data-has-sprite="true"][data-scene-bg]::after {
+  grid-row: 3; /* Zone C — model / activity */
+  margin-bottom: calc(-1 * var(--ct-space-s));
+}
+
+/* The text rows + sprite must composite ABOVE the scrim bands. Grid items with
+ * `z-index` paint above auto z-index items; lift the content children to z-index
+ * 1 so the name/role/model/activity text and the hero sprite sit on top of the
+ * scrim (Zone A/C) or the scene (Zone B), never under a band. */
+.agent-tile[data-has-sprite="true"][data-scene-bg] > .tile-row,
+.agent-tile[data-has-sprite="true"][data-scene-bg] > .sprite-box,
+.agent-tile[data-has-sprite="true"][data-scene-bg] > .persona-instances,
+.agent-tile[data-has-sprite="true"][data-scene-bg] > .agent-tile-overflow {
+  position: relative;
+  z-index: 1;
+}
+
+/* `.persona-instances` (multi-agent expand rows) get NO scene + NO scrim — they
+ * are sprite-less compact rows below Zone C; a scene behind them re-opens the
+ * readability fight (§FIRM.3 / original Q4). On a scene tile the full-bleed
+ * background-image WOULD show behind them, so paint the region with the flat
+ * --ct-card-bg to restore their original surface. (On a non-scene tile the
+ * region inherits the flat card naturally and this rule is a harmless no-op
+ * repaint of the same color.) */
+.agent-tile[data-has-sprite="true"][data-scene-bg] > .persona-instances {
+  background-color: var(--ct-card-bg);
+  border-radius: var(--ct-card-radius);
+}
+
+/* Hover on a scene tile: suppress the flat --ct-card-hover wash (it would fight
+ * the scene) and darken the SCRIM bands instead, so the hover affordance lands
+ * on the text surfaces while the scene is unchanged (§FIRM.3 hover row). The
+ * scene background-image stays painted; only the bands shift. */
+.agent-tile[data-has-sprite="true"][data-scene-bg]:hover,
+.agent-tile[data-has-sprite="true"][data-scene-bg]:focus-visible {
+  background-color: transparent;
+}
+.agent-tile[data-has-sprite="true"][data-scene-bg]:hover::before,
+.agent-tile[data-has-sprite="true"][data-scene-bg]:hover::after,
+.agent-tile[data-has-sprite="true"][data-scene-bg]:focus-visible::before,
+.agent-tile[data-has-sprite="true"][data-scene-bg]:focus-visible::after {
+  background: var(--ct-scene-scrim-hover);
 }
 
 /* Hero size SCALES with the panel drag-width (carry-forward of the #156 rec,
