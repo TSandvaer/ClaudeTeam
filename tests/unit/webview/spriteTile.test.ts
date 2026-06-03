@@ -326,3 +326,113 @@ describe("idle-episode stickiness — AC2 / spec §3.3", () => {
     expect(pose).not.toBe("idle_coffee");
   });
 });
+
+// ── Active-work POOL episode stickiness — END-TO-END through the tile caller
+//    (Sage QA gap-fill for ticket 86ca3mge9) ─────────────────────────────────
+//
+// spritePlayer.test.ts already proves the createSpriteBox stickiness math in
+// isolation (threading priorActivePick by hand). These tests drive TWO real
+// `renderAgentTile` poll re-renders through a SHARED tracker so the wiring
+// agentTile → tracker.priorActivePick/priorWasActive → createSpriteBox →
+// tracker.register is exercised end-to-end — the exact Layer-2.5 poll-tick
+// survivability seam the testing-strategy doc marks REQUIRED for functional
+// behavior. The idle equivalents above proved idle stickiness this way; the
+// active pool had no through-the-tile counterpart until now.
+//
+// maya → ClaudeTeam-F01-Dev; active pool order [typing, work_cycle, work_focus]
+// (verified in generatedManifest.ts) → rng 0 → typing, 0.5 → work_cycle,
+// 0.99 → work_focus.
+//
+// Non-vacuity (revert checklist):
+//   - "sticky across the poll re-render": if agentTile stops threading
+//     priorActivePick/priorWasActive (or createSpriteBox drops the
+//     freshActiveEpisode keep-branch), the second render re-rolls to typing →
+//     the `secondPose === firstPose` assertion FAILS.
+//   - "read→work re-rolls": if the active_read null-out is removed, the read
+//     render registers a non-null pick, so the work render keeps it (no
+//     re-roll) → the work pose stays whatever the read leg threaded instead of
+//     the rng pick → the `workPose === "work_focus"` (rng 0.99) assertion FAILS.
+describe("active-work pool stickiness — END-TO-END through the tile (86ca3mge9)", () => {
+  it("keeps the same working pose across re-renders within an active episode", () => {
+    const tracker = createSpriteTracker();
+    let rngVal = 0.5; // first active render → work_cycle (idx 1)
+    const render = () =>
+      renderAgentTile({
+        tile: tile({ memberId: "maya", state: "running", activity: "tool:Edit reducer.ts", agentId: "a10" }),
+        sessionId: "s1",
+        postMessage: () => undefined,
+        spriteBaseUri: BASE,
+        spriteTracker: tracker,
+        spriteRng: () => rngVal,
+        scheduleFrame: recordingScheduler().schedule,
+      });
+    const first = render();
+    const firstPose = first.querySelector(".sprite-box")?.getAttribute("data-pose");
+    expect(firstPose).toBe("work_cycle");
+    // A naive re-roll under the changed rng would pick work_focus; stickiness
+    // must keep work_cycle because the prior render was also active (same episode).
+    rngVal = 0.99;
+    const second = render();
+    const secondPose = second.querySelector(".sprite-box")?.getAttribute("data-pose");
+    expect(secondPose).toBe(firstPose);
+  });
+
+  it("re-rolls the working pose on a read→work transition (active_read nulls the pick)", () => {
+    const tracker = createSpriteTracker();
+    const renderRead = () =>
+      renderAgentTile({
+        tile: tile({ memberId: "maya", state: "running", activity: "tool:Read src/x.ts", agentId: "a11" }),
+        sessionId: "s1",
+        postMessage: () => undefined,
+        spriteBaseUri: BASE,
+        spriteTracker: tracker,
+        spriteRng: () => 0, // would be typing if Read drew from the pool — it must NOT
+        scheduleFrame: recordingScheduler().schedule,
+      });
+    const renderWork = (rng: number) =>
+      renderAgentTile({
+        tile: tile({ memberId: "maya", state: "running", activity: "tool:Edit reducer.ts", agentId: "a11" }),
+        sessionId: "s1",
+        postMessage: () => undefined,
+        spriteBaseUri: BASE,
+        spriteTracker: tracker,
+        spriteRng: () => rng,
+        scheduleFrame: recordingScheduler().schedule,
+      });
+    const readEl = renderRead();
+    // The read leg renders active_read and registers a NULL active pick.
+    expect(readEl.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("active_read");
+    // read→work: the prior null pick makes this a fresh active episode → the
+    // working pose comes from rng (0.99 → work_focus), NOT a stale threaded pick.
+    const workEl = renderWork(0.99);
+    expect(workEl.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("work_focus");
+  });
+
+  it("work→read resolves active_read (not a pool pose)", () => {
+    const tracker = createSpriteTracker();
+    const renderWork = () =>
+      renderAgentTile({
+        tile: tile({ memberId: "maya", state: "running", activity: "tool:Edit reducer.ts", agentId: "a12" }),
+        sessionId: "s1",
+        postMessage: () => undefined,
+        spriteBaseUri: BASE,
+        spriteTracker: tracker,
+        spriteRng: () => 0, // typing
+        scheduleFrame: recordingScheduler().schedule,
+      });
+    const renderRead = () =>
+      renderAgentTile({
+        tile: tile({ memberId: "maya", state: "running", activity: "tool:Read src/x.ts", agentId: "a12" }),
+        sessionId: "s1",
+        postMessage: () => undefined,
+        spriteBaseUri: BASE,
+        spriteTracker: tracker,
+        spriteRng: () => 0,
+        scheduleFrame: recordingScheduler().schedule,
+      });
+    expect(renderWork().querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("typing");
+    // work→read: the Read tool resolves active_read regardless of the threaded
+    // working pick — active_read is never pool-drawn.
+    expect(renderRead().querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("active_read");
+  });
+});
