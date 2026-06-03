@@ -59,6 +59,15 @@ export interface SpriteCharacter {
   defaultIdle: string | null;
   /** Canonical names of all resolved idle-pool anims. */
   idlePool: string[];
+  /**
+   * Canonical names of all resolved active-pool anims (ticket 86ca3mge9). The
+   * webview picks ONE per ACTIVE episode (running + tool != Read) and loops it,
+   * exactly mirroring `idlePool` + idle-episode stickiness. Empty for a
+   * character with no `active_pool` declared — the pose picker then falls back
+   * to the single `active_work` pose (legacy behavior). `active_read`
+   * (tool == Read) is NEVER drawn from this pool.
+   */
+  activePool: string[];
   /** Canonical anim name → frame data. */
   animations: Record<string, SpriteAnimation>;
 }

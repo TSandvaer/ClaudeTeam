@@ -16,6 +16,7 @@ import {
   poseNameForTile,
   resolvePose,
   pickIdle,
+  pickActive,
   toolFromActivity,
   ACTIVE_READ,
   ACTIVE_WORK,
@@ -26,12 +27,16 @@ const CHAR: SpriteCharacter = {
   character: "Test-Char",
   defaultIdle: "idle_coffee",
   idlePool: ["idle_coffee", "idle_snack", "idle_phone"],
+  activePool: ["typing", "work_cycle", "work_focus"],
   animations: {
     idle_coffee: { folder: "coffee", frames: ["a.png", "b.png"] },
     idle_snack: { folder: "snack", frames: ["c.png"] },
     idle_phone: { folder: "phone", frames: ["d.png"] },
     active_read: { folder: "read", frames: ["r1.png", "r2.png"] },
     active_work: { folder: "work", frames: ["w1.png", "w2.png"] },
+    typing: { folder: "typing", frames: ["t1.png", "t2.png"] },
+    work_cycle: { folder: "cycle", frames: ["wc1.png", "wc2.png"] },
+    work_focus: { folder: "focus", frames: ["wf1.png", "wf2.png"] },
   },
 };
 
@@ -99,9 +104,67 @@ describe("resolvePose — AC6 + fallbacks", () => {
       character: "Empty",
       defaultIdle: null,
       idlePool: [],
+      activePool: [],
       animations: {},
     };
     expect(resolvePose(empty, "active_work")).toBeNull();
+  });
+});
+
+describe("poseNameForTile — active pool (ticket 86ca3mge9)", () => {
+  it("running + tool!=Read + activePick → uses the active-pool pick", () => {
+    const r = poseNameForTile("running", "tool:Edit reducer.ts", null, "work_cycle");
+    expect(r.name).toBe("work_cycle");
+    expect(r.isActive).toBe(true);
+  });
+
+  it("running + tool!=Read + null activePick → falls back to active_work", () => {
+    const r = poseNameForTile("running", "tool:Edit reducer.ts", null, null);
+    expect(r.name).toBe(ACTIVE_WORK);
+    expect(r.isActive).toBe(true);
+  });
+
+  it("running + tool:? sentinel + activePick → uses the pick (non-Read)", () => {
+    const r = poseNameForTile("running", "tool:?", null, "typing");
+    expect(r.name).toBe("typing");
+    expect(r.isActive).toBe(true);
+  });
+
+  it("running + tool==Read ignores activePick → always active_read", () => {
+    const r = poseNameForTile("running", "tool:Read src/x.ts", null, "work_focus");
+    expect(r.name).toBe(ACTIVE_READ);
+    expect(r.isActive).toBe(true);
+  });
+
+  it("idle ignores activePick → uses the idle pick", () => {
+    const r = poseNameForTile("idle", "whatever", "idle_snack", "work_cycle");
+    expect(r.name).toBe("idle_snack");
+    expect(r.isActive).toBe(false);
+  });
+});
+
+describe("pickActive — deterministic under injected RNG (ticket 86ca3mge9)", () => {
+  it("picks the active-pool member at the rng-derived index", () => {
+    // pool length 3; rng 0 → idx 0, 0.5 → idx 1, 0.99 → idx 2
+    expect(pickActive(CHAR, () => 0)).toBe("typing");
+    expect(pickActive(CHAR, () => 0.5)).toBe("work_cycle");
+    expect(pickActive(CHAR, () => 0.99)).toBe("work_focus");
+  });
+
+  it("clamps rng=1.0 to the last index (no out-of-bounds)", () => {
+    expect(pickActive(CHAR, () => 1)).toBe("work_focus");
+  });
+
+  it("every pick is a member of the active pool (membership invariant)", () => {
+    for (let i = 0; i < 50; i++) {
+      const pick = pickActive(CHAR, () => i / 50);
+      expect(CHAR.activePool).toContain(pick);
+    }
+  });
+
+  it("returns null when the active pool is empty (no-pool character)", () => {
+    const noPool: SpriteCharacter = { ...CHAR, activePool: [] };
+    expect(pickActive(noPool, () => 0)).toBeNull();
   });
 });
 

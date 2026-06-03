@@ -81,19 +81,20 @@ describe("sprite rendering — AC2 pose selection", () => {
     );
   });
 
-  it("running + tool!=Read renders the active_work pose", () => {
+  it("running + tool!=Read renders an active-pool working pose (rng=0 → first pool member, ticket 86ca3mge9)", () => {
     const el = renderAgentTile({
       tile: tile({ state: "running", activity: "tool:Edit reducer.ts", agentId: "a2" }),
       sessionId: "s1",
       postMessage: () => undefined,
       spriteBaseUri: BASE,
       spriteTracker: createSpriteTracker(),
+      spriteRng: () => 0, // active_pool[0] → typing → folder typing_at_a_mouse_desk
       scheduleFrame: recordingScheduler().schedule,
     });
     const img = el.querySelector("img.sprite-frame") as HTMLImageElement;
-    expect(img.getAttribute("src")).toContain("sitting_at_a_desk");
+    expect(img.getAttribute("src")).toContain("typing_at_a_mouse_desk");
     expect(el.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe(
-      "active_work",
+      "typing",
     );
   });
 

@@ -58,6 +58,7 @@ function driveSequence(
     character: "TEST-CHAR",
     defaultIdle: "idle_stretch",
     idlePool: ["idle_stretch"],
+    activePool: [],
     animations: {
       idle_stretch: {
         folder: "idle_stretch",
@@ -318,6 +319,7 @@ function buildBox(
     character: "TEST-CHAR",
     defaultIdle: "idle_stretch",
     idlePool: ["idle_stretch"],
+    activePool: [],
     animations: {
       idle_stretch: {
         folder: "idle_stretch",
@@ -491,6 +493,7 @@ function buildWithMs(
     character: "TEST-CHAR",
     defaultIdle: "idle_coffee",
     idlePool: ["idle_coffee"],
+    activePool: [],
     animations: {
       idle_coffee: {
         folder: "idle_coffee",

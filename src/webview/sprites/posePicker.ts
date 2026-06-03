@@ -35,24 +35,35 @@ export function toolFromActivity(activity: string): string | null {
 }
 
 /**
- * The canonical animation NAME a tile should play, given its state + activity
- * and the idle-pool member already selected for this idle episode.
+ * The canonical animation NAME a tile should play, given its state + activity,
+ * the idle-pool member selected for this idle episode, and the active-pool
+ * member selected for this active episode.
  *
- * `idlePick` is supplied by the caller (the player owns idle-episode
- * stickiness — see spritePlayer). For running tiles `idlePick` is ignored.
+ * `idlePick` / `activePick` are supplied by the caller (the player owns
+ * episode stickiness — see spritePlayer). For running + tool != Read the
+ * `activePick` (ticket 86ca3mge9) names the working anim cycled for this active
+ * episode; when no active pool exists (`activePick` is null) it falls back to
+ * the single `active_work` pose. `active_read` (tool == Read) is unchanged and
+ * never drawn from the pool. For idle tiles `activePick` is ignored.
  *
- * Returns the canonical name (e.g. "active_read", "idle_coffee"). The caller
- * resolves it to frames via `resolvePose`.
+ * Returns the canonical name (e.g. "active_read", "typing", "idle_coffee").
+ * The caller resolves it to frames via `resolvePose`.
  */
 export function poseNameForTile(
   state: AgentState,
   activity: string,
   idlePick: string | null,
+  activePick: string | null = null,
 ): { name: string; isActive: boolean } {
   if (state === "running") {
     const tool = toolFromActivity(activity);
-    const name = tool === "Read" ? ACTIVE_READ : ACTIVE_WORK;
-    return { name, isActive: true };
+    if (tool === "Read") {
+      return { name: ACTIVE_READ, isActive: true };
+    }
+    // tool != Read → cycle the active pool (sticky per episode). When the
+    // character declares no active pool the caller passes null → fall back to
+    // the single legacy active_work pose.
+    return { name: activePick ?? ACTIVE_WORK, isActive: true };
   }
   // idle / available / finished / error → idle-pool loop.
   return { name: idlePick ?? "", isActive: false };
@@ -94,6 +105,29 @@ export function pickIdle(
   const pool = char.idlePool.length > 0 ? char.idlePool : Object.keys(char.animations);
   if (pool.length === 0) {
     return char.defaultIdle ?? "";
+  }
+  const idx = Math.min(pool.length - 1, Math.floor(rng() * pool.length));
+  return pool[idx];
+}
+
+/**
+ * Pick an active-pool member for a fresh active episode (ticket 86ca3mge9),
+ * the active-pose analogue of `pickIdle`. Deterministic when a `rng` (0..1) is
+ * injected (tests); defaults to Math.random in production.
+ *
+ * Returns a canonical name from `char.activePool`. When the character declares
+ * NO active pool (empty `activePool`), returns `null` so the caller falls back
+ * to the single legacy `active_work` pose via `poseNameForTile`. Only members
+ * that resolved to frames reach `activePool` (filtered at manifest build), so a
+ * picked name always resolves.
+ */
+export function pickActive(
+  char: SpriteCharacter,
+  rng: () => number = Math.random,
+): string | null {
+  const pool = char.activePool;
+  if (pool.length === 0) {
+    return null;
   }
   const idx = Math.min(pool.length - 1, Math.floor(rng() * pool.length));
   return pool[idx];

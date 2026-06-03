@@ -354,8 +354,8 @@ describe("AC4 — sprite pose follows aggregateState", () => {
     return el.querySelector<HTMLElement>(".sprite-box")?.dataset.pose;
   }
 
-  it("running aggregate + tool!=Read → active_work pose", () => {
-    expect(poseOf("running", "tool:Edit reducer.ts")).toBe("active_work");
+  it("running aggregate + tool!=Read → active-pool working pose (rng=0 → typing, ticket 86ca3mge9)", () => {
+    expect(poseOf("running", "tool:Edit reducer.ts")).toBe("typing");
   });
 
   it("running aggregate + tool==Read → active_read pose", () => {

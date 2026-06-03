@@ -29,6 +29,11 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "idle_wave",
         "idle_reading_book"
       ],
+      "activePool": [
+        "typing",
+        "work_cycle",
+        "work_focus"
+      ],
       "animations": {
         "idle_coffee": {
           "folder": "holding_a_coffee_cup",
@@ -309,6 +314,81 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
           "playback": {
             "speedMultiplier": 0.5
           }
+        },
+        "typing": {
+          "folder": "typing_at_a_mouse_desk",
+          "frames": [
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_000.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_001.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_002.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_003.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_004.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_005.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_006.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_007.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_008.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_009.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_010.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_011.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_012.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_013.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_014.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_015.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/9b11fd07-211d-42de-b796-1230c0322d03/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "work_cycle": {
+          "folder": "working_cycle_at_a_mouse_desk",
+          "frames": [
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_000.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_001.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_002.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_003.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_004.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_005.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_006.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_007.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_008.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_009.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_010.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_011.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_012.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_013.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_014.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_015.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/f7f204dc-d7eb-4750-a771-1614de8dbb1a/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "work_focus": {
+          "folder": "working_focused_at_a_mouse_desk",
+          "frames": [
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_000.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_001.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_002.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_003.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_004.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_005.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_006.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_007.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_008.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_009.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_010.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_011.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_012.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_013.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_014.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_015.png",
+            "sprites/ClaudeTeam-F01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/97b2859c-206d-4814-8512-0a427270bc6c/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
         }
       }
     },
@@ -330,6 +410,11 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "idle_headphones",
         "idle_wave",
         "idle_reading_book"
+      ],
+      "activePool": [
+        "typing",
+        "work_cycle",
+        "work_focus"
       ],
       "animations": {
         "idle_coffee": {
@@ -611,6 +696,81 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
             "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_001.png",
             "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_002.png",
             "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_003.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "typing": {
+          "folder": "typing_at_a_mouse_desk",
+          "frames": [
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_003.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_004.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_005.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_006.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_007.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_008.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_009.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_010.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_011.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_012.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_013.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_014.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_015.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "work_cycle": {
+          "folder": "working_cycle_at_a_mouse_desk",
+          "frames": [
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_003.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_004.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_005.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_006.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_007.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_008.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_009.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_010.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_011.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_012.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_013.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_014.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_015.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "work_focus": {
+          "folder": "working_focused_at_a_mouse_desk",
+          "frames": [
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_003.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_004.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_005.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_006.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_007.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_008.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_009.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_010.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_011.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_012.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_013.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_014.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_015.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_016.png"
           ],
           "playback": {
             "speedMultiplier": 0.5

@@ -36,10 +36,14 @@ function char(name: string, frameCounts: Record<string, number>): SpriteCharacte
       frames: Array.from({ length: n }, (_, i) => `${name}/${anim}/frame_${i}.png`),
     };
   }
+  const ACTIVE_POOL_NAMES = ["typing", "work_cycle", "work_focus"];
   return {
     character: name,
     defaultIdle: "idle_coffee",
     idlePool: Object.keys(frameCounts).filter((k) => k.startsWith("idle_")),
+    activePool: Object.keys(frameCounts).filter((k) =>
+      ACTIVE_POOL_NAMES.includes(k),
+    ),
     animations,
   };
 }
@@ -564,6 +568,7 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
         character: "Synth-A",
         defaultIdle: "idle_x",
         idlePool: ["idle_x"],
+        activePool: [],
         animations: {
           idle_x: {
             folder: "f",
@@ -633,6 +638,7 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
           character: "Has-PerChar",
           defaultIdle: "idle_stretch",
           idlePool: ["idle_stretch"],
+          activePool: [],
           animations: {
             // per-char sets ONLY speedMultiplier → must inherit mode + dwell.
             idle_stretch: {
@@ -652,6 +658,7 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
           character: "No-PerChar",
           defaultIdle: "idle_stretch",
           idlePool: ["idle_stretch"],
+          activePool: [],
           animations: {
             // NO playback at all → pose-default is the whole result.
             idle_stretch: { folder: "f", frames: ["a/0.png"] },
@@ -747,5 +754,119 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
     expect(resolvePlayback(M01, "idle_stretch")).toEqual(
       resolvePlayback(M01, "idle_stretch", GENERATED_SPRITE_MANIFEST),
     );
+  });
+});
+
+// ── Active-work POOL + episode stickiness (ticket 86ca3mge9) ────────────────
+//
+// Mirrors the idle-pool stickiness: running + tool != Read draws ONE working
+// anim per ACTIVE episode and loops it; it only re-rolls on a fresh active
+// episode (idle→active). `active_read` (tool == Read) is never pool-drawn.
+//
+// Non-vacuity (revert checklist):
+//   - drop the `else { activePick = ... }` branch in createSpriteBox → running
+//     tiles always resolve active_work → the "renders a pool member" + "sticky"
+//     assertions FAIL.
+//   - remove the freshActiveEpisode re-roll guard (always keep priorActivePick)
+//     → the "re-rolls on a fresh active episode" assertion FAILS.
+//   - remove the active_read null-out → the "active_read reports null pick"
+//     assertion FAILS.
+describe("createSpriteBox — active_work pool + episode stickiness (86ca3mge9)", () => {
+  const ACTIVE = { typing: 2, work_cycle: 2, work_focus: 2, active_work: 2, active_read: 2 };
+
+  it("running + tool!=Read picks a pool member (deterministic under rng)", () => {
+    // pool order is [typing, work_cycle, work_focus]; rng 0.5 → idx 1.
+    const h = createSpriteBox({
+      char: char(M01, ACTIVE),
+      state: "running",
+      activity: "tool:Edit reducer.ts",
+      spriteBaseUri: "base",
+      rng: () => 0.5,
+      scheduleFrame: recordingScheduler().schedule,
+      cancelFrame: () => undefined,
+    });
+    expect(h.isActive).toBe(true);
+    expect(h.activePick).toBe("work_cycle");
+    expect(h.pose).toBe("work_cycle");
+  });
+
+  it("the picked pose is always a declared active-pool member (membership)", () => {
+    const pool = ["typing", "work_cycle", "work_focus"];
+    for (let i = 0; i < 30; i++) {
+      const h = createSpriteBox({
+        char: char(M01, ACTIVE),
+        state: "running",
+        activity: "tool:Bash echo",
+        spriteBaseUri: "base",
+        rng: () => i / 30,
+        scheduleFrame: recordingScheduler().schedule,
+        cancelFrame: () => undefined,
+      });
+      expect(pool).toContain(h.activePick);
+    }
+  });
+
+  it("keeps the prior active pick across re-renders within an episode (sticky)", () => {
+    // Prior render was active with work_focus; this re-render must KEEP it even
+    // though rng would pick typing (idx 0) — the episode is not fresh.
+    const h = createSpriteBox({
+      char: char(M01, ACTIVE),
+      state: "running",
+      activity: "tool:Edit reducer.ts",
+      spriteBaseUri: "base",
+      priorWasActive: true,
+      priorActivePick: "work_focus",
+      rng: () => 0, // would pick typing if it re-rolled
+      scheduleFrame: recordingScheduler().schedule,
+      cancelFrame: () => undefined,
+    });
+    expect(h.activePick).toBe("work_focus");
+  });
+
+  it("re-rolls on a fresh active episode (idle→active)", () => {
+    // Prior render was IDLE (priorWasActive false) → fresh active episode → the
+    // pick comes from rng, NOT the threaded priorActivePick.
+    const h = createSpriteBox({
+      char: char(M01, ACTIVE),
+      state: "running",
+      activity: "tool:Edit reducer.ts",
+      spriteBaseUri: "base",
+      priorWasActive: false,
+      priorActivePick: "work_focus", // stale; must be ignored
+      rng: () => 0, // → idx 0 → typing
+      scheduleFrame: recordingScheduler().schedule,
+      cancelFrame: () => undefined,
+    });
+    expect(h.activePick).toBe("typing");
+  });
+
+  it("tool==Read renders active_read and reports a null active pick", () => {
+    const h = createSpriteBox({
+      char: char(M01, ACTIVE),
+      state: "running",
+      activity: "tool:Read src/x.ts",
+      spriteBaseUri: "base",
+      priorWasActive: true,
+      priorActivePick: "work_cycle",
+      rng: () => 0,
+      scheduleFrame: recordingScheduler().schedule,
+      cancelFrame: () => undefined,
+    });
+    expect(h.pose).toBe("active_read");
+    expect(h.activePick).toBeNull();
+  });
+
+  it("falls back to active_work when the character has no active pool", () => {
+    const h = createSpriteBox({
+      char: char(M01, { active_work: 2, active_read: 2 }), // empty activePool
+      state: "running",
+      activity: "tool:Edit reducer.ts",
+      spriteBaseUri: "base",
+      rng: () => 0,
+      scheduleFrame: recordingScheduler().schedule,
+      cancelFrame: () => undefined,
+    });
+    expect(h.pose).toBe("active_work");
+    expect(h.activePick).toBeNull();
   });
 });
