@@ -549,9 +549,18 @@ body {
  * scrim (Zone A/C) or the scene (Zone B), never under a band. */
 .agent-tile[data-has-sprite="true"][data-scene-bg] > .tile-row,
 .agent-tile[data-has-sprite="true"][data-scene-bg] > .sprite-box,
-.agent-tile[data-has-sprite="true"][data-scene-bg] > .persona-instances,
-.agent-tile[data-has-sprite="true"][data-scene-bg] > .agent-tile-overflow {
+.agent-tile[data-has-sprite="true"][data-scene-bg] > .persona-instances {
   position: relative;
+  z-index: 1;
+}
+
+/* The overflow control is EXCLUDED from the content-lift selector above: it is
+ * already `position: absolute` (its top-right pin, ~:1218) and adding
+ * `position: relative` here would clobber that pin and drop the [⋯] kebab into
+ * grid flow on scene tiles. It only needs to stack above the scrim/scene, so
+ * give it z-index alone — `position: absolute` already honors z-index, keeping
+ * the kebab pinned top-right on scene AND non-scene tiles. */
+.agent-tile[data-has-sprite="true"][data-scene-bg] > .agent-tile-overflow {
   z-index: 1;
 }
 
