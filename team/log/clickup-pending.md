@@ -520,4 +520,4 @@ Iris has NO ClickUp MCP this dispatch. Orchestrator: flip ticket `86ca3kjyk` `to
 - branch: `iris/86ca3kjyk-scene-bg-spec`
 - spec: `team/iris-ux/scene-bg-design-spec.md` § FIRM (appended)
 - Reviewer: Maya (visuals).
-- PR URL: see ENTRY line below (filled at PR open).
+- PR URL: https://github.com/TSandvaer/ClaudeTeam/pull/184
