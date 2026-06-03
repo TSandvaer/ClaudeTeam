@@ -25,6 +25,8 @@ import {
   sanitizePlayback,
   buildPoseDefaults,
   detectMisplacedPoseDefaults,
+  resolveStaticImage,
+  buildScenes,
 } from "../../../scripts/build-sprite-manifest.mjs";
 
 describe("parseAnimValue — folder/slug value-format (AC5)", () => {
@@ -317,5 +319,78 @@ describe("detectMisplacedPoseDefaults — root-level anim footgun warn (E3 NIT 8
     expect(detectMisplacedPoseDefaults(null).warnings).toEqual([]);
     expect(detectMisplacedPoseDefaults([1, 2]).warnings).toEqual([]);
     expect(detectMisplacedPoseDefaults(42).warnings).toEqual([]);
+  });
+});
+
+describe("resolveStaticImage — scene filename → {id,image} (scene-bg 86ca3kjyk)", () => {
+  it("a .png filename → id (basename, no ext) + dist-relative image path", () => {
+    expect(resolveStaticImage("room3.png")).toEqual({
+      id: "room3",
+      image: "sprites/scenes/room3.png",
+    });
+  });
+
+  it("preserves dots/underscores in the id (only the final .png is stripped)", () => {
+    expect(resolveStaticImage("cozy_office.v2.png")).toEqual({
+      id: "cozy_office.v2",
+      image: "sprites/scenes/cozy_office.v2.png",
+    });
+  });
+
+  it("is case-insensitive on the extension", () => {
+    expect(resolveStaticImage("Room3.PNG")).toEqual({
+      id: "Room3",
+      image: "sprites/scenes/Room3.PNG",
+    });
+  });
+
+  it("returns null for a non-.png filename (caller skips it)", () => {
+    expect(resolveStaticImage("notes.txt")).toBeNull();
+    expect(resolveStaticImage("room3")).toBeNull();
+    expect(resolveStaticImage(".gitkeep")).toBeNull();
+  });
+});
+
+describe("buildScenes — manifest scenes registry (scene-bg 86ca3kjyk)", () => {
+  it("the shipped V1 case: room3.png → defaultSceneId room3 + one byId entry", () => {
+    const { scenes, warnings } = buildScenes(["room3.png"]);
+    expect(scenes).toEqual({
+      defaultSceneId: "room3",
+      byId: { room3: { id: "room3", image: "sprites/scenes/room3.png" } },
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it("architected per-role: multiple scenes all land in byId, room3 stays default", () => {
+    const { scenes, warnings } = buildScenes(["studio.png", "room3.png", "lab.png"]);
+    expect(scenes!.defaultSceneId).toBe("room3");
+    expect(Object.keys(scenes!.byId).sort()).toEqual(["lab", "room3", "studio"]);
+    expect(scenes!.byId.studio).toEqual({
+      id: "studio",
+      image: "sprites/scenes/studio.png",
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it("no PNGs → null scenes (manifest omits the field → flat-card degrade)", () => {
+    expect(buildScenes([])).toEqual({ scenes: null, warnings: [] });
+    expect(buildScenes(["readme.md", ".gitkeep"])).toEqual({
+      scenes: null,
+      warnings: [],
+    });
+  });
+
+  it("default scene PNG missing but others present → alphabetically-first default + warn", () => {
+    const { scenes, warnings } = buildScenes(["studio.png", "lab.png"]);
+    // ids sorted: lab < studio → lab becomes the fallback default.
+    expect(scenes!.defaultSceneId).toBe("lab");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("room3");
+    expect(warnings[0]).toContain("lab");
+  });
+
+  it("ignores non-PNG files while still building from the PNGs", () => {
+    const { scenes } = buildScenes(["room3.png", "README.md", "thumbs.db"]);
+    expect(Object.keys(scenes!.byId)).toEqual(["room3"]);
   });
 });

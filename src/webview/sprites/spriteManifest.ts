@@ -63,9 +63,54 @@ export interface SpriteCharacter {
   animations: Record<string, SpriteAnimation>;
 }
 
+/**
+ * One scene backdrop — a static (single-image) pixel-art room rendered behind
+ * the agent tile (scene-bg feature, 86ca3kjyk; full-bleed + scrim per Iris's
+ * spec §FIRM). Unlike a `SpriteAnimation` (a frame SEQUENCE), a scene is ONE
+ * flat image, so it carries a single `image` path, not a `frames[]` array.
+ */
+export interface SpriteScene {
+  /** Stable scene id (e.g. `"room3"`). Same value as the `byId` key. */
+  id: string;
+  /**
+   * Scene image path relative to `dist/webview/` (e.g.
+   * `"sprites/scenes/room3.png"`) — IDENTICAL convention to `SpriteAnimation.frames`.
+   * The webview prefixes it with the host-injected `spriteBaseUri` (the
+   * `asWebviewUri` of `dist/webview`) to build the final `--ct-scene-url`.
+   */
+  image: string;
+}
+
+/**
+ * The scene registry baked onto the manifest (scene-bg feature, 86ca3kjyk).
+ * V1 ships ONE SHARED scene (per ticket + Iris spec §FIRM.3 "start SHARED,
+ * architect per-role") — `defaultSceneId` points every tile at the one room in
+ * `byId`. The shape is architected so per-ROLE scenes are a DATA-ONLY upgrade:
+ * add more entries to `byId` and let a future member/character field name a
+ * `sceneId`; the registry shape and the default-pointer contract are unchanged.
+ *
+ * Resolution contract (LOCKED): a tile with no explicit scene choice resolves
+ * `scenes.byId[scenes.defaultSceneId]`. Maya's webview reads the resolved
+ * scene's `image`, prefixes it with `spriteBaseUri`, and sets the inline
+ * `--ct-scene-url` custom property + the `data-scene-bg` attribute (Iris §FIRM.4).
+ */
+export interface SpriteScenes {
+  /** Id of the scene every tile uses by default (e.g. `"room3"`). */
+  defaultSceneId: string;
+  /** Scene id → scene. The shared-V1 registry has exactly one entry. */
+  byId: Record<string, SpriteScene>;
+}
+
 /** Shape of the generated manifest module. */
 export interface GeneratedSpriteManifest {
   characters: Record<string, SpriteCharacter>;
+  /**
+   * Scene-backdrop registry (scene-bg feature, 86ca3kjyk). Baked by
+   * `scripts/build-sprite-manifest.mjs` from `assets/sprites/scenes/*.png`.
+   * Absent when the scenes dir has no images (degrade path: no scene → today's
+   * flat card, per Iris spec §FIRM.3). Read via `sceneForId` / `defaultScene`.
+   */
+  scenes?: SpriteScenes;
   /**
    * Pose-keyed playback DEFAULTS, shared across ALL characters (anim-playback
    * epic E3, 86ca2187n). Baked by `scripts/build-sprite-manifest.mjs` from the
@@ -166,4 +211,35 @@ export function spriteForMember(
     return null;
   }
   return spriteForCharacterId(charName, manifest);
+}
+
+/**
+ * Look up a scene backdrop by its id (scene-bg feature, 86ca3kjyk). Returns the
+ * `SpriteScene` (with its build-time-resolved `image` path) when the manifest
+ * has a scene registry containing that id; `null` otherwise. A `null` result →
+ * the caller omits `data-scene-bg` and the tile keeps today's flat card (the
+ * load-bearing degrade path, Iris spec §FIRM.3).
+ */
+export function sceneForId(
+  sceneId: string,
+  manifest: GeneratedSpriteManifest = GENERATED_SPRITE_MANIFEST,
+): SpriteScene | null {
+  return manifest.scenes?.byId[sceneId] ?? null;
+}
+
+/**
+ * Resolve the DEFAULT scene every tile uses when it has no explicit per-role
+ * scene choice (scene-bg V1 ships one SHARED scene — see `SpriteScenes`).
+ * Returns the scene named by `scenes.defaultSceneId`, or `null` when the
+ * manifest has no scene registry (degrade → flat card). The per-role upgrade
+ * replaces the call site's id, not this resolver.
+ */
+export function defaultScene(
+  manifest: GeneratedSpriteManifest = GENERATED_SPRITE_MANIFEST,
+): SpriteScene | null {
+  const scenes = manifest.scenes;
+  if (scenes === undefined) {
+    return null;
+  }
+  return sceneForId(scenes.defaultSceneId, manifest);
 }
