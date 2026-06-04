@@ -4,7 +4,7 @@
  *
  * No filesystem reads inside this function. Callers supply all inputs.
  * Source contracts:
- *   - data-sources.md §"Liveness inference" — idle threshold (10s)
+ *   - data-sources.md §"Liveness inference" — idle threshold (60s)
  *   - iris-ux/m1-cli-output-spec.md §1.4 — activity field format
  *   - iris-ux/m1-cli-output-spec.md §1.5 — parent→child tree
  *   - iris-ux/m1-cli-output-spec.md §2.5 — error state conditions
@@ -502,7 +502,7 @@ export const IDLE_THRESHOLD_MS = 60_000;
  * JSONL-mtime check intentionally:
  *   - Above mtime → completed background agents transition to "finished"
  *     even when their final flush is very recent (would otherwise flicker
- *     as "running" for ~10s post-completion before going idle forever).
+ *     as "running" for ~60s post-completion before going idle forever).
  *   - Below finishedIds → foreground completions still win, preserving
  *     the elapsed-time `finishedAtMs` precision from the parent JSONL's
  *     authoritative timestamp.
