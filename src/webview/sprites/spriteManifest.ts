@@ -68,6 +68,16 @@ export interface SpriteCharacter {
    * (tool == Read) is NEVER drawn from this pool.
    */
   activePool: string[];
+  /**
+   * Per-character active-pool rotation cadence (ticket 86ca4atwt §A.2 cascade
+   * layer 1) — loops-per-pose before the working tile advances IN ORDER. Baked
+   * from the character's `animations.json` top-level `activePoolLoopsPerPose` when
+   * present. WINS over the `claudeteam.activePoolLoopsPerPose` config (layer 2),
+   * which wins over the engine default 1 (layer 3). Absent on characters whose
+   * `animations.json` doesn't declare it (the common case) → the config/engine
+   * cadence applies. NOT per-anim — a single per-character value.
+   */
+  activePoolLoopsPerPose?: number;
   /** Canonical anim name → frame data. */
   animations: Record<string, SpriteAnimation>;
 }

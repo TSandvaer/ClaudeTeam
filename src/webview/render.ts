@@ -182,6 +182,15 @@ export interface RenderContext {
    */
   spriteBaseUri?: string;
   /**
+   * Active-pool rotation cadence (ticket 86ca4atwt) — loops-per-pose before a
+   * working tile advances IN ORDER to the next active-pool member. Resolved by the
+   * boot closure (main.ts) from the `#root` `data-active-pool-loops` attribute,
+   * which the host writes from `claudeteam.activePoolLoopsPerPose` (default 2).
+   * Threaded to each tile's `createSpriteBox`. Absent (component tests / browser
+   * dev) → the engine default 1.
+   */
+  loopsPerActivePose?: number;
+  /**
    * Webview-local sprite playback tracker — idle-episode stickiness + frame-
    * timer disposal across the ~2s poll re-renders. Owned by the boot closure
    * in `main.ts`; pruned each render alongside the other trackers. Optional —
@@ -447,6 +456,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
     expandedGroupsTracker,
     menuOpenTracker,
     spriteBaseUri,
+    loopsPerActivePose,
     spriteTracker,
     memberDirectory,
     hiddenMembersExpanded,
@@ -503,6 +513,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
       renderPlaybackTuner({
         postMessage,
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(loopsPerActivePose !== undefined ? { loopsPerActivePose } : {}),
         ...(tunerSaveAck !== undefined ? { saveAck: tunerSaveAck } : {}),
         ...(onCloseTunerPanel ? { onClose: onCloseTunerPanel } : {}),
         ...(tunerStateTracker !== undefined ? { stateTracker: tunerStateTracker } : {}),
@@ -863,6 +874,7 @@ export function renderFull(ctx: RenderContext, state: RenderableState): void {
         ...(menuOpenTracker ? { menuOpenTracker } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(loopsPerActivePose !== undefined ? { loopsPerActivePose } : {}),
         ...(spriteTracker ? { spriteTracker } : {}),
       }),
     );

@@ -12,6 +12,8 @@ import { createSpriteTracker } from "../../../src/webview/spriteTracker.js";
 function entry(over: {
   idlePick?: string | null;
   activePick?: string | null;
+  activeRotIdx?: number;
+  activeLoopCount?: number;
   isActive?: boolean;
   dispose?: () => void;
   pose?: string;
@@ -22,6 +24,8 @@ function entry(over: {
   return {
     idlePick: over.idlePick ?? null,
     activePick: over.activePick ?? null,
+    activeRotIdx: over.activeRotIdx ?? 0,
+    activeLoopCount: over.activeLoopCount ?? 0,
     isActive: over.isActive ?? false,
     dispose: over.dispose ?? (() => undefined),
     pose: over.pose ?? "idle_coffee",
@@ -58,6 +62,26 @@ describe("spriteTracker", () => {
     );
     expect(t.priorActivePick("s1", "felix")).toBe("work_cycle");
     expect(t.priorWasActive("s1", "felix")).toBe(true);
+  });
+
+  it("remembers the active-pool rotation cursor + loop-count (ticket 86ca4atwt)", () => {
+    const t = createSpriteTracker();
+    t.register(
+      "s1",
+      "felix",
+      entry({
+        activePick: "work_focus",
+        isActive: true,
+        pose: "work_focus",
+        activeRotIdx: 2,
+        activeLoopCount: 1,
+      }),
+    );
+    expect(t.priorActiveRotIdx("s1", "felix")).toBe(2);
+    expect(t.priorActiveLoopCount("s1", "felix")).toBe(1);
+    // Unseen member → undefined (so the player resets to a fresh active episode).
+    expect(t.priorActiveRotIdx("s1", "ghost")).toBeUndefined();
+    expect(t.priorActiveLoopCount("s1", "ghost")).toBeUndefined();
   });
 
   it("priorActivePick is undefined when the prior box stored a null pick", () => {
@@ -120,6 +144,8 @@ describe("spriteTracker", () => {
     t.register("s1", "felix", {
       idlePick: "idle_stretch",
       activePick: null,
+      activeRotIdx: 0,
+      activeLoopCount: 0,
       isActive: false,
       dispose: () => undefined,
       pose: "idle_stretch",

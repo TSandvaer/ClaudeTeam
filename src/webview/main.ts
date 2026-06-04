@@ -299,6 +299,21 @@ function boot(): void {
    */
   const spriteBaseUri = mount.dataset.spriteBase || undefined;
   /**
+   * Active-pool rotation cadence (ticket 86ca4atwt) — loops-per-pose before a
+   * working tile advances IN ORDER through the character's active pool. The host
+   * writes `data-active-pool-loops` on `#root` from
+   * `claudeteam.activePoolLoopsPerPose` (provider.ts `_getHtml`; default 2). Parsed
+   * here once at boot; an absent/blank/non-finite attribute → undefined so the
+   * engine falls back to its default 1. Re-read on a fresh webview reload (a config
+   * change requires a reload to take effect, like the sprite base).
+   */
+  const loopsPerActivePose = ((): number | undefined => {
+    const raw = mount.dataset.activePoolLoops;
+    if (raw === undefined || raw === "") return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  })();
+  /**
    * E-06b — webview-local roster directory. Accumulates display/role from
    * every rostered tile observed across ticks so the "show hidden agents"
    * reveal list can render human-friendly rows for members the host has
@@ -448,6 +463,7 @@ function boot(): void {
       renderFull(buildCtx(), currentState);
     },
     ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+    ...(loopsPerActivePose !== undefined ? { loopsPerActivePose } : {}),
   });
 
   // Wire the re-render hook now that buildCtx exists (used by the postMessage

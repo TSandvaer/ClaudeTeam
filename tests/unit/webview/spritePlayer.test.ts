@@ -774,20 +774,22 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
 describe("createSpriteBox — active_work pool + episode stickiness (86ca3mge9)", () => {
   const ACTIVE = { typing: 2, work_cycle: 2, work_focus: 2, active_work: 2, active_read: 2 };
 
-  it("running + tool!=Read picks a pool member (deterministic under rng)", () => {
-    // pool order is [typing, work_cycle, work_focus]; rng 0.5 → idx 1.
+  it("running + tool!=Read starts at activePool[0] IN ORDER (rotation, 86ca4atwt)", () => {
+    // 86ca4atwt: the active pool now ROTATES IN ORDER (no longer a random draw).
+    // A fresh active episode starts at activePool[0] = typing regardless of rng.
     const h = createSpriteBox({
       char: char(M01, ACTIVE),
       state: "running",
       activity: "tool:Edit reducer.ts",
       spriteBaseUri: "base",
-      rng: () => 0.5,
+      rng: () => 0.5, // rng no longer selects the active pool member
       scheduleFrame: recordingScheduler().schedule,
       cancelFrame: () => undefined,
     });
     expect(h.isActive).toBe(true);
-    expect(h.activePick).toBe("work_cycle");
-    expect(h.pose).toBe("work_cycle");
+    expect(h.activePick).toBe("typing");
+    expect(h.pose).toBe("typing");
+    expect(h.activeRotIdx).toBe(0);
   });
 
   it("the picked pose is always a declared active-pool member (membership)", () => {
@@ -806,38 +808,43 @@ describe("createSpriteBox — active_work pool + episode stickiness (86ca3mge9)"
     }
   });
 
-  it("keeps the prior active pick across re-renders within an episode (sticky)", () => {
-    // Prior render was active with work_focus; this re-render must KEEP it even
-    // though rng would pick typing (idx 0) — the episode is not fresh.
+  it("resumes the rotation cursor across re-renders within an episode (86ca4atwt)", () => {
+    // 86ca4atwt: the prior render was active at cursor 2 (work_focus); this
+    // re-render must RESUME the cursor (mid-episode), playing activePool[2] — NOT
+    // snap back to [0] (typing).
     const h = createSpriteBox({
       char: char(M01, ACTIVE),
       state: "running",
       activity: "tool:Edit reducer.ts",
       spriteBaseUri: "base",
       priorWasActive: true,
-      priorActivePick: "work_focus",
-      rng: () => 0, // would pick typing if it re-rolled
+      priorActiveRotIdx: 2,
+      priorActiveLoopCount: 0,
+      rng: () => 0, // rng is irrelevant to the active rotation cursor
       scheduleFrame: recordingScheduler().schedule,
       cancelFrame: () => undefined,
     });
     expect(h.activePick).toBe("work_focus");
+    expect(h.activeRotIdx).toBe(2);
   });
 
-  it("re-rolls on a fresh active episode (idle→active)", () => {
-    // Prior render was IDLE (priorWasActive false) → fresh active episode → the
-    // pick comes from rng, NOT the threaded priorActivePick.
+  it("resets rotation to activePool[0] on a fresh active episode (idle→active)", () => {
+    // 86ca4atwt: prior render was IDLE (priorWasActive false) → fresh active
+    // episode → rotation restarts at activePool[0] = typing, ignoring the stale
+    // cursor.
     const h = createSpriteBox({
       char: char(M01, ACTIVE),
       state: "running",
       activity: "tool:Edit reducer.ts",
       spriteBaseUri: "base",
       priorWasActive: false,
-      priorActivePick: "work_focus", // stale; must be ignored
-      rng: () => 0, // → idx 0 → typing
+      priorActiveRotIdx: 2, // stale; must be ignored on a fresh episode
+      rng: () => 0,
       scheduleFrame: recordingScheduler().schedule,
       cancelFrame: () => undefined,
     });
     expect(h.activePick).toBe("typing");
+    expect(h.activeRotIdx).toBe(0);
   });
 
   it("tool==Read renders active_read and reports a null active pick", () => {

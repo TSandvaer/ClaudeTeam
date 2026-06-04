@@ -117,6 +117,8 @@ export interface TeamCardProps {
    * instances are deferred — flagged in the PR body).
    */
   spriteBaseUri?: string;
+  /** Active-pool rotation cadence (ticket 86ca4atwt) — threaded to each tile. */
+  loopsPerActivePose?: number;
   /** Webview-local sprite playback tracker (idle stickiness + timer disposal). */
   spriteTracker?: SpriteTracker;
 }
@@ -135,6 +137,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
     expandPersonaTiles,
     nowMs,
     spriteBaseUri,
+    loopsPerActivePose,
     spriteTracker,
   } = props;
 
@@ -192,6 +195,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
           ...(menuOpenTracker ? { menuOpenTracker } : {}),
           ...(finishedTracker ? { finishedTracker } : {}),
           ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+          ...(loopsPerActivePose !== undefined ? { loopsPerActivePose } : {}),
           ...(spriteTracker ? { spriteTracker } : {}),
           nowMs: now,
         }),
@@ -249,6 +253,7 @@ export function renderTeamCard(props: TeamCardProps): HTMLElement {
         ...(finishedAtMs !== undefined ? { finishedAtMs } : {}),
         ...(prevState !== undefined ? { prevState } : {}),
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(loopsPerActivePose !== undefined ? { loopsPerActivePose } : {}),
         ...(spriteTracker ? { spriteTracker } : {}),
         ...(menuOpenTracker ? { menuOpenTracker } : {}),
         nowMs: now,

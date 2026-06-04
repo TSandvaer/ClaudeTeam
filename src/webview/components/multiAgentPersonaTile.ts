@@ -137,6 +137,13 @@ export interface MultiAgentPersonaTileProps {
   /** Webview-local sprite playback tracker (idle stickiness + timer disposal). */
   spriteTracker?: SpriteTracker;
   /**
+   * Active-pool rotation cadence (ticket 86ca4atwt) — loops-per-pose before the
+   * working tile advances IN ORDER to the next active-pool member. Resolved by the
+   * boot closure from `claudeteam.activePoolLoopsPerPose` (default 2). Absent →
+   * engine default 1.
+   */
+  loopsPerActivePose?: number;
+  /**
    * Optional finished-tile tracker — threaded so finished INSTANCE rows pick
    * up an `Xs/Xm/Xh` suffix when the host omits the humanized suffix (the
    * diagnostic no-timestamp case; the host normally supplies it). Consulted
@@ -190,6 +197,7 @@ export function renderMultiAgentPersonaTile(
     teamId,
     spriteBaseUri,
     spriteTracker,
+    loopsPerActivePose,
     finishedTracker,
     nowMs,
     reducedMotion,
@@ -313,6 +321,29 @@ export function renderMultiAgentPersonaTile(
                 sessionId,
                 tile.memberId,
               ),
+              // Active-pool rotation cursor + loop-count (ticket 86ca4atwt) —
+              // threaded so the working tile walks the pool IN ORDER across the
+              // poll re-render (survives active_read so read→work resumes).
+              ...(spriteTracker.priorActiveRotIdx(sessionId, tile.memberId) !==
+              undefined
+                ? {
+                    priorActiveRotIdx: spriteTracker.priorActiveRotIdx(
+                      sessionId,
+                      tile.memberId,
+                    ),
+                  }
+                : {}),
+              ...(spriteTracker.priorActiveLoopCount(
+                sessionId,
+                tile.memberId,
+              ) !== undefined
+                ? {
+                    priorActiveLoopCount: spriteTracker.priorActiveLoopCount(
+                      sessionId,
+                      tile.memberId,
+                    ),
+                  }
+                : {}),
               priorWasActive: spriteTracker.priorWasActive(
                 sessionId,
                 tile.memberId,
@@ -330,6 +361,7 @@ export function renderMultiAgentPersonaTile(
             };
           })()
         : {}),
+      ...(loopsPerActivePose !== undefined ? { loopsPerActivePose } : {}),
       ...(spriteRng ? { rng: spriteRng } : {}),
       ...(reducedMotion !== undefined ? { reducedMotion } : {}),
       ...(scheduleFrame ? { scheduleFrame } : {}),
@@ -340,6 +372,8 @@ export function renderMultiAgentPersonaTile(
       spriteTracker.register(sessionId, tile.memberId, {
         idlePick: handle.idlePick,
         activePick: handle.activePick,
+        activeRotIdx: handle.activeRotIdx,
+        activeLoopCount: handle.activeLoopCount,
         isActive: handle.isActive,
         dispose: handle.dispose,
         pose: handle.pose,

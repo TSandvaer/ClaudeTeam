@@ -98,6 +98,13 @@ export interface PlaybackTunerProps {
   manifest?: GeneratedSpriteManifest;
   /** Host-injected sprite base URI. Absent → preview renders no frames. */
   spriteBaseUri?: string;
+  /**
+   * Active-pool rotation cadence (ticket 86ca4atwt §B.2) — loops-per-pose the
+   * Cycle toggle uses to auto-advance over the room, REUSING Feature A's cadence so
+   * the tuner previews EXACTLY what the dashboard will ship. Resolved by the boot
+   * closure from `claudeteam.activePoolLoopsPerPose` (default 2). Absent → 1.
+   */
+  loopsPerActivePose?: number;
   /** Webview → host dispatcher. */
   postMessage: (msg: WebviewMessage) => void;
   /** Called when the user closes the panel (Escape / ✕). */
@@ -187,6 +194,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   const {
     manifest: bakedManifest = GENERATED_SPRITE_MANIFEST,
     spriteBaseUri,
+    loopsPerActivePose,
     postMessage,
     onClose,
     saveAck: initialSaveAck = null,
@@ -324,6 +332,28 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   let previewTimer: number | null = null;
   let saveTimer: number | null = null;
 
+  // Active-pool rotation cadence (ticket 86ca4atwt §B.2 / B.4) — the Cycle toggle
+  // REUSES Feature A's cadence so the tuner previews EXACTLY the dashboard rotation.
+  // Mirrors the engine cascade (spritePlayer.ts): per-character
+  // `char.activePoolLoopsPerPose` (layer 1) wins over the threaded
+  // `loopsPerActivePose` config (layer 2), clamped >= 1 (layer 3). Resolved per
+  // call since `selectedChar` changes as the sponsor switches characters.
+  function cycleCadence(): number {
+    const perChar = manifest.characters[selectedChar]?.activePoolLoopsPerPose;
+    const raw =
+      typeof perChar === "number" && Number.isFinite(perChar) && perChar > 0
+        ? perChar
+        : loopsPerActivePose;
+    return typeof raw === "number" && Number.isFinite(raw) && raw > 0
+      ? Math.trunc(raw)
+      : 1;
+  }
+  // Cycle (auto-advance over the room) state — webview-local, ephemeral; drives
+  // `selectedAnim` forward on loop-completion. Default OFF (sponsor gate 3). The
+  // counter mirrors Feature A's wrap-count on the preview box.
+  let cycleOn = false;
+  let cycleLoopCount = 0;
+
   // ── Selectors (§3.1) ──────────────────────────────────────────────────────
   const selectorsRow = document.createElement("div");
   selectorsRow.className = "ct-tuner-selectors";
@@ -349,6 +379,77 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   selectorsRow.appendChild(animField);
 
   root.appendChild(selectorsRow);
+
+  // ── Step / Cycle control (ticket 86ca4atwt §B.2) ──────────────────────────
+  // A NEW row DIRECTLY BELOW the selectors and ABOVE the preview, so the sponsor
+  // reads top-to-bottom: pick char/anim → step through poses → watch over the room
+  // → tune. It drives the SAME `selectedAnim` the Animation dropdown drives (step
+  // + dropdown stay in sync), so it needs no new tracker field — it only
+  // reads/writes the already-persisted `selectedAnim` (§B.2 placement note).
+  const stepRow = document.createElement("div");
+  stepRow.className = "ct-tuner-step";
+
+  // Step source: which anim list Prev/Next walk. Default = the selected
+  // character's `activePool` (review the WORK poses — the feature's point); the
+  // "All animations" option walks every entry in the anim dropdown.
+  const stepSourceSelect = document.createElement("select");
+  stepSourceSelect.className = "ct-tuner-select ct-tuner-step-source";
+  stepSourceSelect.setAttribute("aria-label", "Step source");
+  for (const opt of [
+    { value: "active-pool", label: "Active pool" },
+    { value: "all", label: "All animations" },
+  ]) {
+    const o = document.createElement("option");
+    o.value = opt.value;
+    o.textContent = opt.label;
+    stepSourceSelect.appendChild(o);
+  }
+  const stepSourceField = labeledField("Source", stepSourceSelect);
+  stepRow.appendChild(stepSourceField);
+
+  const stepPrevBtn = document.createElement("button");
+  stepPrevBtn.type = "button";
+  stepPrevBtn.className = "ct-tuner-step-prev";
+  stepPrevBtn.textContent = "◄ Prev";
+  stepPrevBtn.setAttribute("aria-label", "Previous pose");
+  stepPrevBtn.addEventListener("click", () => onStep(-1));
+  stepRow.appendChild(stepPrevBtn);
+
+  const stepNextBtn = document.createElement("button");
+  stepNextBtn.type = "button";
+  stepNextBtn.className = "ct-tuner-step-next";
+  stepNextBtn.textContent = "Next ►";
+  stepNextBtn.setAttribute("aria-label", "Next pose");
+  stepNextBtn.addEventListener("click", () => onStep(1));
+  stepRow.appendChild(stepNextBtn);
+
+  const stepReadout = document.createElement("span");
+  stepReadout.className = "ct-tuner-step-readout";
+  stepReadout.setAttribute("role", "status");
+  stepRow.appendChild(stepReadout);
+
+  const cycleLabel = document.createElement("label");
+  cycleLabel.className = "ct-tuner-step-cycle-label";
+  const cycleCheckbox = document.createElement("input");
+  cycleCheckbox.type = "checkbox";
+  cycleCheckbox.className = "ct-tuner-step-cycle";
+  cycleCheckbox.checked = false; // sponsor gate 3: default OFF
+  cycleCheckbox.setAttribute("aria-label", "Cycle over room");
+  cycleCheckbox.addEventListener("change", () => onCycleToggle());
+  const cycleText = document.createElement("span");
+  cycleText.textContent = "Cycle over room";
+  cycleLabel.appendChild(cycleCheckbox);
+  cycleLabel.appendChild(cycleText);
+  stepRow.appendChild(cycleLabel);
+
+  stepSourceSelect.addEventListener("change", () => {
+    // Switching the source re-derives the readout against the new list; the
+    // current `selectedAnim` may not be in it → the readout shows its position
+    // when present, else "1 / N" semantics fall out of stepList()/stepIndex().
+    refreshStepReadout();
+  });
+
+  root.appendChild(stepRow);
 
   // ── Preview + cascade source table (§3.5) ─────────────────────────────────
   const previewRow = document.createElement("div");
@@ -688,6 +789,98 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     animSelect.value = preferred;
   }
 
+  // ── Step / Cycle control (ticket 86ca4atwt §B.2) ──────────────────────────
+
+  /**
+   * The ordered anim-name list the step control walks for the current source.
+   *   - "active-pool" → the selected character's `activePool` (the WORK poses).
+   *   - "all"         → every entry in the Animation dropdown (idle + active).
+   * Empty when the character has no active pool (the disabled-state below).
+   */
+  function stepList(): string[] {
+    const char = manifest.characters[selectedChar];
+    if (!char) return [];
+    if (stepSourceSelect.value === "all") {
+      return Object.keys(char.animations);
+    }
+    // `activePool` may be absent on older / minimal manifests (component-test
+    // fixtures predating the active-pool field) — default to empty.
+    return [...(char.activePool ?? [])];
+  }
+
+  /** Index of `selectedAnim` in the current step list, or -1 when absent. */
+  function stepIndex(list: string[]): number {
+    return list.indexOf(selectedAnim);
+  }
+
+  /**
+   * Prev/Next moved the step cursor by `dir` (wrap % N). Moves `selectedAnim` to
+   * the next/previous entry in the step source, reflects it in the Animation
+   * dropdown's `.value`, and fires the SAME `onSelectionChange()` path the dropdown
+   * fires — so step + dropdown stay in sync. No-op when the source is empty.
+   */
+  function onStep(dir: 1 | -1): void {
+    const list = stepList();
+    if (list.length === 0) return;
+    const cur = stepIndex(list);
+    // When the current anim isn't in the list (e.g. an idle anim while source is
+    // "active-pool"), start from the first member on a forward step.
+    const next =
+      cur === -1
+        ? dir === 1
+          ? 0
+          : list.length - 1
+        : (cur + dir + list.length) % list.length;
+    selectedAnim = list[next];
+    animSelect.value = selectedAnim;
+    // Stepping resets the cycle loop-count so the new pose gets a full cadence.
+    cycleLoopCount = 0;
+    onSelectionChange();
+  }
+
+  /**
+   * Render the step readout — `"<animName> — <i+1> / <N>"` (text label, a11y per
+   * design discipline). Disabled state: when the source is empty (no active pool)
+   * the Prev/Next buttons disable + the readout reads "no active pool".
+   */
+  function refreshStepReadout(): void {
+    const list = stepList();
+    if (list.length === 0) {
+      stepPrevBtn.disabled = true;
+      stepNextBtn.disabled = true;
+      stepReadout.textContent = "no active pool";
+      return;
+    }
+    stepPrevBtn.disabled = false;
+    stepNextBtn.disabled = false;
+    const idx = stepIndex(list);
+    const shown = idx === -1 ? selectedAnim : list[idx];
+    const pos = idx === -1 ? 1 : idx + 1;
+    stepReadout.textContent = `${shown} — ${pos} / ${list.length}`;
+  }
+
+  /** Cycle toggle changed (§B.2). ON → auto-advance on loop-complete; OFF → hold. */
+  function onCycleToggle(): void {
+    cycleOn = cycleCheckbox.checked;
+    cycleLoopCount = 0;
+  }
+
+  /**
+   * The preview completed one loop (ticket 86ca4atwt §B.4). When Cycle is ON,
+   * count it; once the count reaches the SHARED cadence (`cycleCadence` = Feature
+   * A's `loopsPerActivePose`), advance the step source forward (Next) so the tuner
+   * walks the pool over the room at exactly the dashboard cadence. No-op when Cycle
+   * is OFF (the preview just holds the current pose).
+   */
+  function onPreviewLoopComplete(): void {
+    if (!cycleOn) return;
+    cycleLoopCount += 1;
+    if (cycleLoopCount >= cycleCadence()) {
+      cycleLoopCount = 0;
+      onStep(1); // advances selectedAnim + rebuilds the preview on the new pose
+    }
+  }
+
   /**
    * Char or anim changed (§3.1): re-seed the draft from the current effective
    * resolved value (so the sliders open at the real current state, not zeros),
@@ -740,6 +933,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     renderSourceTable(computeCascadeSource(selectedChar, selectedAnim, manifest));
     refreshPreviewNote();
     refreshShadowWarning();
+    refreshStepReadout();
   }
 
   /**
@@ -821,6 +1015,7 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     renderSourceTable(source);
     refreshPreviewNote();
     refreshShadowWarning();
+    refreshStepReadout();
   }
 
   /**
@@ -1166,7 +1361,16 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
         char,
         animName: selectedAnim,
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        // 86ca4atwt §B.1: the preview paints the shared scene backdrop from the
+        // same (overlaid) manifest the panel reads, so the room renders behind the
+        // sprite exactly as on the dashboard tile.
+        manifest,
         draftOverride: overrideForPreview,
+        // 86ca4atwt §B.4: while the Cycle toggle is ON, each completed loop bumps
+        // `selectedAnim` forward through the step source — REUSING Feature A's
+        // cadence (`cycleCadence`) so the tuner previews exactly the dashboard
+        // rotation. The callback fires for any pose (active or idle).
+        onLoopComplete: () => onPreviewLoopComplete(),
         ...(scheduleFrame !== undefined ? { scheduleFrame } : {}),
         ...(cancelFrame !== undefined ? { cancelFrame } : {}),
       });

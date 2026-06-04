@@ -137,6 +137,13 @@ export interface AgentTileProps {
    */
   spriteTracker?: SpriteTracker;
   /**
+   * Active-pool rotation cadence (ticket 86ca4atwt) — loops-per-pose before the
+   * working tile advances IN ORDER to the next active-pool member. Resolved by the
+   * boot closure from `claudeteam.activePoolLoopsPerPose` (default 2) and threaded
+   * to `createSpriteBox`. Absent → engine default 1.
+   */
+  loopsPerActivePose?: number;
+  /**
    * Reduced-motion override for tests (AC4). Production reads
    * `matchMedia("(prefers-reduced-motion: reduce)")` inside the player.
    */
@@ -187,6 +194,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     scheduleClearTransition,
     spriteBaseUri,
     spriteTracker,
+    loopsPerActivePose,
     reducedMotion,
     spriteRng,
     scheduleFrame,
@@ -330,6 +338,29 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
                 sessionId,
                 tile.memberId,
               ),
+              // Active-pool rotation cursor + loop-count (ticket 86ca4atwt) —
+              // threaded so the working tile walks the pool IN ORDER across the
+              // poll re-render (survives active_read so read→work resumes).
+              ...(spriteTracker.priorActiveRotIdx(sessionId, tile.memberId) !==
+              undefined
+                ? {
+                    priorActiveRotIdx: spriteTracker.priorActiveRotIdx(
+                      sessionId,
+                      tile.memberId,
+                    ),
+                  }
+                : {}),
+              ...(spriteTracker.priorActiveLoopCount(
+                sessionId,
+                tile.memberId,
+              ) !== undefined
+                ? {
+                    priorActiveLoopCount: spriteTracker.priorActiveLoopCount(
+                      sessionId,
+                      tile.memberId,
+                    ),
+                  }
+                : {}),
               priorWasActive: spriteTracker.priorWasActive(
                 sessionId,
                 tile.memberId,
@@ -348,6 +379,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
             };
           })()
         : {}),
+      ...(loopsPerActivePose !== undefined ? { loopsPerActivePose } : {}),
       ...(spriteRng ? { rng: spriteRng } : {}),
       ...(reducedMotion !== undefined ? { reducedMotion } : {}),
       ...(scheduleFrame ? { scheduleFrame } : {}),
@@ -358,6 +390,8 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
       spriteTracker.register(sessionId, tile.memberId, {
         idlePick: handle.idlePick,
         activePick: handle.activePick,
+        activeRotIdx: handle.activeRotIdx,
+        activeLoopCount: handle.activeLoopCount,
         isActive: handle.isActive,
         dispose: handle.dispose,
         pose: handle.pose,
