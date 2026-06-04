@@ -48,6 +48,7 @@ import type { GeneratedSpriteManifest } from "../sprites/spriteManifest.js";
 import { GENERATED_SPRITE_MANIFEST } from "../sprites/generatedManifest.js";
 import type { TunerStateTracker } from "../tunerStateTracker.js";
 import type { LiveManifestOverlay } from "../liveManifestOverlay.js";
+import { ACTIVE_WORK } from "../sprites/posePicker.js";
 import { createPreviewController } from "./playbackTunerPreview.js";
 import {
   computeCascadeSource,
@@ -61,6 +62,22 @@ import {
 /** Debounce windows (E4 spec §6). Overridable for tests. */
 export const PREVIEW_DEBOUNCE_MS = 120;
 export const SAVE_DEBOUNCE_MS = 500;
+
+/**
+ * Anim keys hidden from the tuner's animation dropdown (86ca4g2fh — cosmetic).
+ * `active_work` stays fully wired as the no-active-pool fallback in posePicker
+ * (`activePick ?? ACTIVE_WORK`) and is NOT removed from the manifest / json — it
+ * is only suppressed as a SELECTABLE tuner option, since the 3 active-pool poses
+ * (typing / work_cycle / work_focus) are what the sponsor actually tunes. Keyed
+ * off the canonical `ACTIVE_WORK` constant so a rename can't silently un-hide it.
+ */
+const TUNER_HIDDEN_ANIMS: ReadonlySet<string> = new Set([ACTIVE_WORK]);
+
+/** The selectable anim names for `char`, in manifest order, minus hidden keys. */
+function selectableAnimNames(char: { animations: Record<string, unknown> } | undefined): string[] {
+  if (!char) return [];
+  return Object.keys(char.animations).filter((n) => !TUNER_HIDDEN_ANIMS.has(n));
+}
 
 /** Slider bounds (E4 spec §3.2 / §3.3). */
 const SPEED_MIN = 0.25;
@@ -769,7 +786,9 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
    */
   function populateAnims(preferAnim?: string): void {
     const char = manifest.characters[selectedChar];
-    const animNames = char ? Object.keys(char.animations) : [];
+    // 86ca4g2fh: hide the legacy `active_work` fallback pose from the dropdown
+    // (still wired everywhere else — see TUNER_HIDDEN_ANIMS).
+    const animNames = selectableAnimNames(char);
     animSelect.replaceChildren();
     for (const name of animNames) {
       const opt = document.createElement("option");
@@ -801,7 +820,8 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     const char = manifest.characters[selectedChar];
     if (!char) return [];
     if (stepSourceSelect.value === "all") {
-      return Object.keys(char.animations);
+      // Mirror the dropdown exactly (86ca4g2fh hides active_work there too).
+      return selectableAnimNames(char);
     }
     // `activePool` may be absent on older / minimal manifests (component-test
     // fixtures predating the active-pool field) — default to empty.

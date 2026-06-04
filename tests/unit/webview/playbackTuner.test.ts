@@ -266,6 +266,95 @@ describe("AC1 — controls render", () => {
 });
 
 // ===========================================================================
+// 86ca4g2fh — the legacy `active_work` fallback pose is HIDDEN from the tuner
+// animation dropdown (cosmetic). It stays fully wired as the no-active-pool
+// fallback in posePicker + present in the manifest/json — only the dev-tuner
+// SELECTOR suppresses it, since the 3 active-pool poses (typing / work_cycle /
+// work_focus) are what the sponsor actually tunes.
+//
+// NON-VACUITY (revert-probe): drop the `selectableAnimNames` filter in
+// playbackTuner.ts `populateAnims` (revert to `Object.keys(char.animations)`)
+// and `active_work` reappears in the dropdown → assertion 1 below fails. The
+// pool-anim presence assertion (2) and the stepList-"all" mirror assertion (3)
+// guard against an over-broad filter that would also hide the live poses.
+// ===========================================================================
+
+describe("86ca4g2fh — active_work hidden from the tuner dropdown (fallback intact)", () => {
+  /** A character carrying active_work + the 3 active-pool poses, like F01/M01. */
+  function manifestWithActivePool(): GeneratedSpriteManifest {
+    const frames = (f: string) => [`sprites/x/${f}/0.png`, `sprites/x/${f}/1.png`];
+    return {
+      characters: {
+        "ClaudeTeam-X01-Dev": {
+          character: "ClaudeTeam-X01-Dev",
+          defaultIdle: "idle_coffee",
+          idlePool: ["idle_coffee"],
+          activePool: ["typing", "work_cycle", "work_focus"],
+          animations: {
+            idle_coffee: { folder: "coffee", frames: frames("coffee") },
+            active_work: { folder: "desk", frames: frames("desk"), playback: { speedMultiplier: 0.5 } },
+            active_read: { folder: "desk", frames: frames("desk2"), playback: { speedMultiplier: 0.5 } },
+            typing: { folder: "typing", frames: frames("typing"), playback: { speedMultiplier: 0.5 } },
+            work_cycle: { folder: "work_cycle", frames: frames("work_cycle"), playback: { speedMultiplier: 0.5 } },
+            work_focus: { folder: "work_focus", frames: frames("work_focus"), playback: { speedMultiplier: 0.5 } },
+          },
+        },
+      },
+    } as unknown as GeneratedSpriteManifest;
+  }
+
+  const dropdownValues = (root: HTMLElement): string[] =>
+    Array.from(
+      root.querySelectorAll<HTMLOptionElement>(".ct-tuner-anim-select option"),
+    ).map((o) => o.value);
+
+  it("active_work is absent from the dropdown but the 3 active-pool poses remain", () => {
+    const { root } = mount({ manifest: manifestWithActivePool() });
+    const vals = dropdownValues(root);
+    // (1) AC1: active_work is hidden.
+    expect(vals).not.toContain("active_work");
+    // (2) AC2: the 3 active-pool poses (and the unrelated idle + active_read)
+    // are untouched — the filter is surgical, not a broad active-pose cull.
+    expect(vals).toContain("typing");
+    expect(vals).toContain("work_cycle");
+    expect(vals).toContain("work_focus");
+    expect(vals).toContain("active_read");
+    expect(vals).toContain("idle_coffee");
+  });
+
+  it("the default-selected anim is never active_work (fallback heuristic skips the hidden key)", () => {
+    const { root } = mount({ manifest: manifestWithActivePool() });
+    // defaultIdle (idle_coffee) is selectable → it's chosen; never active_work.
+    expect(q<HTMLSelectElement>(root, ".ct-tuner-anim-select").value).not.toBe(
+      "active_work",
+    );
+    expect(q<HTMLSelectElement>(root, ".ct-tuner-anim-select").value).toBe(
+      "idle_coffee",
+    );
+  });
+
+  it("the step 'all' source mirrors the dropdown — active_work absent there too", () => {
+    const { root } = mount({ manifest: manifestWithActivePool() });
+    // Switch the step source to "all" (walks the dropdown contents) and step
+    // forward through the whole list; active_work must never be landed on.
+    const stepSource = q<HTMLSelectElement>(root, ".ct-tuner-step-source");
+    stepSource.value = "all";
+    stepSource.dispatchEvent(new Event("change"));
+    const next = q<HTMLButtonElement>(root, ".ct-tuner-step-next");
+    const animSel = q<HTMLSelectElement>(root, ".ct-tuner-anim-select");
+    const seen = new Set<string>();
+    // The "all" list has 5 selectable entries (6 anims − active_work). Step well
+    // past that to wrap fully and collect every reachable value.
+    for (let i = 0; i < 8; i++) {
+      seen.add(animSel.value);
+      next.click();
+    }
+    expect(seen.has("active_work")).toBe(false);
+    expect(seen.has("typing")).toBe(true);
+  });
+});
+
+// ===========================================================================
 // AC3 — cascade source table (effective value + layer, field-independent)
 // ===========================================================================
 
