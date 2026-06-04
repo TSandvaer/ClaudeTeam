@@ -652,6 +652,12 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // first tick's `shownAtMs` so accumulated on-screen time survives the box
   // swap and a sub-frame re-render cadence still eventually advances (86ca3a7x3).
   let carryElapsedMs = 0;
+  // 86ca4atwt §A.3 — one-shot guard against double-counting a rotation wrap
+  // across the poll re-render. Armed in the RESUME block below when the prior
+  // box re-seats us EXACTLY on `winEnd` (the wrap frame it already counted);
+  // consumed on the resumed box's first `willWrap` tick so a genuine SECOND
+  // loop still counts. False on a fresh box / non-winEnd resume.
+  let wrapAlreadyCounted = false;
 
   // ── Playback-position RESUME across re-renders (E1 live-preview fix
   // 86ca2c4t8) ────────────────────────────────────────────────────────────
@@ -698,6 +704,12 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     const elapsed =
       typeof priorElapsedMs === "number" && priorElapsedMs >= 0 ? priorElapsedMs : 0;
     carryElapsedMs = elapsed;
+    // 86ca4atwt §A.3 — if the re-render re-seats us EXACTLY on `winEnd`, the prior
+    // box already incremented `activeLoopCount` for that wrap (on the tick that
+    // painted winEnd) and threaded the post-increment value back as
+    // `priorActiveLoopCount`. The resumed box's first tick re-paints winEnd and
+    // would re-fire `willWrap`, so arm a one-shot suppression to count it ONCE.
+    wrapAlreadyCounted = frameIdx === winEnd;
   }
 
   let handle: number | null = null;
@@ -795,12 +807,14 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     // on, A.2). Detect it BEFORE mutating `frameIdx`: we're at winEnd, moving
     // forward, and not pingpong (active poses are loop mode — final dwell is
     // idle-only). On a wrap, increment the loop-count; once it reaches the cadence
-    // advance the cursor IN ORDER through the pool and reset the count. The wrap is
-    // counted exactly once — in the box that performs it — and `activeLoopCount`
-    // seeds from the prior post-increment value, so the count is monotonic across
-    // the poll re-render with no double-count on the resumed wrap (A.3). The
-    // resulting cursor is reported on the handle; the NEXT render resolves the new
-    // pool pose from it (the pose-swap happens at re-render, not mid-box).
+    // advance the cursor IN ORDER through the pool and reset the count. A.3 demands
+    // the wrap be counted EXACTLY ONCE across the poll re-render: the prior box
+    // counts it on the tick that paints winEnd, then threads the post-increment
+    // value + `priorFrameIdx === winEnd` forward; the resumed box re-paints winEnd
+    // on its first tick and would re-fire `willWrap`, so `wrapAlreadyCounted`
+    // (armed in the resume block) suppresses that one re-count. The resulting
+    // cursor is reported on the handle; the NEXT render resolves the new pool pose
+    // from it (the pose-swap happens at re-render, not mid-box).
     const willWrap = rotates && !isPingpong && frameIdx === winEnd;
     // Loop-completion detection for the tuner Cycle toggle (ticket 86ca4atwt §B.4)
     // — independent of `rotates` so it fires for ANY pose (incl. idle, for the
@@ -831,11 +845,18 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       onLoopComplete();
     }
     if (willWrap) {
-      activeLoopCount += 1;
-      if (activeLoopCount >= cadence) {
-        const pool = char.activePool;
-        activeRotIdx = (activeRotIdx + 1) % pool.length;
-        activeLoopCount = 0;
+      if (wrapAlreadyCounted) {
+        // The poll re-render re-seated us on winEnd, which the PRIOR box already
+        // counted. Consume the one-shot suppression so the NEXT genuine wrap (a
+        // real second loop) still counts — A.3, counted exactly once.
+        wrapAlreadyCounted = false;
+      } else {
+        activeLoopCount += 1;
+        if (activeLoopCount >= cadence) {
+          const pool = char.activePool;
+          activeRotIdx = (activeRotIdx + 1) % pool.length;
+          activeLoopCount = 0;
+        }
       }
     }
     handle = sched(tick, ms);

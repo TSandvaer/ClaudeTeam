@@ -220,6 +220,57 @@ describe("active-pool rotation — survives the ~2s poll re-render (A.3)", () =>
     steps(s2.step, 3);
     expect(second.activeRotIdx).toBe(2);
   });
+
+  it("cadence=2: a re-render landing EXACTLY on the wrap frame counts the wrap ONCE", () => {
+    // The seam Felix flagged (PR #192 review). At cadence >= 2 — the SHIPPED
+    // default — if the poll re-render re-seats the resumed box on `winEnd`, the
+    // very frame the prior box just counted, the resumed box's first tick
+    // re-paints winEnd and would re-fire `willWrap`. The wrap must be counted
+    // exactly once across the box swap (A.3) or rotation advances after ONE real
+    // loop instead of two. The mid-loop test above can't catch this: it lands
+    // mid-window (never on winEnd) and is cadence 1.
+    const s1 = recordingScheduler();
+    const first = workBox(
+      { priorWasActive: false, loopsPerActivePose: 2 },
+      s1.schedule,
+    );
+    // Mount paints frame 0; two steps put the DISPLAYED frame on winEnd (frame 2)
+    // with the wrap counted exactly once → loopCount 1, cursor still 0 (cadence 2).
+    steps(s1.step, 2);
+    expect(first.currentFrame().frameIdx).toBe(2); // winEnd on screen
+    expect(first.activeLoopCount).toBe(1); // counted once
+    expect(first.activeRotIdx).toBe(0); // not advanced yet (cadence 2)
+
+    // Poll re-render re-seats a NEW box EXACTLY on winEnd, seeded from the prior
+    // post-wrap-count values — the double-count trap.
+    const s2 = recordingScheduler();
+    const second = workBox(
+      {
+        loopsPerActivePose: 2,
+        priorActiveRotIdx: first.activeRotIdx,
+        priorActiveLoopCount: first.activeLoopCount,
+        priorPose: poseOf(first),
+        priorFrameIdx: first.currentFrame().frameIdx,
+        priorDirection: first.currentFrame().direction,
+        priorElapsedMs: first.currentFrame().elapsedMs,
+      },
+      s2.schedule,
+    );
+    // The resumed box's first (synchronous mount) tick re-painted winEnd. The wrap
+    // must be SUPPRESSED: cursor still 0, loopCount still 1. WITHOUT the fix the
+    // wrap re-counts → loopCount hits 2 → the cursor over-advances to 1 HERE
+    // (this assertion is the revert-probe — it fails on the un-fixed code).
+    expect(poseOf(second)).toBe("work_a");
+    expect(second.activeRotIdx).toBe(0);
+    expect(second.activeLoopCount).toBe(1);
+
+    // A FULL genuine second loop on the resumed box NOW advances (two real loops
+    // total → cadence 2 satisfied), proving the suppression was one-shot, not a
+    // permanent stall.
+    steps(s2.step, 3);
+    expect(second.activeRotIdx).toBe(1);
+    expect(second.activeLoopCount).toBe(0);
+  });
 });
 
 describe("active-pool rotation — episode boundaries (A.4 / A.5)", () => {
