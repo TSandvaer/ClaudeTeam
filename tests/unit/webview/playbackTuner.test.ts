@@ -272,11 +272,27 @@ describe("AC1 — controls render", () => {
 // SELECTOR suppresses it, since the 3 active-pool poses (typing / work_cycle /
 // work_focus) are what the sponsor actually tunes.
 //
-// NON-VACUITY (revert-probe): drop the `selectableAnimNames` filter in
-// playbackTuner.ts `populateAnims` (revert to `Object.keys(char.animations)`)
-// and `active_work` reappears in the dropdown → assertion 1 below fails. The
-// pool-anim presence assertion (2) and the stepList-"all" mirror assertion (3)
-// guard against an over-broad filter that would also hide the live poses.
+// NON-VACUITY (revert-probe), TWO independent filter sites — each verified by a
+// local revert that turns the relevant block(s) red:
+//
+//  - DROPDOWN site: drop the `selectableAnimNames` filter in `populateAnims`
+//    (revert to `Object.keys(char.animations)`) → `active_work` reappears in the
+//    dropdown → assertion 1 in the first `it` below fails. The pool-anim
+//    presence assertions guard against an over-broad filter that would also hide
+//    the live poses.
+//
+//  - stepList() "all" site (playbackTuner.ts:824): revert
+//    `return selectableAnimNames(char)` → `return Object.keys(char.animations)`.
+//    The third `it` below reads the STEP READOUT (`.ct-tuner-step-readout`),
+//    whose text is `"<anim> — <i+1> / <N>"` derived DIRECTLY from `stepList()`
+//    (N = list.length; the leading anim = list[idx]) — NOT from `animSel.value`,
+//    which the <select> coerces to "" when the option is absent (the vacuity bug
+//    the prior version had: it asserted on `animSel.value` and stayed green under
+//    the :824 revert because `seen` collected "" not "active_work"). Under the
+//    :824 revert N becomes 6 (fails the count assertion) AND `active_work`
+//    surfaces as a readout anim during the walk (fails the seen-set assertion).
+//    Verified locally: reverting :824 turns the third `it` red on BOTH assertions;
+//    restoring the filter turns it green.
 // ===========================================================================
 
 describe("86ca4g2fh — active_work hidden from the tuner dropdown (fallback intact)", () => {
@@ -333,24 +349,52 @@ describe("86ca4g2fh — active_work hidden from the tuner dropdown (fallback int
     );
   });
 
-  it("the step 'all' source mirrors the dropdown — active_work absent there too", () => {
+  /**
+   * Parse the step readout text `"<anim> — <i+1> / <N>"` into its anim name and
+   * the total count N. The readout is rendered by `refreshStepReadout()` straight
+   * off `stepList()` (the actual "all"-source list), so it reflects the filtered
+   * list independently of the <select>'s value-coercion behavior.
+   */
+  const parseStepReadout = (
+    root: HTMLElement,
+  ): { anim: string; count: number } => {
+    const text = q<HTMLElement>(root, ".ct-tuner-step-readout").textContent ?? "";
+    const m = /^(.+?) — \d+ \/ (\d+)$/.exec(text);
+    if (!m) throw new Error(`unparseable step readout: "${text}"`);
+    return { anim: m[1], count: Number(m[2]) };
+  };
+
+  it("the step 'all' source mirrors the filtered list — active_work absent from stepList()", () => {
     const { root } = mount({ manifest: manifestWithActivePool() });
-    // Switch the step source to "all" (walks the dropdown contents) and step
-    // forward through the whole list; active_work must never be landed on.
+    // Switch the step source to "all" (mirrors selectableAnimNames(), the same
+    // filter the dropdown uses — playbackTuner.ts:824).
     const stepSource = q<HTMLSelectElement>(root, ".ct-tuner-step-source");
     stepSource.value = "all";
     stepSource.dispatchEvent(new Event("change"));
     const next = q<HTMLButtonElement>(root, ".ct-tuner-step-next");
-    const animSel = q<HTMLSelectElement>(root, ".ct-tuner-anim-select");
-    const seen = new Set<string>();
-    // The "all" list has 5 selectable entries (6 anims − active_work). Step well
-    // past that to wrap fully and collect every reachable value.
+
+    // (1) NON-VACUOUS count assertion. The readout's N is `stepList().length`.
+    // Filter intact → 5 (6 anims − active_work). The :824 revert makes it 6.
+    // Asserting on the readout N (not animSel.value) is what catches the revert.
+    const start = parseStepReadout(root);
+    expect(start.count).toBe(5);
+
+    // (2) NON-VACUOUS membership assertion. Walk forward past the list length and
+    // collect the anim name the READOUT reports each step. The readout anim is
+    // `stepList()[idx]` (or selectedAnim when off-list) — so when the :824 revert
+    // lets stepList() include active_work, the walk lands on it and it surfaces
+    // here, even though `animSel.value` would coerce to "". Filter intact: never.
+    const seen = new Set<string>([start.anim]);
     for (let i = 0; i < 8; i++) {
-      seen.add(animSel.value);
       next.click();
+      const r = parseStepReadout(root);
+      expect(r.count).toBe(5); // N stays 5 across the whole walk
+      seen.add(r.anim);
     }
     expect(seen.has("active_work")).toBe(false);
     expect(seen.has("typing")).toBe(true);
+    // The full filtered "all" list is reachable (5 distinct selectable poses).
+    expect(seen.size).toBe(5);
   });
 });
 
