@@ -9,9 +9,9 @@
  * flipped without invalidating the cached agent tree, and each pass produces
  * BOTH the filtered tree AND the wire count in one walk.
  *
- * (The global state-driven `hideFinishedFilter` / `hideIdleFilter` siblings
- * were removed by 86ca1gdbp — the global hide chips were superseded by the
- * whole-team-always-visible default + this per-member hide.)
+ * (The global state-driven hide-finished / hide-idle filters this comment
+ * once referenced were removed by 86ca1gdbp — the global hide chips were
+ * superseded by the whole-team-always-visible default + this per-member hide.)
  *
  * ## Crucial difference from a state-driven filter
  *
@@ -98,9 +98,10 @@ export interface HideMembersResult {
  * the input ref directly (identity transform) so callers can skip downstream
  * work when nothing is hidden.
  *
- * @param tree       Input tree (typically after the hide-finished / hide-idle
- *                   filters have already run — order is irrelevant since the
- *                   predicates are disjoint, but keep a deterministic sequence).
+ * @param tree       Input tree (the reducer output, after `removeMembersFilter`
+ *                   has run — order between the two presentation filters is
+ *                   irrelevant since their predicates are disjoint, but keep a
+ *                   deterministic sequence).
  * @param hiddenSet  The persisted hidden-member set as `HiddenMemberKey`
  *                   strings. The filter only READS it — never mutates it, never
  *                   adds to it. (Auto-hide is forbidden; AC4.)

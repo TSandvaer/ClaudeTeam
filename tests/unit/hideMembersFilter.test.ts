@@ -2,8 +2,9 @@
  * Unit tests for src/extension/state/hideMembersFilter.ts
  * (E-06a / EPIC 86ca11187 §7.2 — reversible hide-agent, HOST portion).
  *
- * Sibling of `hideIdleFilter.test.ts` / `hideFinishedFilter.test.ts`. The
- * predicate differs: suppression is by `(teamId, memberId)` set-membership,
+ * Sibling of `removeMembersFilter.test.ts`. (The earlier state-driven
+ * hide-idle / hide-finished filter tests were removed alongside their filters
+ * by 86ca1gdbp.) The predicate here is by `(teamId, memberId)` set-membership,
  * INDEPENDENT of tile state.
  *
  *   - Empty set: identity transform — same reference, count 0.
