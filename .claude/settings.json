@@ -26,6 +26,8 @@
       "Bash(yarn:*)",
       "Bash(vsce:*)",
       "Edit(.claude/agents/*.md)",
+      "Edit(team/**)",
+      "Write(team/**)",
       "mcp__clickup__update_task"
     ]
   },
