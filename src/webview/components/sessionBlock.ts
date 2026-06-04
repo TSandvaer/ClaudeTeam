@@ -116,6 +116,8 @@ export interface SessionBlockProps {
   nowMs?: number;
   /** Host-injected sprite base URI — threaded to each team card / tile. */
   spriteBaseUri?: string;
+  /** Active-pool rotation cadence (ticket 86ca4atwt) — threaded to each tile. */
+  loopsPerActivePose?: number;
   /** Webview-local sprite playback tracker. */
   spriteTracker?: SpriteTracker;
 }
@@ -132,6 +134,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
     expandPersonaTiles,
     nowMs,
     spriteBaseUri,
+    loopsPerActivePose,
     spriteTracker,
   } = props;
 
@@ -244,6 +247,7 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
         ...(expandPersonaTiles !== undefined ? { expandPersonaTiles } : {}),
         ...(nowMs !== undefined ? { nowMs } : {}),
         ...(spriteBaseUri !== undefined ? { spriteBaseUri } : {}),
+        ...(loopsPerActivePose !== undefined ? { loopsPerActivePose } : {}),
         ...(spriteTracker ? { spriteTracker } : {}),
       }),
     );

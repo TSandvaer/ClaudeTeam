@@ -29,6 +29,15 @@ interface SpriteEntry {
   idlePick: string | null;
   /** Active-pool pick the prior box used (null if idle / active_read / no pool). */
   activePick: string | null;
+  /**
+   * Active-pool ROTATION cursor + completed-loop count the prior box reached
+   * (ticket 86ca4atwt). Read at re-render time (LIVE — the prior handle's getters)
+   * so an active episode walks the pool IN ORDER across the ~2s poll tick. Kept
+   * intact on an idle / `active_read` render so read→work RESUMES rotation rather
+   * than restarting (spec A.5 — the tracker holds the last non-read cursor).
+   */
+  activeRotIdx: number;
+  activeLoopCount: number;
   isActive: boolean;
   dispose: () => void;
   /** Canonical pose the prior box played (for resume pose-match guard). */
@@ -65,6 +74,18 @@ export interface SpriteTracker {
    * same anim across re-renders (ticket 86ca3mge9).
    */
   priorActivePick(sessionId: string, memberId: string): string | undefined;
+  /**
+   * Prior active-pool ROTATION cursor for this member (undefined if none). Threaded
+   * so an active episode advances IN ORDER through the pool across re-renders, and
+   * survives `active_read` so read→work resumes (ticket 86ca4atwt).
+   */
+  priorActiveRotIdx(sessionId: string, memberId: string): number | undefined;
+  /**
+   * Prior completed-loop count for the current active pose (undefined if none).
+   * Threaded so the wrap-count is monotonic across re-renders (no double-count on a
+   * resumed wrap — spec A.3). Ticket 86ca4atwt.
+   */
+  priorActiveLoopCount(sessionId: string, memberId: string): number | undefined;
   /** Whether the prior render's pose for this member was active. */
   priorWasActive(sessionId: string, memberId: string): boolean;
   /**
@@ -84,6 +105,8 @@ export interface SpriteTracker {
     entry: {
       idlePick: string | null;
       activePick: string | null;
+      activeRotIdx: number;
+      activeLoopCount: number;
       isActive: boolean;
       dispose: () => void;
       pose: string;
@@ -111,6 +134,14 @@ export function createSpriteTracker(): SpriteTracker {
     priorActivePick(sessionId, memberId) {
       const e = entries.get(`${sessionId}:${memberId}`);
       return e ? (e.activePick ?? undefined) : undefined;
+    },
+    priorActiveRotIdx(sessionId, memberId) {
+      const e = entries.get(`${sessionId}:${memberId}`);
+      return e ? e.activeRotIdx : undefined;
+    },
+    priorActiveLoopCount(sessionId, memberId) {
+      const e = entries.get(`${sessionId}:${memberId}`);
+      return e ? e.activeLoopCount : undefined;
     },
     priorWasActive(sessionId, memberId) {
       const e = entries.get(`${sessionId}:${memberId}`);

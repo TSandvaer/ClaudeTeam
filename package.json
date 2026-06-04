@@ -122,6 +122,12 @@
           "default": false,
           "description": "Show Claude Code sessions from all workspaces, not just the current VS Code window. Default: false (only sessions whose cwd matches an open workspace folder are shown)."
         },
+        "claudeteam.activePoolLoopsPerPose": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "description": "How many full animation loops a working agent's tile plays on each active-pool pose before rotating IN ORDER to the next pose. Default 2 (calm rotation). 1 = advance after every loop (most responsive); raise to 3+ for slower rotation. A per-character animations.json top-level activePoolLoopsPerPose overrides this. Values ≤0 are clamped to 1 (the tile never freezes on one pose). Takes effect after a webview reload."
+        },
         "claudeteam.collapsePersonaTiles": {
           "type": "boolean",
           "default": true,

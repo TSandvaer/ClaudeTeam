@@ -343,19 +343,22 @@ describe("idle-episode stickiness — AC2 / spec §3.3", () => {
 // (verified in generatedManifest.ts) → rng 0 → typing, 0.5 → work_cycle,
 // 0.99 → work_focus.
 //
+// 86ca4atwt: the active pool now ROTATES IN ORDER (was a random sticky draw).
+// A fresh active episode starts at activePool[0] = typing; within an episode the
+// cursor SURVIVES the poll re-render (same pose until a loop-advance), and a Read
+// FREEZES then RESUMES the cursor (read→work is a continuation, not a reset).
+//
 // Non-vacuity (revert checklist):
-//   - "sticky across the poll re-render": if agentTile stops threading
-//     priorActivePick/priorWasActive (or createSpriteBox drops the
-//     freshActiveEpisode keep-branch), the second render re-rolls to typing →
-//     the `secondPose === firstPose` assertion FAILS.
-//   - "read→work re-rolls": if the active_read null-out is removed, the read
-//     render registers a non-null pick, so the work render keeps it (no
-//     re-roll) → the work pose stays whatever the read leg threaded instead of
-//     the rng pick → the `workPose === "work_focus"` (rng 0.99) assertion FAILS.
-describe("active-work pool stickiness — END-TO-END through the tile (86ca3mge9)", () => {
+//   - "cursor survives the poll re-render": if agentTile stops threading
+//     priorActiveRotIdx/priorActiveLoopCount (or createSpriteBox drops the
+//     resume), the second render snaps back to activePool[0] when the cursor was
+//     elsewhere → the resume assertion FAILS.
+//   - "read→work resumes": if the cursor isn't preserved across active_read, the
+//     work render restarts at activePool[0] after a non-[0] read → the resume
+//     assertion FAILS.
+describe("active-pool rotation — END-TO-END through the tile (86ca4atwt)", () => {
   it("keeps the same working pose across re-renders within an active episode", () => {
     const tracker = createSpriteTracker();
-    let rngVal = 0.5; // first active render → work_cycle (idx 1)
     const render = () =>
       renderAgentTile({
         tile: tile({ memberId: "maya", state: "running", activity: "tool:Edit reducer.ts", agentId: "a10" }),
@@ -363,22 +366,35 @@ describe("active-work pool stickiness — END-TO-END through the tile (86ca3mge9
         postMessage: () => undefined,
         spriteBaseUri: BASE,
         spriteTracker: tracker,
-        spriteRng: () => rngVal,
+        spriteRng: () => 0.99, // rng no longer selects the active pool member
+        // No frame scheduler stepping → no loop completes → cursor never advances,
+        // so the pose is STABLE across the two poll re-renders.
         scheduleFrame: recordingScheduler().schedule,
       });
     const first = render();
     const firstPose = first.querySelector(".sprite-box")?.getAttribute("data-pose");
-    expect(firstPose).toBe("work_cycle");
-    // A naive re-roll under the changed rng would pick work_focus; stickiness
-    // must keep work_cycle because the prior render was also active (same episode).
-    rngVal = 0.99;
+    expect(firstPose).toBe("typing"); // activePool[0], in order
     const second = render();
     const secondPose = second.querySelector(".sprite-box")?.getAttribute("data-pose");
-    expect(secondPose).toBe(firstPose);
+    expect(secondPose).toBe(firstPose); // cursor survived the re-render
   });
 
-  it("re-rolls the working pose on a read→work transition (active_read nulls the pick)", () => {
+  it("read→work RESUMES the rotation cursor from a NON-ZERO position (active_read freezes it)", () => {
     const tracker = createSpriteTracker();
+    // Seed the tracker as though a prior work render had rotated to cursor 2
+    // (work_focus) within the active episode — so a fresh reset (cursor 0) is
+    // distinguishable from a resume (cursor 2). This is exactly what the tile
+    // registers after a loop-advance.
+    tracker.register("s1", "maya", {
+      idlePick: null,
+      activePick: "work_focus",
+      activeRotIdx: 2,
+      activeLoopCount: 0,
+      isActive: true,
+      dispose: () => undefined,
+      pose: "work_focus",
+      currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
+    });
     const renderRead = () =>
       renderAgentTile({
         tile: tile({ memberId: "maya", state: "running", activity: "tool:Read src/x.ts", agentId: "a11" }),
@@ -386,25 +402,24 @@ describe("active-work pool stickiness — END-TO-END through the tile (86ca3mge9
         postMessage: () => undefined,
         spriteBaseUri: BASE,
         spriteTracker: tracker,
-        spriteRng: () => 0, // would be typing if Read drew from the pool — it must NOT
+        spriteRng: () => 0,
         scheduleFrame: recordingScheduler().schedule,
       });
-    const renderWork = (rng: number) =>
+    const renderWork = () =>
       renderAgentTile({
         tile: tile({ memberId: "maya", state: "running", activity: "tool:Edit reducer.ts", agentId: "a11" }),
         sessionId: "s1",
         postMessage: () => undefined,
         spriteBaseUri: BASE,
         spriteTracker: tracker,
-        spriteRng: () => rng,
+        spriteRng: () => 0,
         scheduleFrame: recordingScheduler().schedule,
       });
+    // A Read freezes the cursor at 2 (the read pose renders; cursor not reset).
     const readEl = renderRead();
-    // The read leg renders active_read and registers a NULL active pick.
     expect(readEl.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("active_read");
-    // read→work: the prior null pick makes this a fresh active episode → the
-    // working pose comes from rng (0.99 → work_focus), NOT a stale threaded pick.
-    const workEl = renderWork(0.99);
+    // read→work: the cursor RESUMES at 2 → work_focus (NOT a reset to typing).
+    const workEl = renderWork();
     expect(workEl.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("work_focus");
   });
 

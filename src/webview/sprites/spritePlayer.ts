@@ -49,7 +49,7 @@
 import type { AgentState } from "../../shared/types.js";
 import type { GeneratedSpriteManifest, SpriteCharacter } from "./spriteManifest.js";
 import { GENERATED_SPRITE_MANIFEST } from "./generatedManifest.js";
-import { pickActive, pickIdle, poseNameForTile, resolvePose } from "./posePicker.js";
+import { pickIdle, poseNameForTile, resolvePose } from "./posePicker.js";
 
 /** Default slow per-frame duration (ms) — mirrors --ct-anim-frame-ms-default. */
 export const FRAME_MS_DEFAULT = 160;
@@ -224,6 +224,33 @@ export interface SpriteBoxProps {
    */
   priorActivePick?: string;
   /**
+   * The active-pool ROTATION CURSOR from the PRIOR render of this tile (an index
+   * into `char.activePool`). Threaded by the caller so an ACTIVE working episode
+   * advances IN ORDER through the pool across the ~2s poll re-renders rather than
+   * re-rolling or resetting every tick — the in-order analogue of the sticky
+   * `priorActivePick` (ticket 86ca4atwt). Undefined on first render, on idle→active
+   * (fresh active episode → resets to 0), or when the prior pose was idle.
+   * Survives an `active_read` render (the tracker keeps the last non-read cursor)
+   * so read→work RESUMES rotation rather than restarting.
+   */
+  priorActiveRotIdx?: number;
+  /**
+   * The count of COMPLETED loops on the current active pose this episode, from the
+   * PRIOR render (ticket 86ca4atwt). Threaded back so the wrap-count is monotonic
+   * across the poll re-render and a wrap that just incremented in the prior box is
+   * not double-counted by the resuming box. Undefined → treated as 0.
+   */
+  priorActiveLoopCount?: number;
+  /**
+   * Loops-per-pose cadence for active-pool rotation (ticket 86ca4atwt). After the
+   * current active pose's frame sequence completes this many full loops, the cursor
+   * advances to the next pool member. Resolved by the caller (per-char
+   * `animations.json` `activePoolLoopsPerPose` → config `claudeteam.activePoolLoopsPerPose`
+   * → engine default). `<= 0` / non-finite is clamped to 1 here (never freeze on one
+   * pose). Absent → 1.
+   */
+  loopsPerActivePose?: number;
+  /**
    * Whether the prior render was an ACTIVE pose. Combined with the current
    * pose to decide if this is a "fresh idle episode" (active→idle) that may
    * re-roll the idle pick — AND, symmetrically, a "fresh active episode"
@@ -307,6 +334,16 @@ export interface SpriteBoxProps {
    * `priorFrameIdx`.
    */
   priorPose?: string;
+  /**
+   * Fired ONCE each time the loop completes a full cycle (the loop-mode wrap
+   * winEnd→winStart, OR the pingpong forward arrival back at winStart). Used by the
+   * Playback Tuner's Cycle toggle (ticket 86ca4atwt §B.4) to auto-advance through
+   * the pool over the room on Feature A's cadence — a webview-local loop-count
+   * counter mirroring the dashboard rotation. Absent → no callback (the dashboard
+   * tile path does not use it; rotation there advances via the cursor/handle). The
+   * callback fires INSIDE `tick()` at the wrap, BEFORE the next frame is scheduled.
+   */
+  onLoopComplete?: () => void;
 }
 
 /** Handle returned so the caller can stop the timer on tile teardown. */
@@ -322,6 +359,20 @@ export interface SpriteBoxHandle {
    * active working episode keeps the same anim (ticket 86ca3mge9).
    */
   activePick: string | null;
+  /**
+   * The active-pool ROTATION CURSOR this box used (index into `char.activePool`),
+   * advanced as the active pose's loops complete (ticket 86ca4atwt). Threaded back
+   * on re-render so the next box continues the in-order rotation. For an idle /
+   * `active_read` / no-pool render this carries the seeded cursor unchanged (the
+   * tracker keeps the last non-read value so read→work resumes).
+   */
+  activeRotIdx: number;
+  /**
+   * The count of COMPLETED loops on the current active pose this episode (ticket
+   * 86ca4atwt). Threaded back so the wrap-count stays monotonic across the poll
+   * re-render and the cursor-advance check resumes mid-cadence without a reset.
+   */
+  activeLoopCount: number;
   /** Whether the rendered pose is an active pose. For re-render threading. */
   isActive: boolean;
   /**
@@ -370,7 +421,13 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     activity,
     spriteBaseUri,
     priorIdlePick,
-    priorActivePick,
+    // `priorActivePick` (86ca3mge9) is retained on SpriteBoxProps for caller
+    // back-compat but is no longer read here: the active pose is derived from the
+    // rotation CURSOR (`priorActiveRotIdx`) since 86ca4atwt, not from a sticky
+    // random pick. Intentionally NOT destructured.
+    priorActiveRotIdx,
+    priorActiveLoopCount,
+    loopsPerActivePose,
     priorWasActive,
     rng = Math.random,
     reducedMotion,
@@ -382,6 +439,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     priorPose,
     priorElapsedMs,
     nowMs,
+    onLoopComplete,
   } = props;
 
   // ── Pose selection (AC2) ────────────────────────────────────────────────
@@ -396,13 +454,68 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   const wantActive = state === "running";
   let idlePick: string | null = null;
   let activePick: string | null = null;
+  // Active-pool ROTATION cursor + loop-count (ticket 86ca4atwt). The cursor is an
+  // index into `char.activePool`; the loop-count is how many full loops the current
+  // pose has completed this episode. Both seed from the prior render and advance
+  // INSIDE tick() (frame-completion-driven), then are threaded back on re-render so
+  // rotation walks the pool IN ORDER across the ~2s poll tick — mirroring how the
+  // sticky `priorActivePick`/`priorActiveRotIdx` survives the re-render.
+  //   - idle / available / finished / error → no rotation; the cursor + loop-count
+  //     pass through the prior values unchanged so a future active episode resumes
+  //     them (read→work; see below) but idle→active resets them to 0.
+  //   - running → seed from the prior cursor UNLESS this is a fresh active episode
+  //     (idle→active OR no prior cursor), in which case rotation restarts at
+  //     activePool[0] (spec A.4: "in order from the top").
+  // `loopsPerActivePose` cadence: clamp <=0 / non-finite up to 1 so the pose never
+  // freezes and the modulo math stays well-defined (spec A.2 last line).
+  // Cadence cascade (spec A.2): per-character `char.activePoolLoopsPerPose` (layer
+  // 1, baked from animations.json) wins over the threaded `loopsPerActivePose`
+  // (layer 2, the config setting), which wins over the engine default 1 (layer 3).
+  // A finite-positive value is used as-is (truncated); anything else falls through
+  // to the next layer, and the final clamp guarantees >= 1 (never freeze).
+  const cadenceRaw =
+    typeof char.activePoolLoopsPerPose === "number" &&
+    Number.isFinite(char.activePoolLoopsPerPose) &&
+    char.activePoolLoopsPerPose > 0
+      ? char.activePoolLoopsPerPose
+      : loopsPerActivePose;
+  const cadence =
+    typeof cadenceRaw === "number" &&
+    Number.isFinite(cadenceRaw) &&
+    cadenceRaw > 0
+      ? Math.trunc(cadenceRaw)
+      : 1;
+  let activeRotIdx = priorActiveRotIdx ?? 0;
+  let activeLoopCount = priorActiveLoopCount ?? 0;
   if (!wantActive) {
     const freshIdleEpisode = priorWasActive === true || priorIdlePick === undefined;
     idlePick = freshIdleEpisode ? pickIdle(char, rng) : priorIdlePick;
   } else {
+    // Active-pool ROTATION fresh-episode predicate (spec A.4) — keyed on the
+    // CURSOR carrier `priorActiveRotIdx`, NOT `priorActivePick`. Across an
+    // `active_read` render the read pose is not pooled so `priorActivePick` is
+    // dropped to undefined, but the cursor survives in the tracker — keying on the
+    // cursor means read→work RESUMES (not a fresh reset), while a true idle→active
+    // gap (priorWasActive false) OR a first render (priorActiveRotIdx undefined)
+    // restarts rotation at activePool[0] (spec A.4 + A.5).
     const freshActiveEpisode =
-      priorWasActive !== true || priorActivePick === undefined;
-    activePick = freshActiveEpisode ? pickActive(char, rng) : priorActivePick;
+      priorWasActive !== true || priorActiveRotIdx === undefined;
+    if (freshActiveEpisode) {
+      // idle→active (or first render): restart rotation at the top of the pool.
+      activeRotIdx = 0;
+      activeLoopCount = 0;
+    }
+    // Resolve the rotation pose from the cursor (in-order pick). When the pool is
+    // non-empty this REPLACES the random `pickActive` draw — the cursor IS the
+    // pick. Empty pool → null (poseNameForTile falls back to the single
+    // `active_work`); the cursor stays 0 and never advances (A.6).
+    const pool = char.activePool;
+    if (pool.length > 0) {
+      activeRotIdx = activeRotIdx % pool.length;
+      activePick = pool[activeRotIdx];
+    } else {
+      activePick = null;
+    }
   }
 
   const { name, isActive } = poseNameForTile(state, activity, idlePick, activePick);
@@ -416,6 +529,18 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   if (isActive && name !== activePick) {
     activePick = null;
   }
+
+  // Whether THIS render is a rotating active-pool pose (ticket 86ca4atwt) — i.e.
+  // the cursor should advance on loop-completion in tick(). True only when the
+  // rendered pose IS the pool pick the cursor resolved (`activePick` survived the
+  // normalization above). False for idle poses (cursor frozen, threaded through
+  // unchanged) AND for `active_read` (the read pose is not a pool member, so the
+  // normalization nulled `activePick` → cursor/loop-count freeze and resume on the
+  // next non-read render, per spec A.5). A single-/empty-pool degrades correctly:
+  // empty pool → activePick null → no rotation (A.6); single member → cursor wraps
+  // 0→0, a visual no-op (A.6).
+  const rotates =
+    isActive && activePick !== null && char.activePool.length > 0;
 
   // Canonical pose name for this render (active name or idle pick). Used for
   // playback-position resume (E1 fix 86ca2c4t8) and exposed on the handle so a
@@ -442,6 +567,8 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       dispose: () => undefined,
       idlePick,
       activePick,
+      activeRotIdx,
+      activeLoopCount,
       isActive,
       pose: canonicalName,
       currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
@@ -462,6 +589,8 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       dispose: () => undefined,
       idlePick,
       activePick,
+      activeRotIdx,
+      activeLoopCount,
       isActive,
       pose: canonicalName,
       currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
@@ -523,6 +652,12 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // first tick's `shownAtMs` so accumulated on-screen time survives the box
   // swap and a sub-frame re-render cadence still eventually advances (86ca3a7x3).
   let carryElapsedMs = 0;
+  // 86ca4atwt §A.3 — one-shot guard against double-counting a rotation wrap
+  // across the poll re-render. Armed in the RESUME block below when the prior
+  // box re-seats us EXACTLY on `winEnd` (the wrap frame it already counted);
+  // consumed on the resumed box's first `willWrap` tick so a genuine SECOND
+  // loop still counts. False on a fresh box / non-winEnd resume.
+  let wrapAlreadyCounted = false;
 
   // ── Playback-position RESUME across re-renders (E1 live-preview fix
   // 86ca2c4t8) ────────────────────────────────────────────────────────────
@@ -569,6 +704,12 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     const elapsed =
       typeof priorElapsedMs === "number" && priorElapsedMs >= 0 ? priorElapsedMs : 0;
     carryElapsedMs = elapsed;
+    // 86ca4atwt §A.3 — if the re-render re-seats us EXACTLY on `winEnd`, the prior
+    // box already incremented `activeLoopCount` for that wrap (on the tick that
+    // painted winEnd) and threaded the post-increment value back as
+    // `priorActiveLoopCount`. The resumed box's first tick re-paints winEnd and
+    // would re-fire `willWrap`, so arm a one-shot suppression to count it ONCE.
+    wrapAlreadyCounted = frameIdx === winEnd;
   }
 
   let handle: number | null = null;
@@ -660,6 +801,32 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       ms = Math.max(1, ms - carry);
     }
     firstTick = false;
+    // Active-pool ROTATION wrap detection (ticket 86ca4atwt). A `rotates` pose
+    // (running, non-read, non-empty pool) completes ONE full loop each time the
+    // loop-mode advance wraps winEnd→winStart (the same wrap point the spec keys
+    // on, A.2). Detect it BEFORE mutating `frameIdx`: we're at winEnd, moving
+    // forward, and not pingpong (active poses are loop mode — final dwell is
+    // idle-only). On a wrap, increment the loop-count; once it reaches the cadence
+    // advance the cursor IN ORDER through the pool and reset the count. A.3 demands
+    // the wrap be counted EXACTLY ONCE across the poll re-render: the prior box
+    // counts it on the tick that paints winEnd, then threads the post-increment
+    // value + `priorFrameIdx === winEnd` forward; the resumed box re-paints winEnd
+    // on its first tick and would re-fire `willWrap`, so `wrapAlreadyCounted`
+    // (armed in the resume block) suppresses that one re-count. The resulting
+    // cursor is reported on the handle; the NEXT render resolves the new pool pose
+    // from it (the pose-swap happens at re-render, not mid-box).
+    const willWrap = rotates && !isPingpong && frameIdx === winEnd;
+    // Loop-completion detection for the tuner Cycle toggle (ticket 86ca4atwt §B.4)
+    // — independent of `rotates` so it fires for ANY pose (incl. idle, for the
+    // "All animations" step source). Loop mode: a full cycle completes when we're
+    // at winEnd about to wrap to winStart. Pingpong: a full there-and-back cycle
+    // completes on the forward arrival back at winStart (direction was -1, about
+    // to flip to +1). A single-frame window has no cycle.
+    const completesLoop =
+      winEnd > winStart &&
+      (isPingpong
+        ? frameIdx === winStart && direction === -1
+        : frameIdx === winEnd);
     // Advance to the next frame WITHIN the window.
     if (isPingpong && winEnd > winStart) {
       // Reverse direction AT each window endpoint (naive endpoint-hold: winStart
@@ -674,6 +841,24 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       // to the historic +1/wrap-to-0 advance.
       frameIdx = frameIdx === winEnd ? winStart : frameIdx + 1;
     }
+    if (completesLoop && onLoopComplete) {
+      onLoopComplete();
+    }
+    if (willWrap) {
+      if (wrapAlreadyCounted) {
+        // The poll re-render re-seated us on winEnd, which the PRIOR box already
+        // counted. Consume the one-shot suppression so the NEXT genuine wrap (a
+        // real second loop) still counts — A.3, counted exactly once.
+        wrapAlreadyCounted = false;
+      } else {
+        activeLoopCount += 1;
+        if (activeLoopCount >= cadence) {
+          const pool = char.activePool;
+          activeRotIdx = (activeRotIdx + 1) % pool.length;
+          activeLoopCount = 0;
+        }
+      }
+    }
     handle = sched(tick, ms);
   };
 
@@ -685,6 +870,8 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       dispose: () => undefined,
       idlePick,
       activePick,
+      activeRotIdx,
+      activeLoopCount,
       isActive,
       pose: canonicalName,
       currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
@@ -704,6 +891,18 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     },
     idlePick,
     activePick,
+    // Active-pool rotation cursor + loop-count (ticket 86ca4atwt). LIVE getters —
+    // `tick()` advances these as the active pose's loops complete, and the tracker
+    // reads them at the NEXT poll re-render so rotation continues in order across
+    // the box swap (the same live-read contract `currentFrame()` uses for the
+    // frame position). Plain-value snapshots would freeze the cursor at the
+    // construction-time value and rotation would never advance across re-renders.
+    get activeRotIdx() {
+      return activeRotIdx;
+    },
+    get activeLoopCount() {
+      return activeLoopCount;
+    },
     isActive,
     pose: canonicalName,
     // Report the DISPLAYED frame + the direction it was travelling when shown

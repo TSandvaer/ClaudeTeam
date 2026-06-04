@@ -279,6 +279,16 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
       vscode.Uri.joinPath(this._extensionUri, "dist", "webview"),
     );
 
+    // Active-pool rotation cadence (ticket 86ca4atwt): how many full loops a
+    // working tile plays per active-pool pose before rotating IN ORDER to the
+    // next. Passed to the webview as a `data-` attribute on #root (NOT an inline
+    // script — CSP-strict), exactly like `data-sprite-base`. The webview parses it
+    // once at boot; an absent/blank value → engine default. Config default is 2
+    // (package.json `claudeteam.activePoolLoopsPerPose`).
+    const activePoolLoopsPerPose = vscode.workspace
+      .getConfiguration("claudeteam")
+      .get<number>("activePoolLoopsPerPose", 2);
+
     // Content-Security-Policy:
     //   default-src 'none'               — deny everything by default
     //   img-src <cspSource>              — allow extension-local images
@@ -312,7 +322,7 @@ export class ClaudeTeamViewProvider implements vscode.WebviewViewProvider {
   <title>ClaudeTeam</title>
 </head>
 <body>
-  <div id="root" data-sprite-base="${spriteBaseUri}">ClaudeTeam loading…</div>
+  <div id="root" data-sprite-base="${spriteBaseUri}" data-active-pool-loops="${activePoolLoopsPerPose}">ClaudeTeam loading…</div>
   <script src="${scriptUri}"></script>
 </body>
 </html>`;

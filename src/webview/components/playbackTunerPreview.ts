@@ -43,7 +43,11 @@
  */
 
 import type { AgentState } from "../../shared/types.js";
-import type { SpriteCharacter } from "../sprites/spriteManifest.js";
+import type {
+  GeneratedSpriteManifest,
+  SpriteCharacter,
+} from "../sprites/spriteManifest.js";
+import { defaultScene } from "../sprites/spriteManifest.js";
 import {
   createSpriteBox,
   type PlaybackOverride,
@@ -107,6 +111,14 @@ export interface PreviewControllerProps {
   animName: string;
   /** Host-injected sprite base URI. Absent in browser-dev → no frames render. */
   spriteBaseUri?: string;
+  /**
+   * The manifest the scene backdrop resolves from (ticket 86ca4atwt §B.1). The
+   * preview paints the SAME shared `defaultScene` the dashboard tile does (Iris
+   * spec §B.1) behind the sprite. Defaults to the baked manifest; tests inject a
+   * scene-less manifest to exercise the degrade path (no `data-scene-bg`). Absent
+   * → the baked `GENERATED_SPRITE_MANIFEST`.
+   */
+  manifest?: GeneratedSpriteManifest;
   /** The current draft override (the live slider/dropdown values). */
   draftOverride: PlaybackOverride;
   /** Timer scheduler injection (tests — deterministic stepping). */
@@ -115,6 +127,12 @@ export interface PreviewControllerProps {
   cancelFrame?: (handle: number) => void;
   /** RNG injection (tests). Unused for forced poses but threaded for parity. */
   rng?: () => number;
+  /**
+   * Fired once per completed loop of the previewed pose (ticket 86ca4atwt §B.4).
+   * The tuner's Cycle toggle uses it to auto-advance through the step source over
+   * the room on Feature A's cadence. Absent → no callback (manual stepping only).
+   */
+  onLoopComplete?: () => void;
 }
 
 /** Handle the tuner uses to drive the preview. */
@@ -154,10 +172,35 @@ export interface PreviewController {
 export function createPreviewController(
   props: PreviewControllerProps,
 ): PreviewController {
-  const { spriteBaseUri, scheduleFrame, cancelFrame, rng } = props;
+  const { spriteBaseUri, manifest, scheduleFrame, cancelFrame, rng, onLoopComplete } =
+    props;
 
   const wrapper = document.createElement("div");
   wrapper.className = "ct-tuner-preview-box";
+
+  // ── Scene backdrop over the preview (ticket 86ca4atwt §B.1) ────────────────
+  // Paint the SAME shared `defaultScene` the dashboard tile paints (agentTile.ts
+  // §FIRM), so the sponsor reviews each pose IN CONTEXT over the room. Reuse the
+  // EXISTING tile vocabulary verbatim — `data-scene-bg` attribute + `--ct-scene-url`
+  // custom prop, with the identical base/image normalization (Iris §B.1). The new
+  // `.ct-tuner-preview-box[data-scene-bg]` CSS rule (dashboard.css) paints it; the
+  // dashboard tile's `.agent-tile[data-scene-bg]` rule is NOT overloaded.
+  //
+  // Degrade path (Iris §B.1, mirrors §FIRM.3): set NEITHER attribute when
+  //   - `defaultScene()` returns null (manifest has no scene registry), OR
+  //   - `spriteBaseUri` is absent (browser-dev / no host — the scene image, like
+  //     sprite frames, only resolves through the host's `asWebviewUri`),
+  // so the preview keeps today's bare box with no broken bg-image.
+  const scene = defaultScene(manifest);
+  if (scene !== null && spriteBaseUri !== undefined && spriteBaseUri !== "") {
+    const sceneBase = spriteBaseUri.replace(/\/+$/, "");
+    const sceneImage = scene.image.replace(/^\/+/, "");
+    wrapper.dataset.sceneBg = "";
+    wrapper.style.setProperty(
+      "--ct-scene-url",
+      `url('${sceneBase}/${sceneImage}')`,
+    );
+  }
 
   let handle: SpriteBoxHandle | null = null;
   let currentPose = "";
@@ -192,6 +235,7 @@ export function createPreviewController(
       ...(scheduleFrame !== undefined ? { scheduleFrame } : {}),
       ...(cancelFrame !== undefined ? { cancelFrame } : {}),
       ...(rng !== undefined ? { rng } : {}),
+      ...(onLoopComplete !== undefined ? { onLoopComplete } : {}),
     });
     currentPose = handle.pose;
     // A sprite "rendered" when the box resolved frames — the engine stamps

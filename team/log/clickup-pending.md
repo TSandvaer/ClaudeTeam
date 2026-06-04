@@ -531,3 +531,8 @@ Felix has NO ClickUp MCP. Orchestrator: flip ticket `86ca3bm0g` `to do → in pr
 - PR: https://github.com/TSandvaer/ClaudeTeam/pull/190
 - HEAD: `20b2321`
 - CI runs (at push): `26890240262`, `26890209210` (in_progress at push time)
+
+## STATUS FLIP — 86ca4atwt (Maya, 2026-06-04): flip `to do -> in progress -> in review` (active-pool rotation + tuner preview-over-room; branch `maya/86ca4atwt-pool-rotation-tuner`); reviewer Felix; after merge `in review -> complete`.
+- PR: https://github.com/TSandvaer/ClaudeTeam/pull/192
+- HEAD: `9ab24b1`
+- CI runs (at push): `26946348636`, `26946318124` (in_progress at push time)
