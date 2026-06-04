@@ -28,6 +28,8 @@
       "Edit(.claude/agents/*.md)",
       "Edit(team/**)",
       "Write(team/**)",
+      "Edit(**)",
+      "Write(**)",
       "mcp__clickup__update_task"
     ]
   },
