@@ -98,7 +98,25 @@ fi
 # as `\\` on Windows transcripts) — both `team/STATE.md` and
 # `team\\STATE.md` variants must match. We normalise by replacing `\\` with `/`
 # before the regex check.
-tick_pattern='(^|/)(team/STATE\.md|team/DECISIONS\.md|team/log/clickup-pending\.md|team/log/process-incidents\.md|\.claude/decisions-while-away\.md|\.claude/away-queue\.md|\.claude/auto-status\.state|team/(felix-dev|maya-dev|sage-qa|bram-research|iris-ux|nora-tickets|dogfood)/.*)$'
+#
+# Allowlist surfaces (each a pure orchestration-coordination write, NOT
+# doc-worthy — the maintain-docs skill early-exits on all of them):
+#   - team/STATE.md, team/DECISIONS.md, team/log/{clickup-pending,process-incidents}.md
+#   - .claude/{decisions-while-away.md, away-queue.md, auto-status.state}
+#   - team/<role>/** persona scratch notes
+#   - ~/.claude/projects/<slug>/memory/**     ← auto-memory promotion (save-session
+#                                                + orchestrator durable-insight writes)
+#   - ~/.claude/projects/<slug>/sessions/session-*.md  ← /save-session state files
+#
+# The two `.claude/projects/.../{memory,sessions}/` surfaces were the
+# early-exit allowlist GAP fixed under `86c9z7yrh`: a save-session or
+# memory-promotion turn writes ONLY these files (+ STATE.md), yet the hook
+# block-fired the maintain-docs banner because the auto-memory / session-state
+# dirs were not in the allowlist. Verified against real transcripts — e.g.
+# `Write` to `…/memory/feedback_bypass_mode_runtime_outranks_settings.md` and
+# `…/sessions/session-2026-06-04-2149-…md`. Both anchor on the stable
+# `.claude/projects/` prefix so they are project-slug-agnostic.
+tick_pattern='(^|/)(team/STATE\.md|team/DECISIONS\.md|team/log/clickup-pending\.md|team/log/process-incidents\.md|\.claude/decisions-while-away\.md|\.claude/away-queue\.md|\.claude/auto-status\.state|team/(felix-dev|maya-dev|sage-qa|bram-research|iris-ux|nora-tickets|dogfood)/.*|\.claude/projects/[^/]+/memory/.*\.md|\.claude/projects/[^/]+/sessions/session-.*\.md)$'
 
 all_tick=1
 while IFS= read -r path; do
