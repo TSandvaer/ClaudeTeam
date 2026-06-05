@@ -536,3 +536,8 @@ Felix has NO ClickUp MCP. Orchestrator: flip ticket `86ca3bm0g` `to do → in pr
 - PR: https://github.com/TSandvaer/ClaudeTeam/pull/192
 - HEAD: `9ab24b1`
 - CI runs (at push): `26946348636`, `26946318124` (in_progress at push time)
+
+## STATUS FLIP — 86c9z7yrh (Felix, 2026-06-05): flip `to do -> in progress -> in review` (maintain-docs early-exit allowlist gap: auto-memory + save-session state files; branch `felix/86c9-maintain-docs-allowlist-gap`); reviewer Maya; after merge `in review -> complete`.
+- PR: https://github.com/TSandvaer/ClaudeTeam/pull/199
+- HEAD: `483125e`
+- CI runs (at push): `27003228213`, `27003190138` (in_progress at push time)
