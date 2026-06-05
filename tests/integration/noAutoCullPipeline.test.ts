@@ -94,10 +94,11 @@ describe("E-09 no-auto-cull pipeline guard (EPIC 86ca11187)", () => {
     ({ root, cleanup } = createTempRoot());
     rosterPath = writeRoster(root, "teams-valid.yaml");
 
-    // One live session, one felix agent. The other roster members (maya, bram,
-    // sage) never ran → they materialize as `available` baseline tiles. That
-    // gives the tick a mix of: a detected felix tile + several available
-    // baselines, all of which are cull-ELIGIBLE if an auto-hide path existed.
+    // One live session, one felix agent. The other claudeteam-alpha roster
+    // members (maya, bram) never ran → they materialize as `available` baseline
+    // tiles. That gives the tick a mix of: a detected felix tile + several
+    // available baselines, all of which are cull-ELIGIBLE if an auto-hide path
+    // existed.
     writeSessionFile(root, { pid: ALIVE_PID, sessionId: SESSION, cwd: CWD });
     writeParentJsonl(root, CWD, SESSION, { title: "no-auto-cull-guard" });
     writeMetaJson(root, CWD, SESSION, AGENT_FELIX, "meta-new-schema-persona.json");
@@ -132,7 +133,7 @@ describe("E-09 no-auto-cull pipeline guard (EPIC 86ca11187)", () => {
       removedMemberKeys: removedStore.keys(),
     });
 
-    // --- Tick 1: felix RUNNING (fresh mtime), maya/bram/sage AVAILABLE ---------
+    // --- Tick 1: felix RUNNING (fresh mtime), maya/bram AVAILABLE -------------
     const t1 = await runTick(tickOpts());
     expect(hiddenStore.keys().size).toBe(0);
     expect(removedStore.keys().size).toBe(0);
