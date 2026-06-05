@@ -108,6 +108,26 @@ Each pose = `create_character_state(base_id, edit_description=<state line>)` →
 - residual: `the character stays seated and completely still, the arms and forearms stay resting in place on the desk and do not move, the desk monitor and keyboard stay completely still, only the fingers make small rapid typing taps on the keyboard and the head stays facing the screen, the character never stands up and nothing else moves, smooth continuous seamless loop`
   - ⚠️ **Swinging-arms gotcha (sponsor-caught 2026-05-28):** "only the hands type" still let the model swing the whole arms. Explicitly **lock the arms and forearms** ("arms and forearms stay resting in place and do not move") and isolate the motion to "only the fingers make small typing taps". Same principle as `only the <body-part> moves`, but push the named part as DISTAL as possible (fingers, not hands).
 
+⚠️ **Baked-furniture poses must be COMPLETE GROUNDED mini-scenes when rendered over a full-bleed scene background (sponsor-caught 2026-06-03, ticket `86ca3mge9`).** The desk `active_work` pose was authored as a **waist-up** figure seated behind a *simplified, near-legless* desk-block. That reads fine on the old flat card, but once the scene-bg feature put a full-bleed room (`room3`) behind every tile, the pose **floats**: the idle poses are full standing characters whose **feet land on the room's wood floor** (grounded), so a waist-up seated figure on a legless desk-block — character legs occluded, no floor contact — visibly doesn't belong in the same room. **The constraint:** any pose that bakes furniture, when it will composite over a grounded room, must itself depict a *complete grounded scene* — chair + desk-with-legs + the character's legs visible under the table, in the same **low-top-down perspective** as the room — so the whole sprite grounds as one unit. The scene is a static bg layer and the character is a separate sprite layer on top, so they cannot be aligned at runtime; the pose sprite must self-ground. **Process lesson:** a cheap PIL composite of the EXISTING pose over the room (checking *grounding*, not just furniture collisions) would have caught this before ship — the earlier scene-clash composite test only checked for double-desk. (Fix VALIDATED 2026-06-03 — a re-genned full grounded desk pose (chair + desk-with-legs + legs-under-table, low-top-down) composites cleanly; see the recipe section below and `[[project_scene_bg_clash_finding]]`.)
+
+### Seated desk poses for over-scene rendering — validated recipe (2026-06-03, ticket `86ca3mge9`)
+
+A long iteration to ship a grounded "working at a desk" pose + 3-animation pool over the scene-bg room produced these reusable, non-obvious findings:
+
+⚠️ **v3 `frame_count=16` BEATS `pro` for multi-phase / leg-stable SEATED animations — the opposite of the reading-sweep case.** `pro` returns a coarse ~4-frame loop: at tile size that reads as **blinking/jumping**, and on a full-body seated pose the **legs stomp** (measured frame-to-frame leg-region change 76–109px). The SAME motion as a **v3 16-frame** loop is smooth and keeps the legs **planted** (max ~0–4px drift). Use **v3 16f** for working/typing/mouse-cycle motions. Reserve `pro` for the narrow case where v3 structurally won't comply (hands must be STILL where the base pose implies motion — the `read_at_screen` finding above). NB pro 4f also has no `frame_count` control (the field is v3-only).
+
+⚠️ **`create_character_state` is NOT a surgical edit — it re-synthesizes the whole sprite, drifting ONE detail almost every time.** Adding a mouse drifted the desk wood→pink one round and the trousers dark→brown another; a side instruction landed the mouse on the wrong side. `use_color_palette_from_reference=true` holds the *palette* but not textures/structure/placement. **Plan for re-rolls**, verify the WHOLE sprite after each edit (not just the thing you changed), and prefer the downstream recolor below for isolated color drift.
+
+⚠️ **Post-process recolor BEATS a re-gen for an ISOLATED color drift.** If the drifted color is distinct from its neighbours (desk pink `(182,125,107)` is far from skin `(223,171,145)`), a **deterministic per-frame pixel remap at harvest** (`dist(c,PINK)<=~30 and dist(c,SKIN)>dist(c,PINK) → WOOD`) fixes it with **zero drift** to anything else — vastly more reliable than re-rolling the generation and hoping. When the color is NOT globally unique (trousers brown `==` desk-leg brown), **region-mask** it (only recolor within the trouser column/row box, e.g. cols 27-41 / rows 46-63). The recolor must run on the baked animation frames too (same map, all frames) — it's part of the asset pipeline, not a one-off.
+
+⚠️ **Left/right placement: a south-facing character's RIGHT hand is the VIEWER'S LEFT.** To put a prop under the character's right hand, say **"on the character's right-hand side — the LEFT side of the image as the viewer sees it."** Bare "to the right of the keyboard" lands on the viewer's right (= the character's *left* hand) — wrong for a right-handed character. A wrong-side prop ALSO breaks reach animations: the hand crosses the body and v3 renders a **flail** ("throwing the mouse on the floor"). Fixing the side turned the same motion into a calm short reach.
+
+⚠️ **Only the SOUTH frame ships — ignore non-south rotation artifacts.** The dashboard manifest references only `.../south/frame_NNN.png` (every path). A floor baked into the *east* rotation, or a different angle in *west*, NEVER renders. Don't chase rotation issues the user spots in the PixelLab UI — confirm only the south frame.
+
+⚠️ **A "floor" can bake INTO the sprite — detect it by a solid bottom band.** Prompt phrases like "standing on a wood floor" / "floor line at the bottom" sometimes induce a **solid full-width opaque strip** in the bottom rows of the sprite, which double-floors over a scene-bg room. Detectable programmatically: scan the bottom ~10 rows — a clean sprite **tapers** (only desk-legs + feet, a handful of opaque px) while a baked floor is a **solid ~full-width band**. Avoid it with "a fully transparent empty background, nothing drawn beneath the feet" (PixelLab character gen defaults to transparent bg, so just removing the floor LANGUAGE usually suffices). It's generation variance — one char baked a floor on the same prompt another didn't; re-roll the offender.
+
+**Unified-pose-for-a-pool tip:** when several active animations must alternate on the SAME tile (a working "pool"), generate ONE shared base pose (e.g. both hands on keyboard + a mouse PROP on the desk) and animate all variants on it — otherwise props (a mouse) blink in/out as the pool switches. Cheap PIL composites over the room + a per-frame leg-stability metric are the fast judge for each candidate before committing to the bake.
+
 ### reading (book) — `animation_name: reading` — triggered by tool == Read
 
 The **canonical worked example** of state-per-pose — full recipe + gotchas immediately below.
@@ -188,6 +208,38 @@ The webview `spritePlayer` (`src/webview/sprites/spritePlayer.ts`) carries a per
 | `idle_wave` | — (1.0) | — | — | unchanged |
 
 Peak indices were read off the harvested south-view frames (M01 stretch starts at the overhead peak and re-peaks overhead at frame 8; F01 stretch is a gentler raise maxing around frame 5). **The sponsor visually tunes the exact feel (speed + dwell ms + peak index) on reload** — this table is the starting point, all values are render-time-tunable with zero gens.
+
+---
+
+## Workspace structure & cleanup safety
+
+### The PixelLab account is SHARED across projects — always scope deletes
+
+`list_characters` returns ALL characters across EVERY project using this account. As of 2026-06-04 that is 76 characters mixing ClaudeTeam personas with RandomGame's roster (Player Monk v3, Archive-Sentinel, a full S1 enemy set: Bone-Catalyst, Sunken-Scholar, NPC*, Grunt, Charger, Shooter, Stratum1Boss, PracticeDummy, and more). **Any delete has cross-project blast radius.** Rule: only ever delete characters whose name starts with `ClaudeTeam-` OR whose `get_character` `group:` field matches a known ClaudeTeam group_id (below). Anything else is do-not-touch regardless of how "unused" it looks.
+
+### Group IDs vs character IDs
+
+The IDs recorded in `assets/sprites/ClaudeTeam-{F01,M01}-Dev/animations.json` (`6603010c…` for F01, `ee57907c…` for M01) are PixelLab **`group_id`s**, NOT individual character IDs. A group contains multiple character entries: one base rotation character + one per pose state. The `group_id` is the cross-reference for future `create_character_state` calls; `character_id` is what `delete_character`/`get_character` take. (M02 is not yet harvested to disk, so it has no `animations.json` — its `group_id`/anchor come from `get_character`, not a committed file; see the table below. Beware: in `list_characters` the M02-Dev row surfaces by its **character_id** `7f65dc76…`, which is NOT its group_id.)
+
+Confirmed groups (2026-06-04; F01/M01 scratch deleted 2026-06-05 — anchors only remain):
+
+| Group | group_id | Members | Keep-anchor character_id |
+|---|---|---|---|
+| ClaudeTeam-F01-Dev | `6603010c-19e8-4b5a-a50a-2230e834dfc5` | 1 (anchor only; 21 scratch deleted 2026-06-05) | `f8f5708f-1364-4908-838a-4ab200cb0aff` |
+| ClaudeTeam-M01-Dev | `ee57907c-dfa7-419f-bf77-071bc99e54fd` | 1 (anchor only; 21 scratch deleted 2026-06-05) | `7282cc3d-f822-492c-a790-08b3b5d2b27e` |
+| ClaudeTeam-M02-Dev | `77112ef7-dd4b-4495-8689-4cf5c9ca551c` | 5 | `7f65dc76-da9e-4e57-9926-d094077ef98b` (not yet harvested to disk; values from `get_character`) |
+
+### Identifying the keep-anchor
+
+Each group's **keep-anchor** is the base rotation character — `animations: none`, referenced by `group_id` in `animations.json`, the source for every `create_character_state`. NEVER delete it. The other ~21 group members are intermediate generation scratch states named by their `edit_description` prompt ("add a small computer", "holding a coffee cup", "sitting at a desk fa", "reading an open book", …). Many scratch names appear in BOTH the F01 and M01 groups, so **names alone cannot identify group membership.**
+
+### Mapping a character to its group (list_characters limitation)
+
+`list_characters` shows each character's group SIZE (`group(+N)` — e.g. `+21` = a 22-member group) but does NOT show the `group_id` per row. The only reliable membership check is `get_character(character_id)` → read its `group:` field. Identifying all members of a group therefore requires iterating the list and calling `get_character` on each candidate. There is no list-by-group endpoint.
+
+### Delete safety checklist
+
+`delete_character(id, confirm=true)` is **irreversible** (no recycle bin) and there is **no bulk/by-group delete** — always per-character. Functional value of deleting is ~zero: the sprite PNGs are already committed under `assets/sprites/<Char>/` and the extension makes no PixelLab API calls at runtime, so cleanup is workspace-tidiness only. Per orchestrator-autonomy rules, irreversible deletes are on the **never-auto-decide list** regardless of how mechanical the scope looks — surface the exact candidate list (each `id` + verified `group:` + confirmed not-an-anchor) and wait for explicit sponsor authorization before any `delete_character` call. Before each delete: (1) name starts `ClaudeTeam-` or group_id verified; (2) `get_character` confirms the target group; (3) it is not the keep-anchor.
 
 ---
 
