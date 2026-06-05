@@ -219,15 +219,15 @@ Peak indices were read off the harvested south-view frames (M01 stretch starts a
 
 ### Group IDs vs character IDs
 
-The IDs recorded in `assets/sprites/ClaudeTeam-{F01,M01}-Dev/animations.json` (`6603010c…` for F01, `ee57907c…` for M01, `7f65dc76…` for M02) are PixelLab **`group_id`s**, NOT individual character IDs. A group contains multiple character entries: one base rotation character + one per pose state. The `group_id` is the cross-reference for future `create_character_state` calls; `character_id` is what `delete_character`/`get_character` take.
+The IDs recorded in `assets/sprites/ClaudeTeam-{F01,M01}-Dev/animations.json` (`6603010c…` for F01, `ee57907c…` for M01) are PixelLab **`group_id`s**, NOT individual character IDs. A group contains multiple character entries: one base rotation character + one per pose state. The `group_id` is the cross-reference for future `create_character_state` calls; `character_id` is what `delete_character`/`get_character` take. (M02 is not yet harvested to disk, so it has no `animations.json` — its `group_id`/anchor come from `get_character`, not a committed file; see the table below. Beware: in `list_characters` the M02-Dev row surfaces by its **character_id** `7f65dc76…`, which is NOT its group_id.)
 
-Confirmed groups (2026-06-04):
+Confirmed groups (2026-06-04; F01/M01 scratch deleted 2026-06-05 — anchors only remain):
 
 | Group | group_id | Members | Keep-anchor character_id |
 |---|---|---|---|
-| ClaudeTeam-F01-Dev | `6603010c-19e8-4b5a-a50a-2230e834dfc5` | 22 (1 anchor + 21 scratch) | `f8f5708f-1364-4908-838a-4ab200cb0aff` |
-| ClaudeTeam-M01-Dev | `ee57907c-dfa7-419f-bf77-071bc99e54fd` | 22 (1 anchor + 21 scratch) | `7282cc3d-f822-492c-a790-08b3b5d2b27e` |
-| ClaudeTeam-M02-Dev | `7f65dc76-…` (see animations.json) | 5 | (see animations.json) |
+| ClaudeTeam-F01-Dev | `6603010c-19e8-4b5a-a50a-2230e834dfc5` | 1 (anchor only; 21 scratch deleted 2026-06-05) | `f8f5708f-1364-4908-838a-4ab200cb0aff` |
+| ClaudeTeam-M01-Dev | `ee57907c-dfa7-419f-bf77-071bc99e54fd` | 1 (anchor only; 21 scratch deleted 2026-06-05) | `7282cc3d-f822-492c-a790-08b3b5d2b27e` |
+| ClaudeTeam-M02-Dev | `77112ef7-dd4b-4495-8689-4cf5c9ca551c` | 5 | `7f65dc76-da9e-4e57-9926-d094077ef98b` (not yet harvested to disk; values from `get_character`) |
 
 ### Identifying the keep-anchor
 
