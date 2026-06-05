@@ -12,6 +12,9 @@
 #   6. Pure Q&A (no tool_use)          → silent exit 0
 #   7. stop_hook_active re-entry guard → silent exit 0
 #   8. Missing transcript_path         → block-response (fail-open)
+#   9. Auto-memory promotion           → silent exit 0   (86c9z7yrh allowlist gap)
+#  10. /save-session state file         → silent exit 0   (86c9z7yrh allowlist gap)
+#  11. Memory write + code edit         → block (non-vacuity guard)
 #
 # Fixtures are HEREDOC-inlined per test so each case reads as literal JSONL —
 # the prior helper-based shape obscured the actual content the hook regexes
@@ -163,6 +166,46 @@ assert_block "8. missing transcript_path (fail-open)" "$OUT" "$RC"
 # Test 8b: unreadable transcript_path → fail-open block-response
 OUT=$(run_hook "$TMP_DIR/does-not-exist.jsonl"); RC=$?
 assert_block "8b. unreadable transcript_path (fail-open)" "$OUT" "$RC"
+
+# --- early-exit allowlist-gap fixtures (ticket 86c9z7yrh) --------------------
+# The two ~/.claude/projects/<slug>/{memory,sessions}/ surfaces were a tick-class
+# allowlist GAP: a save-session / memory-promotion turn writes ONLY these files
+# (+ STATE.md), yet the pre-fix hook block-fired the maintain-docs banner because
+# those dirs were absent from tick_pattern. Paths use the real on-disk Windows
+# backslash shape captured from live transcripts.
+
+# Test 9: tick-class — auto-memory promotion (memory/*.md + STATE.md) → silent
+T9="$TMP_DIR/t9-memory-promotion.jsonl"
+cat > "$T9" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"save session"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t9a","name":"Write","input":{"file_path":"C:\\Users\\538252\\.claude\\projects\\c--Trunk-PRIVATE-ClaudeTeam\\memory\\feedback_bypass_mode_runtime_outranks_settings.md","content":"x"}}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t9b","name":"Edit","input":{"file_path":"c:\\Trunk\\PRIVATE\\ClaudeTeam\\team\\STATE.md","old_string":"a","new_string":"b"}}]}}
+EOF
+OUT=$(run_hook "$T9"); RC=$?
+assert_silent "9. tick-class — auto-memory promotion (memory/*.md + STATE.md)" "$OUT" "$RC"
+
+# Test 10: tick-class — /save-session state file only → silent
+T10="$TMP_DIR/t10-session-state.jsonl"
+cat > "$T10" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"save"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t10","name":"Write","input":{"file_path":"C:\\Users\\538252\\.claude\\projects\\c--Trunk-PRIVATE-ClaudeTeam\\sessions\\session-2026-06-04-2149-drain-nits.md","content":"x"}}]}}
+EOF
+OUT=$(run_hook "$T10"); RC=$?
+assert_silent "10. tick-class — /save-session state file (sessions/session-*.md)" "$OUT" "$RC"
+
+# Test 11: NON-VACUITY guard — memory write + REAL code edit → block.
+# Proves the new memory/sessions patterns do NOT over-match: a turn that also
+# touches code is still doc-worthy. Reverting the fix keeps tests 9-10 green but
+# this asserts the guard direction holds; reverting tick_pattern's anchoring so
+# memory matched `.*` would (wrongly) silence this — the assert catches it.
+T11="$TMP_DIR/t11-memory-plus-code.jsonl"
+cat > "$T11" <<'EOF'
+{"role":"user","message":{"content":[{"type":"text","text":"promote insight and fix parser"}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t11a","name":"Edit","input":{"file_path":"C:\\Users\\538252\\.claude\\projects\\c--Trunk-PRIVATE-ClaudeTeam\\memory\\MEMORY.md","old_string":"a","new_string":"b"}}]}}
+{"role":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t11b","name":"Edit","input":{"file_path":"c:\\Trunk\\PRIVATE\\ClaudeTeam-felix-wt\\src\\extension\\watcher\\metaJsonLoader.ts","old_string":"a","new_string":"b"}}]}}
+EOF
+OUT=$(run_hook "$T11"); RC=$?
+assert_block "11. non-vacuity — memory write + code edit (non-tick wins)" "$OUT" "$RC"
 
 # --- summary -----------------------------------------------------------------
 
