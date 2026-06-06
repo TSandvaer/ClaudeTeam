@@ -5,6 +5,8 @@
   "base_id": "a8bccf92-ac1f-4990-95cd-6ad16bd56e3d",
   "sprites_root": "_pixellab_anims",
   "base_portrait_folder": "ClaudeTeam-F02-Dev",
+  "_render_note": "Per-character render-fit (ticket 86ca5b0gj). v3 92x92 sprites bake the figure into only ~50% of the canvas (measured: figure ~46-51px of 92px, ~20-24px transparent bottom margin) vs ~75% for the legacy 68x68 chars (F01/M01/M02). With `.sprite-frame { object-fit: contain }` the WHOLE canvas scales into the box, so a 92px char renders ~0.7x the apparent figure size AND floats high. `scale` enlarges the figure to the 68px apparent size; `offsetY` (% of box, positive = DOWN/forward toward the viewer) fine-anchors it. Origin is center-center: scale 1.5 lands the feet at ~86% down, matching the 68px chars. SPONSOR-TUNABLE on reload (edit + npm run build + reload, OR override the dashboard.css :root --ct-render-scale / --ct-render-offset-y fallbacks for a no-rebuild nudge). Omit the block to render identity (no transform).",
+  "render": { "scale": 1.5, "offsetY": 4 },
   "default_idle": "idle_coffee",
   "idle_pool": [
     "idle_coffee",

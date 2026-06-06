@@ -552,6 +552,28 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   box.className = "sprite-box";
   box.dataset.character = char.character;
 
+  // Per-character render-fit (ticket 86ca5b0gj). v3 92×92 sprites bake the
+  // figure into only ~50% of the canvas vs ~75% for the legacy 68×68 chars, so
+  // with `.sprite-frame { object-fit: contain }` they render smaller AND float
+  // high (the big transparent bottom margin pushes the figure up). When the
+  // character declares a `render` block, expose it as two CSS custom props on
+  // the box; `.sprite-frame`'s `transform` reads them (origin: center bottom →
+  // feet planted) to enlarge + re-anchor the figure to match the 68px chars.
+  // Absent → props unset → the dashboard.css fallbacks (1 / 0%) → identity
+  // transform → 68×68 chars render byte-identically (no regression). The values
+  // are sponsor-tunable on reload via the manifest OR the :root fallback tokens.
+  if (char.render) {
+    if (typeof char.render.scale === "number" && Number.isFinite(char.render.scale)) {
+      box.style.setProperty("--ct-render-scale", String(char.render.scale));
+    }
+    if (
+      typeof char.render.offsetY === "number" &&
+      Number.isFinite(char.render.offsetY)
+    ) {
+      box.style.setProperty("--ct-render-offset-y", `${char.render.offsetY}%`);
+    }
+  }
+
   const img = document.createElement("img");
   img.className = "sprite-frame";
   img.alt = "";

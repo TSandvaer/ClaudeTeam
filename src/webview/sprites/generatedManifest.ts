@@ -394,6 +394,10 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
     },
     "ClaudeTeam-F02-Dev": {
       "character": "ClaudeTeam-F02-Dev",
+      "render": {
+        "scale": 1.5,
+        "offsetY": 4
+      },
       "defaultIdle": "idle_coffee",
       "idlePool": [
         "idle_coffee",
@@ -881,6 +885,10 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
     },
     "ClaudeTeam-M03-Dev": {
       "character": "ClaudeTeam-M03-Dev",
+      "render": {
+        "scale": 1.5,
+        "offsetY": 4
+      },
       "defaultIdle": "idle_coffee",
       "idlePool": [
         "idle_coffee",
