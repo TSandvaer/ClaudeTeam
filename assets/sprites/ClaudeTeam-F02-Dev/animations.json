@@ -1,0 +1,33 @@
+{
+  "_note": "Canonical animation-name → sprite map for ClaudeTeam-F02-Dev (v3 92x92 persona). PixelLab does NOT export the semantic animation_name; its metadata.json keys by an action-description slug + folder. This file is the authoritative map the webview trigger logic + manifest generator (scripts/build-sprite-manifest.mjs) consume. VALUE FORMAT: a bare folder name `<state_folder>` means that folder holds exactly ONE animation (resolve animations/<sole-slug>/south/frame_*.png); a `<state_folder>/<anim_slug>` value names a SPECIFIC animation inside a folder holding MORE THAN ONE. active_work + active_read SHARE the add_a_small_computer desk state (state f40fe102 — same desk posture → no flip during active sessions), so both use the folder/slug form. idle_pool = [idle_coffee, idle_stretch, idle_think] (webview picks at random). NO active_pool (single active_work pose); active_work is the single-pose fallback for running + tool != Read. Slugs discovered from the harvested metadata.json — not guessed.",
+  "character": "ClaudeTeam-F02-Dev",
+  "group_id": "3839c05c-5f2a-4660-ab40-644068faade7",
+  "base_id": "a8bccf92-ac1f-4990-95cd-6ad16bd56e3d",
+  "sprites_root": "_pixellab_anims",
+  "base_portrait_folder": "ClaudeTeam-F02-Dev",
+  "default_idle": "idle_coffee",
+  "idle_pool": [
+    "idle_coffee",
+    "idle_stretch",
+    "idle_think"
+  ],
+  "active": {
+    "active_work": "tool != Read",
+    "active_read": "tool == Read"
+  },
+  "animations": {
+    "idle_coffee": "holding_a_coffee_cup",
+    "idle_stretch": "a_relaxed_tired_upwa",
+    "idle_think": "standing_in_a_relaxe",
+    "active_work": "add_a_small_computer/the_character_stays_seated_at_the_desk_facing_the-fdb2c837",
+    "active_read": "add_a_small_computer/the_character_sits_facing_the_monitor_and_reads_wh-8a4f5fd3"
+  },
+  "_playback_note": "Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Keyed by canonical anim name (must exist in `animations`). Fields (all optional): speedMultiplier (fraction of default frame RATE; 0.5 = half speed), dwellFrameIndex, dwellMs, finalDwellMs, playbackMode, startFrame/endFrame. Malformed values dropped + warned by scripts/build-sprite-manifest.mjs. Mirrors F01's slow-calm defaults; sponsor retunes on reload with zero gens (edit + npm run build + reload).",
+  "playback": {
+    "active_work": { "speedMultiplier": 0.5 },
+    "active_read": { "speedMultiplier": 0.5 },
+    "idle_coffee": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
+    "idle_stretch": { "speedMultiplier": 0.5 },
+    "idle_think": { "speedMultiplier": 0.5 }
+  }
+}

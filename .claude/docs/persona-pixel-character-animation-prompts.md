@@ -228,6 +228,7 @@ Confirmed groups (2026-06-04; F01/M01 scratch deleted 2026-06-05 — anchors onl
 | ClaudeTeam-F01-Dev | `6603010c-19e8-4b5a-a50a-2230e834dfc5` | 1 (anchor only; 21 scratch deleted 2026-06-05) | `f8f5708f-1364-4908-838a-4ab200cb0aff` |
 | ClaudeTeam-M01-Dev | `ee57907c-dfa7-419f-bf77-071bc99e54fd` | 1 (anchor only; 21 scratch deleted 2026-06-05) | `7282cc3d-f822-492c-a790-08b3b5d2b27e` |
 | ClaudeTeam-M02-Dev | `77112ef7-dd4b-4495-8689-4cf5c9ca551c` | 5 | `7f65dc76-da9e-4e57-9926-d094077ef98b` (not yet harvested to disk; values from `get_character`) |
+| ClaudeTeam-F02-Dev | `3839c05c-5f2a-4660-ab40-644068faade7` | 5 (base + idle_coffee/idle_stretch/idle_think + shared desk state) | `a8bccf92-ac1f-4990-95cd-6ad16bd56e3d` (first **v3 92×92** persona; harvested to disk 86ca5aczf; desk state `f40fe102` holds BOTH active_work + active_read) |
 
 ### Identifying the keep-anchor
 
