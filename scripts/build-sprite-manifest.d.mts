@@ -60,6 +60,24 @@ export function buildPoseDefaults(rawBlock: unknown): {
   warnings: string[];
 };
 
+/** Validated per-character render-fit shape baked onto the manifest (86ca5b0gj). */
+export interface SanitizedRenderFit {
+  scale?: number;
+  offsetY?: number;
+}
+
+/**
+ * Sanitize a character's optional top-level `render` block (ticket 86ca5b0gj)
+ * into `{ scale?, offsetY? }`. Mirrors `sanitizePlayback`'s policy: numeric
+ * fields must be finite numbers, malformed ones dropped (with a warning) never
+ * thrown; a non-object block is ignored. Returns `null` render when nothing
+ * valid survives (the manifest then omits the field → identity transform).
+ */
+export function sanitizeRenderFit(
+  label: string,
+  raw: unknown,
+): { render: SanitizedRenderFit | null; warnings: string[] };
+
 /**
  * Detect anim-looking keys placed at the JSON ROOT of `pose-defaults.json`
  * instead of nested under the expected `playback` wrapper (E3 NIT 86ca292rr).

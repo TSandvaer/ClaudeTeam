@@ -115,6 +115,21 @@
   --ct-anim-frame-ms-default: 160ms;
   --ct-anim-dwell-ms-default: 400ms;
 
+  /* Per-character sprite render-fit fallbacks (ticket 86ca5b0gj). v3 92×92
+   * persona sprites (F02/M03) bake the figure into only ~50% of the canvas vs
+   * ~75% for the legacy 68×68 chars, so with `.sprite-frame { object-fit:
+   * contain }` they render smaller AND float high (the big transparent bottom
+   * margin pushes the figure up). `createSpriteBox` sets `--ct-render-scale` /
+   * `--ct-render-offset-y` PER `.sprite-box` from each character's manifest
+   * `render` block (baked from animations.json); `.sprite-frame`'s transform
+   * reads them with these :root values as the no-render fallback. The fallbacks
+   * are IDENTITY (1 / 0%) so a character with NO `render` block — every 68×68
+   * char (F01/M01/M02) — renders byte-identically (no regression). Override
+   * here to retune ALL render-fit chars on reload without a rebuild; the
+   * per-character manifest value is the normal tuning lever. */
+  --ct-render-scale: 1;
+  --ct-render-offset-y: 0%;
+
   /* Light WHOLE-CARD background behind the persona sprite AND the text column,
    * so the dark-outlined pixel character reads against the dark side bar and the
    * card reads as one lit portrait container (86ca23utq — sponsor pivoted from
@@ -665,6 +680,26 @@ body {
    * image glyph (AC5). The build copies the frames, so this should not fire
    * in production. */
   object-fit: contain;
+  /* Per-character render-fit (ticket 86ca5b0gj). `object-fit: contain` fits the
+   * WHOLE sprite canvas (incl. transparent margin) into the box, so a v3 92×92
+   * canvas — whose figure is only ~50% of its height — renders the figure
+   * smaller than a 68×68 char (~75% figure) AND floats it high. This transform
+   * corrects BOTH: `scale()` enlarges the figure to the 68px apparent size, and
+   * `translateY()` (positive = DOWN, toward the viewer) re-anchors it lower in
+   * the tile. The values come from the box's `--ct-render-scale` /
+   * `--ct-render-offset-y` custom props (set by createSpriteBox from the
+   * manifest `render` block); the :root fallbacks are IDENTITY (1 / 0%), so a
+   * character with no `render` block — every 68×68 char — gets
+   * `translateY(0%) scale(1)` = no visual change.
+   *
+   * Origin is `center center` (NOT bottom): the figure's feet sit at ~74% down
+   * the 92px canvas (a ~26% transparent bottom margin). Scaling 1.5× about the
+   * CENTER lands the feet at 50% + 1.5×(74%−50%) ≈ 86% down — matching the 68px
+   * chars' feet at ~85% — while enlarging the figure to the 68px apparent size.
+   * A bottom origin would instead LIFT the feet (it scales the bottom margin
+   * too). offsetY then nudges the whole figure down/forward for fine-tuning. */
+  transform-origin: center center;
+  transform: translateY(var(--ct-render-offset-y, 0%)) scale(var(--ct-render-scale, 1));
 }
 
 .tile-row {

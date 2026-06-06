@@ -51,10 +51,47 @@ export interface SpriteAnimation {
   playback?: PlaybackOverride;
 }
 
+/**
+ * Per-character render-fit tuning (ticket 86ca5b0gj). v3 92×92 persona sprites
+ * (ClaudeTeam-F02-Dev, ClaudeTeam-M03-Dev) bake the figure into only ~50% of the
+ * canvas height (measured: figure ≈ 46–51px of 92px, with a ~20–24px transparent
+ * bottom margin), whereas the legacy 68×68 chars (F01/M01/M02) fill ~75% (≈48px
+ * of 68px, ~10px bottom margin). `.sprite-frame` uses `object-fit: contain`, which
+ * scales the WHOLE canvas (including the transparent margin) into the fixed box —
+ * so a 92px char renders ≈ 50/75 ≈ 0.7× the apparent figure size of a 68px char
+ * AND floats high (the big bottom margin pushes the figure up). This block lets a
+ * character declare a CSS-transform correction applied to its `.sprite-frame`:
+ * `scale` enlarges the figure to match the 68px apparent size; `offsetY` (a % of
+ * the box, positive = DOWN/forward toward the viewer) re-anchors the figure lower
+ * in the tile. The transform-origin is `center bottom` (feet planted) so scaling
+ * grows the figure up+out from its base rather than off-center.
+ *
+ * Absent → no transform (identity) → the 68×68 chars render BYTE-IDENTICALLY (no
+ * regression). The values are SPONSOR-TUNABLE on reload: they bake into the
+ * `--ct-render-scale` / `--ct-render-offset-y` custom props on each `.sprite-box`,
+ * and the dashboard.css `:root` fallback tokens are the single nudge point if the
+ * sponsor wants to retune without re-running the build.
+ */
+export interface SpriteRenderFit {
+  /** Figure-size multiplier (CSS `scale`). 1 = unchanged. ~1.5 lifts a 92px
+   *  figure to the legacy 68px apparent size. Absent → 1. */
+  scale?: number;
+  /** Vertical re-anchor as a % of the sprite box, POSITIVE = DOWN / forward
+   *  toward the viewer (CSS `translateY(<offsetY>%)`). Absent → 0. */
+  offsetY?: number;
+}
+
 /** One character's full animation set. */
 export interface SpriteCharacter {
   /** Character folder name (e.g. "ClaudeTeam-M01-Dev"). */
   character: string;
+  /**
+   * Per-character render-fit correction (ticket 86ca5b0gj). Applied as a CSS
+   * transform on the character's `.sprite-frame` so v3 92×92 sprites render at
+   * the same apparent size + vertical anchor as the legacy 68×68 chars. Absent
+   * → identity (no transform) → 68px chars unchanged. See `SpriteRenderFit`.
+   */
+  render?: SpriteRenderFit;
   /** Canonical default idle anim name (e.g. "idle_coffee"). */
   defaultIdle: string | null;
   /** Canonical names of all resolved idle-pool anims. */

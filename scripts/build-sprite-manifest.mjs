@@ -288,6 +288,50 @@ export function buildPoseDefaults(rawBlock) {
   return { poseDefaults: Object.keys(out).length > 0 ? out : null, warnings };
 }
 
+/** Numeric render-fit fields (ticket 86ca5b0gj) validated as finite numbers. */
+const RENDER_FIT_NUMERIC_FIELDS = ["scale", "offsetY"];
+
+/**
+ * Sanitize a character's optional top-level `render` block (ticket 86ca5b0gj)
+ * into the `{ scale?, offsetY? }` shape baked onto the manifest character entry.
+ * Mirrors `sanitizePlayback`'s policy: malformed fields are DROPPED + warned,
+ * never thrown, so a typo can never break the build. Pure — exported for unit
+ * coverage.
+ *
+ * Returns `{ render, warnings }`. `render` is `null` when nothing valid survived
+ * (the manifest then OMITS the field → identity transform → 68×68 chars
+ * unchanged).
+ *
+ * @param {string} label `<char>` for warning context
+ * @param {unknown} raw the raw per-character render object (or undefined)
+ * @returns {{ render: object | null, warnings: string[] }}
+ */
+export function sanitizeRenderFit(label, raw) {
+  const warnings = [];
+  if (raw === undefined || raw === null) {
+    return { render: null, warnings };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    warnings.push(
+      `[sprite-manifest] ${label}: render must be an object — ignoring (got ${Array.isArray(raw) ? "array" : typeof raw})`,
+    );
+    return { render: null, warnings };
+  }
+  const out = {};
+  for (const field of RENDER_FIT_NUMERIC_FIELDS) {
+    if (!(field in raw)) continue;
+    const v = raw[field];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      out[field] = v;
+    } else {
+      warnings.push(
+        `[sprite-manifest] ${label}: render.${field} must be a finite number — dropping (got ${JSON.stringify(v)})`,
+      );
+    }
+  }
+  return { render: Object.keys(out).length > 0 ? out : null, warnings };
+}
+
 /**
  * Detect anim-looking keys placed at the JSON ROOT of `pose-defaults.json`
  * instead of nested under the expected `playback` wrapper (E3 NIT 86ca292rr).
@@ -543,8 +587,16 @@ async function buildCharacter(charName) {
   const activePool = (animMap.active_pool ?? []).filter(
     (name) => animations[name] !== undefined,
   );
+  // Per-character render-fit (ticket 86ca5b0gj) — optional top-level `render`
+  // block. Malformed fields dropped + warned; absent → omitted (identity).
+  const { render, warnings: renderWarnings } = sanitizeRenderFit(
+    charName,
+    animMap.render,
+  );
+  for (const w of renderWarnings) console.warn(w);
   return {
     character: charName,
+    ...(render !== null ? { render } : {}),
     defaultIdle: animMap.default_idle ?? idlePool[0] ?? null,
     idlePool,
     activePool,
