@@ -27,6 +27,7 @@ import type { SpriteCharacter } from "../../../src/webview/sprites/spriteManifes
 const M01 = "ClaudeTeam-M01-Dev";
 const F01 = "ClaudeTeam-F01-Dev";
 const F02 = "ClaudeTeam-F02-Dev";
+const M03 = "ClaudeTeam-M03-Dev";
 
 /** Build a synthetic character with N-frame anims for the named poses. */
 function char(name: string, frameCounts: Record<string, number>): SpriteCharacter {
@@ -148,8 +149,8 @@ describe("resolvePlayback — peak-frame dwell indices (character-specific)", ()
     // character's animations.json + baked into GENERATED_SPRITE_MANIFEST (E2).
     // resolvePlayback reads the manifest by default — assert the characters'
     // playback survived the migration as the new source of truth. F02 (86ca5aczf)
-    // joined the manifest as the first v3 92×92 persona.
-    expect(Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort()).toEqual([F01, F02, M01]);
+    // joined the manifest as the first v3 92×92 persona; M03 (86ca5at8f) as the second.
+    expect(Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort()).toEqual([F01, F02, M01, M03]);
     expect(GENERATED_SPRITE_MANIFEST.characters[M01].animations.idle_stretch.playback).toEqual({
       speedMultiplier: 0.5,
       startFrame: 5,
