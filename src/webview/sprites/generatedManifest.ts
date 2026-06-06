@@ -878,6 +878,107 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
           }
         }
       }
+    },
+    "ClaudeTeam-M03-Dev": {
+      "character": "ClaudeTeam-M03-Dev",
+      "defaultIdle": "idle_coffee",
+      "idlePool": [
+        "idle_coffee",
+        "idle_stretch",
+        "idle_think"
+      ],
+      "activePool": [],
+      "animations": {
+        "idle_coffee": {
+          "folder": "holding_a_coffee_cup",
+          "frames": [
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_000.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_001.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_002.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_003.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_004.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_005.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_006.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_007.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_008.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5,
+            "dwellFrameIndex": 4
+          }
+        },
+        "idle_stretch": {
+          "folder": "a_relaxed_tired_upwa",
+          "frames": [
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_000.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_001.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_002.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_003.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_004.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_005.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_006.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_007.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_008.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "idle_think": {
+          "folder": "standing_in_a_relaxe",
+          "frames": [
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_000.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_001.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_002.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_003.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_004.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_005.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_006.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_007.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_008.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "active_work": {
+          "folder": "sitting_at_a_desk_wo",
+          "frames": [
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_000.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_001.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_002.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_003.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_004.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_005.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_006.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_007.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_008.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_009.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_010.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_011.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_012.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_013.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_014.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_015.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "active_read": {
+          "folder": "sitting_at_a_desk_wo",
+          "frames": [
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_000.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_001.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_002.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_003.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        }
+      }
     }
   },
   "scenes": {

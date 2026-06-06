@@ -1,0 +1,224 @@
+{
+  "group_id": "f6f4fbcb-13bb-49ac-8e8b-cba075c698c4",
+  "states": [
+    {
+      "character": {
+        "id": "038a4e27-b8b0-4dcf-9f20-827d22ce243c",
+        "name": "ClaudeTeam-M03-Dev",
+        "prompt": "a young white-skinned software developer in his twenties, short messy brown hair and light stubble, wearing an open green and black plaid flannel shirt over a plain white t-shirt, dark blue jeans and grey sneakers, a full-length standing figure showing the entire body from head down to the feet with both legs and both shoes clearly visible, relaxed casual posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-06T08:15:05.795675+00:00"
+      },
+      "folder": "ClaudeTeam-M03-Dev",
+      "frames": {
+        "rotations": {
+          "south": "ClaudeTeam-M03-Dev/rotations/south.png",
+          "south-east": "ClaudeTeam-M03-Dev/rotations/south-east.png",
+          "east": "ClaudeTeam-M03-Dev/rotations/east.png",
+          "north-east": "ClaudeTeam-M03-Dev/rotations/north-east.png",
+          "north": "ClaudeTeam-M03-Dev/rotations/north.png",
+          "north-west": "ClaudeTeam-M03-Dev/rotations/north-west.png",
+          "west": "ClaudeTeam-M03-Dev/rotations/west.png",
+          "south-west": "ClaudeTeam-M03-Dev/rotations/south-west.png"
+        },
+        "animations": {}
+      }
+    },
+    {
+      "character": {
+        "id": "ff8ca3ab-867d-4af4-a0ea-661d5a239d72",
+        "name": "sitting at a desk wo",
+        "prompt": "a young white-skinned software developer in his twenties, short messy brown hair and light stubble, wearing an open green and black plaid flannel shirt over a plain white t-shirt, dark blue jeans and grey sneakers, a full-length standing figure showing the entire body from head down to the feet with both legs and both shoes clearly visible, relaxed casual posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-06T13:09:36.82054+00:00"
+      },
+      "folder": "sitting_at_a_desk_wo",
+      "frames": {
+        "rotations": {
+          "south": "sitting_at_a_desk_wo/rotations/south.png",
+          "south-east": "sitting_at_a_desk_wo/rotations/south-east.png",
+          "east": "sitting_at_a_desk_wo/rotations/east.png",
+          "north-east": "sitting_at_a_desk_wo/rotations/north-east.png",
+          "north": "sitting_at_a_desk_wo/rotations/north.png",
+          "north-west": "sitting_at_a_desk_wo/rotations/north-west.png",
+          "west": "sitting_at_a_desk_wo/rotations/west.png",
+          "south-west": "sitting_at_a_desk_wo/rotations/south-west.png"
+        },
+        "animations": {
+          "the_character_stays_seated_at_the_desk_facing_the-ed4c196c": {
+            "south": [
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_000.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_001.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_002.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_003.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_004.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_005.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_006.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_007.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_008.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_009.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_010.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_011.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_012.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_013.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_014.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_015.png",
+              "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_016.png"
+            ]
+          },
+          "the_character_sits_facing_the_monitor_and_reads_wh-727467be": {
+            "south": [
+              "sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_000.png",
+              "sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_001.png",
+              "sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_002.png",
+              "sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_003.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "e0ae7323-caa5-4c3c-92db-d544771636d1",
+        "name": "a relaxed tired upwa",
+        "prompt": "a young white-skinned software developer in his twenties, short messy brown hair and light stubble, wearing an open green and black plaid flannel shirt over a plain white t-shirt, dark blue jeans and grey sneakers, a full-length standing figure showing the entire body from head down to the feet with both legs and both shoes clearly visible, relaxed casual posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-06T13:23:43.92032+00:00"
+      },
+      "folder": "a_relaxed_tired_upwa",
+      "frames": {
+        "rotations": {
+          "south": "a_relaxed_tired_upwa/rotations/south.png",
+          "south-east": "a_relaxed_tired_upwa/rotations/south-east.png",
+          "east": "a_relaxed_tired_upwa/rotations/east.png",
+          "north-east": "a_relaxed_tired_upwa/rotations/north-east.png",
+          "north": "a_relaxed_tired_upwa/rotations/north.png",
+          "north-west": "a_relaxed_tired_upwa/rotations/north-west.png",
+          "west": "a_relaxed_tired_upwa/rotations/west.png",
+          "south-west": "a_relaxed_tired_upwa/rotations/south-west.png"
+        },
+        "animations": {
+          "a_slow_stretching_loop_from_the_overhead_stretched-9b168570": {
+            "south": [
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_000.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_001.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_002.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_003.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_004.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_005.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_006.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_007.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-9b168570/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "685d20cf-c3c6-4091-a253-8b169d5d5279",
+        "name": "standing in a relaxe",
+        "prompt": "a young white-skinned software developer in his twenties, short messy brown hair and light stubble, wearing an open green and black plaid flannel shirt over a plain white t-shirt, dark blue jeans and grey sneakers, a full-length standing figure showing the entire body from head down to the feet with both legs and both shoes clearly visible, relaxed casual posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-06T13:23:53.865323+00:00"
+      },
+      "folder": "standing_in_a_relaxe",
+      "frames": {
+        "rotations": {
+          "south": "standing_in_a_relaxe/rotations/south.png",
+          "south-east": "standing_in_a_relaxe/rotations/south-east.png",
+          "east": "standing_in_a_relaxe/rotations/east.png",
+          "north-east": "standing_in_a_relaxe/rotations/north-east.png",
+          "north": "standing_in_a_relaxe/rotations/north.png",
+          "north-west": "standing_in_a_relaxe/rotations/north-west.png",
+          "west": "standing_in_a_relaxe/rotations/west.png",
+          "south-west": "standing_in_a_relaxe/rotations/south-west.png"
+        },
+        "animations": {
+          "the_character_stays_standing_still_in_the_thinking-af8a7ffb": {
+            "south": [
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_000.png",
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_001.png",
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_002.png",
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_003.png",
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_004.png",
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_005.png",
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_006.png",
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_007.png",
+              "standing_in_a_relaxe/animations/the_character_stays_standing_still_in_the_thinking-af8a7ffb/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "4cc57e0d-734c-4871-94af-30e45a15a805",
+        "name": "holding a coffee cup",
+        "prompt": "a young white-skinned software developer in his twenties, short messy brown hair and light stubble, wearing an open green and black plaid flannel shirt over a plain white t-shirt, dark blue jeans and grey sneakers, a full-length standing figure showing the entire body from head down to the feet with both legs and both shoes clearly visible, relaxed casual posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-06T13:34:03.00455+00:00"
+      },
+      "folder": "holding_a_coffee_cup",
+      "frames": {
+        "rotations": {
+          "south": "holding_a_coffee_cup/rotations/south.png",
+          "south-east": "holding_a_coffee_cup/rotations/south-east.png",
+          "east": "holding_a_coffee_cup/rotations/east.png",
+          "north-east": "holding_a_coffee_cup/rotations/north-east.png",
+          "north": "holding_a_coffee_cup/rotations/north.png",
+          "north-west": "holding_a_coffee_cup/rotations/north-west.png",
+          "west": "holding_a_coffee_cup/rotations/west.png",
+          "south-west": "holding_a_coffee_cup/rotations/south-west.png"
+        },
+        "animations": {
+          "the_coffee_cup_stays_pressed_against_the_lips_and-67051356": {
+            "south": [
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_000.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_001.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_002.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_003.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_004.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_005.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_006.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_007.png",
+              "holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_against_the_lips_and-67051356/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "export_version": "3.0",
+  "export_date": "2026-06-06T13:57:46.771159"
+}

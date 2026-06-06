@@ -79,10 +79,15 @@ describe("spriteForMember — 6-member gender binding (E-07b) / AC6", () => {
 });
 
 describe("generated manifest — AC6 shape", () => {
-  it("contains the harvested dev characters (F01, F02, M01)", () => {
+  it("contains the harvested dev characters (F01, F02, M01, M03)", () => {
     expect(
       Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort(),
-    ).toEqual(["ClaudeTeam-F01-Dev", "ClaudeTeam-F02-Dev", "ClaudeTeam-M01-Dev"]);
+    ).toEqual([
+      "ClaudeTeam-F01-Dev",
+      "ClaudeTeam-F02-Dev",
+      "ClaudeTeam-M01-Dev",
+      "ClaudeTeam-M03-Dev",
+    ]);
   });
 
   it("each character exposes active_read + active_work + an idle pool", () => {
