@@ -26,6 +26,7 @@ import type { SpriteCharacter } from "../../../src/webview/sprites/spriteManifes
 
 const M01 = "ClaudeTeam-M01-Dev";
 const F01 = "ClaudeTeam-F01-Dev";
+const F02 = "ClaudeTeam-F02-Dev";
 
 /** Build a synthetic character with N-frame anims for the named poses. */
 function char(name: string, frameCounts: Record<string, number>): SpriteCharacter {
@@ -142,12 +143,13 @@ describe("resolvePlayback — peak-frame dwell indices (character-specific)", ()
     expect(resolvePlayback(M01, "idle_hips").speedMultiplier).toBe(0.5);
   });
 
-  it("the generated manifest carries playback for both characters (E2 — map removed)", () => {
+  it("the generated manifest carries playback for the harvested characters (E2 — map removed)", () => {
     // The former hardcoded PLAYBACK_OVERRIDES map was migrated INTO each
     // character's animations.json + baked into GENERATED_SPRITE_MANIFEST (E2).
-    // resolvePlayback reads the manifest by default — assert both characters'
-    // playback survived the migration as the new source of truth.
-    expect(Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort()).toEqual([F01, M01]);
+    // resolvePlayback reads the manifest by default — assert the characters'
+    // playback survived the migration as the new source of truth. F02 (86ca5aczf)
+    // joined the manifest as the first v3 92×92 persona.
+    expect(Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort()).toEqual([F01, F02, M01]);
     expect(GENERATED_SPRITE_MANIFEST.characters[M01].animations.idle_stretch.playback).toEqual({
       speedMultiplier: 0.5,
       startFrame: 5,

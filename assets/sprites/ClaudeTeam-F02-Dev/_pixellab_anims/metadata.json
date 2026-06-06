@@ -1,0 +1,224 @@
+{
+  "group_id": "3839c05c-5f2a-4660-ab40-644068faade7",
+  "states": [
+    {
+      "character": {
+        "id": "a8bccf92-ac1f-4990-95cd-6ad16bd56e3d",
+        "name": "ClaudeTeam-F02-Dev",
+        "prompt": "a casual office IT support worker, an adult woman with short wavy auburn hair and round glasses, wearing a teal zip hoodie over a light grey t-shirt, dark jeans, an ID badge on a lanyard around her neck, relaxed friendly standing posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-05T20:03:50.863477+00:00"
+      },
+      "folder": "ClaudeTeam-F02-Dev",
+      "frames": {
+        "rotations": {
+          "south": "ClaudeTeam-F02-Dev/rotations/south.png",
+          "south-east": "ClaudeTeam-F02-Dev/rotations/south-east.png",
+          "east": "ClaudeTeam-F02-Dev/rotations/east.png",
+          "north-east": "ClaudeTeam-F02-Dev/rotations/north-east.png",
+          "north": "ClaudeTeam-F02-Dev/rotations/north.png",
+          "north-west": "ClaudeTeam-F02-Dev/rotations/north-west.png",
+          "west": "ClaudeTeam-F02-Dev/rotations/west.png",
+          "south-west": "ClaudeTeam-F02-Dev/rotations/south-west.png"
+        },
+        "animations": {}
+      }
+    },
+    {
+      "character": {
+        "id": "f8d44a25-d08d-454b-9c18-d0babfb5bef3",
+        "name": "holding a coffee cup",
+        "prompt": "a casual office IT support worker, an adult woman with short wavy auburn hair and round glasses, wearing a teal zip hoodie over a light grey t-shirt, dark jeans, an ID badge on a lanyard around her neck, relaxed friendly standing posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-05T20:18:18.452658+00:00"
+      },
+      "folder": "holding_a_coffee_cup",
+      "frames": {
+        "rotations": {
+          "south": "holding_a_coffee_cup/rotations/south.png",
+          "south-east": "holding_a_coffee_cup/rotations/south-east.png",
+          "east": "holding_a_coffee_cup/rotations/east.png",
+          "north-east": "holding_a_coffee_cup/rotations/north-east.png",
+          "north": "holding_a_coffee_cup/rotations/north.png",
+          "north-west": "holding_a_coffee_cup/rotations/north-west.png",
+          "west": "holding_a_coffee_cup/rotations/west.png",
+          "south-west": "holding_a_coffee_cup/rotations/south-west.png"
+        },
+        "animations": {
+          "the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd": {
+            "south": [
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_000.png",
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_001.png",
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_002.png",
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_003.png",
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_004.png",
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_005.png",
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_006.png",
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_007.png",
+              "holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s-fd3eaedd/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "86b1f605-e9f7-48d0-bb5a-a4f1b45eb72a",
+        "name": "a relaxed tired upwa",
+        "prompt": "a casual office IT support worker, an adult woman with short wavy auburn hair and round glasses, wearing a teal zip hoodie over a light grey t-shirt, dark jeans, an ID badge on a lanyard around her neck, relaxed friendly standing posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-05T20:18:21.988931+00:00"
+      },
+      "folder": "a_relaxed_tired_upwa",
+      "frames": {
+        "rotations": {
+          "south": "a_relaxed_tired_upwa/rotations/south.png",
+          "south-east": "a_relaxed_tired_upwa/rotations/south-east.png",
+          "east": "a_relaxed_tired_upwa/rotations/east.png",
+          "north-east": "a_relaxed_tired_upwa/rotations/north-east.png",
+          "north": "a_relaxed_tired_upwa/rotations/north.png",
+          "north-west": "a_relaxed_tired_upwa/rotations/north-west.png",
+          "west": "a_relaxed_tired_upwa/rotations/west.png",
+          "south-west": "a_relaxed_tired_upwa/rotations/south-west.png"
+        },
+        "animations": {
+          "a_slow_stretching_loop_from_the_overhead_stretched-3278da22": {
+            "south": [
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_000.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_001.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_002.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_003.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_004.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_005.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_006.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_007.png",
+              "a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-3278da22/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "a0e20bec-10f9-47d1-b32d-7a045d507587",
+        "name": "standing in a relaxe",
+        "prompt": "a casual office IT support worker, an adult woman with short wavy auburn hair and round glasses, wearing a teal zip hoodie over a light grey t-shirt, dark jeans, an ID badge on a lanyard around her neck, relaxed friendly standing posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-05T20:18:24.566755+00:00"
+      },
+      "folder": "standing_in_a_relaxe",
+      "frames": {
+        "rotations": {
+          "south": "standing_in_a_relaxe/rotations/south.png",
+          "south-east": "standing_in_a_relaxe/rotations/south-east.png",
+          "east": "standing_in_a_relaxe/rotations/east.png",
+          "north-east": "standing_in_a_relaxe/rotations/north-east.png",
+          "north": "standing_in_a_relaxe/rotations/north.png",
+          "north-west": "standing_in_a_relaxe/rotations/north-west.png",
+          "west": "standing_in_a_relaxe/rotations/west.png",
+          "south-west": "standing_in_a_relaxe/rotations/south-west.png"
+        },
+        "animations": {
+          "the_hand_stays_resting_at_the_chin_completely_stil-cd50c831": {
+            "south": [
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_000.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_001.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_002.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_003.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_004.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_005.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_006.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_007.png",
+              "standing_in_a_relaxe/animations/the_hand_stays_resting_at_the_chin_completely_stil-cd50c831/south/frame_008.png"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "character": {
+        "id": "f40fe102-2331-4e30-b63d-c453d043d8aa",
+        "name": "add a small computer",
+        "prompt": "a casual office IT support worker, an adult woman with short wavy auburn hair and round glasses, wearing a teal zip hoodie over a light grey t-shirt, dark jeans, an ID badge on a lanyard around her neck, relaxed friendly standing posture",
+        "size": {
+          "width": 92,
+          "height": 92
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-06-06T11:35:30.634892+00:00"
+      },
+      "folder": "add_a_small_computer",
+      "frames": {
+        "rotations": {
+          "south": "add_a_small_computer/rotations/south.png",
+          "south-east": "add_a_small_computer/rotations/south-east.png",
+          "east": "add_a_small_computer/rotations/east.png",
+          "north-east": "add_a_small_computer/rotations/north-east.png",
+          "north": "add_a_small_computer/rotations/north.png",
+          "north-west": "add_a_small_computer/rotations/north-west.png",
+          "west": "add_a_small_computer/rotations/west.png",
+          "south-west": "add_a_small_computer/rotations/south-west.png"
+        },
+        "animations": {
+          "the_character_sits_facing_the_monitor_and_reads_wh-8a4f5fd3": {
+            "south": [
+              "add_a_small_computer/animations/the_character_sits_facing_the_monitor_and_reads_wh-8a4f5fd3/south/frame_000.png",
+              "add_a_small_computer/animations/the_character_sits_facing_the_monitor_and_reads_wh-8a4f5fd3/south/frame_001.png",
+              "add_a_small_computer/animations/the_character_sits_facing_the_monitor_and_reads_wh-8a4f5fd3/south/frame_002.png",
+              "add_a_small_computer/animations/the_character_sits_facing_the_monitor_and_reads_wh-8a4f5fd3/south/frame_003.png"
+            ]
+          },
+          "the_character_stays_seated_at_the_desk_facing_the-fdb2c837": {
+            "south": [
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_000.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_001.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_002.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_003.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_004.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_005.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_006.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_007.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_008.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_009.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_010.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_011.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_012.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_013.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_014.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_015.png",
+              "add_a_small_computer/animations/the_character_stays_seated_at_the_desk_facing_the-fdb2c837/south/frame_016.png"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "export_version": "3.0",
+  "export_date": "2026-06-06T12:11:44.113953"
+}
