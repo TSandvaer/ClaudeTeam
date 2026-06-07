@@ -43,6 +43,13 @@ node_modules/
 
 # Working notes / scratch files
 .scratch/
+# Throwaway scratch dirs (.tmp-scene/, .tmp-m01-reroll/, etc.) — vsce was
+# packing ~9.4 MB of these into the .vsix; they have no business shipping.
+# Both forms needed: the bare glob matches the dir entry, the `/**` form matches
+# its CONTENTS (vsce/minimatch evaluates each file path, and `.tmp*` alone does
+# not match `.tmp-foo/bar.bin`).
+.tmp*
+.tmp*/**
 
 # Misc
 *.map
