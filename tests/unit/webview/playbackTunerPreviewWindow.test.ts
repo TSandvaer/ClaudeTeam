@@ -54,21 +54,59 @@
 
 import { describe, it, expect } from "vitest";
 import { GENERATED_SPRITE_MANIFEST } from "../../../src/webview/sprites/generatedManifest.js";
+import type { GeneratedSpriteManifest } from "../../../src/webview/sprites/spriteManifest.js";
 import { renderPlaybackTuner } from "../../../src/webview/components/playbackTuner.js";
 
 const q = <T extends HTMLElement>(el: ParentNode, sel: string): T =>
   el.querySelector<T>(sel)!;
 
 /**
- * Mount the real tuner against the SHIPPED generated manifest with a single-step
- * scheduler (captures the pending preview callback). Returns helpers to select a
- * (char, anim), flip the write target, step the preview, and read the rendered
- * frame index off the preview <img> (frame path `…/frame_<nnn>.png`).
+ * The windowed idle_stretch fixture formerly shipped on the 68×68 M01. The v3
+ * 92×92 M01 (overwritten 86ca5ed8v) ships a PLAIN idle_stretch, and no shipped
+ * character now carries a per-char baked window with an empty pose-default — the
+ * exact shape the tuner window-restore fix (NIT 1, 86ca2w1g9) guards. So these
+ * windowed tests run against a synthetic manifest cloned from the shipped one,
+ * with the windowed idle_stretch re-injected onto M01's per-char block. This
+ * keeps the non-vacuity probe intact (per-char window + empty pose-default).
  */
-function mountAndDrive() {
+function manifestWithWindowedM01Stretch(): GeneratedSpriteManifest {
+  const base = GENERATED_SPRITE_MANIFEST;
+  const m01 = base.characters["ClaudeTeam-M01-Dev"];
+  const stretch = m01.animations.idle_stretch;
+  return {
+    ...base,
+    characters: {
+      ...base.characters,
+      "ClaudeTeam-M01-Dev": {
+        ...m01,
+        animations: {
+          ...m01.animations,
+          idle_stretch: {
+            ...stretch,
+            playback: {
+              speedMultiplier: 0.5,
+              startFrame: 5,
+              endFrame: 10,
+              playbackMode: "pingpong",
+              finalDwellMs: 800,
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Mount the real tuner against a generated manifest (defaults to the SHIPPED one)
+ * with a single-step scheduler (captures the pending preview callback). Returns
+ * helpers to select a (char, anim), flip the write target, step the preview, and
+ * read the rendered frame index off the preview <img> (frame path `…/frame_<nnn>.png`).
+ */
+function mountAndDrive(manifest: GeneratedSpriteManifest = GENERATED_SPRITE_MANIFEST) {
   let pending: (() => void) | null = null;
   const root = renderPlaybackTuner({
-    manifest: GENERATED_SPRITE_MANIFEST,
+    manifest,
     spriteBaseUri: "vscode-webview://host/dist/webview",
     postMessage: () => undefined,
     scheduleFrame: (cb) => {
@@ -121,7 +159,7 @@ function mountAndDrive() {
 
 describe("Playback Tuner live preview honors the active window (NIT 1, 86ca2w1g9)", () => {
   it("windowed anim under the pose-default target — preview min frame === startFrame (5), max === endFrame (10)", () => {
-    const { select, flipWriteTarget, drive } = mountAndDrive();
+    const { select, flipWriteTarget, drive } = mountAndDrive(manifestWithWindowedM01Stretch());
     select("ClaudeTeam-M01-Dev", "idle_stretch");
     // "All characters" — the draft is seeded from the (empty) pose-default block,
     // so it carries NO window. The overlay must restore it from the per-char baked
@@ -137,19 +175,20 @@ describe("Playback Tuner live preview honors the active window (NIT 1, 86ca2w1g9
   });
 
   it("windowed anim under the default per-char target — preview also stays in [5..10]", () => {
-    const { select, drive } = mountAndDrive();
+    const { select, drive } = mountAndDrive(manifestWithWindowedM01Stretch());
     select("ClaudeTeam-M01-Dev", "idle_stretch");
     const seq = drive(24);
     expect(Math.min(...seq)).toBe(5);
     expect(Math.max(...seq)).toBe(10);
   });
 
-  it("no-window anim (M01 idle_phone, no startFrame/endFrame) — preview plays the full clip (over-correction guard)", () => {
+  it("no-window anim (F01 idle_phone, no startFrame/endFrame) — preview plays the full clip (over-correction guard)", () => {
     const { select, drive } = mountAndDrive();
-    // idle_phone has a per-char playback block but NO window fields.
-    select("ClaudeTeam-M01-Dev", "idle_phone");
+    // idle_phone has a per-char playback block but NO window fields. (Lives on the
+    // legacy 68×68 F01 — the v3 92×92 M01 no longer ships idle_phone.)
+    select("ClaudeTeam-F01-Dev", "idle_phone");
     const count =
-      GENERATED_SPRITE_MANIFEST.characters["ClaudeTeam-M01-Dev"].animations[
+      GENERATED_SPRITE_MANIFEST.characters["ClaudeTeam-F01-Dev"].animations[
         "idle_phone"
       ].frames.length;
     const seq = drive(count * 2 + 4);

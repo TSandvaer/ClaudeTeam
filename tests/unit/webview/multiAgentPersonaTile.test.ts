@@ -354,8 +354,11 @@ describe("AC4 — sprite pose follows aggregateState", () => {
     return el.querySelector<HTMLElement>(".sprite-box")?.dataset.pose;
   }
 
-  it("running aggregate + tool!=Read → active-pool working pose (rng=0 → typing, ticket 86ca3mge9)", () => {
-    expect(poseOf("running", "tool:Edit reducer.ts")).toBe("typing");
+  it("running aggregate + tool!=Read → active_work (v3 M01 has no active_pool, single-pose fallback)", () => {
+    // felix binds to the v3 92×92 M01 (overwritten 86ca5ed8v), which mirrors the
+    // F02/M03 shape: a single shared desk state, NO active_pool. So running +
+    // tool != Read resolves to the single-pose active_work fallback, not a pool pick.
+    expect(poseOf("running", "tool:Edit reducer.ts")).toBe("active_work");
   });
 
   it("running aggregate + tool==Read → active_read pose", () => {
