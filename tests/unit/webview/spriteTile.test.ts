@@ -72,29 +72,30 @@ describe("sprite rendering — AC2 pose selection", () => {
     });
     const img = el.querySelector("img.sprite-frame") as HTMLImageElement;
     expect(img).not.toBeNull();
-    // active_read now resolves to the shared desk state (read-at-screen),
-    // NOT the standalone book-reading pose (which moved to the idle pool).
-    expect(img.getAttribute("src")).toContain("sitting_at_a_desk_fa");
+    // active_read now resolves to the shared v3 desk state (read-at-screen),
+    // NOT the standalone book-reading pose (retired with the legacy 68×68 build).
+    expect(img.getAttribute("src")).toContain("Sitting_at_a_desk_wo");
     expect(img.getAttribute("src")).not.toContain("reading_an_open_book");
     expect(el.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe(
       "active_read",
     );
   });
 
-  it("running + tool!=Read renders an active-pool working pose (rng=0 → first pool member, ticket 86ca3mge9)", () => {
+  it("running + tool!=Read renders the active_work desk pose (v3 1-member active_pool, ticket 86ca5ftzp)", () => {
     const el = renderAgentTile({
       tile: tile({ state: "running", activity: "tool:Edit reducer.ts", agentId: "a2" }),
       sessionId: "s1",
       postMessage: () => undefined,
       spriteBaseUri: BASE,
       spriteTracker: createSpriteTracker(),
-      spriteRng: () => 0, // active_pool[0] → typing → folder typing_at_a_mouse_desk
+      spriteRng: () => 0, // 1-member active_pool → active_work → shared desk state
       scheduleFrame: recordingScheduler().schedule,
     });
     const img = el.querySelector("img.sprite-frame") as HTMLImageElement;
-    expect(img.getAttribute("src")).toContain("typing_at_a_mouse_desk");
+    // v3 F01 has a single-member active_pool [active_work] sharing the desk state.
+    expect(img.getAttribute("src")).toContain("Sitting_at_a_desk_wo");
     expect(el.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe(
-      "typing",
+      "active_work",
     );
   });
 
@@ -121,10 +122,11 @@ describe("sprite rendering — AC2 pose selection", () => {
 });
 
 describe("sprite rendering — AC3 slow playback + dwell", () => {
-  // The default tile member is `maya` → ClaudeTeam-F01-Dev. active_work and
-  // idle_coffee are both in the 50%-speed list (86ca1fntp), so their base
-  // per-frame ms is FRAME_MS_DEFAULT / 0.5 = 2× the default.
+  // The default tile member is `maya` → ClaudeTeam-F01-Dev (v3 92×92, 86ca5j1mt).
+  // active_work plays at 50% speed → base ms = FRAME_MS_DEFAULT / 0.5. idle_coffee
+  // plays at 60% speed in the v3 F01 animations.json → base ms = FRAME_MS_DEFAULT / 0.6.
   const HALF_SPEED_MS = FRAME_MS_DEFAULT / 0.5;
+  const COFFEE_SPEED_MS = FRAME_MS_DEFAULT / 0.6;
 
   it("schedules the first frame at the tuned (50% speed) duration", () => {
     const sched = recordingScheduler();
@@ -159,9 +161,9 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
       sched.step();
     }
     // Final frame (8) ≠ peak frame (4) for coffee, so only the final-frame
-    // dwell applies here, on the 50%-speed base.
+    // dwell applies here, on the 60%-speed base (v3 F01 idle_coffee).
     expect(sched.calls[sched.calls.length - 1]).toBe(
-      HALF_SPEED_MS + DWELL_MS_DEFAULT,
+      COFFEE_SPEED_MS + DWELL_MS_DEFAULT,
     );
   });
 
@@ -185,7 +187,7 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
 
   it("holds the mid-sequence peak frame longer (idle_coffee → frame 4)", () => {
     const sched = recordingScheduler();
-    // idle_coffee peak (cup-at-mouth hold) is frame 4 for both characters.
+    // v3 F01 idle_coffee peak (cup-at-mouth hold) is frame 4 (dwellFrameIndex).
     // The delay scheduled WHILE SHOWING frame 4 carries the peak dwell.
     renderAgentTile({
       tile: tile({ state: "idle", activity: "idle 30s", agentId: "a9" }),
@@ -201,10 +203,10 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
     for (let i = 0; i < 4; i++) {
       sched.step();
     }
-    // Peak frame (4) is not the final frame (8) → base 50% speed + peak dwell.
-    expect(sched.calls[4]).toBe(HALF_SPEED_MS + PEAK_DWELL_MS_DEFAULT);
+    // Peak frame (4) is not the final frame (8) → base 60% speed + peak dwell.
+    expect(sched.calls[4]).toBe(COFFEE_SPEED_MS + PEAK_DWELL_MS_DEFAULT);
     // And a non-peak, non-final idle frame (e.g. frame 1) is the plain base ms.
-    expect(sched.calls[1]).toBe(HALF_SPEED_MS);
+    expect(sched.calls[1]).toBe(COFFEE_SPEED_MS);
   });
 });
 
@@ -339,25 +341,23 @@ describe("idle-episode stickiness — AC2 / spec §3.3", () => {
 // behavior. The idle equivalents above proved idle stickiness this way; the
 // active pool had no through-the-tile counterpart until now.
 //
-// maya → ClaudeTeam-F01-Dev; active pool order [typing, work_cycle, work_focus]
-// (verified in generatedManifest.ts) → rng 0 → typing, 0.5 → work_cycle,
-// 0.99 → work_focus.
-//
-// 86ca4atwt: the active pool now ROTATES IN ORDER (was a random sticky draw).
-// A fresh active episode starts at activePool[0] = typing; within an episode the
-// cursor SURVIVES the poll re-render (same pose until a loop-advance), and a Read
-// FREEZES then RESUMES the cursor (read→work is a continuation, not a reset).
+// maya → ClaudeTeam-F01-Dev. Every shipped persona is now the v3 92×92 build
+// (F01 overwritten in place 86ca5j1mt), which carries a SINGLE-member active_pool
+// [active_work] (ticket 86ca5ftzp) — so `pickActive` always returns active_work,
+// keeping the dashboard pose identical to a no-pool char while still feeding the
+// tuner's Active-pool controls. The MULTI-pose rotation ENGINE (in-order advance,
+// cursor survival across re-render, read→work resume from a non-zero cursor) is
+// covered non-vacuously against a synthetic 3-pose pool in
+// spritePlayerActiveRotation.test.ts; this block asserts the v3 single-pose path
+// END-TO-END through the tile.
 //
 // Non-vacuity (revert checklist):
-//   - "cursor survives the poll re-render": if agentTile stops threading
-//     priorActiveRotIdx/priorActiveLoopCount (or createSpriteBox drops the
-//     resume), the second render snaps back to activePool[0] when the cursor was
-//     elsewhere → the resume assertion FAILS.
-//   - "read→work resumes": if the cursor isn't preserved across active_read, the
-//     work render restarts at activePool[0] after a non-[0] read → the resume
-//     assertion FAILS.
-describe("active-pool rotation — END-TO-END through the tile (86ca4atwt)", () => {
-  it("keeps the same working pose across re-renders within an active episode", () => {
+//   - "active_work stable across re-render": if agentTile stops threading the
+//     active pick / resume, the pose flickers or resets across the poll re-render.
+//   - "work→read resolves active_read (never pool-drawn)": if the Read gate is
+//     dropped, the read render shows active_work → the active_read assertion FAILS.
+describe("active-pool (v3 single-member) — END-TO-END through the tile (86ca5ftzp)", () => {
+  it("keeps active_work across re-renders within an active episode", () => {
     const tracker = createSpriteTracker();
     const render = () =>
       renderAgentTile({
@@ -366,35 +366,21 @@ describe("active-pool rotation — END-TO-END through the tile (86ca4atwt)", () 
         postMessage: () => undefined,
         spriteBaseUri: BASE,
         spriteTracker: tracker,
-        spriteRng: () => 0.99, // rng no longer selects the active pool member
+        spriteRng: () => 0.99, // 1-member pool → rng irrelevant → always active_work
         // No frame scheduler stepping → no loop completes → cursor never advances,
         // so the pose is STABLE across the two poll re-renders.
         scheduleFrame: recordingScheduler().schedule,
       });
     const first = render();
     const firstPose = first.querySelector(".sprite-box")?.getAttribute("data-pose");
-    expect(firstPose).toBe("typing"); // activePool[0], in order
+    expect(firstPose).toBe("active_work"); // sole active_pool member
     const second = render();
     const secondPose = second.querySelector(".sprite-box")?.getAttribute("data-pose");
     expect(secondPose).toBe(firstPose); // cursor survived the re-render
   });
 
-  it("read→work RESUMES the rotation cursor from a NON-ZERO position (active_read freezes it)", () => {
+  it("read→work resumes active_work (active_read freezes the single-member cursor)", () => {
     const tracker = createSpriteTracker();
-    // Seed the tracker as though a prior work render had rotated to cursor 2
-    // (work_focus) within the active episode — so a fresh reset (cursor 0) is
-    // distinguishable from a resume (cursor 2). This is exactly what the tile
-    // registers after a loop-advance.
-    tracker.register("s1", "maya", {
-      idlePick: null,
-      activePick: "work_focus",
-      activeRotIdx: 2,
-      activeLoopCount: 0,
-      isActive: true,
-      dispose: () => undefined,
-      pose: "work_focus",
-      currentFrame: () => ({ frameIdx: 0, direction: 1, elapsedMs: 0 }),
-    });
     const renderRead = () =>
       renderAgentTile({
         tile: tile({ memberId: "maya", state: "running", activity: "tool:Read src/x.ts", agentId: "a11" }),
@@ -415,12 +401,14 @@ describe("active-pool rotation — END-TO-END through the tile (86ca4atwt)", () 
         spriteRng: () => 0,
         scheduleFrame: recordingScheduler().schedule,
       });
-    // A Read freezes the cursor at 2 (the read pose renders; cursor not reset).
+    // First a work render establishes the active episode at active_work...
+    expect(renderWork().querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("active_work");
+    // ...a Read renders active_read (never pool-drawn)...
     const readEl = renderRead();
     expect(readEl.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("active_read");
-    // read→work: the cursor RESUMES at 2 → work_focus (NOT a reset to typing).
+    // ...read→work resumes the (single-member) cursor → active_work, not a flip.
     const workEl = renderWork();
-    expect(workEl.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("work_focus");
+    expect(workEl.querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("active_work");
   });
 
   it("work→read resolves active_read (not a pool pose)", () => {
@@ -432,7 +420,7 @@ describe("active-pool rotation — END-TO-END through the tile (86ca4atwt)", () 
         postMessage: () => undefined,
         spriteBaseUri: BASE,
         spriteTracker: tracker,
-        spriteRng: () => 0, // typing
+        spriteRng: () => 0,
         scheduleFrame: recordingScheduler().schedule,
       });
     const renderRead = () =>
@@ -445,7 +433,7 @@ describe("active-pool rotation — END-TO-END through the tile (86ca4atwt)", () 
         spriteRng: () => 0,
         scheduleFrame: recordingScheduler().schedule,
       });
-    expect(renderWork().querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("typing");
+    expect(renderWork().querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("active_work");
     // work→read: the Read tool resolves active_read regardless of the threaded
     // working pick — active_read is never pool-drawn.
     expect(renderRead().querySelector(".sprite-box")?.getAttribute("data-pose")).toBe("active_read");
