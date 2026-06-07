@@ -182,14 +182,14 @@ describe("Playback Tuner live preview honors the active window (NIT 1, 86ca2w1g9
     expect(Math.max(...seq)).toBe(10);
   });
 
-  it("no-window anim (F01 idle_phone, no startFrame/endFrame) — preview plays the full clip (over-correction guard)", () => {
+  it("no-window anim (F01 idle_think, no startFrame/endFrame) — preview plays the full clip (over-correction guard)", () => {
     const { select, drive } = mountAndDrive();
-    // idle_phone has a per-char playback block but NO window fields. (Lives on the
-    // legacy 68×68 F01 — the v3 92×92 M01 no longer ships idle_phone.)
-    select("ClaudeTeam-F01-Dev", "idle_phone");
+    // idle_think has a per-char playback block (speedMultiplier 0.5) but NO window
+    // fields on the v3 92×92 F01 (86ca5j1mt) — every shipped persona is now v3.
+    select("ClaudeTeam-F01-Dev", "idle_think");
     const count =
       GENERATED_SPRITE_MANIFEST.characters["ClaudeTeam-F01-Dev"].animations[
-        "idle_phone"
+        "idle_think"
       ].frames.length;
     const seq = drive(count * 2 + 4);
     // No window declared anywhere → preview is left full-clip: starts at 0,

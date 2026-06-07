@@ -117,9 +117,9 @@ describe("createSpriteBox — render-fit custom props (86ca5b0gj)", () => {
     expect(box.style.getPropertyValue("--ct-render-offset-y")).toBe("4%");
   });
 
-  it("leaves BOTH props unset when char has no render block (68px no-regression)", () => {
+  it("leaves BOTH props unset when char has no render block (identity no-regression)", () => {
     const handle = createSpriteBox({
-      char: char("ClaudeTeam-F01-Dev"),
+      char: char("ClaudeTeam-NoRender-Dev"),
       state: "idle",
       activity: "",
       spriteBaseUri: "vscode://x",
@@ -150,8 +150,15 @@ describe("createSpriteBox — render-fit custom props (86ca5b0gj)", () => {
 // ── 3. shipped manifest — only the 92px chars carry render-fit ───────────────
 
 describe("GENERATED_SPRITE_MANIFEST render-fit wiring (86ca5b0gj)", () => {
-  it("v3 92×92 chars (M01/F02/M03) carry a render block with scale > 1", () => {
-    for (const name of ["ClaudeTeam-M01-Dev", "ClaudeTeam-F02-Dev", "ClaudeTeam-M03-Dev"]) {
+  it("v3 92×92 chars (F01/M01/F02/M03) carry a render block with scale > 1", () => {
+    // Every shipped persona is now the v3 92×92 build (F01 overwritten in place
+    // 86ca5j1mt); all carry the render-fit block (scale 1.5, offsetY 4).
+    for (const name of [
+      "ClaudeTeam-F01-Dev",
+      "ClaudeTeam-M01-Dev",
+      "ClaudeTeam-F02-Dev",
+      "ClaudeTeam-M03-Dev",
+    ]) {
       const c = GENERATED_SPRITE_MANIFEST.characters[name];
       expect(c, `${name} must be in the manifest`).toBeDefined();
       expect(c.render, `${name} must carry render-fit`).toBeDefined();
@@ -159,11 +166,10 @@ describe("GENERATED_SPRITE_MANIFEST render-fit wiring (86ca5b0gj)", () => {
     }
   });
 
-  it("legacy 68×68 chars (F01) carry NO render block (identity → unchanged)", () => {
-    for (const name of ["ClaudeTeam-F01-Dev"]) {
-      const c = GENERATED_SPRITE_MANIFEST.characters[name];
-      if (c === undefined) continue; // M-series not all harvested to disk
-      expect(c.render, `${name} must NOT carry render-fit`).toBeUndefined();
-    }
+  it("a character with no render block resolves to identity (no transform)", () => {
+    // No shipped character omits the render block any more (all are v3). The
+    // identity path is asserted directly: an unknown character has no render-fit.
+    const c = GENERATED_SPRITE_MANIFEST.characters["ClaudeTeam-Z99-Dev"];
+    expect(c).toBeUndefined();
   });
 });

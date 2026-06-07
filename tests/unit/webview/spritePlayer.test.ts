@@ -47,6 +47,32 @@ const STRETCH_WINDOW: Record<string, PlaybackOverrideTable> = {
   },
 };
 
+// Legacy 14-idle playback shape — formerly baked into the 68×68 F01 manifest
+// (PR #205 parked the full speed/peak list on F01 after M01 went v3). The v3
+// 92×92 F01 (86ca5j1mt) ships only the 3-pose v3 idle set, so the full-list
+// resolution + sequencer ENGINE is now exercised via this injected table — the
+// mechanism is still real and must stay covered, decoupled from any shipped
+// manifest (same approach as STRETCH_WINDOW above).
+const LEGACY_IDLE: Record<string, PlaybackOverrideTable> = {
+  [F01]: {
+    active_read: { speedMultiplier: 0.5 },
+    active_work: { speedMultiplier: 0.5 },
+    idle_coffee: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+    idle_snack: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+    idle_stretch: { speedMultiplier: 0.5 },
+    idle_phone: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+    idle_hips: { speedMultiplier: 0.5 },
+    idle_think: { speedMultiplier: 0.5 },
+    idle_arms_crossed: { speedMultiplier: 0.5 },
+    idle_pockets: { speedMultiplier: 0.5 },
+    idle_neck_roll: { speedMultiplier: 0.5 },
+    idle_yawn: { speedMultiplier: 0.5 },
+    idle_watch: { speedMultiplier: 0.5 },
+    idle_headphones: { speedMultiplier: 0.7 },
+    // idle_wave intentionally absent → resolves to {} (no override).
+  },
+};
+
 /** Build a synthetic character with N-frame anims for the named poses. */
 function char(name: string, frameCounts: Record<string, number>): SpriteCharacter {
   const animations: SpriteCharacter["animations"] = {};
@@ -85,9 +111,10 @@ function recordingScheduler() {
 }
 
 describe("resolvePlayback — speed list (86ca1fntp)", () => {
-  // The v3 92×92 M01 (overwritten 86ca5ed8v) carries only the 3-pose v3 idle
-  // set + actives, all at 50% speed. The legacy 14-idle layout survives on the
-  // unchanged 68×68 F01, so the full speed list is asserted against F01.
+  // Every shipped character (F01/F02/M01/M03) is now the v3 92×92 build carrying
+  // only the 3-pose v3 idle set + actives, all at 50% speed. The legacy 14-idle
+  // layout is no longer on any shipped manifest, so the full speed list is
+  // asserted against the injected LEGACY_IDLE table (engine still real).
   it.each([
     "active_read",
     "active_work",
@@ -102,8 +129,8 @@ describe("resolvePlayback — speed list (86ca1fntp)", () => {
     "idle_neck_roll",
     "idle_yawn",
     "idle_watch",
-  ])("%s plays at 50%% speed on F01 (legacy full idle set)", (anim) => {
-    expect(resolvePlayback(F01, anim).speedMultiplier).toBe(0.5);
+  ])("%s plays at 50%% speed (legacy full idle set, injected)", (anim) => {
+    expect(resolvePlayback(F01, anim, LEGACY_IDLE).speedMultiplier).toBe(0.5);
   });
 
   it.each([
@@ -116,12 +143,12 @@ describe("resolvePlayback — speed list (86ca1fntp)", () => {
     expect(resolvePlayback(M01, anim).speedMultiplier).toBe(0.5);
   });
 
-  it("idle_headphones plays at 70% speed (F01)", () => {
-    expect(resolvePlayback(F01, "idle_headphones").speedMultiplier).toBe(0.7);
+  it("idle_headphones plays at 70% speed (legacy, injected)", () => {
+    expect(resolvePlayback(F01, "idle_headphones", LEGACY_IDLE).speedMultiplier).toBe(0.7);
   });
 
-  it("idle_wave is unchanged (no override) on F01", () => {
-    expect(resolvePlayback(F01, "idle_wave")).toEqual({});
+  it("idle_wave is unchanged (no override) (legacy, injected)", () => {
+    expect(resolvePlayback(F01, "idle_wave", LEGACY_IDLE)).toEqual({});
   });
 
   it("an unknown anim or character resolves to the default (empty) override", () => {
@@ -131,10 +158,10 @@ describe("resolvePlayback — speed list (86ca1fntp)", () => {
 });
 
 describe("resolvePlayback — peak-frame dwell indices (character-specific)", () => {
-  it("coffee/snack/phone peak at frame 4 for F01 (legacy full idle set)", () => {
-    expect(resolvePlayback(F01, "idle_coffee").dwellFrameIndex).toBe(4);
-    expect(resolvePlayback(F01, "idle_snack").dwellFrameIndex).toBe(4);
-    expect(resolvePlayback(F01, "idle_phone").dwellFrameIndex).toBe(4);
+  it("coffee/snack/phone peak at frame 4 (legacy full idle set, injected)", () => {
+    expect(resolvePlayback(F01, "idle_coffee", LEGACY_IDLE).dwellFrameIndex).toBe(4);
+    expect(resolvePlayback(F01, "idle_snack", LEGACY_IDLE).dwellFrameIndex).toBe(4);
+    expect(resolvePlayback(F01, "idle_phone", LEGACY_IDLE).dwellFrameIndex).toBe(4);
   });
 
   it("v3 M01 idle_coffee peaks at frame 4 (its only mid-peak idle)", () => {
@@ -170,9 +197,9 @@ describe("resolvePlayback — peak-frame dwell indices (character-specific)", ()
     expect(o.dwellFrameIndex).toBe(4);
   });
 
-  it("a non-peak speed pose carries speed only (no dwellFrameIndex)", () => {
-    expect(resolvePlayback(F01, "idle_hips").dwellFrameIndex).toBeUndefined();
-    expect(resolvePlayback(F01, "idle_hips").speedMultiplier).toBe(0.5);
+  it("a non-peak speed pose carries speed only (no dwellFrameIndex) (legacy, injected)", () => {
+    expect(resolvePlayback(F01, "idle_hips", LEGACY_IDLE).dwellFrameIndex).toBeUndefined();
+    expect(resolvePlayback(F01, "idle_hips", LEGACY_IDLE).speedMultiplier).toBe(0.5);
   });
 
   it("the generated manifest carries playback for the harvested characters (E2 — map removed)", () => {
@@ -196,7 +223,7 @@ describe("createSpriteBox — speed-scaled per-frame ms", () => {
   it("a 50% pose holds each frame for 2× the default ms", () => {
     const sched = recordingScheduler();
     createSpriteBox({
-      char: char(F01, { idle_hips: 4 }), // idle_hips = 50% speed, no peak (F01 legacy idle)
+      char: char(F01, { idle_hips: 4 }), // idle_hips = 50% speed, no peak (legacy idle, injected)
       state: "idle",
       activity: "idle 10s",
       spriteBaseUri: "base",
@@ -204,6 +231,7 @@ describe("createSpriteBox — speed-scaled per-frame ms", () => {
       rng: () => 0,
       scheduleFrame: sched.schedule,
       cancelFrame: () => undefined,
+      playbackTable: LEGACY_IDLE,
     });
     // First frame (idx 0): base 50% ms, no dwell (not peak, not final).
     expect(sched.calls[0]).toBe(FRAME_MS_DEFAULT / 0.5);
@@ -237,6 +265,7 @@ describe("createSpriteBox — peak-frame dwell + composition (deterministic)", (
       spriteBaseUri: "base",
       priorIdlePick: "idle_snack",
       rng: () => 0,
+      playbackTable: LEGACY_IDLE,
       scheduleFrame: sched.schedule,
       cancelFrame: () => undefined,
     });
@@ -536,6 +565,7 @@ describe("createSpriteBox — finalDwellMs (AC2)", () => {
       rng: () => 0,
       scheduleFrame: sched.schedule,
       cancelFrame: () => undefined,
+      playbackTable: LEGACY_IDLE,
     });
     sched.step();
     sched.step(); // frame 2 = final
@@ -775,9 +805,10 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
   it("NO-REGRESSION: the shipped manifest resolves M01/F01 to their playback values", () => {
     // Each character's playback lives in its animations.json, baked into
     // GENERATED_SPRITE_MANIFEST. resolvePlayback's DEFAULT source is that manifest.
-    // M01 was overwritten in place by the v3 92×92 build (86ca5ed8v) — its
-    // idle_stretch is now a PLAIN 50%-speed loop (the windowed raise-first variant
-    // belonged to the retired 68×68 M01). F01 (legacy 68×68) is unchanged.
+    // Both M01 (86ca5ed8v) and F01 (86ca5j1mt) were overwritten in place by their
+    // v3 92×92 builds — idle_stretch is now a PLAIN 50%-speed loop on each (the
+    // windowed raise-first variant belonged to the retired 68×68 M01; the legacy
+    // 14-idle F01 layout — idle_headphones etc. — is now exercised via LEGACY_IDLE).
     expect(resolvePlayback(M01, "idle_stretch", GENERATED_SPRITE_MANIFEST)).toEqual({
       speedMultiplier: 0.5,
     });
@@ -788,8 +819,14 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
     expect(resolvePlayback(F01, "idle_stretch", GENERATED_SPRITE_MANIFEST)).toEqual({
       speedMultiplier: 0.5,
     });
+    // v3 F01 idle_coffee carries the slow-calm 0.6 speed + mid-peak (its animations.json).
+    expect(resolvePlayback(F01, "idle_coffee", GENERATED_SPRITE_MANIFEST)).toEqual({
+      speedMultiplier: 0.6,
+      dwellFrameIndex: 4,
+    });
+    // The retired legacy F01 idle_headphones (70%) is preserved via the injected table.
     expect(
-      resolvePlayback(F01, "idle_headphones", GENERATED_SPRITE_MANIFEST).speedMultiplier,
+      resolvePlayback(F01, "idle_headphones", LEGACY_IDLE).speedMultiplier,
     ).toBe(0.7);
     // The default arg (no 3rd param) resolves identically to the explicit manifest.
     expect(resolvePlayback(M01, "idle_stretch")).toEqual(

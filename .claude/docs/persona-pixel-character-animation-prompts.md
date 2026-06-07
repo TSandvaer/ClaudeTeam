@@ -225,11 +225,11 @@ Peak indices were read off the harvested south-view frames (M01 stretch starts a
 
 The IDs recorded in `assets/sprites/ClaudeTeam-{F01,M01}-Dev/animations.json` (`6603010c…` for F01, `ee57907c…` for M01) are PixelLab **`group_id`s**, NOT individual character IDs. A group contains multiple character entries: one base rotation character + one per pose state. The `group_id` is the cross-reference for future `create_character_state` calls; `character_id` is what `delete_character`/`get_character` take. (M02 is not yet harvested to disk, so it has no `animations.json` — its `group_id`/anchor come from `get_character`, not a committed file; see the table below. Beware: in `list_characters` the M02-Dev row surfaces by its **character_id** `7f65dc76…`, which is NOT its group_id.)
 
-Confirmed groups (2026-06-04; F01/M01 scratch deleted 2026-06-05 — anchors only remain):
+Confirmed groups (2026-06-04; M01 scratch deleted 2026-06-05; F01 rebuilt to v3 92×92 2026-06-07 — new group f60935b7, ticket 86ca5j1mt):
 
 | Group | group_id | Members | Keep-anchor character_id |
 |---|---|---|---|
-| ClaudeTeam-F01-Dev | `6603010c-19e8-4b5a-a50a-2230e834dfc5` | 1 (anchor only; 21 scratch deleted 2026-06-05) | `f8f5708f-1364-4908-838a-4ab200cb0aff` |
+| ClaudeTeam-F01-Dev | `f60935b7-e769-4613-8533-8e0c57a40ed5` | 5 (base + Sitting_at_a_desk_wo desk c175e6da + holding_a_coffee_cup 1ea5a97d + a_relaxed_tired_upwa e8cc443a + standing_in_a_relaxe 9118bf54) | `47692cce-2f6b-449e-9175-550334e261c9` (v3 92×92 rebuild; overwrote old 68×68 F01 in place — ticket 86ca5j1mt; desk state c175e6da holds BOTH active_work + active_read; member ids read from the harvested metadata.json) |
 | ClaudeTeam-M01-Dev | `53712ca3-5239-44ae-a7e9-7ec361587e9e` | 5 (base + desk b73d5b2e + idle_coffee 1dd9fd2a + idle_stretch 28516a3e + idle_think d3a7150d) | `dfd4d94e-990c-4e8c-996d-31216b074929` (v3 92×92 rebuild; overwrote old 68×68 M01 in place — ticket 86ca5ed8v; desk state b73d5b2e holds BOTH active_work + active_read) |
 | ClaudeTeam-M02-Dev | `77112ef7-dd4b-4495-8689-4cf5c9ca551c` | 5 | `7f65dc76-da9e-4e57-9926-d094077ef98b` (not yet harvested to disk; values from `get_character`) |
 | ClaudeTeam-F02-Dev | `3839c05c-5f2a-4660-ab40-644068faade7` | 5 (base + idle_coffee/idle_stretch/idle_think + shared desk state) | `a8bccf92-ac1f-4990-95cd-6ad16bd56e3d` (first **v3 92×92** persona; harvested to disk 86ca5aczf; desk state `f40fe102` holds BOTH active_work + active_read) |
