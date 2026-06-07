@@ -22,7 +22,7 @@
     "idle_stretch": "a_relaxed_tired_upwa",
     "idle_think": "standing_in_a_relaxe",
     "active_work": "sitting_at_a_desk_wo/the_character_stays_seated_at_the_desk_facing_the-ed4c196c",
-    "active_read": "sitting_at_a_desk_wo/the_character_sits_facing_the_monitor_and_reads_wh-727467be"
+    "active_read": "sitting_at_a_desk_wo/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a"
   },
   "_playback_note": "Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Keyed by canonical anim name (must exist in `animations`). Fields (all optional): speedMultiplier (fraction of default frame RATE; 0.5 = half speed), dwellFrameIndex, dwellMs, finalDwellMs, playbackMode, startFrame/endFrame. Malformed values dropped + warned by scripts/build-sprite-manifest.mjs. Mirrors F02's slow-calm defaults; sponsor retunes on reload with zero gens (edit + npm run build + reload).",
   "playback": {

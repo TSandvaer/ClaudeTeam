@@ -700,10 +700,10 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "active_read": {
           "folder": "sitting_at_a_desk_wo",
           "frames": [
-            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_000.png",
-            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_001.png",
-            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_002.png",
-            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_003.png"
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_000.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_001.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_002.png",
+            "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_003.png"
           ],
           "playback": {
             "speedMultiplier": 0.5

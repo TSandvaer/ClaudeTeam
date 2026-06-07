@@ -82,10 +82,12 @@ describe("M03 manifest wiring (86ca5at8f)", () => {
     expect(read.folder).toBe("sitting_at_a_desk_wo");
     // ...but the folder/slug form disambiguates them to different subfolders.
     expect(work.frames[0]).not.toBe(read.frames[0]);
-    // active_read is the head-scan-at-monitor anim ("...reads_wh...").
-    expect(read.frames[0]).toMatch(/reads_wh-[0-9a-f]+\/south\//);
-    // active_work is the seated/typing anim — NOT the reads_wh one.
-    expect(work.frames[0]).not.toMatch(/reads_wh-/);
+    // active_read is the approved torso-lock head-scan anim (ticket 86ca5fdy3
+    // re-roll: "Seated_at_the_desk_reading_the_screen._The_torso_s..." — the
+    // narrow head-yaw with frozen torso that replaced the over-wide-scan read).
+    expect(read.frames[0]).toMatch(/Seated_at_the_desk_reading[^/]*\/south\//);
+    // active_work is the seated/typing anim — NOT the reading one.
+    expect(work.frames[0]).not.toMatch(/Seated_at_the_desk_reading/);
     expect(work.frames[0]).toMatch(/stays_seated[^/]*\/south\//);
   });
 });
