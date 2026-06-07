@@ -542,3 +542,8 @@ Felix has NO ClickUp MCP. Orchestrator: flip ticket `86ca3bm0g` `to do → in pr
 - HEAD: `483125e`
 - CI runs (at push): `27003228213`, `27003190138` (in_progress at push time)
 ENTRY 20260606T122120Z: 86ca5aczf -> in review (PR #200 opened)
+
+## STATUS FLIP — 86ca5ed8v (Maya, 2026-06-07): flip `to do -> in progress -> in review` (wire ClaudeTeam-M01-Dev v3 92×92 persona — overwrite old 68×68 in place; branch `maya/86ca5ed8v-m01-v3-wire`); reviewer Felix, then Sage QA; after merge `in review -> complete`.
+- PR: https://github.com/TSandvaer/ClaudeTeam/pull/205
+- HEAD: `4bd2eb2`
+- CI runs (at push): `27088607985` (in_progress at record time), `27088590442` (completed)
