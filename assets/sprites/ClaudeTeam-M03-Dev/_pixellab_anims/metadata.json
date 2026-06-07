@@ -78,12 +78,12 @@
               "sitting_at_a_desk_wo/animations/the_character_stays_seated_at_the_desk_facing_the-ed4c196c/south/frame_016.png"
             ]
           },
-          "the_character_sits_facing_the_monitor_and_reads_wh-727467be": {
+          "Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a": {
             "south": [
-              "sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_000.png",
-              "sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_001.png",
-              "sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_002.png",
-              "sitting_at_a_desk_wo/animations/the_character_sits_facing_the_monitor_and_reads_wh-727467be/south/frame_003.png"
+              "sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_000.png",
+              "sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_001.png",
+              "sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_002.png",
+              "sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_003.png"
             ]
           }
         }
