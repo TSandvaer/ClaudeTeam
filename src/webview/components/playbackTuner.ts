@@ -70,13 +70,37 @@ export const SAVE_DEBOUNCE_MS = 500;
  * is only suppressed as a SELECTABLE tuner option, since the 3 active-pool poses
  * (typing / work_cycle / work_focus) are what the sponsor actually tunes. Keyed
  * off the canonical `ACTIVE_WORK` constant so a rename can't silently un-hide it.
+ *
+ * EXCEPTION (ticket 86ca5ftzp): the hide is unconditional ONLY for a char where
+ * active_work is a non-tunable legacy fallback. When `active_work` is ITSELF an
+ * `activePool` MEMBER — the v3 single-member-pool shape (F02/M01/M03) — it MUST
+ * stay selectable, because the Active-pool Source's Prev/Next + Cycle-over-room
+ * set `selectedAnim` to it; a hidden (unselectable) option would silently desync
+ * the Animation dropdown (its `.value` would reset to blank). See
+ * `selectableAnimNames`.
  */
 const TUNER_HIDDEN_ANIMS: ReadonlySet<string> = new Set([ACTIVE_WORK]);
 
-/** The selectable anim names for `char`, in manifest order, minus hidden keys. */
-function selectableAnimNames(char: { animations: Record<string, unknown> } | undefined): string[] {
+/**
+ * The selectable anim names for `char`, in manifest order, minus hidden keys.
+ *
+ * An anim in `TUNER_HIDDEN_ANIMS` is KEPT when the character declares it as an
+ * `activePool` member (ticket 86ca5ftzp) — the step/cycle controls walk the
+ * active pool and set the Animation dropdown's value to each member, so a hidden
+ * pool member would leave the dropdown unable to reflect the stepped selection.
+ * For a char whose active pool does NOT include the hidden anim (the rich-pool
+ * shape where active_work is a pure fallback), the unconditional hide stands.
+ */
+function selectableAnimNames(
+  char:
+    | { animations: Record<string, unknown>; activePool?: string[] }
+    | undefined,
+): string[] {
   if (!char) return [];
-  return Object.keys(char.animations).filter((n) => !TUNER_HIDDEN_ANIMS.has(n));
+  const pool = new Set(char.activePool ?? []);
+  return Object.keys(char.animations).filter(
+    (n) => !TUNER_HIDDEN_ANIMS.has(n) || pool.has(n),
+  );
 }
 
 /** Slider bounds (E4 spec §3.2 / §3.3). */

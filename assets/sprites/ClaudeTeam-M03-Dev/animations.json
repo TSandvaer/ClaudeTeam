@@ -1,5 +1,5 @@
 {
-  "_note": "Canonical animation-name → sprite map for ClaudeTeam-M03-Dev (v3 92x92 persona). PixelLab does NOT export the semantic animation_name; its metadata.json keys by an action-description slug + folder. This file is the authoritative map the webview trigger logic + manifest generator (scripts/build-sprite-manifest.mjs) consume. VALUE FORMAT: a bare folder name `<state_folder>` means that folder holds exactly ONE animation (resolve animations/<sole-slug>/south/frame_*.png); a `<state_folder>/<anim_slug>` value names a SPECIFIC animation inside a folder holding MORE THAN ONE. active_work + active_read SHARE the sitting_at_a_desk_wo desk state (state ff8ca3ab — same desk posture → no flip during active sessions), so both use the folder/slug form. idle_pool = [idle_coffee, idle_stretch, idle_think] (webview picks at random). NO active_pool (single active_work pose); active_work is the single-pose fallback for running + tool != Read. Slugs discovered from the harvested metadata.json — not guessed.",
+  "_note": "Canonical animation-name → sprite map for ClaudeTeam-M03-Dev (v3 92x92 persona). PixelLab does NOT export the semantic animation_name; its metadata.json keys by an action-description slug + folder. This file is the authoritative map the webview trigger logic + manifest generator (scripts/build-sprite-manifest.mjs) consume. VALUE FORMAT: a bare folder name `<state_folder>` means that folder holds exactly ONE animation (resolve animations/<sole-slug>/south/frame_*.png); a `<state_folder>/<anim_slug>` value names a SPECIFIC animation inside a folder holding MORE THAN ONE. active_work + active_read SHARE the sitting_at_a_desk_wo desk state (state ff8ca3ab — same desk posture → no flip during active sessions), so both use the folder/slug form. idle_pool = [idle_coffee, idle_stretch, idle_think] (webview picks at random). active_pool = [active_work] — a single-member pool (ticket 86ca5ftzp) so `pickActive` always returns active_work, keeping the dashboard pose identical to a no-pool char while enabling the tuner's Active-pool Source / Prev-Next / Cycle-over-room controls. active_read stays tool==Read-gated (NEVER pool-drawn). Slugs discovered from the harvested metadata.json — not guessed.",
   "character": "ClaudeTeam-M03-Dev",
   "group_id": "f6f4fbcb-13bb-49ac-8e8b-cba075c698c4",
   "base_id": "038a4e27-b8b0-4dcf-9f20-827d22ce243c",
@@ -12,6 +12,9 @@
     "idle_coffee",
     "idle_stretch",
     "idle_think"
+  ],
+  "active_pool": [
+    "active_work"
   ],
   "active": {
     "active_work": "tool != Read",
