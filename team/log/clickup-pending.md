@@ -547,3 +547,8 @@ ENTRY 20260606T122120Z: 86ca5aczf -> in review (PR #200 opened)
 - PR: https://github.com/TSandvaer/ClaudeTeam/pull/205
 - HEAD: `4bd2eb2`
 - CI runs (at push): `27088607985` (in_progress at record time), `27088590442` (completed)
+
+## STATUS FLIP — 86ca5fdy3 (Maya, 2026-06-07): flip `to do -> in progress -> in review` (re-wire M03 active_read to approved narrow head-yaw / torso-lock read; branch `maya/86ca5fdy3-m03-read`); reviewer Felix; after merge `in review -> complete`.
+- PR: https://github.com/TSandvaer/ClaudeTeam/pull/207
+- HEAD: `0dfea40`
+- CI runs (at record): `27093877747` (in_progress), `27093859232` (completed/success)
