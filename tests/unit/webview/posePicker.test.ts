@@ -168,6 +168,35 @@ describe("pickActive — deterministic under injected RNG (ticket 86ca3mge9)", (
   });
 });
 
+describe("single-member active pool [active_work] (ticket 86ca5ftzp — v3 chars)", () => {
+  // The v3 92×92 chars (F02/M01/M03) declare active_pool: ["active_work"]. The
+  // single member keeps the dashboard pose identical to a no-pool char (pickActive
+  // always returns active_work, the same name poseNameForTile would fall back to)
+  // while lighting up the tuner's Active-pool Source / Cycle controls.
+  const oneMemberPool: SpriteCharacter = { ...CHAR, activePool: ["active_work"] };
+
+  it("pickActive ALWAYS returns active_work regardless of rng", () => {
+    for (let i = 0; i <= 10; i++) {
+      expect(pickActive(oneMemberPool, () => i / 10)).toBe(ACTIVE_WORK);
+    }
+    expect(pickActive(oneMemberPool, () => 1)).toBe(ACTIVE_WORK);
+  });
+
+  it("running + tool!=Read with the 1-member pick → active_work (dashboard unchanged)", () => {
+    const pick = pickActive(oneMemberPool, () => 0.42);
+    const r = poseNameForTile("running", "tool:Edit reducer.ts", null, pick);
+    expect(r.name).toBe(ACTIVE_WORK);
+    expect(r.isActive).toBe(true);
+  });
+
+  it("running + tool==Read STAYS tool-gated to active_read even with the active pick", () => {
+    const pick = pickActive(oneMemberPool, () => 0.42);
+    const r = poseNameForTile("running", "tool:Read src/x.ts", null, pick);
+    expect(r.name).toBe(ACTIVE_READ);
+    expect(r.isActive).toBe(true);
+  });
+});
+
 describe("pickIdle — deterministic under injected RNG", () => {
   it("picks the pool member at the rng-derived index", () => {
     // pool length 3; rng 0 → idx 0, 0.5 → idx 1, 0.99 → idx 2

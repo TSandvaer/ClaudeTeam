@@ -404,7 +404,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "idle_stretch",
         "idle_think"
       ],
-      "activePool": [],
+      "activePool": [
+        "active_work"
+      ],
       "animations": {
         "idle_coffee": {
           "folder": "holding_a_coffee_cup",
@@ -509,7 +511,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "idle_stretch",
         "idle_think"
       ],
-      "activePool": [],
+      "activePool": [
+        "active_work"
+      ],
       "animations": {
         "idle_coffee": {
           "folder": "Standing_and_drinkin",
@@ -618,7 +622,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "idle_stretch",
         "idle_think"
       ],
-      "activePool": [],
+      "activePool": [
+        "active_work"
+      ],
       "animations": {
         "idle_coffee": {
           "folder": "holding_a_coffee_cup",

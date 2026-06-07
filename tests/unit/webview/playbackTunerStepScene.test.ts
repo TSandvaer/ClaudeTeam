@@ -216,6 +216,55 @@ describe("B.2 — step control walks the active pool", () => {
 });
 
 // ===========================================================================
+// 86ca5ftzp — single-member active pool [active_work] (the v3 char shape).
+//   active_work is in TUNER_HIDDEN_ANIMS (hidden from the dropdown for rich-pool
+//   chars), but when it is ITSELF the lone active_pool member it MUST stay
+//   selectable — otherwise the step/cycle controls set the dropdown's value to a
+//   non-existent option and it silently desyncs to blank.
+//   Non-vacuity: reverting the selectableAnimNames un-hide makes the dropdown
+//   option assertion + the post-step `.value === "active_work"` assertion fail.
+// ===========================================================================
+
+describe("86ca5ftzp — active pool [active_work] (v3 single-member pool)", () => {
+  function oneMemberPoolManifest(): GeneratedSpriteManifest {
+    const m = sceneManifest();
+    m.characters[M01].activePool = ["active_work"];
+    m.characters[M01].animations = {
+      idle_coffee: { folder: "coffee", frames: ["s/c/0.png", "s/c/1.png"] },
+      active_read: { folder: "read", frames: ["s/r/0.png", "s/r/1.png"] },
+      active_work: { folder: "work", frames: ["s/w/0.png", "s/w/1.png", "s/w/2.png"] },
+    } as unknown as GeneratedSpriteManifest["characters"][string]["animations"];
+    return m;
+  }
+
+  it("active_work stays selectable in the Animation dropdown (un-hidden as a pool member)", () => {
+    const root = mountTuner({ manifest: oneMemberPoolManifest() });
+    const animSelect = root.querySelector<HTMLSelectElement>(".ct-tuner-anim-select")!;
+    const opts = Array.from(animSelect.options).map((o) => o.value);
+    expect(opts).toContain("active_work");
+    // active_read (never a pool member, never hidden) also present.
+    expect(opts).toContain("active_read");
+  });
+
+  it("Source=Active pool: readout shows active_work (NOT 'no active pool') + Prev/Next enabled", () => {
+    const root = mountTuner({ manifest: oneMemberPoolManifest() });
+    const next = root.querySelector<HTMLButtonElement>(".ct-tuner-step-next")!;
+    const prev = root.querySelector<HTMLButtonElement>(".ct-tuner-step-prev")!;
+    const animSelect = root.querySelector<HTMLSelectElement>(".ct-tuner-anim-select")!;
+    const readout = root.querySelector<HTMLElement>(".ct-tuner-step-readout")!;
+
+    expect(next.disabled).toBe(false);
+    expect(prev.disabled).toBe(false);
+
+    next.click(); // steps to the lone member
+    // The dropdown value SYNCS to active_work (the desync-to-blank bug the fix
+    // prevents) and the readout names it.
+    expect(animSelect.value).toBe("active_work");
+    expect(readout.textContent).toBe("active_work — 1 / 1");
+  });
+});
+
+// ===========================================================================
 // B.4 — Cycle toggle auto-advances on loop completion (cadence reuse)
 // ===========================================================================
 

@@ -64,10 +64,12 @@ describe("F02 manifest wiring (86ca5aczf)", () => {
     }
   });
 
-  it("idlePool is exactly the three idle poses; there is NO active pool (single active_work pose)", () => {
+  it("idlePool is exactly the three idle poses; activePool is the single-member [active_work] (ticket 86ca5ftzp)", () => {
     expect([...char.idlePool].sort()).toEqual(["idle_coffee", "idle_stretch", "idle_think"]);
-    // F02 ships a single working pose — no active_pool stickiness (unlike F01's mouse-desk pool).
-    expect(char.activePool ?? []).toEqual([]);
+    // F02 ships a single working pose, declared as a 1-member active_pool so
+    // pickActive always returns active_work (dashboard pose identical to a
+    // no-pool char) while the tuner's Active-pool / Cycle controls light up.
+    expect(char.activePool).toEqual(["active_work"]);
   });
 
   it("frame paths are dist-relative under sprites/ClaudeTeam-F02-Dev/", () => {
