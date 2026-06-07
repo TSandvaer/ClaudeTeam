@@ -499,59 +499,30 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
     },
     "ClaudeTeam-M01-Dev": {
       "character": "ClaudeTeam-M01-Dev",
+      "render": {
+        "scale": 1.5,
+        "offsetY": 4
+      },
       "defaultIdle": "idle_coffee",
       "idlePool": [
         "idle_coffee",
-        "idle_snack",
         "idle_stretch",
-        "idle_phone",
-        "idle_hips",
-        "idle_think",
-        "idle_arms_crossed",
-        "idle_pockets",
-        "idle_neck_roll",
-        "idle_yawn",
-        "idle_watch",
-        "idle_headphones",
-        "idle_wave",
-        "idle_reading_book"
+        "idle_think"
       ],
-      "activePool": [
-        "typing",
-        "work_cycle",
-        "work_focus"
-      ],
+      "activePool": [],
       "animations": {
         "idle_coffee": {
-          "folder": "holding_a_coffee_cup",
+          "folder": "Standing_and_drinkin",
           "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_coffee_cup_stays_pressed_to_the_lips_and_both-f7bbb25b/south/frame_008.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5,
-            "dwellFrameIndex": 4
-          }
-        },
-        "idle_snack": {
-          "folder": "holding_a_small_snac",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_small_snac/animations/the_hand_stays_at_the_mouth_completely_still_and_t-dc2919bb/south/frame_008.png"
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_003.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_004.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_005.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_006.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_007.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_drinkin/animations/Standing_still_holding_the_coffee_mug_at_his_lips-0ae8820b/south/frame_008.png"
           ],
           "playback": {
             "speedMultiplier": 0.5,
@@ -559,323 +530,75 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
           }
         },
         "idle_stretch": {
-          "folder": "a_relaxed_tired_upwa",
+          "folder": "Standing_and_stretch",
           "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched-39a563ff/south/frame_010.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5,
-            "finalDwellMs": 800,
-            "startFrame": 5,
-            "endFrame": 10,
-            "playbackMode": "pingpong"
-          }
-        },
-        "idle_phone": {
-          "folder": "holding_a_phone_in_f",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/holding_a_phone_in_f/animations/the_phone_and_both_hands_stay_completely_still_and-6b6ba3e7/south/frame_008.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5,
-            "dwellFrameIndex": 4
-          }
-        },
-        "idle_hips": {
-          "folder": "standing_with_both_h",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_h/animations/both_hands_stay_resting_on_the_hips_and_the_body_s-63b36753/south/frame_008.png"
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_003.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_004.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_005.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_006.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_007.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_008.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_009.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_010.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_011.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_and_stretch/animations/Standing_in_place_with_both_arms_raised_overhead_d-f9ad9bc1/south/frame_012.png"
           ],
           "playback": {
             "speedMultiplier": 0.5
           }
         },
         "idle_think": {
-          "folder": "standing_in_a_relaxe",
+          "folder": "Standing_in_a_thinki",
           "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_firmly_resting_on_the_chin_the_enti-0be9d387/south/frame_008.png"
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_003.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_004.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_005.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_006.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_007.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Standing_in_a_thinki/animations/Standing_in_place_in_a_thinking_pose_with_one_hand-783ed009/south/frame_008.png"
           ],
           "playback": {
             "speedMultiplier": 0.5
           }
-        },
-        "idle_arms_crossed": {
-          "folder": "standing_with_both_a",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_with_both_a/animations/both_arms_stay_crossed_over_the_chest_and_the_body-c0893353/south/frame_010.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5
-          }
-        },
-        "idle_pockets": {
-          "folder": "standing_relaxed_wit",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit/animations/both_hands_stay_tucked_in_the_pockets_and_the_feet-298d1cba/south/frame_010.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5
-          }
-        },
-        "idle_neck_roll": {
-          "folder": "standing_relaxed_wit_2",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_wit_2/animations/the_body_stays_standing_in_place_with_the_arms_res-0fb2aacf/south/frame_010.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5
-          }
-        },
-        "idle_yawn": {
-          "folder": "standing_relaxed_be",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_relaxed_be/animations/a_slow_tired_yawn_loop_the_mouth_opens_wide_while-7914190d/south/frame_010.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5
-          }
-        },
-        "idle_watch": {
-          "folder": "one_forearm_raised_u",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/one_forearm_raised_u/animations/the_raised_forearm_and_wrist_stay_completely_still-a5a0317f/south/frame_008.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5
-          }
-        },
-        "idle_headphones": {
-          "folder": "wearing_over-ear_hea",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/wearing_over-ear_hea/animations/the_over-ear_headphones_stay_on_the_head_and_the_f-cc3b1896/south/frame_010.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.7
-          }
-        },
-        "idle_wave": {
-          "folder": "standing_upright_wit",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/standing_upright_wit/animations/the_raised_open_hand_sways_gently_side_to_side_in-38411c09/south/frame_010.png"
-          ]
-        },
-        "idle_reading_book": {
-          "folder": "reading_an_open_book",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/reading_an_open_book/animations/the_head_is_tilted_down_toward_the_book_and_gently-63614c3a/south/frame_010.png"
-          ]
         },
         "active_work": {
-          "folder": "sitting_at_a_desk_fa",
+          "folder": "Sitting_at_a_desk_wo",
           "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_stays_seated_and_completely_still_th-a1b98373/south/frame_008.png"
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_003.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_004.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_005.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_006.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_007.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_008.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_009.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_010.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_011.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_012.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_013.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_014.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_015.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3/south/frame_016.png"
           ],
           "playback": {
             "speedMultiplier": 0.5
           }
         },
         "active_read": {
-          "folder": "sitting_at_a_desk_fa",
+          "folder": "Sitting_at_a_desk_wo",
           "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/sitting_at_a_desk_fa/animations/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2/south/frame_003.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5
-          }
-        },
-        "typing": {
-          "folder": "typing_at_a_mouse_desk",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_010.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_011.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_012.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_013.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_014.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_015.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/typing_at_a_mouse_desk/animations/60c3a3cc-9a2a-4f70-b16f-f8ab844bd373/south/frame_016.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5
-          }
-        },
-        "work_cycle": {
-          "folder": "working_cycle_at_a_mouse_desk",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_010.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_011.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_012.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_013.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_014.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_015.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_cycle_at_a_mouse_desk/animations/8e9eff1c-a8a4-47c9-927f-24243ccb2636/south/frame_016.png"
-          ],
-          "playback": {
-            "speedMultiplier": 0.5
-          }
-        },
-        "work_focus": {
-          "folder": "working_focused_at_a_mouse_desk",
-          "frames": [
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_000.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_001.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_002.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_003.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_004.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_005.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_006.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_007.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_008.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_009.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_010.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_011.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_012.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_013.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_014.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_015.png",
-            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/working_focused_at_a_mouse_desk/animations/c81f610d-4f36-4776-8743-bde6f73b08ce/south/frame_016.png"
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/The_head_stays_up_facing_the_monitor_the_entire_ti-93baf3ab/south/frame_000.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/The_head_stays_up_facing_the_monitor_the_entire_ti-93baf3ab/south/frame_001.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/The_head_stays_up_facing_the_monitor_the_entire_ti-93baf3ab/south/frame_002.png",
+            "sprites/ClaudeTeam-M01-Dev/_pixellab_anims/Sitting_at_a_desk_wo/animations/The_head_stays_up_facing_the_monitor_the_entire_ti-93baf3ab/south/frame_003.png"
           ],
           "playback": {
             "speedMultiplier": 0.5

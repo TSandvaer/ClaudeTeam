@@ -150,8 +150,8 @@ describe("createSpriteBox — render-fit custom props (86ca5b0gj)", () => {
 // ── 3. shipped manifest — only the 92px chars carry render-fit ───────────────
 
 describe("GENERATED_SPRITE_MANIFEST render-fit wiring (86ca5b0gj)", () => {
-  it("F02 + M03 (v3 92×92) carry a render block with scale > 1", () => {
-    for (const name of ["ClaudeTeam-F02-Dev", "ClaudeTeam-M03-Dev"]) {
+  it("v3 92×92 chars (M01/F02/M03) carry a render block with scale > 1", () => {
+    for (const name of ["ClaudeTeam-M01-Dev", "ClaudeTeam-F02-Dev", "ClaudeTeam-M03-Dev"]) {
       const c = GENERATED_SPRITE_MANIFEST.characters[name];
       expect(c, `${name} must be in the manifest`).toBeDefined();
       expect(c.render, `${name} must carry render-fit`).toBeDefined();
@@ -159,8 +159,8 @@ describe("GENERATED_SPRITE_MANIFEST render-fit wiring (86ca5b0gj)", () => {
     }
   });
 
-  it("legacy 68×68 chars (F01/M01) carry NO render block (identity → unchanged)", () => {
-    for (const name of ["ClaudeTeam-F01-Dev", "ClaudeTeam-M01-Dev"]) {
+  it("legacy 68×68 chars (F01) carry NO render block (identity → unchanged)", () => {
+    for (const name of ["ClaudeTeam-F01-Dev"]) {
       const c = GENERATED_SPRITE_MANIFEST.characters[name];
       if (c === undefined) continue; // M-series not all harvested to disk
       expect(c.render, `${name} must NOT carry render-fit`).toBeUndefined();

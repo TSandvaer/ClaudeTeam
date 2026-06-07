@@ -111,7 +111,11 @@ describe("generated manifest — AC6 shape", () => {
 });
 
 describe("read-at-screen wiring (regenerated manifest) — AC4 + AC5", () => {
-  it.each(["ClaudeTeam-M01-Dev", "ClaudeTeam-F01-Dev"])(
+  // Legacy 68×68 F01 keeps the original sitting_at_a_desk_fa desk state +
+  // book pose. M01 was overwritten in place by the v3 92×92 build (ticket
+  // 86ca5ed8v) and now mirrors the F02/M03 desk shape — covered separately
+  // below.
+  it.each(["ClaudeTeam-F01-Dev"])(
     "%s: active_read resolves to the DESK read anim, not the book pose",
     (charName) => {
       const char = GENERATED_SPRITE_MANIFEST.characters[charName];
@@ -125,7 +129,7 @@ describe("read-at-screen wiring (regenerated manifest) — AC4 + AC5", () => {
     },
   );
 
-  it.each(["ClaudeTeam-M01-Dev", "ClaudeTeam-F01-Dev"])(
+  it.each(["ClaudeTeam-F01-Dev"])(
     "%s: active_work resolves to the WORKING desk anim, distinct from active_read (AC5 disambiguation)",
     (charName) => {
       const char = GENERATED_SPRITE_MANIFEST.characters[charName];
@@ -143,7 +147,7 @@ describe("read-at-screen wiring (regenerated manifest) — AC4 + AC5", () => {
     },
   );
 
-  it.each(["ClaudeTeam-M01-Dev", "ClaudeTeam-F01-Dev"])(
+  it.each(["ClaudeTeam-F01-Dev"])(
     "%s: idle_reading_book joined the idle pool and points at the book pose",
     (charName) => {
       const char = GENERATED_SPRITE_MANIFEST.characters[charName];
@@ -154,6 +158,39 @@ describe("read-at-screen wiring (regenerated manifest) — AC4 + AC5", () => {
       expect(book.frames.length).toBeGreaterThan(0);
     },
   );
+
+  // v3 92×92 chars (M01 overwritten 86ca5ed8v, F02, M03) share ONE desk state
+  // holding BOTH active_work and active_read via the folder/slug value form, so
+  // there is no book↔desk flip during active sessions. The desk folder name and
+  // read-anim slug differ per character (re-export variance), so this block
+  // asserts the structural invariant (shared folder + distinct anims), not a
+  // fixed slug string.
+  it.each(["ClaudeTeam-M01-Dev", "ClaudeTeam-F02-Dev", "ClaudeTeam-M03-Dev"])(
+    "%s: active_work + active_read share ONE desk folder but resolve to DISTINCT anims",
+    (charName) => {
+      const char = GENERATED_SPRITE_MANIFEST.characters[charName];
+      const work = char.animations.active_work;
+      const read = char.animations.active_read;
+      expect(work).toBeDefined();
+      expect(read).toBeDefined();
+      // Same desk state folder (no flip between work and read)...
+      expect(work.folder).toBe(read.folder);
+      // ...but the folder/slug form disambiguated them onto DIFFERENT anims.
+      expect(work.frames[0]).not.toBe(read.frames[0]);
+      // No book pose in the active animations.
+      expect(work.frames[0]).not.toContain("/reading_an_open_book/");
+      expect(read.frames[0]).not.toContain("/reading_an_open_book/");
+    },
+  );
+
+  it("M01 (v3): active anims live in the Sitting_at_a_desk_wo state, no book pose in the idle pool", () => {
+    const char = GENERATED_SPRITE_MANIFEST.characters["ClaudeTeam-M01-Dev"];
+    expect(char.animations.active_work.folder).toBe("Sitting_at_a_desk_wo");
+    expect(char.animations.active_read.folder).toBe("Sitting_at_a_desk_wo");
+    // v3 M01 idle pool is the 3-pose v3 set, NOT the legacy 14-idle layout.
+    expect(char.idlePool).toEqual(["idle_coffee", "idle_stretch", "idle_think"]);
+    expect(char.idlePool).not.toContain("idle_reading_book");
+  });
 });
 
 describe("scene-bg accessors — sceneForId / defaultScene (86ca3kjyk)", () => {

@@ -1,81 +1,35 @@
 {
-  "_note": "Canonical animation-name → sprite map (sponsor-locked naming 2026-05-29). PixelLab does NOT export the semantic animation_name passed at generation; its metadata.json keys by an action-description slug + folder. This file is the authoritative map the webview trigger logic + manifest generator (scripts/build-sprite-manifest.mjs) consume. VALUE FORMAT: a bare folder name `<state_folder>` means that folder holds exactly ONE animation (resolve animations/<sole-slug>/south/frame_*.png — legacy default); a `<state_folder>/<anim_slug>` value names a SPECIFIC animation inside a folder holding MORE THAN ONE. active_work + active_read SHARE sitting_at_a_desk_fa (same desk posture → no book↔desk flip during active sessions), so both use the folder/slug form. Idle pool = all idle_* (webview picks at random). ACTIVE POOL (ticket 86ca3mge9): for running + tool != Read the webview now picks ONE of `active_pool` (typing / work_cycle / work_focus, baked on new grounded mouse-desk poses) per active EPISODE and loops it, mirroring idle-episode stickiness; active_work remains the single-pose fallback for a character with no active_pool. active_read (tool == Read) is unchanged and never pool-drawn.",
+  "_note": "Canonical animation-name → sprite map for ClaudeTeam-M01-Dev (v3 92x92 persona). PixelLab does NOT export the semantic animation_name; its metadata.json keys by an action-description slug + folder. This file is the authoritative map the webview trigger logic + manifest generator (scripts/build-sprite-manifest.mjs) consume. VALUE FORMAT: a bare folder name `<state_folder>` means that folder holds exactly ONE animation (resolve animations/<sole-slug>/south/frame_*.png); a `<state_folder>/<anim_slug>` value names a SPECIFIC animation inside a folder holding MORE THAN ONE. active_work + active_read SHARE the Sitting_at_a_desk_wo desk state (state b73d5b2e — same desk posture → no flip during active sessions), so both use the folder/slug form. idle_pool = [idle_coffee, idle_stretch, idle_think] (webview picks at random). NO active_pool (single active_work pose); active_work is the single-pose fallback for running + tool != Read. Slugs discovered from the harvested metadata.json — not guessed.",
   "character": "ClaudeTeam-M01-Dev",
-  "group_id": "ee57907c-dfa7-419f-bf77-071bc99e54fd",
-  "base_id": "7282cc3d-f822-492c-a790-08b3b5d2b27e",
+  "group_id": "53712ca3-5239-44ae-a7e9-7ec361587e9e",
+  "base_id": "dfd4d94e-990c-4e8c-996d-31216b074929",
   "sprites_root": "_pixellab_anims",
-  "base_portrait_folder": "ClaudeTeam-M01-Dev",
+  "base_portrait_folder": "ClaudeTeam-M01-Dev-v3",
+  "_render_note": "Per-character render-fit (ticket 86ca5b0gj). v3 92x92 sprites bake the figure into only ~50% of the canvas (measured: figure ~46-51px of 92px, ~20-24px transparent bottom margin) vs ~75% for the legacy 68x68 chars (F01/M01/M02). With `.sprite-frame { object-fit: contain }` the WHOLE canvas scales into the box, so a 92px char renders ~0.7x the apparent figure size AND floats high. `scale` enlarges the figure to the 68px apparent size; `offsetY` (% of box, positive = DOWN/forward toward the viewer) fine-anchors it. Origin is center-center: scale 1.5 lands the feet at ~86% down, matching the 68px chars. SPONSOR-TUNABLE on reload (edit + npm run build + reload, OR override the dashboard.css :root --ct-render-scale / --ct-render-offset-y fallbacks for a no-rebuild nudge). Omit the block to render identity (no transform).",
+  "render": { "scale": 1.5, "offsetY": 4 },
   "default_idle": "idle_coffee",
   "idle_pool": [
     "idle_coffee",
-    "idle_snack",
     "idle_stretch",
-    "idle_phone",
-    "idle_hips",
-    "idle_think",
-    "idle_arms_crossed",
-    "idle_pockets",
-    "idle_neck_roll",
-    "idle_yawn",
-    "idle_watch",
-    "idle_headphones",
-    "idle_wave",
-    "idle_reading_book"
+    "idle_think"
   ],
   "active": {
     "active_work": "tool != Read",
     "active_read": "tool == Read"
   },
-  "active_pool": [
-    "typing",
-    "work_cycle",
-    "work_focus"
-  ],
   "animations": {
-    "idle_coffee": "holding_a_coffee_cup",
-    "idle_snack": "holding_a_small_snac",
-    "idle_stretch": "a_relaxed_tired_upwa",
-    "idle_phone": "holding_a_phone_in_f",
-    "idle_hips": "standing_with_both_h",
-    "idle_think": "standing_in_a_relaxe",
-    "idle_arms_crossed": "standing_with_both_a",
-    "idle_pockets": "standing_relaxed_wit",
-    "idle_neck_roll": "standing_relaxed_wit_2",
-    "idle_yawn": "standing_relaxed_be",
-    "idle_watch": "one_forearm_raised_u",
-    "idle_headphones": "wearing_over-ear_hea",
-    "idle_wave": "standing_upright_wit",
-    "idle_reading_book": "reading_an_open_book",
-    "active_work": "sitting_at_a_desk_fa/the_character_stays_seated_and_completely_still_th-a1b98373",
-    "active_read": "sitting_at_a_desk_fa/the_character_sits_facing_the_monitor_and_reads_wh-8f46a4d2",
-    "typing": "typing_at_a_mouse_desk",
-    "work_cycle": "working_cycle_at_a_mouse_desk",
-    "work_focus": "working_focused_at_a_mouse_desk"
+    "idle_coffee": "Standing_and_drinkin",
+    "idle_stretch": "Standing_and_stretch",
+    "idle_think": "Standing_in_a_thinki",
+    "active_work": "Sitting_at_a_desk_wo/Working_at_the_desk_in_a_seamless_loop_first_typin-ed0414d3",
+    "active_read": "Sitting_at_a_desk_wo/The_head_stays_up_facing_the_monitor_the_entire_ti-93baf3ab"
   },
-  "_playback_note": "Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Keyed by canonical anim name (must exist in `animations`). Fields (all optional): speedMultiplier (fraction of default frame RATE; 0.5 = half speed = 2x per-frame ms), dwellFrameIndex (mid-sequence apex frame held longer), dwellMs (apex hold add-on), finalDwellMs (final-frame hold before loop restart; default 400), playbackMode (\"loop\"|\"pingpong\"; default loop), startFrame/endFrame (inclusive frame sub-window). Malformed values are dropped + warned by scripts/build-sprite-manifest.mjs (unknown playbackMode falls back to loop). Migrated from the former hardcoded PLAYBACK_OVERRIDES map (E2). Edit + `npm run build` + reload to retune — no TS edit.",
+  "_playback_note": "Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Keyed by canonical anim name (must exist in `animations`). Fields (all optional): speedMultiplier (fraction of default frame RATE; 0.5 = half speed), dwellFrameIndex, dwellMs, finalDwellMs, playbackMode, startFrame/endFrame. Malformed values dropped + warned by scripts/build-sprite-manifest.mjs. Mirrors F02's slow-calm defaults; sponsor retunes on reload with zero gens (edit + npm run build + reload).",
   "playback": {
     "active_work": { "speedMultiplier": 0.5 },
     "active_read": { "speedMultiplier": 0.5 },
-    "typing": { "speedMultiplier": 0.5 },
-    "work_cycle": { "speedMultiplier": 0.5 },
-    "work_focus": { "speedMultiplier": 0.5 },
     "idle_coffee": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
-    "idle_snack": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
-    "idle_stretch": {
-      "speedMultiplier": 0.5,
-      "startFrame": 5,
-      "endFrame": 10,
-      "playbackMode": "pingpong",
-      "finalDwellMs": 800
-    },
-    "idle_phone": { "speedMultiplier": 0.5, "dwellFrameIndex": 4 },
-    "idle_hips": { "speedMultiplier": 0.5 },
-    "idle_think": { "speedMultiplier": 0.5 },
-    "idle_arms_crossed": { "speedMultiplier": 0.5 },
-    "idle_pockets": { "speedMultiplier": 0.5 },
-    "idle_neck_roll": { "speedMultiplier": 0.5 },
-    "idle_yawn": { "speedMultiplier": 0.5 },
-    "idle_watch": { "speedMultiplier": 0.5 },
-    "idle_headphones": { "speedMultiplier": 0.7 }
+    "idle_stretch": { "speedMultiplier": 0.5 },
+    "idle_think": { "speedMultiplier": 0.5 }
   }
 }
