@@ -73,6 +73,20 @@ const LEGACY_IDLE: Record<string, PlaybackOverrideTable> = {
   },
 };
 
+// Engine-contract fixture for the createSpriteBox sequencer tests that drive an
+// M01 synthetic character. These tests assert the ENGINE's dwell/composition
+// math (peak+final dwell, out-of-range peak, active-no-dwell) on a known
+// 50%-speed config — they must NOT read the SHIPPED M01 manifest, whose values
+// the sponsor retunes freely in the Playback Tuner (PR #210 changed idle_coffee
+// to speed 1.1 + dwellFrameIndex 0 + window, breaking the old implicit-read
+// assumption). Injecting this table keeps the math deterministic + tuning-proof.
+const M01_ENGINE: Record<string, PlaybackOverrideTable> = {
+  [M01]: {
+    idle_coffee: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+    active_work: { speedMultiplier: 0.5 },
+  },
+};
+
 /** Build a synthetic character with N-frame anims for the named poses. */
 function char(name: string, frameCounts: Record<string, number>): SpriteCharacter {
   const animations: SpriteCharacter["animations"] = {};
@@ -133,14 +147,29 @@ describe("resolvePlayback — speed list (86ca1fntp)", () => {
     expect(resolvePlayback(F01, anim, LEGACY_IDLE).speedMultiplier).toBe(0.5);
   });
 
+  // The v3 M01 idle/active speeds are SPONSOR-TUNED in the live manifest
+  // (Playback Tuner 2026-06-12, PR #210) and will keep changing — pinning them
+  // to a fixed number couples this engine test to live tuning data. The ENGINE
+  // contract under test ("resolvePlayback returns the per-char speedMultiplier
+  // verbatim") is asserted against the injected M01_SPEED fixture instead so a
+  // future retune can never break it (same decoupling as LEGACY_IDLE above).
+  const M01_SPEED: Record<string, PlaybackOverrideTable> = {
+    [M01]: {
+      active_read: { speedMultiplier: 0.5 },
+      active_work: { speedMultiplier: 0.5 },
+      idle_coffee: { speedMultiplier: 0.5 },
+      idle_stretch: { speedMultiplier: 0.5 },
+      idle_think: { speedMultiplier: 0.5 },
+    },
+  };
   it.each([
     "active_read",
     "active_work",
     "idle_coffee",
     "idle_stretch",
     "idle_think",
-  ])("%s plays at 50%% speed on the v3 M01", (anim) => {
-    expect(resolvePlayback(M01, anim).speedMultiplier).toBe(0.5);
+  ])("%s resolves the per-char speedMultiplier verbatim (injected M01 fixture)", (anim) => {
+    expect(resolvePlayback(M01, anim, M01_SPEED).speedMultiplier).toBe(0.5);
   });
 
   it("idle_headphones plays at 70% speed (legacy, injected)", () => {
@@ -164,26 +193,25 @@ describe("resolvePlayback — peak-frame dwell indices (character-specific)", ()
     expect(resolvePlayback(F01, "idle_phone", LEGACY_IDLE).dwellFrameIndex).toBe(4);
   });
 
-  it("v3 M01 idle_coffee peaks at frame 4 (its only mid-peak idle)", () => {
-    expect(resolvePlayback(M01, "idle_coffee").dwellFrameIndex).toBe(4);
+  // ENGINE CONTRACT — "resolvePlayback returns the per-char dwellFrameIndex
+  // verbatim, alongside the speed" — asserted against an injected fixture so the
+  // sponsor's live M01 tuning (PR #210, which moved idle_coffee's apex off frame
+  // 4 and gave it a window) can never break it. The "does the SHIPPED manifest
+  // carry sane playback?" question is covered by the data-following manifest test
+  // below (it reads the value off the manifest, not a frozen constant).
+  const M01_PEAK: Record<string, PlaybackOverrideTable> = {
+    [M01]: {
+      idle_coffee: { speedMultiplier: 0.5, dwellFrameIndex: 4 },
+      idle_stretch: { speedMultiplier: 0.5 },
+    },
+  };
+
+  it("a mid-peak idle resolves its dwellFrameIndex verbatim (injected M01 fixture)", () => {
+    expect(resolvePlayback(M01, "idle_coffee", M01_PEAK).dwellFrameIndex).toBe(4);
   });
 
-  it("idle_stretch is a plain held loop on F01 (near-static clip) — E1-refine 86ca21876", () => {
-    // The legacy 68×68 F01's stretch clip is near-static (arms held high all 11
-    // frames); sponsor said the held stretch "is fine" → plain gentle loop
-    // (no window/pingpong/peak), keeping only the speed-half cadence. (The old
-    // 68×68 M01 carried the windowed raise-first variant; the v3 92×92 M01 that
-    // replaced it ships a plain 50%-speed stretch — see the manifest test below.)
-    const f = resolvePlayback(F01, "idle_stretch");
-    expect(f.startFrame).toBeUndefined();
-    expect(f.endFrame).toBeUndefined();
-    expect(f.playbackMode).toBeUndefined();
-    expect(f.dwellFrameIndex).toBeUndefined();
-    expect(f.speedMultiplier).toBe(0.5);
-  });
-
-  it("v3 M01 idle_stretch is a plain 50%-speed loop (no window/pingpong/peak)", () => {
-    const m = resolvePlayback(M01, "idle_stretch");
+  it("a plain-loop idle resolves with no window/pingpong/peak (injected M01 fixture)", () => {
+    const m = resolvePlayback(M01, "idle_stretch", M01_PEAK);
     expect(m.speedMultiplier).toBe(0.5);
     expect(m.startFrame).toBeUndefined();
     expect(m.endFrame).toBeUndefined();
@@ -191,8 +219,8 @@ describe("resolvePlayback — peak-frame dwell indices (character-specific)", ()
     expect(m.dwellFrameIndex).toBeUndefined();
   });
 
-  it("peak poses retain their 50% speed alongside the dwell", () => {
-    const o = resolvePlayback(M01, "idle_coffee");
+  it("a peak pose retains its speed alongside the dwell (injected M01 fixture)", () => {
+    const o = resolvePlayback(M01, "idle_coffee", M01_PEAK);
     expect(o.speedMultiplier).toBe(0.5);
     expect(o.dwellFrameIndex).toBe(4);
   });
@@ -208,14 +236,19 @@ describe("resolvePlayback — peak-frame dwell indices (character-specific)", ()
     // resolvePlayback reads the manifest by default — assert the characters'
     // playback survived the migration as the new source of truth. F02 (86ca5aczf)
     // joined the manifest as the first v3 92×92 persona; M03 (86ca5at8f) as the second;
-    // M01 (86ca5ed8v) was overwritten in place by the v3 92×92 build (plain stretch).
+    // M01 (86ca5ed8v) was overwritten in place by the v3 92×92 build.
     expect(Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort()).toEqual([F01, F02, M01, M03]);
-    expect(GENERATED_SPRITE_MANIFEST.characters[M01].animations.idle_stretch.playback).toEqual({
-      speedMultiplier: 0.5,
-    });
-    expect(GENERATED_SPRITE_MANIFEST.characters[F01].animations.idle_stretch.playback).toEqual({
-      speedMultiplier: 0.5,
-    });
+    // The PLAYBACK VALUES are SPONSOR-TUNED in the live Playback Tuner (PR #210)
+    // and change freely — so assert the migration SHAPE (a playback block exists
+    // and carries a valid speedMultiplier), NOT a frozen tuning constant, so a
+    // retune can't break this. The end-to-end "tuned value → resolvePlayback"
+    // round-trip is data-following in NO-REGRESSION below.
+    for (const c of [F01, M01]) {
+      const pb = GENERATED_SPRITE_MANIFEST.characters[c].animations.idle_stretch.playback;
+      expect(pb).toBeDefined();
+      expect(typeof pb?.speedMultiplier).toBe("number");
+      expect(pb?.speedMultiplier).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -312,6 +345,8 @@ describe("createSpriteBox — peak-frame dwell + composition (deterministic)", (
   it("composes peak dwell + final-frame dwell when peak lands on the last frame", () => {
     const sched = recordingScheduler();
     // Synthetic 5-frame coffee so the peak (4) IS the final frame.
+    // Injected M01_ENGINE fixture (50% speed, idle_coffee peak 4) — decoupled
+    // from the sponsor-tuned live M01 manifest so the engine math stays pinned.
     createSpriteBox({
       char: char(M01, { idle_coffee: 5 }),
       state: "idle",
@@ -321,6 +356,7 @@ describe("createSpriteBox — peak-frame dwell + composition (deterministic)", (
       rng: () => 0,
       scheduleFrame: sched.schedule,
       cancelFrame: () => undefined,
+      playbackTable: M01_ENGINE,
     });
     const base = FRAME_MS_DEFAULT / 0.5;
     for (let i = 0; i < 4; i++) sched.step();
@@ -331,7 +367,7 @@ describe("createSpriteBox — peak-frame dwell + composition (deterministic)", (
   it("ignores an out-of-range peak index without breaking the loop", () => {
     const sched = recordingScheduler();
     // Coffee with only 3 frames — peak index 4 is out of range; loop must run
-    // at plain base speed with no dwell crash.
+    // at plain base speed with no dwell crash. Injected fixture (peak 4).
     createSpriteBox({
       char: char(M01, { idle_coffee: 3 }),
       state: "idle",
@@ -341,6 +377,7 @@ describe("createSpriteBox — peak-frame dwell + composition (deterministic)", (
       rng: () => 0,
       scheduleFrame: sched.schedule,
       cancelFrame: () => undefined,
+      playbackTable: M01_ENGINE,
     });
     const base = FRAME_MS_DEFAULT / 0.5;
     expect(sched.calls[0]).toBe(base);
@@ -352,7 +389,7 @@ describe("createSpriteBox — peak-frame dwell + composition (deterministic)", (
 
   it("active poses never dwell on the final frame (continuous loop)", () => {
     const sched = recordingScheduler();
-    // active_work: 50% speed, no peak, no final dwell.
+    // active_work: 50% speed, no peak, no final dwell (injected M01_ENGINE).
     createSpriteBox({
       char: char(M01, { active_work: 5 }),
       state: "running",
@@ -360,6 +397,7 @@ describe("createSpriteBox — peak-frame dwell + composition (deterministic)", (
       spriteBaseUri: "base",
       scheduleFrame: sched.schedule,
       cancelFrame: () => undefined,
+      playbackTable: M01_ENGINE,
     });
     const base = FRAME_MS_DEFAULT / 0.5;
     for (let i = 0; i < 4; i++) sched.step();
@@ -422,18 +460,22 @@ describe("PlaybackOverride — E1 + E1-refine fields resolve (AC1)", () => {
     expect(o.endFrame).toBe(10);
   });
 
-  it("v3 M01 idle_stretch is a plain held loop — no pingpong/window (manifest)", () => {
+  // The SHIPPED M01/F01 idle_stretch stays a plain LOOP (no pingpong, no frame
+  // window) — that part is the structural contract this guards. The sponsor MAY
+  // tune a final-frame dwell / peak / speed on it via the Playback Tuner (PR
+  // #210 added finalDwellMs), so those scalar fields are NOT asserted absent
+  // here — only the loop STRUCTURE (no playbackMode / startFrame / endFrame),
+  // which is what makes it a plain wrap-loop rather than a windowed pingpong.
+  it("v3 M01 idle_stretch is a plain loop — no pingpong/window (manifest)", () => {
     const o = resolvePlayback(M01, "idle_stretch");
     expect(o.playbackMode).toBeUndefined();
-    expect(o.finalDwellMs).toBeUndefined();
     expect(o.startFrame).toBeUndefined();
     expect(o.endFrame).toBeUndefined();
   });
 
-  it("F01 idle_stretch is a plain held loop — no pingpong/window (near-static clip)", () => {
+  it("F01 idle_stretch is a plain loop — no pingpong/window (near-static clip)", () => {
     const o = resolvePlayback(F01, "idle_stretch");
     expect(o.playbackMode).toBeUndefined();
-    expect(o.finalDwellMs).toBeUndefined();
     expect(o.startFrame).toBeUndefined();
     expect(o.endFrame).toBeUndefined();
   });
@@ -802,36 +844,29 @@ describe("resolvePlayback — MANIFEST-FED resolution (E2 86ca2187g, AC3)", () =
     });
   });
 
-  it("NO-REGRESSION: the shipped manifest resolves M01/F01 to their playback values", () => {
+  it("NO-REGRESSION: resolvePlayback returns each char's BAKED manifest playback (data-following)", () => {
     // Each character's playback lives in its animations.json, baked into
-    // GENERATED_SPRITE_MANIFEST. resolvePlayback's DEFAULT source is that manifest.
-    // Both M01 (86ca5ed8v) and F01 (86ca5j1mt) were overwritten in place by their
-    // v3 92×92 builds — idle_stretch is now a PLAIN 50%-speed loop on each (the
-    // windowed raise-first variant belonged to the retired 68×68 M01; the legacy
-    // 14-idle F01 layout — idle_headphones etc. — is now exercised via LEGACY_IDLE).
-    expect(resolvePlayback(M01, "idle_stretch", GENERATED_SPRITE_MANIFEST)).toEqual({
-      speedMultiplier: 0.5,
-    });
-    expect(resolvePlayback(M01, "idle_coffee", GENERATED_SPRITE_MANIFEST)).toEqual({
-      speedMultiplier: 0.5,
-      dwellFrameIndex: 4,
-    });
-    expect(resolvePlayback(F01, "idle_stretch", GENERATED_SPRITE_MANIFEST)).toEqual({
-      speedMultiplier: 0.5,
-    });
-    // v3 F01 idle_coffee carries the slow-calm 0.6 speed + mid-peak (its animations.json).
-    expect(resolvePlayback(F01, "idle_coffee", GENERATED_SPRITE_MANIFEST)).toEqual({
-      speedMultiplier: 0.6,
-      dwellFrameIndex: 4,
-    });
+    // GENERATED_SPRITE_MANIFEST; resolvePlayback's DEFAULT source is that manifest
+    // (poseDefaults is absent on the live manifest, so the resolved override is
+    // the per-char block verbatim). The sponsor RETUNES these values freely in the
+    // Playback Tuner (PR #210), so this test FOLLOWS THE DATA rather than freezing
+    // a constant: for each shipped char/anim, resolvePlayback must equal the
+    // manifest's own `animations[anim].playback` block. That pins the RESOLVER
+    // WIRING (reads the baked manifest, per-char verbatim) without breaking on the
+    // next retune — exactly the decoupling the brief calls for.
+    for (const c of [M01, F01]) {
+      for (const a of ["idle_stretch", "idle_coffee", "idle_think", "active_work"]) {
+        const baked =
+          GENERATED_SPRITE_MANIFEST.characters[c].animations[a]?.playback ?? {};
+        expect(resolvePlayback(c, a, GENERATED_SPRITE_MANIFEST)).toEqual(baked);
+        // The default arg (no 3rd param) resolves identically to the explicit manifest.
+        expect(resolvePlayback(c, a)).toEqual(baked);
+      }
+    }
     // The retired legacy F01 idle_headphones (70%) is preserved via the injected table.
     expect(
       resolvePlayback(F01, "idle_headphones", LEGACY_IDLE).speedMultiplier,
     ).toBe(0.7);
-    // The default arg (no 3rd param) resolves identically to the explicit manifest.
-    expect(resolvePlayback(M01, "idle_stretch")).toEqual(
-      resolvePlayback(M01, "idle_stretch", GENERATED_SPRITE_MANIFEST),
-    );
   });
 });
 
