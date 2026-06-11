@@ -135,7 +135,7 @@ The tuner panel is a single vertical column. Theme-aware (`--vscode-*` tokens; �
 │               0.25×        2.0×                            │
 │                                                           │
 │  Hold (final) ──────●────────   800 ms   [reset]          │  ← §3.3 finalDwellMs
-│               0 ms       2000 ms                          │
+│               0 ms      10000 ms                          │
 │                                                           │
 │  Mode         ( ) loop   (•) pingpong                     │  ← §3.4 playbackMode
 │                                                           │
@@ -172,7 +172,7 @@ Two native `<select>` dropdowns (theme-styled).
 ### 3.3 Hold slider → `finalDwellMs`
 
 - Bound field: **`finalDwellMs`** (LOCKED vocabulary, the NEW E1 field).
-- Range: `0` → `2000` ms, step `50`. Default thumb = resolved effective `finalDwellMs` (engine default `DWELL_MS_DEFAULT = 400` when unset).
+- Range: `0` → `10000` ms, step `50` (shipped `HOLD_MIN = 0`, `HOLD_MAX = 10000`, `HOLD_STEP = 50` in `playbackTuner.ts`; tunes can want a multi-second beat, e.g. F01 idle_coffee shipped `finalDwellMs 2000`). Default thumb = resolved effective `finalDwellMs` (engine default `DWELL_MS_DEFAULT = 400` when unset).
 - Display: integer + ` ms`.
 - aria-label: "Final-frame hold before the loop restarts, in milliseconds."
 - `[reset]` clears the field from `draftOverride`.
@@ -441,13 +441,13 @@ A native `input[type=range]` slider, identical idiom + range to the Hold (final)
 
 **`dwellFrameIndex` — a frame-bounded `<select>` (number-picker), NOT a stepper and NOT a slider-over-frames.**
 
-> **DECISION (AC2): a native `<select>` listing one option per in-window frame (`"Off"`, `frame 0`, `frame 1`, …), bounded to the selected animation's south-frame count.** This matches the shipped `apexFrameSelect` (`playbackTuner.ts`).
+> **DECISION (AC2): a native `<select>` listing one option per in-window frame (`"Off"`, `frame 0`, `frame 1`, …), bounded to the selected animation's total frame count (shipped `frameCount()` reads `manifest…animations[anim].frames.length`).** This matches the shipped `apexFrameSelect` (`playbackTuner.ts`).
 
 Justification (stepper vs number-`<select>` vs slider-over-frames):
 
 | Form | Verdict | Rationale |
 |---|---|---|
-| **Native `<select>` (frame picker)** ✅ CHOSEN | Chosen | The apex is a *discrete, small-cardinality* choice (south-frame counts are ~4–16; M01 vs F01 differ — `frameCount()` reads `manifest...animations[anim].frames.length`). A `<select>` shows the full enumerable set at once, makes the **`"Off"` (no apex hold) sentinel** a first-class first option (clearing both fields), and is trivially **re-populated per (char, anim)** so an index valid for one anim never dangles on another. It is also the natural twin of the window control's discrete-frame idiom (`86ca2wj6u` §1 consistency note). The sponsor picks "the peak frame" by reading the live preview and choosing its index — a list, not a continuous drag. |
+| **Native `<select>` (frame picker)** ✅ CHOSEN | Chosen | The apex is a *discrete, small-cardinality* choice (frame counts are ~4–16; M01 vs F01 differ — `frameCount()` reads `manifest...animations[anim].frames.length`). A `<select>` shows the full enumerable set at once, makes the **`"Off"` (no apex hold) sentinel** a first-class first option (clearing both fields), and is trivially **re-populated per (char, anim)** so an index valid for one anim never dangles on another. It is also the natural twin of the window control's discrete-frame idiom (`86ca2wj6u` §1 consistency note). The sponsor picks "the peak frame" by reading the live preview and choosing its index — a list, not a continuous drag. |
 | **Number input / stepper (`±`)** ✗ rejected | — | A bare stepper gives no sense of the valid range and invites out-of-bounds entry (the sponsor would have to know the frame count); it also can't express the `"Off"` sentinel cleanly (0 is a valid frame, not "off"). A clamp-on-blur stepper is more code for less clarity at this cardinality. |
 | **Slider over frame indices** ✗ rejected | — | A single-thumb range slider implies a *continuous* quantity; the apex is one discrete frame, and a slider gives no labelled stops (the sponsor can't tell frame 6 from frame 7 by thumb position at 4–16 stops). The ms holds are sliders precisely because ms IS continuous; frame index is not. Reserving the slider idiom for continuous quantities (speed ×, ms) and `<select>` for discrete frame choices keeps the control vocabulary legible. |
 
