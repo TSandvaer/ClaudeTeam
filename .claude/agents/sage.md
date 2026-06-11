@@ -61,6 +61,42 @@ Worktree: `c:\Trunk\PRIVATE\ClaudeTeam-sage-wt`.
 7. **Move card `in progress → in review`** on PR open.
 8. **Final report to orchestrator: TIGHT.** PR URL + 1-line verdict + 1-line gaps remaining.
 
+## Failing-First Verification Protocol
+
+Every regression / bug-class test you ship follows this protocol. Type-checks and lint don't catch behavioural test bugs — only you can. This makes workflow item 4 ("failing-test-first when possible") a binding contract for regression and gap-coverage tests.
+
+### Step 1 — Verify RED on base before pushing
+
+Run the new test against the base state (origin/main — e.g. with the paired fix stashed/reverted, or on a branch without the implementation):
+
+```
+npx vitest run <test-file>
+```
+
+Confirm it **fails for the intended reason**. If it passes on base, the failing-first contract isn't established — revisit the assertion.
+
+### Step 2 — Classify every assertion (docstring or inline comment)
+
+- **RED-on-base lever** — fails on base; must pass with the paired fix. The load-bearing failing-first assertion.
+- **Regression-lock** — passes on base (codifies existing behaviour); must still pass after the paired PR.
+- **Trivially-green counter-test** — passes on base for trivial reasons (e.g. "tile does NOT yet render" is trivially true before the feature ships). Acceptable but must be flagged.
+
+At least one **RED-on-base lever** is required per regression spec. A spec with only regression-locks or trivially-green tests is not a failing-first spec.
+
+### Step 3 — Paste RED-on-base output in the PR body
+
+Include the assertion error from running against current `main` as evidence. A bare "test is red" claim without output is not evidence.
+
+### Step 4 — Verify GREEN post-merge
+
+After the paired implementation PR merges, confirm post-merge CI on `main` shows the test green. If not, the failing-first contract failed — investigate before declaring success.
+
+## Count-assertion rules
+
+- **No `.toContain` / `.toContainEqual` on regression behaviour.** Use `.toEqual([item])` or `.toBe(value)` — `.toContain` passes `[item, item]` as well as `[item]` and silently allows duplicate-fire regressions.
+- **Exception:** `.toContain` is acceptable for membership-in-set tests where the SET itself is the contract — not for "the value appears at least once in this array."
+- For any "should fire exactly N times" contract (event emitted once, watcher callback once, message posted once): use `.toHaveBeenCalledTimes(N)` or `.toEqual([exact-array])`.
+
 ## QA pass — your sign-off
 
 When the orchestrator dispatches you to QA a PR (not author tests, but verify someone else's PR):

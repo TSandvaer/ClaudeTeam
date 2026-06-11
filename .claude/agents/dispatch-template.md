@@ -40,6 +40,8 @@ Before any other work: read CLAUDE.md and every .claude/docs/*.md file IN PARALL
 **Conflict rule:** if you discover OOS scope is load-bearing, STOP and file a follow-up ticket — do not expand mid-PR.
 ```
 
+**Work-type tag (ticket-level):** every ticket carries a free-text tag from `impl` / `spec` / `investigation` / `test` / `chore` / `cleanup`. The tag drives which acceptance gates apply: impl needs a green test, spec needs PR-opens-to-template, investigation needs question-answered-in-PR-body, test needs a failing-first contract, chore needs no behavior change, cleanup needs comment-only or follow-up reframe. Without a work-type tag, spec/investigation tickets get mis-scored against impl-shaped gates.
+
 ### 3a. Vocabulary contract (mandatory for parallel dispatches sharing a NEW concept)
 
 When dispatching multiple agents in parallel where two or more will reference a NEW type / event shape / wire-format field / guard function, include the following block in BOTH briefs verbatim so both agents read identical identifier names:
@@ -86,6 +88,8 @@ Doc updates: <none | "added .claude/docs/<file>.md" | "updated <file>.md @ secti
 Decision drafts (if any): <one per line, prefixed `Decision draft:`>
 
 Anything beyond this goes in the PR body, ticket comments, or your workspace folder — NOT in the orchestrator-bound report. Cite verifiable evidence for every state claim (run-id URL, SHA, file:line, screenshot URL).
+
+Use `gh pr create --body-file <path>` for PR bodies longer than ~5 lines — avoids the 600s stream-watchdog kill observed on inline `--body` / heredoc patterns in sibling projects.
 ```
 
 ### 6. Non-obvious findings postamble
@@ -105,6 +109,12 @@ git switch --detach HEAD
 **Rationale:** prevents `gh pr merge --delete-branch` from failing local cleanup when the orchestrator merges. A worktree still holding the branch blocks the post-merge `--delete-branch` step (documented failure mode in `orchestration-overview.md` § Common failure modes). Applies to BOTH authors and peer-reviewers — defense-in-depth even when the reviewer used the `fetch into local-only branch` pattern.
 
 Include this verbatim as the final action of every dispatch brief, alongside the final-report contract (§5). Do NOT duplicate it inside other blocks — the peer-review routing block (Optional blocks below) references this global Final step rather than repeating the command.
+
+### 8. Regression guard (mandatory for any production code change)
+
+```
+**Regression guard:** Name at least one test (vitest unit or integration) that would fail if this feature broke in a future unrelated PR. If none exists, add it in this PR. The named test is the artifact a future unrelated PR's CI run flips RED against, so the regression surfaces at PR-time rather than at sponsor-dogfood-time.
+```
 
 ## Anti-fabrication contract
 
@@ -143,6 +153,20 @@ Every dispatched agent inherits project `CLAUDE.md` rule 10 "Never fabricate, ne
 
 ```
 This agent is being dispatched in the background. The orchestrator MUST pair this dispatch with a ScheduleWakeup at ~2× the agent's expected duration so a silent agent-death is caught. Background agents must `git commit && git push` after each milestone — agents die silently and uncommitted work is lost.
+```
+
+### Lesson reminder (load-bearing this session)
+
+Inject one or two relevant cautionary tales per dispatch, picked from this project's `[[feedback_*]]` memory. Examples:
+
+- `[[feedback_verify_subagent_cited_paths]]` — spot-check cited paths/evidence before building on an investigation report. Verify, don't reason from priors.
+- `[[feedback_fabrication_is_sequencing_not_knowledge]]` — never write an ID/SHA/URL you haven't seen in a tool result this task.
+- `[[feedback_author_detach_after_dispatch]]` — `git switch --detach HEAD` after PR open / review, or the merge's branch-delete fails.
+- `[[feedback_background_agent_notifications_can_drop]]` — commit + push after each milestone; agents die silently and uncommitted work is lost.
+- `[[feedback_implementer_verifies_triager_hypothesis]]` — verify/refute a triager's root-cause hypothesis from the authoritative source before fixing.
+
+```markdown
+**Lesson reminder (load-bearing this session):** `[[<memory-name>]]` — <one-line summary of the cautionary tale + why it applies here>.
 ```
 
 ### Peer-review routing
@@ -199,5 +223,18 @@ Before sending a brief:
 - [ ] Non-obvious findings postamble present.
 - [ ] If background dispatch: ScheduleWakeup tripwire scheduled.
 - [ ] If UX-visible: Self-Test Report block present.
+- [ ] Regression guard block (§8) present (production-code dispatches).
+- [ ] 1–2 lesson reminders injected (when a matching incident memory exists).
 
 (All briefs inherit the **Anti-fabrication contract** section above + project `CLAUDE.md` rule 10 — orchestrators do NOT need to paste fabrication-discipline language inline. Sub-agents read both as part of the dispatch-template + CLAUDE.md preload.)
+
+## When NOT to use this template
+
+Skip most blocks for:
+
+- Status-pulse cron firings (read-only summaries — no dispatch).
+- One-line ticket comments (no scope/worktree/gates needed).
+- Skill-driven dispatches that are already structured by the skill itself (e.g. /investigate).
+- Idle-tick state updates (no scope needed).
+
+The template is for **work-producing dispatches** (impl PRs, test PRs, review dispatches, spec PRs). Trivial admin actions stay short.
