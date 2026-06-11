@@ -5,6 +5,9 @@
 **Gates:** E5 (`86ca21884` — Maya impl + Sage QA).
 **Scope flag:** solo-user / experimental — sponsor is the only user. Functional spec over pixel-polish (per ticket OOS). This is a power-user dev aid, NOT a Marketplace surface.
 
+**Amendment history:**
+- 2026-06-12 (`86ca5eve1`, Phase 1) — **§12 added: apex-hold (`dwellFrameIndex` + `dwellMs`) field-set amendment.** Un-LOCKs the original three-field set (§10 OOS #3) to include the apex-hold pair, which was already exposed by ticket `86ca2bqe1` and is **shipped on `origin/main`** (verified `git rev-parse origin/main = f1ae6a73cbbca12f80e84cd7af6105e4ecdb382e` this task; `git grep -c "Hold (apex)" = 5`, `dwellFrameIndex` ×21 in `src/webview/components/playbackTuner.ts`). This amendment is **documentation-reconciling, not net-new design** — it brings the E4 spec body into line with the already-shipped apex control so the spec stops contradicting itself (§10 OOS #3 said the apex pair was OOS while its own 2026-06-02 update noted it had been exposed). See §12 for the full apex-hold control-type, apex-shadow-interaction, placement, and persistence-banner spec.
+
 ---
 
 ## 0. Verified ground truth (read before designing against this spec)
@@ -380,7 +383,7 @@ E5 (Maya impl) MUST NOT include:
 
 1. **Engine changes** — E1 shipped (`finalDwellMs`, `playbackMode`, window, resume). The tuner CONSUMES the engine; it does not modify `spritePlayer.ts`'s sequencer. (One exception, NOT an engine change: the preview helper §5.2 may live in a new tuner-side module — it calls `createSpriteBox`, doesn't edit it.)
 2. **Schema / build-script changes** — E2/E3 shipped the `animations.json` / `pose-defaults.json` `playback` schema + `build-sprite-manifest.mjs` threading + the cascade. The tuner's host writer MUST emit that EXISTING schema, not a new one. No new json fields.
-3. **New playback fields** — only `speedMultiplier`, `finalDwellMs`, `playbackMode` are tunable. `dwellFrameIndex`/`dwellMs` (peak dwell) and `startFrame`/`endFrame` (window) are NOT exposed in this tuner (they are per-character frame-index values that require knowing the exact frame sequence — out of scope for the slider surface; sponsor hand-edits json for those rare cases). State this so E5 doesn't add sliders for them. **Update 2026-06-02:** `dwellFrameIndex`/`dwellMs` were subsequently exposed (apex hold, 86ca2bqe1) and `startFrame`/`endFrame` (window) are exposed by the follow-up ticket `86ca2wj6u` — see `team/iris-design/anim-tuner-window-control-spec.md`. This OOS item reflects the ORIGINAL E5 scope only.
+3. **New playback fields** — ~~only `speedMultiplier`, `finalDwellMs`, `playbackMode` are tunable. `dwellFrameIndex`/`dwellMs` (peak dwell) and `startFrame`/`endFrame` (window) are NOT exposed in this tuner~~ **(SUPERSEDED — see below).** The ORIGINAL E5 scope locked the field set to three (`speedMultiplier`, `finalDwellMs`, `playbackMode`); the apex pair and window were initially deferred (per-character frame-index values that require knowing the exact frame sequence). **Update 2026-06-02:** `dwellFrameIndex`/`dwellMs` were exposed (apex hold, `86ca2bqe1`) and `startFrame`/`endFrame` (window) by `86ca2wj6u` — see `team/iris-design/anim-tuner-window-control-spec.md`. **Amendment 2026-06-12 (`86ca5eve1`, §12):** the locked three-field set is formally UN-LOCKed to include the apex-hold pair (`dwellFrameIndex` + `dwellMs`); **§12 is now the canonical spec for those two controls.** This OOS item is retained only as the historical record of the ORIGINAL E5 scope — it does NOT describe the current shipped tuner.
 4. **File-watcher / auto-rebuild** — the tuner does NOT trigger `npm run build`. Persistence is "json written; rebuild + reload to apply" (§1.3, §3.6). Auto-rebuild-on-save is a possible future nicety, explicitly deferred.
 5. **Pixel-polish / motion-feel tuning of the tuner chrome itself** — solo-user experimental; functional spec over polish (ticket OOS). The preview sprite's feel IS the point, but the panel's own visual refinement is sponsor-post-merge.
 6. **Multi-anim batch editing / presets / undo history** — one (char, anim) tuned at a time. No preset library, no undo stack. Out of scope.
@@ -407,3 +410,121 @@ E5 (Maya) can implement directly from this spec. The decisions are all made:
 - ✅ Functional behaviors (preview-rebuild-on-change, debounced-save-fires-once, correct-write-target, field-clear) are jsdom Layer-2.5 testable → NOT sponsor-deferred (§6 note; `testing-strategy.md` § Layer decision rule). Only the sprite's visual FEEL is sponsor-post-merge.
 
 **The one open sponsor item** (final report): confirm on-demand-panel placement (§2 recommendation) vs always-visible. Everything else is decided.
+
+---
+
+## 12. Apex-hold (`dwellFrameIndex` + `dwellMs`) — field-set amendment (`86ca5eve1`, 2026-06-12)
+
+This section **un-LOCKs the original three-field set** (§10 OOS #3) to add the **apex-hold pair**: a mid-loop dwell that holds ONE chosen frame (the gesture's peak — e.g. the cup at the lips, the arms-overhead stretch apex) longer than the rest of the loop. Two bound fields:
+
+- **`dwellFrameIndex`** — which frame to hold (the apex).
+- **`dwellMs`** — how long to hold it, in ms.
+
+### 12.0 Reconciliation — this is shipped reality, not net-new design
+
+⚠️ **Read before designing against this section.** The apex-hold controls are **already implemented and shipped on `origin/main`** (verified this task: `git rev-parse origin/main = f1ae6a73cbbca12f80e84cd7af6105e4ecdb382e`; `git grep -c "Hold (apex)" origin/main -- src/webview/components/playbackTuner.ts = 5`; `dwellFrameIndex` ×21 in the same file). They were exposed by ticket **`86ca2bqe1`** (the "Hold (apex)" control group) and are window-coupled by **`86ca2wj6u`** (the window control — see `team/iris-design/anim-tuner-window-control-spec.md`).
+
+So this amendment is **documentation-reconciling**, NOT an instruction to build something new. Its purpose: the E4 spec body still described a three-field tuner (and §10 OOS #3 contradicted its own 2026-06-02 update), so a future reader of THIS spec would not know the apex pair is a first-class, shipped tunable. §12 makes the apex-hold design canonical in the E4 spec the same way §1–§9 are canonical for the original three fields. Every control-type / interaction / placement statement below was verified against the live `src/webview/components/playbackTuner.ts` on `f1ae6a73` — they document the shipped behavior; they do not propose a change to it.
+
+(Phase 2 of `86ca5eve1` — Maya's lane — validates the shipped implementation against this written spec and fills any gap. It is NOT a from-scratch build.)
+
+### 12.1 Control types (AC2) — the apex pair
+
+**`dwellMs` — ms numeric slider mirroring `finalDwellMs`.**
+
+A native `input[type=range]` slider, identical idiom + range to the Hold (final) control (§3.3), built via the same `buildSlider` helper:
+
+- Range `0 … 10000` ms, step `50` (mirrors the Hold (final) range — both ms holds share the same dial vocabulary so the sponsor reasons about one "how-long-to-hold" scale). Live constants: `APEX_MS_MIN = 0`, `APEX_MS_MAX = 10000`, `APEX_MS_STEP = 50` (`playbackTuner.ts`).
+- Display: integer + ` ms`. aria-text: "<n> milliseconds" (no icon-only — Iris hard rule).
+- `[reset]` clears `dwellMs` from `draftOverride` (field-omission == clear, §4.1) and re-seeds from the cascade.
+- The ms slider is only **meaningful** once a frame is picked (an index-less `dwellMs` has nothing to hold). It stays usable when no frame is set (the value saves, harmlessly) — the picker's "Off" branch clears BOTH fields together so the json never carries a `dwellMs` with no `dwellFrameIndex`.
+
+**`dwellFrameIndex` — a frame-bounded `<select>` (number-picker), NOT a stepper and NOT a slider-over-frames.**
+
+> **DECISION (AC2): a native `<select>` listing one option per in-window frame (`"Off"`, `frame 0`, `frame 1`, …), bounded to the selected animation's south-frame count.** This matches the shipped `apexFrameSelect` (`playbackTuner.ts`).
+
+Justification (stepper vs number-`<select>` vs slider-over-frames):
+
+| Form | Verdict | Rationale |
+|---|---|---|
+| **Native `<select>` (frame picker)** ✅ CHOSEN | Chosen | The apex is a *discrete, small-cardinality* choice (south-frame counts are ~4–16; M01 vs F01 differ — `frameCount()` reads `manifest...animations[anim].frames.length`). A `<select>` shows the full enumerable set at once, makes the **`"Off"` (no apex hold) sentinel** a first-class first option (clearing both fields), and is trivially **re-populated per (char, anim)** so an index valid for one anim never dangles on another. It is also the natural twin of the window control's discrete-frame idiom (`86ca2wj6u` §1 consistency note). The sponsor picks "the peak frame" by reading the live preview and choosing its index — a list, not a continuous drag. |
+| **Number input / stepper (`±`)** ✗ rejected | — | A bare stepper gives no sense of the valid range and invites out-of-bounds entry (the sponsor would have to know the frame count); it also can't express the `"Off"` sentinel cleanly (0 is a valid frame, not "off"). A clamp-on-blur stepper is more code for less clarity at this cardinality. |
+| **Slider over frame indices** ✗ rejected | — | A single-thumb range slider implies a *continuous* quantity; the apex is one discrete frame, and a slider gives no labelled stops (the sponsor can't tell frame 6 from frame 7 by thumb position at 4–16 stops). The ms holds are sliders precisely because ms IS continuous; frame index is not. Reserving the slider idiom for continuous quantities (speed ×, ms) and `<select>` for discrete frame choices keeps the control vocabulary legible. |
+
+**Frame-bounding (load-bearing):** the picker options are **NOT `[0, frameCount)`** — they are bounded to the **active window** `[startFrame … endFrame]` (resolved by `activeWindow()` over the cascade, clamped to the live clip). An apex outside the window is unreachable: the engine arms the apex hold ONLY when `peakIndex` is inside `[winStart, winEnd]`, so an out-of-window apex silently does nothing. The picker therefore offers only in-window frames; a preferred index that falls outside resolves to `"Off"`. This is the apex↔window coupling — fully specified in `anim-tuner-window-control-spec.md` §4.4 (auto-clear + quiet note on narrowing). For a **no-window** anim the window is the full clip `[0, count-1]`, so the picker lists every frame.
+
+> **Note — `N` in the AC2 clamp "0..N-1":** the ticket frames the bound as "frame-bounded integer clamped 0..N-1 (N = selected animation's south frame count)." That is the **no-window** case. When a window is declared, the *effective* bound is the narrower `[startFrame … endFrame] ⊆ [0, N-1]`, not the full `0..N-1`. The picker honors the tighter of the two — see the frame-bounding paragraph above. This is intentional (an apex outside the window never fires) and is the shipped behavior.
+
+### 12.2 Interaction with the existing apex-shadow warning + `refreshShadowWarning` (AC3)
+
+The apex pair participates in the existing cascade machinery exactly like the original three fields. Three interaction cases, each verified against the live `refreshShadowWarning` / cascade code:
+
+**(a) When BOTH apex fields are set (`dwellFrameIndex` + `dwellMs` present in the draft):**
+- The cascade source table (§3.5) shows TWO independent rows — **`apex frame`** (effective `frame N` or `none`, + source layer) and **`apex hold`** (effective `<n> ms`, + source layer) — resolved field-independently like every other row (`renderSourceTable` adds both via `addSourceRow`). The two apex fields can legitimately carry *different* source tags (e.g. `dwellFrameIndex` per-char, `dwellMs` pose-default) — never label the pair with one source.
+- On save, both ride the `ui:save-playback-override` payload's `override` object (E4 §4.1). The `"Off"` picker branch clears BOTH together, so the json never persists a `dwellMs` with no `dwellFrameIndex`.
+
+**(b) When `dwellFrameIndex` points past the frame range (or past the active window):**
+- **Not reachable from the picker** (the `<select>` only offers in-window frames), but a stale/hand-edited json index that falls outside is defended two ways: (1) the picker resolves an out-of-window `preferIndex` to `"Off"` on populate, so the control never *displays* a dangling apex; (2) on a window narrowing that strands a previously-valid apex, the window control **auto-clears** the apex pair and shows the one-shot note *"Apex frame N is outside the new window — apex hold cleared."* (`anim-tuner-window-control-spec.md` §4.4). The engine itself no-ops an out-of-window apex (it arms only inside `[winStart, winEnd]`), so even an un-cleared stale value animates nothing rather than misbehaving — but the tuner clears it so the json stays honest (a persisted out-of-window apex is a latent footgun: it re-fires if the window later re-widens).
+
+**(c) When writing to "All characters" (pose-default) but `speedMultiplier`/`playbackMode`/the apex pair is already per-char (the shadow case):**
+- `refreshShadowWarning` (verified live) extends to the apex pair: it pushes **`apex frame`** and/or **`apex hold`** into the shadowed-fields list when their cascade source layer is `per-char` while the write target is `pose-default`. The inline warning then reads *"⚠ `<char>` overrides `<…, apex frame, apex hold>` per-char; the pose-default you set won't show for this character."* — same surface, same `--vscode-inputValidation-warning*` tokens (§8), same derive-from-source-table mechanism as speed/hold/mode. The apex fields are NOT a special case; they shadow exactly like the others.
+- `speedMultiplier` or `playbackMode` "shadowing the dwell" (AC3 phrasing): these do not shadow the apex *value* (they are independent cascade fields). What the sponsor must understand is the **engine-application coupling**, surfaced as quiet helper notes (not the shadow warning):
+  - **`finalDwellMs` and the apex hold both apply to IDLE poses only.** On an `active_*` anim the engine runs a uniform-cadence loop and applies no final-frame dwell — the apex `dwellMs` likewise has no idle-style beat. The preview note already says *"Final-frame hold applies to idle poses only"* when an active anim is selected (§7). The apex picker stays usable (value saves) but the sponsor is told the hold won't read on an active loop.
+  - **`playbackMode: "pingpong"`** fires the *final-frame* hold only on the forward arrival at the window end (§3.3 note); the **apex** hold is independent of mode — it fires whenever the loop reaches `dwellFrameIndex` inside the window, on the forward pass. Surface no extra warning here; the existing §3.3 pingpong note plus the apex helper text *"Pick the apex frame (the gesture's peak — e.g. cup at the lips) to hold it longer mid-loop. Off = no apex hold."* are sufficient.
+
+### 12.3 Panel placement of the 2 controls (AC4)
+
+The apex pair lives in a dedicated **"Hold (apex)" control group** inside the existing `── Controls ──` section, placed **directly below Hold (final) and above Mode** (verified live order: Speed → Hold (final) → Hold (apex) → Mode). The group contains, top-to-bottom: a caption row (`Hold (apex)` + a `[reset]` that clears BOTH fields), the **`Frame` `<select>`** (`dwellFrameIndex`), then the **`Apex hold` ms slider** (`dwellMs`), then the helper line. ASCII (delta to the §3 wireframe — bracketed group is the apex pair):
+
+```
+│  ── Window ──────────────────────────────────────────    │  ← 86ca2wj6u, structural, FIRST
+│  Frames   0 [────●━━━━━━━●────] 11    5 – 10   [reset]    │
+│                                                           │
+│  ── Controls ──────────────────────────────────────────  │
+│  Speed        ──────●─────────   0.50×    [reset]         │
+│  Hold (final) ──────●────────    800 ms   [reset]         │
+│ ┌── Hold (apex) ───────────────────────────── [reset] ──┐ │  ← §12 the apex PAIR
+│ │  Frame   [ frame 7 ▾ ]   (Off | frame 5 … frame 10)   │ │  ← dwellFrameIndex <select>, window-bounded
+│ │  Apex hold ──────●──────   600 ms                     │ │  ← dwellMs slider (mirrors Hold (final))
+│ │  "Pick the apex frame (the gesture's peak)…"          │ │  ← helper
+│ └───────────────────────────────────────────────────────┘ │
+│  Mode         ( ) loop   (•) pingpong                     │
+│  ── Write target ──   (•) This character  ( ) All chars   │
+│  [ persistence banner ]                                   │
+```
+
+**Why below Hold (final), above Mode** (verified shipped order): the two "hold" controls (final-frame + apex) read as a pair — the sponsor tunes *how long the loop pauses* in one visual block — while Mode (loop/pingpong) is a separate structural choice. The window stays FIRST (it defines *which* frames exist; `86ca2wj6u` §2) so the apex picker below it is always re-derived from an already-decided window — the sponsor sets the window, then picks the apex from the in-window frames in reading order.
+
+**Frame-source table row coupling:** the cascade source table (§3.5, beside the preview) gains the two apex rows (`apex frame`, `apex hold`) alongside speed/hold/mode/window — so the explain-surface lists every tunable field, none hidden.
+
+### 12.4 Persistence-banner copy + the live-preview-vs-rebuild honesty (AC4)
+
+**No change to the §3.6 persistence banner is needed for the apex pair — and that is the load-bearing point.** The apex controls persist through the **same** `ui:save-playback-override` round-trip as the original three fields (the window-control spec §5.3 confirms the host writer's `TUNABLE_KEYS` already owns `dwellFrameIndex` + `dwellMs`). So:
+
+- **Live preview** (the apex hold visibly lengthens the chosen frame in the tuner's preview sprite) is webview-local + instant — the draft's apex fields ride `previewOverride()` → injected `playbackTable` → `createSpriteBox`, zero rebuild (§1.2, §5).
+- **Persistence** writes the apex fields to json on the debounced save; **the live dashboard tiles do NOT change until the next `npm run build` + reload** — they read the baked manifest (§1.3).
+
+The existing banner copy carries this honestly for every save, apex included:
+
+> ✎ Saved to `<filename>`. Rebuild + reload to apply to the live dashboard tiles.
+
+(where `<filename>` = `<char>/animations.json` per-char or `pose-defaults.json`). **The honesty contract is unchanged:** the preview moved (apex hold visible in the tuner), the real tiles are baked. The dashboard tiles do NOT live-update — that is explicitly out of scope (AC4) and the banner says so. Do NOT add apex-specific banner copy that implies otherwise; the single per-save banner is the one honesty surface and it already tells the truth for the apex pair.
+
+### 12.5 What this amendment does NOT change
+
+- **No engine change.** `spritePlayer.ts` already applies `dwellFrameIndex`/`dwellMs` (peak-frame hold). The tuner consumes it.
+- **No schema / build-script change.** `build-sprite-manifest.mjs` + the host writer already own the apex keys (verified via `86ca2wj6u` §0.1's owned-key audit — the apex keys ARE in `TUNABLE_KEYS`; only the *window* keys were the gap that ticket closed).
+- **No new message type.** Apex fields ride the existing `ui:save-playback-override` payload's `override` object.
+- **No new placement / panel.** On-demand panel mirroring Manage Team (§2) is unchanged.
+
+### 12.6 Phase-2 (Maya) dispatch-readiness checklist (AC4 — zero clarifying rounds)
+
+- ✅ Field set un-LOCKed: `dwellFrameIndex` + `dwellMs` are first-class tunables (§12.1; §10 OOS #3 superseded).
+- ✅ Control types: `dwellMs` = ms slider mirroring `finalDwellMs` (0..10000, step 50); `dwellFrameIndex` = window-bounded native `<select>` with an `"Off"` sentinel — DECIDED `<select>` over stepper/slider, justified (§12.1).
+- ✅ Apex-shadow interaction: both fields cascade + shadow field-independently via `refreshShadowWarning` (`apex frame` / `apex hold` chips); out-of-window apex auto-cleared + noted; idle-only + pingpong helper notes (§12.2).
+- ✅ Placement: dedicated "Hold (apex)" group below Hold (final), above Mode; source-table gains two apex rows (§12.3).
+- ✅ Persistence banner: unchanged; the single per-save banner honestly covers the apex pair (live preview moves, tiles baked-until-rebuild); dashboard tiles do NOT live-update (OOS) (§12.4).
+- ✅ No engine / schema / message-type / placement change (§12.5).
+- ✅ Functional behaviors (apex picker re-bounds to window, "Off" clears both fields, save fires with apex, shadow warning names the apex chips) are jsdom Layer-2.5 testable → NOT sponsor-deferred (`testing-strategy.md` § Layer decision rule). Only the apex hold's visual FEEL (does the pause read as a deliberate beat?) is sponsor-post-merge.
+
+**No open sponsor item for §12** — the apex controls are already shipped + sponsor-validated through `86ca2bqe1`; this amendment only reconciles the written spec to that reality.
