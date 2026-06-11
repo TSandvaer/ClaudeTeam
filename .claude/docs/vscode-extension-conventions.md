@@ -76,13 +76,15 @@ The `package.json` `contributes` block needs (at minimum):
 
 ## Re-render-resume discipline: survive the poll tick AND resume on the displayed frame
 
-The dashboard pushes a full `state:full` snapshot every ~2s; `onStateFull → renderFull` can root-swap a component while it has live, in-progress state. Two distinct gotchas surfaced building the playback tuner — both pass jsdom unit tests and only bite on a live reload (same blind spot as the `[hidden]` gotcha above):
+The dashboard pushes a full `state:full` snapshot every ~2s; `onStateFull → renderFull` can root-swap a component while it has live, in-progress state. Several distinct gotchas surfaced building the playback tuner + sprite tiles — all pass jsdom unit tests and only bite on a live reload (same blind spot as the `[hidden]` gotcha above):
 
 - **Stateful panels must survive `renderFull`.** A component whose state lives only in its own render closure (selection, draft, slider positions, an open/expanded flag) is wiped every poll tick when a fresh instance is swapped in — e.g. the open tuner snapped back to the first character every ~2s. **Fix pattern:** hoist the survivable fields into a single boot-closure **tracker** threaded through `RenderContext` (mirror the Manage Team `pickerOpenTracker`); the fresh component seeds from it on mount and writes back on every change. Reset the tracker on panel open + close so nothing leaks between sessions. Cite: tuner B1, PR #164 (`tunerStateTracker.ts`); the required test must drive a **second** `renderFull` and assert state survival — a single-mount test is vacuous w.r.t. this class.
 
 - **A resume snapshot must report the DISPLAYED state, not the already-advanced next state.** `SpriteBoxHandle.currentFrame()` originally returned the *post-advance* `{frameIdx, direction}` (what `tick()` queued next). A poll re-render landing mid-dwell then re-mounted on the **next** frame — skipping the on-screen frame and dropping its remaining hold (the "slow speed restarts before it finishes" symptom, visible because peak/final dwells of 600–2000ms exceed the 2s poll interval). **Fix pattern:** capture what is actually shown at the *top* of the step (`shownIdx`/`shownDirection`, before advancing) and report *that* for restoration. Cite: `86ca2apxn` #1, PR #165 (main `a8706b8`), `src/webview/sprites/spritePlayer.ts`; the test drives a re-render mid-dwell and asserts the shown frame + remaining hold survive (`spritePlayerWindowed.test.ts`).
 
 - **The baked sprite manifest is a LOAD-TIME snapshot — in-session saves don't update it, so any re-seed reads stale.** `GENERATED_SPRITE_MANIFEST` (`src/webview/sprites/generatedManifest.ts`) is imported once at webview module load. Host-side override saves (`playbackOverrideWriter.ts`) write to `animations.json` on disk and the save-ack carries only `{ok, error}` — it does **not** push the new value back into the webview's in-memory manifest. So any UI that **re-seeds from the manifest** after a save — character switch, animation switch, close+reopen (`readSavedPerCharOverride` / `seedControlsForWriteTarget` / `computeCascadeSource`) — reads the value baked at load, NOT the just-saved one. Symptom: sponsor tuned all M01 anims, switched M01→F01→M01, saw every control "reset" (disk was correct throughout — display-only / near-data-loss). **Fix pattern:** a boot-owned webview-local **live overlay** that records each *confirmed* save (ok ack only) and overlays it field-level (set/clear, mirroring the host `mergePlaybackEntry`) onto the baked manifest; all seed/cascade/window reads go through the overlaid manifest. Cite: `86ca2wrnq`, PR #174 (main `8df4eff`, `src/webview/liveManifestOverlay.ts`). **Test discipline:** save through the *real* save path so the in-memory source updates, THEN re-seed **without re-feeding a fresh manifest** — a test that hands the component a manifest already reflecting the save is vacuous w.r.t. this class (it masks the bug exactly as a rebuild does). **Diagnostic trap:** a `npm run dev:install` "fixes" the symptom because it rebuilds the manifest fresh from disk — so **"works after dev:install" does NOT prove a stale-read bug is environmental.** The real repro is in-session with no rebuild between save and re-seed. (`86ca2vuzr` was wrongly closed "environmental" on a dev:install retest; `86ca2wrnq` is the real fix.) Related: `npm run build` only re-bundles to disk — it does NOT reinstall the running extension; only `npm run dev:install` updates what VS Code serves.
+
+- **A re-render must carry the displayed frame's ELAPSED on-screen time forward, or a long hold never advances.** Distinct from the displayed-vs-advanced bullet above (that fixed *which* frame to report; this fixes the frame *clock*). The sprite box is rebuilt on every ~2s poll re-render; the rebuilt box reset its per-frame clock to 0. When the re-render cadence is shorter than the displayed frame's *remaining hold* — a peak/final dwell of 600–2000ms, or a fast out-of-band `onDidDelete` tick under the 320ms slow-frame interval — the box was disposed and re-mounted on the same frame *before its `tick()` timer could fire*, so that frame re-showed forever. Symptom: idle sprite "frozen on one frame"; the **frozen tile set shuffled across reloads** (bram/maya/nora → bram/felix → none) because it's per-*pose* (whichever tile currently sits on a long-hold frame), not per-character — and a fresh `dev:install` "fixes" it only because the tiles re-roll onto short-hold poses (same "works after rebuild ≠ not-a-bug" trap as the manifest bullet). **Fix pattern:** `SpriteBoxHandle.currentFrame()` reports `elapsedMs` (on-screen time via an injectable monotonic clock — `nowMs ?? performance.now() ?? Date.now()`, kept deterministic in tests); the resuming box back-dates its clock so `remainingHold = max(1, hold − carry)` shrinks each poll until it floors to 1ms and the timer fires. Thread `elapsedMs` host-free through `spriteTracker` + every tile caller. Preserves the displayed-frame + mid-dwell behavior above. Cite: `86ca3a7x3`, PR #179 (main `882a99b`, `src/webview/sprites/spritePlayer.ts` + `spriteTracker.ts`). **Test discipline:** drive ticks across the loop boundary under a re-render cadence *shorter* than the frame hold and assert the frame advances; the carry must be mutation-verified non-vacuous (zeroing it fails the advance assertions) — `spritePlayerIdleAdvance.test.ts`.
 
 ## Webview boot state — dev-fixture gating
 
@@ -214,6 +216,41 @@ VS Code measures activation time; long activation gets flagged in the Output pan
 **Window-filter passthrough when no folder is open.** The `claudeteam.showAllSessionsGlobally` setting (default `false`) is intended to scope the dashboard to the current VS Code workspace. However, when VS Code has NO workspace folder open (e.g., a File > Open File window with no folder), the filter passes through all sessions rather than showing an empty dashboard. This is the "don't strand the user" behavior — without a workspace folder, there is no filter signal to interpret. If a sponsor opens the ClaudeTeam pane in a no-folder window and sees sessions from other projects, this is expected behavior, not a filter leak. To restrict visibility in a no-folder window, set `claudeteam.showAllSessionsGlobally: false` and open the desired folder first.
 
 **`showAllSessionsGlobally: true` disables the filter entirely.** When set to `true` (not the default), the dashboard shows all sessions on the machine regardless of the current window's workspace. This is also a valid cause of cross-workspace session visibility if the user has previously enabled the setting.
+
+## Sprite manifest rendering: per-character render-fit and scene-path semantics
+
+### Per-character render-fit normalization (`render:` block in `animations.json`)
+
+v3 92×92 persona sprites frame the figure as only ~50% of the canvas (≈46–51px figure + ~20–24px transparent bottom margin) versus ~75% for the older 68×68 characters. Because `.sprite-frame` uses `object-fit: contain` on a fixed `--ct-sprite-size` box, `contain` fits the entire canvas — so a v3 figure renders at ~0.7× apparent size and floats high in the tile relative to older chars.
+
+**Fix pattern (PR #203, merged main `8008f2b`):** an optional `render: { scale, offsetY }` block in `assets/sprites/<Char>/animations.json`:
+
+```json
+"render": { "scale": 1.5, "offsetY": 4 }
+```
+
+- `scale` — CSS scale multiplier; v3 chars seeded at `1.5`.
+- `offsetY` — percentage of the box; positive = down/forward; v3 chars seeded at `4`.
+
+This is parsed into `SpriteRenderFit` in `src/webview/sprites/spriteManifest.ts` and applied as a CSS transform on `.sprite-frame` via `:root` tokens `--ct-render-scale` / `--ct-render-offset-y` in `dashboard.css`. **Characters with NO `render` block are a true no-op** (identity scale 1 / offset 0) — existing rendering is byte-identical to before.
+
+`sanitizeRenderFit` in `scripts/build-sprite-manifest.mjs` clamps / drops non-finite values at build time.
+
+**Tuning without a rebuild:** the `:root` tokens in `dashboard.css` can be edited directly for a preview; bake the final values into `animations.json` and re-run `npm run build` to persist.
+
+Test: `tests/unit/webview/spriteRenderFit.test.ts`.
+
+### Scene backgrounds are PATH-referenced, not data-URI baked (PR #204)
+
+Only CHARACTER sprite frames are baked as data URIs into `src/webview/sprites/generatedManifest.ts`. SCENE images (e.g. `assets/sprites/scenes/room3.png`) are stored as a stable relative path (`sprites/scenes/room3.png`) in the manifest — NOT as inline bytes.
+
+**Consequence:** swapping or adding a scene PNG produces **no diff in `generatedManifest.ts`** — this is by design, not a bug. The new bytes reach the runtime via the build's scene-copy step into `dist/webview/sprites/scenes/`. `defaultScene()` resolves the path; `tests/unit/webview/spriteManifest.test.ts:~210` asserts `room3` as the default.
+
+**Practical rule for new scenes:**
+1. Swap or add the PNG under `assets/sprites/scenes/`.
+2. Run `npm run build` (triggers the scene-copy step).
+3. Do NOT expect `generatedManifest.ts` to change — an empty git diff on that file after adding a scene is correct.
+4. Do NOT hardcode scene pixel bytes in tests — test against the resolved path string, not the file content.
 
 ## Open questions (decide during M2)
 
