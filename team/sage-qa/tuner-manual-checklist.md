@@ -5,9 +5,15 @@ Visual / interactive steps the sponsor runs against the **dev build** (rebuild +
 assert — pixel feel, native `<select>` popup behavior, the actual on-disk json
 write, and motion. Each step lists the click and the expected result.
 
-Build first: `npm run build` (or `npm run dev:install`) then `Ctrl+Shift+P` →
+Build first: **`npm run dev:install`** then `Ctrl+Shift+P` →
 `Developer: Reload Window`. Open the tuner via the Dashboard title-bar button or
 `Command Palette → ClaudeTeam: Open Playback Tuner`.
+
+> ⚠️ Use **`npm run dev:install`**, NOT `npm run build`. `npm run build` only
+> re-bundles to disk — it does NOT reinstall the extension VS Code is running, so
+> a `Reload Window` keeps serving the previously-installed VSIX with a stale baked
+> manifest. (This is exactly the false "my saved values are gone" symptom hit
+> 2026-06-01 — the data was fine; the running bundle was stale. `86ca2vuzr`.)
 
 > Real-manifest note (verified this sweep): the first character is
 > `ClaudeTeam-F01-Dev`; `poseDefaults` is **absent** in the baked manifest, so
@@ -82,9 +88,11 @@ Build first: `npm run build` (or `npm run dev:install`) then `Ctrl+Shift+P` →
     the json block (inherits again); the other saved fields remain.
 18. `[reset]` the last remaining field. **Expect:** the whole `playback["<anim>"]`
     key disappears (file stays minimal).
-19. Set a value, then rebuild (`npm run build`) + reload. **Expect:** the dashboard
-    TILE now reflects the saved value (the banner always says a rebuild is needed —
-    confirm the tile only changes after the rebuild, never before).
+19. Set a value, then reinstall (**`npm run dev:install`**) + reload. **Expect:** the
+    dashboard TILE now reflects the saved value (the banner always says a rebuild is
+    needed — confirm the tile only changes after the dev:install + reload, never
+    before). NOTE: `npm run build` alone is NOT enough — it bundles but does not
+    reinstall the running extension (see the ⚠️ note at the top).
 
 ## G. Cross-interactions
 

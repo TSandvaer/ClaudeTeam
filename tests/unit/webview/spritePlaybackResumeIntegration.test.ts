@@ -52,15 +52,22 @@ import { describe, it, expect } from "vitest";
 import { renderAgentTile } from "../../../src/webview/components/agentTile.js";
 import { renderMultiAgentPersonaTile } from "../../../src/webview/components/multiAgentPersonaTile.js";
 import { createSpriteTracker } from "../../../src/webview/spriteTracker.js";
+import { resolvePlayback } from "../../../src/webview/sprites/spritePlayer.js";
+import { GENERATED_SPRITE_MANIFEST } from "../../../src/webview/sprites/generatedManifest.js";
 import type {
   AgentTile,
   MultiAgentPersonaTile,
 } from "../../../src/shared/types.js";
 
 const BASE = "vscode-webview://abc/dist/webview";
-// maya → ClaudeTeam-F01-Dev. rng=0 → idle_coffee (first pool member): the REAL
-// shipped config is 9 frames [0..8], speedMultiplier 0.5, dwellFrameIndex 4
-// (peak). loop mode (no window) so frames advance 0,1,2,…,8 then wrap to 0.
+const F01 = "ClaudeTeam-F01-Dev";
+// maya → ClaudeTeam-F01-Dev. rng=0 → idle_coffee (first pool member). The exact
+// frame layout / speed / window / mode of idle_coffee is SPONSOR-TUNED in the
+// live Playback Tuner (PR #210), so the boundary-crossing test below DATA-DERIVES
+// the window + mode from the resolved playback rather than hardcoding a frame
+// count — the WIRING seam under test (tracker → box resume) is tuning-independent.
+// The early tests step only a few frames (well inside any window) so they resume
+// regardless of the tune.
 
 /** A scheduler that records each delay and lets the test step the loop. */
 function recordingScheduler() {
@@ -170,11 +177,26 @@ describe("playback resume WIRING — renderAgentTile threads tracker → box (86
     expect(frameOf(imgIn(idleEl))).toBe(0);
   });
 
-  it("crossing the loop boundary survives a re-render (resumes near the wrap, not at 0)", () => {
-    // Step to the final frame (8), re-render, and confirm the resumed box re-shows
-    // 8 and then WRAPS to 0 — i.e. the loop boundary is crossed by resuming, not
-    // by restarting (which would also show 0 but for the wrong reason). Asserting
-    // the re-show of 8 first distinguishes resume from restart.
+  it("crossing the loop/window boundary survives a re-render (resumes at the boundary, not at the start)", () => {
+    // Step to the pose's reachable BOUNDARY frame (the window end — the loop-wrap
+    // point in loop mode, the turnaround in pingpong), re-render, confirm the
+    // resumed box RE-SHOWS that boundary frame, then advances correctly across it.
+    // Re-showing the boundary distinguishes resume from restart (a restart would
+    // show winStart for the wrong reason). The boundary + advance target are
+    // DATA-DERIVED from the resolved F01 idle_coffee playback so the sponsor's
+    // live Playback Tuner (PR #210 windowed idle_coffee to [0,6] pingpong) can't
+    // re-break this — the WIRING seam under test is independent of the tuning.
+    const pb = resolvePlayback(F01, "idle_coffee");
+    const coffee =
+      GENERATED_SPRITE_MANIFEST.characters[F01].animations.idle_coffee;
+    const lastIdx = coffee.frames.length - 1;
+    const winStart = typeof pb.startFrame === "number" ? pb.startFrame : 0;
+    const winEnd = typeof pb.endFrame === "number" ? pb.endFrame : lastIdx;
+    const pingpong = pb.playbackMode === "pingpong";
+    // The frame shown after crossing the window end: pingpong reverses (winEnd-1),
+    // loop wraps to winStart.
+    const afterBoundary = pingpong ? winEnd - 1 : winStart;
+
     const tracker = createSpriteTracker();
     const render = (sched: { schedule: (cb: () => void, ms: number) => number }) =>
       renderAgentTile({
@@ -189,15 +211,17 @@ describe("playback resume WIRING — renderAgentTile threads tracker → box (86
       });
     const s1 = recordingScheduler();
     const first = render(s1);
-    for (let i = 0; i < 8; i++) s1.step(); // 0→8
-    expect(frameOf(imgIn(first))).toBe(8);
+    // Advance from winStart up to the window end (winEnd - winStart steps).
+    for (let i = 0; i < winEnd - winStart; i++) s1.step();
+    expect(frameOf(imgIn(first))).toBe(winEnd);
     const s2 = recordingScheduler();
     const second = render(s2);
-    // Resumed on the final frame (NOT restarted at 0)…
-    expect(frameOf(imgIn(second))).toBe(8);
-    // …then wraps to the loop start on the next step (its OWN timer).
+    // Resumed ON the boundary frame (NOT restarted at winStart)…
+    expect(frameOf(imgIn(second))).toBe(winEnd);
+    // …then crosses the boundary on the next step (its OWN timer): pingpong
+    // reverses one frame back, loop wraps to the window start.
     s2.step();
-    expect(frameOf(imgIn(second))).toBe(0);
+    expect(frameOf(imgIn(second))).toBe(afterBoundary);
   });
 });
 

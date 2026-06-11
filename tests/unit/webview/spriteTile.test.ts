@@ -20,8 +20,7 @@ import { renderAgentTile } from "../../../src/webview/components/agentTile.js";
 import { createSpriteTracker } from "../../../src/webview/spriteTracker.js";
 import {
   FRAME_MS_DEFAULT,
-  DWELL_MS_DEFAULT,
-  PEAK_DWELL_MS_DEFAULT,
+  resolvePlayback,
 } from "../../../src/webview/sprites/spritePlayer.js";
 import type { AgentTile, AgentState } from "../../../src/shared/types.js";
 
@@ -121,14 +120,31 @@ describe("sprite rendering — AC2 pose selection", () => {
   );
 });
 
-describe("sprite rendering — AC3 slow playback + dwell", () => {
-  // The default tile member is `maya` → ClaudeTeam-F01-Dev (v3 92×92, 86ca5j1mt).
-  // active_work plays at 50% speed → base ms = FRAME_MS_DEFAULT / 0.5. idle_coffee
-  // plays at 60% speed in the v3 F01 animations.json → base ms = FRAME_MS_DEFAULT / 0.6.
-  const HALF_SPEED_MS = FRAME_MS_DEFAULT / 0.5;
-  const COFFEE_SPEED_MS = FRAME_MS_DEFAULT / 0.6;
-
-  it("schedules the first frame at the tuned (50% speed) duration", () => {
+describe("sprite rendering — AC3 slow playback + dwell (tile WIRES manifest speed → scheduler)", () => {
+  // The default tile member is `maya` → ClaudeTeam-F01-Dev (v3 92×92). The
+  // per-frame ms the scheduler receives is FRAME_MS_DEFAULT / resolved-speed for
+  // the rendered pose. The F01 SPEEDS are SPONSOR-TUNED in the live Playback
+  // Tuner (PR #210) and change freely, so these tests DATA-DERIVE the expected
+  // base ms from the manifest (resolvePlayback off GENERATED_SPRITE_MANIFEST)
+  // rather than freezing a 0.5 / 0.6 constant — a future retune can't re-break
+  // them. The frame-by-frame dwell/peak/composition ENGINE math is covered
+  // non-vacuously against injected fixtures in spritePlayer.test.ts; here we only
+  // assert the TILE threads the resolved speed through to the scheduler.
+  const F01 = "ClaudeTeam-F01-Dev";
+  const baseMsFor = (anim: string): number => {
+    const pb = resolvePlayback(F01, anim);
+    const speed =
+      typeof pb.speedMultiplier === "number" && pb.speedMultiplier > 0
+        ? pb.speedMultiplier
+        : 1;
+    return FRAME_MS_DEFAULT / speed;
+  };
+  // Find the first scheduled delay for a frame that is NEITHER the pose's peak
+  // (dwellFrameIndex) NOR a window endpoint — i.e. a plain base-ms frame, so the
+  // assertion isolates the SPEED wiring from any dwell add-on. For F01 active_work
+  // and idle_coffee the peak is frame 0; the second scheduled call (frame 1) is a
+  // plain interior frame for both, so it equals the pure base ms.
+  it("schedules an interior frame of active_work at the manifest-derived base ms", () => {
     const sched = recordingScheduler();
     renderAgentTile({
       tile: tile({ state: "running", activity: "tool:Edit x", agentId: "a4" }),
@@ -138,15 +154,12 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
       spriteTracker: createSpriteTracker(),
       scheduleFrame: sched.schedule,
     });
-    // active_work is a 50%-speed pose → first frame held at 2× the default.
-    expect(sched.calls[0]).toBe(HALF_SPEED_MS);
+    sched.step(); // advance to frame 1 (interior, non-peak, non-endpoint)
+    expect(sched.calls[1]).toBe(baseMsFor("active_work"));
   });
 
-  it("dwells on the final frame of an idle loop before restarting", () => {
+  it("schedules an interior frame of idle_coffee at the manifest-derived base ms", () => {
     const sched = recordingScheduler();
-    // idle_coffee has 9 frames (indices 0..8). The delay scheduled AFTER the
-    // final frame (idx 8) carries the final-frame dwell, on top of the
-    // 50%-speed base ms.
     renderAgentTile({
       tile: tile({ state: "idle", activity: "idle 30s", agentId: "a5" }),
       sessionId: "s1",
@@ -156,39 +169,18 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
       spriteRng: () => 0, // idle_coffee
       scheduleFrame: sched.schedule,
     });
-    // Step through to the last frame. coffee = 9 frames → 8 steps to reach idx 8.
-    for (let i = 0; i < 8; i++) {
-      sched.step();
-    }
-    // Final frame (8) ≠ peak frame (4) for coffee, so only the final-frame
-    // dwell applies here, on the 60%-speed base (v3 F01 idle_coffee).
-    expect(sched.calls[sched.calls.length - 1]).toBe(
-      COFFEE_SPEED_MS + DWELL_MS_DEFAULT,
-    );
+    sched.step(); // advance to frame 1 (interior, non-peak)
+    // Frame 1 is neither the peak (frame 0) nor a window endpoint → plain base ms.
+    expect(sched.calls[1]).toBe(baseMsFor("idle_coffee"));
   });
 
-  it("active poses loop at uniform cadence (NO dwell on final frame)", () => {
+  it("holds the pose's apex frame longer than a plain interior frame (dwell wired through)", () => {
     const sched = recordingScheduler();
-    // active_work has 9 frames; step to the last and confirm uniform (no
-    // final-frame dwell) cadence — at the tuned 50% speed.
-    renderAgentTile({
-      tile: tile({ state: "running", activity: "tool:Edit x", agentId: "a6" }),
-      sessionId: "s1",
-      postMessage: () => undefined,
-      spriteBaseUri: BASE,
-      spriteTracker: createSpriteTracker(),
-      scheduleFrame: sched.schedule,
-    });
-    for (let i = 0; i < 8; i++) {
-      sched.step();
-    }
-    expect(sched.calls[sched.calls.length - 1]).toBe(HALF_SPEED_MS);
-  });
-
-  it("holds the mid-sequence peak frame longer (idle_coffee → frame 4)", () => {
-    const sched = recordingScheduler();
-    // v3 F01 idle_coffee peak (cup-at-mouth hold) is frame 4 (dwellFrameIndex).
-    // The delay scheduled WHILE SHOWING frame 4 carries the peak dwell.
+    // idle_coffee's apex is its dwellFrameIndex (frame 0 in the live F01 tune).
+    // The delay scheduled WHILE SHOWING the apex carries the peak dwell on top of
+    // the base ms — so it must EXCEED a plain interior frame's base ms. Asserting
+    // the inequality (not a frozen ms) keeps this tuning-proof while still proving
+    // the tile threads the dwell, not just the speed.
     renderAgentTile({
       tile: tile({ state: "idle", activity: "idle 30s", agentId: "a9" }),
       sessionId: "s1",
@@ -198,15 +190,13 @@ describe("sprite rendering — AC3 slow playback + dwell", () => {
       spriteRng: () => 0, // idle_coffee
       scheduleFrame: sched.schedule,
     });
-    // Frame 0 shown immediately (calls[0]); each step advances one frame.
-    // After 4 steps we are showing frame 4 → calls[4] is the peak-dwell delay.
-    for (let i = 0; i < 4; i++) {
-      sched.step();
-    }
-    // Peak frame (4) is not the final frame (8) → base 60% speed + peak dwell.
-    expect(sched.calls[4]).toBe(COFFEE_SPEED_MS + PEAK_DWELL_MS_DEFAULT);
-    // And a non-peak, non-final idle frame (e.g. frame 1) is the plain base ms.
-    expect(sched.calls[1]).toBe(COFFEE_SPEED_MS);
+    const pb = resolvePlayback(F01, "idle_coffee");
+    const apex =
+      typeof pb.dwellFrameIndex === "number" ? pb.dwellFrameIndex : 0;
+    const base = baseMsFor("idle_coffee");
+    // Step to the apex frame; calls[apex] is the delay scheduled while showing it.
+    for (let i = 0; i < apex; i++) sched.step();
+    expect(sched.calls[apex]).toBeGreaterThan(base);
   });
 });
 

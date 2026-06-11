@@ -6,7 +6,10 @@
   "sprites_root": "_pixellab_anims",
   "base_portrait_folder": "ClaudeTeam-F01-Dev-v3",
   "_render_note": "Per-character render-fit (ticket 86ca5b0gj). v3 92x92 sprites bake the figure into only ~50% of the canvas (measured: figure ~46-51px of 92px, ~20-24px transparent bottom margin) vs ~75% for the legacy 68x68 chars. With `.sprite-frame { object-fit: contain }` the WHOLE canvas scales into the box, so a 92px char renders ~0.7x the apparent figure size AND floats high. `scale` enlarges the figure to the 68px apparent size; `offsetY` (% of box, positive = DOWN/forward toward the viewer) fine-anchors it. Origin is center-center: scale 1.5 lands the feet at ~86% down, matching the 68px chars. SPONSOR-TUNABLE on reload (edit + npm run build + reload, OR override the dashboard.css :root --ct-render-scale / --ct-render-offset-y fallbacks for a no-rebuild nudge). Omit the block to render identity (no transform).",
-  "render": { "scale": 1.5, "offsetY": 4 },
+  "render": {
+    "scale": 1.5,
+    "offsetY": 4
+  },
   "default_idle": "idle_coffee",
   "idle_pool": [
     "idle_coffee",
@@ -30,20 +33,37 @@
   "_playback_note": "Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Keyed by canonical anim name (must exist in `animations`). Fields (all optional): speedMultiplier (fraction of default frame RATE; 0.5 = half speed), dwellFrameIndex, dwellMs, finalDwellMs, playbackMode, startFrame/endFrame. Malformed values dropped + warned by scripts/build-sprite-manifest.mjs. Mirrors F02's slow-calm defaults; sponsor retunes on reload with zero gens (edit + npm run build + reload).",
   "playback": {
     "active_work": {
-      "speedMultiplier": 0.5
+      "speedMultiplier": 1.1,
+      "dwellFrameIndex": 0,
+      "dwellMs": 2300,
+      "playbackMode": "pingpong",
+      "finalDwellMs": 1850
     },
     "active_read": {
-      "speedMultiplier": 0.5
+      "speedMultiplier": 0.5,
+      "startFrame": 1,
+      "endFrame": 2
     },
     "idle_coffee": {
-      "speedMultiplier": 0.6,
-      "dwellFrameIndex": 4
+      "speedMultiplier": 0.75,
+      "dwellFrameIndex": 0,
+      "finalDwellMs": 5700,
+      "playbackMode": "pingpong",
+      "dwellMs": 2350,
+      "startFrame": 0,
+      "endFrame": 6
     },
     "idle_stretch": {
-      "speedMultiplier": 0.5
+      "speedMultiplier": 1.2,
+      "finalDwellMs": 4750,
+      "dwellFrameIndex": 7,
+      "dwellMs": 2600
     },
     "idle_think": {
-      "speedMultiplier": 0.5
+      "speedMultiplier": 0.85,
+      "finalDwellMs": 2100,
+      "dwellFrameIndex": 4,
+      "dwellMs": 3900
     }
   }
 }
