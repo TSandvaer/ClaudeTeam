@@ -185,11 +185,81 @@ const PLAYBACK_FIELD_NAMES = [...PLAYBACK_NUMERIC_FIELDS, "playbackMode"];
 /**
  * Root keys that are legitimately allowed at the top of `pose-defaults.json`:
  *   - `playback` — the wrapper that holds the actual pose-default entries.
+ *   - `scenes` — the scene-per-pose pose-default block (scene-per-pose feature,
+ *     86ca88nvd — spec §4.1). Holds anim → scene-id (or `"none"`); baked onto the
+ *     manifest as `sceneDefaults`. Added here so the misplaced-key detector does
+ *     NOT warn on a legitimate `scenes` block (without it, a sponsor seeding the
+ *     scene desk-clash fix would get a spurious "misplaced playback entry" warn).
  *   - `_note` — human documentation (the file ships with one).
  * Anything else at the root that looks like a playback entry is the editor
  * footgun this detector warns about.
  */
-const POSE_DEFAULTS_ROOT_KEYS = ["playback", "_note"];
+const POSE_DEFAULTS_ROOT_KEYS = ["playback", "scenes", "_note"];
+
+/** The literal flat-card scene sentinel (scene-per-pose, 86ca88nvd — spec §5.2). */
+const SCENE_NONE_SENTINEL = "none";
+
+/**
+ * Sanitize a `scenes` block (per-char `animations.json` or `pose-defaults.json`)
+ * into the anim → scene-id table baked onto the manifest (scene-per-pose feature,
+ * 86ca88nvd — spec §4.1 / §5.1). Pure — no filesystem, exported for unit
+ * coverage.
+ *
+ * Each value must be a STRING that is either the literal `"none"` sentinel
+ * (always valid — the flat-card STOP, spec §5.2) OR a scene id present in the
+ * resolved registry `validSceneIds`. Validation policy mirrors `sanitizePlayback`
+ * (malformed → drop the field + warn, never throw):
+ *   - a value that is not a string → dropped + warned.
+ *   - a string `"none"` → kept (the explicit flat-card sentinel).
+ *   - a string scene id IN `validSceneIds` → kept.
+ *   - a string scene id NOT in `validSceneIds` (a DANGLING id — no matching PNG)
+ *     → dropped + warned (it then falls through the cascade as if unset, spec §4
+ *     degrade "Dangling scene id (build-time)"). Consistent with the malformed-
+ *     playback drop+warn handling.
+ *
+ * Returns `{ scenes, warnings }`. `scenes` is `null` when nothing valid survived
+ * (so the baked block is OMITTED entirely — byte-identical to a no-scenes file,
+ * the no-`scenes`-block degrade). `warnings` are surfaced by the caller as
+ * console.warn.
+ *
+ * @param {string} label `<char>` or `pose-defaults` for warning context
+ * @param {unknown} raw the raw `scenes` block (or undefined)
+ * @param {Set<string>} validSceneIds the resolved registry scene ids (from `buildScenes`)
+ * @returns {{ scenes: Record<string, string> | null, warnings: string[] }}
+ */
+export function sanitizeScenes(label, raw, validSceneIds) {
+  const warnings = [];
+  if (raw === undefined || raw === null) {
+    return { scenes: null, warnings };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    warnings.push(
+      `[sprite-manifest] ${label}: scenes must be an object — ignoring (got ${Array.isArray(raw) ? "array" : typeof raw})`,
+    );
+    return { scenes: null, warnings };
+  }
+  const out = {};
+  for (const [anim, value] of Object.entries(raw)) {
+    if (typeof value !== "string") {
+      warnings.push(
+        `[sprite-manifest] ${label}: scenes.${anim} must be a string scene id or "none" — dropping (got ${JSON.stringify(value)})`,
+      );
+      continue;
+    }
+    if (value === SCENE_NONE_SENTINEL) {
+      out[anim] = value; // explicit flat card — always valid.
+      continue;
+    }
+    if (validSceneIds.has(value)) {
+      out[anim] = value;
+    } else {
+      warnings.push(
+        `[sprite-manifest] ${label}: scenes.${anim} names scene "${value}" not found in registry — dropping (falls through to inherit)`,
+      );
+    }
+  }
+  return { scenes: Object.keys(out).length > 0 ? out : null, warnings };
+}
 
 /**
  * Sanitize one anim's raw playback object from `animations.json` into the
@@ -383,16 +453,21 @@ export function detectMisplacedPoseDefaults(parsed) {
 
 /**
  * Read + sanitize the repo-root `pose-defaults.json`. Returns the baked
- * `poseDefaults` table (or null when absent / empty) plus any warnings. A
- * missing file is NOT an error — pose-defaults are optional (AC3: no file or
- * empty `{}` → no pose-default layer). Malformed JSON is warned + treated as
- * absent so a typo can never break the build.
+ * `poseDefaults` table (or null when absent / empty), the baked `sceneDefaults`
+ * table (scene-per-pose, 86ca88nvd — null when absent / empty), plus any
+ * warnings. A missing file is NOT an error — pose-defaults are optional (AC3: no
+ * file or empty `{}` → no pose-default layer). Malformed JSON is warned + treated
+ * as absent so a typo can never break the build.
  *
- * @returns {Promise<{ poseDefaults: object | null, warnings: string[] }>}
+ * `validSceneIds` is the resolved scene registry's id set (from `buildScenes`) —
+ * used to validate the `scenes` block (dangling ids dropped + warned).
+ *
+ * @param {Set<string>} validSceneIds resolved registry scene ids
+ * @returns {Promise<{ poseDefaults: object | null, sceneDefaults: object | null, warnings: string[] }>}
  */
-async function readPoseDefaults() {
+async function readPoseDefaults(validSceneIds) {
   if (!existsSync(POSE_DEFAULTS_SRC)) {
-    return { poseDefaults: null, warnings: [] };
+    return { poseDefaults: null, sceneDefaults: null, warnings: [] };
   }
   let parsed;
   try {
@@ -400,6 +475,7 @@ async function readPoseDefaults() {
   } catch (err) {
     return {
       poseDefaults: null,
+      sceneDefaults: null,
       warnings: [
         `[sprite-manifest] pose-defaults.json: failed to parse — ignoring (${err instanceof Error ? err.message : String(err)})`,
       ],
@@ -409,7 +485,19 @@ async function readPoseDefaults() {
   // under `playback` — otherwise they are silently ignored (E3 NIT 86ca292rr).
   const { warnings: misplaced } = detectMisplacedPoseDefaults(parsed);
   const { poseDefaults, warnings } = buildPoseDefaults(parsed?.playback);
-  return { poseDefaults, warnings: [...misplaced, ...warnings] };
+  // Pose-default SCENE block (scene-per-pose, 86ca88nvd — spec §4.1). Read +
+  // sanitize the top-level `scenes` block alongside `playback`; baked onto the
+  // manifest as `sceneDefaults` (parallels `poseDefaults`). Dangling ids dropped.
+  const { scenes: sceneDefaults, warnings: sceneWarnings } = sanitizeScenes(
+    "pose-defaults",
+    parsed?.scenes,
+    validSceneIds,
+  );
+  return {
+    poseDefaults,
+    sceneDefaults,
+    warnings: [...misplaced, ...warnings, ...sceneWarnings],
+  };
 }
 
 /**
@@ -532,7 +620,7 @@ export function buildScenes(fileNames) {
   return { scenes: { defaultSceneId, byId }, warnings };
 }
 
-async function buildCharacter(charName) {
+async function buildCharacter(charName, validSceneIds) {
   const manifestPath = path.join(SPRITES_SRC, charName, "animations.json");
   if (!existsSync(manifestPath)) {
     return null;
@@ -594,6 +682,16 @@ async function buildCharacter(charName) {
     animMap.render,
   );
   for (const w of renderWarnings) console.warn(w);
+  // Per-character SCENE block (scene-per-pose feature, 86ca88nvd — spec §4.1) —
+  // optional top-level `scenes` block (sibling of `playback`), anim → scene-id
+  // (or `"none"`). Dangling ids (no matching PNG) dropped + warned; absent →
+  // omitted. Validated against the resolved registry's valid ids.
+  const { scenes: charScenes, warnings: sceneWarnings } = sanitizeScenes(
+    charName,
+    animMap.scenes,
+    validSceneIds,
+  );
+  for (const w of sceneWarnings) console.warn(w);
   return {
     character: charName,
     ...(render !== null ? { render } : {}),
@@ -601,6 +699,7 @@ async function buildCharacter(charName) {
     idlePool,
     activePool,
     animations,
+    ...(charScenes !== null ? { scenes: charScenes } : {}),
   };
 }
 
@@ -616,9 +715,41 @@ async function main() {
         .sort()
     : [];
 
+  // Scene backdrops (scene-bg feature, 86ca3kjyk; cascade scene-per-pose 86ca88nvd)
+  // — static single-image rooms in `assets/sprites/scenes/`, emitted as a
+  // top-level `scenes` REGISTRY. Built FIRST (before characters + pose-defaults)
+  // so its resolved id set validates the per-char + pose-default scene blocks
+  // (dangling-id drop+warn, spec §4.1). Omitted entirely when the dir has no PNGs
+  // (degrade → flat card, Iris spec §FIRM.3 → an empty validSceneIds → every
+  // scene override but `"none"` drops as dangling).
+  let scenes = null;
+  if (existsSync(SCENES_SRC)) {
+    const sceneFiles = (await readdir(SCENES_SRC, { withFileTypes: true }))
+      .filter((e) => e.isFile())
+      .map((e) => e.name);
+    const { scenes: built, warnings: sceneWarnings } = buildScenes(sceneFiles);
+    for (const w of sceneWarnings) console.warn(w);
+    scenes = built;
+    if (scenes !== null) {
+      // Copy every resolved scene PNG into dist/webview/sprites/scenes/ so it
+      // sits under the existing dist/webview localResourceRoot.
+      await mkdir(DIST_SCENES, { recursive: true });
+      for (const scene of Object.values(scenes.byId)) {
+        const fileName = path.basename(scene.image);
+        await copyFile(
+          path.join(SCENES_SRC, fileName),
+          path.join(DIST_SCENES, fileName),
+        );
+      }
+    }
+  }
+  // The valid scene-id set the per-char + pose-default scene blocks validate
+  // against (empty when no registry → only the `"none"` sentinel survives).
+  const validSceneIds = new Set(scenes !== null ? Object.keys(scenes.byId) : []);
+
   const characters = {};
   for (const name of charNames) {
-    const built = await buildCharacter(name);
+    const built = await buildCharacter(name, validSceneIds);
     if (built) {
       characters[name] = built;
       // Copy this character's PNG tree into dist/webview/sprites/<char>/.
@@ -647,42 +778,24 @@ async function main() {
     }
   }
 
-  // Pose-keyed playback defaults (E3 86ca2187n) — shared across all characters,
-  // baked as a top-level sibling of `characters`. Omitted when absent / empty so
-  // an empty pose-defaults.json is byte-identical to the E2 end-state (AC3).
-  const { poseDefaults, warnings: poseWarnings } = await readPoseDefaults();
+  // Pose-keyed playback defaults (E3 86ca2187n) + pose-default SCENE block
+  // (scene-per-pose, 86ca88nvd — spec §4.1) — shared across all characters, baked
+  // as top-level siblings of `characters` (`poseDefaults` + `sceneDefaults`).
+  // Each omitted when absent / empty so an empty pose-defaults.json is
+  // byte-identical to the E2 end-state (AC3). Scene block validated against the
+  // already-resolved registry (`validSceneIds`).
+  const {
+    poseDefaults,
+    sceneDefaults,
+    warnings: poseWarnings,
+  } = await readPoseDefaults(validSceneIds);
   for (const w of poseWarnings) console.warn(w);
-
-  // Scene backdrops (scene-bg feature, 86ca3kjyk) — static single-image rooms in
-  // `assets/sprites/scenes/`, copied into `dist/webview/sprites/scenes/` and
-  // emitted as a top-level `scenes` registry. Omitted entirely when the dir has
-  // no PNGs (degrade → flat card, Iris spec §FIRM.3).
-  let scenes = null;
-  if (existsSync(SCENES_SRC)) {
-    const sceneFiles = (await readdir(SCENES_SRC, { withFileTypes: true }))
-      .filter((e) => e.isFile())
-      .map((e) => e.name);
-    const { scenes: built, warnings: sceneWarnings } = buildScenes(sceneFiles);
-    for (const w of sceneWarnings) console.warn(w);
-    scenes = built;
-    if (scenes !== null) {
-      // Copy every resolved scene PNG into dist/webview/sprites/scenes/ so it
-      // sits under the existing dist/webview localResourceRoot.
-      await mkdir(DIST_SCENES, { recursive: true });
-      for (const scene of Object.values(scenes.byId)) {
-        const fileName = path.basename(scene.image);
-        await copyFile(
-          path.join(SCENES_SRC, fileName),
-          path.join(DIST_SCENES, fileName),
-        );
-      }
-    }
-  }
 
   const manifestObj = {
     characters,
-    ...(poseDefaults !== null ? { poseDefaults } : {}),
     ...(scenes !== null ? { scenes } : {}),
+    ...(sceneDefaults !== null ? { sceneDefaults } : {}),
+    ...(poseDefaults !== null ? { poseDefaults } : {}),
   };
 
   const banner = `/**

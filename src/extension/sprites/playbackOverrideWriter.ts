@@ -24,6 +24,18 @@
  * entry is empty (no fields), the entire `playback["<anim>"]` key is removed so
  * the file stays minimal.
  *
+ * ## Scene block (scene-per-pose feature, 86ca88nvd — Iris spec §5.1/§5.4)
+ *
+ * The same `override` payload also carries an optional `sceneId` (a scene id or
+ * the literal `"none"`). It lands in a SEPARATE top-level `scenes` block (sibling
+ * of `playback`, NOT inside it — §5.1), keyed by anim name, with one string value
+ * per anim. Same field-omission == clear semantic: present → set, absent →
+ * DELETE the `scenes["<anim>"]` key (→ inherit / cascade fall-through). The block
+ * is created lazily and dropped when empty, so a file with no scene overrides is
+ * byte-identical to today. The webview overlay (`liveManifestOverlay.ts`) MUST
+ * mirror this set/clear exactly (the §5.4 PARITY INVARIANT — the #213/#214
+ * stale-re-seed defect class).
+ *
  * ## Schema compatibility (Felix spec-edge — E4 spec §4.3)
  *
  * The shape this writer emits MUST round-trip through `scripts/build-sprite-
@@ -80,6 +92,21 @@ export interface TunablePlaybackOverride {
    * alongside `startFrame`. Absent → full clip (inherits / last frame).
    */
   endFrame?: number;
+  /**
+   * Tile backdrop SCENE for this pose (scene-per-pose feature, 86ca88nvd — Iris
+   * spec §5.3 LOCKED). A scene id (e.g. `"room3"`) OR the literal lowercase
+   * string `"none"` (the flat-card STOP sentinel, §2.1 / §5.2). Absent → clear
+   * (inherit — the writer DELETES the `scenes["<anim>"]` key).
+   *
+   * **This field is NOT a playback field — it does NOT join `TUNABLE_KEYS`.** It
+   * lives in a SEPARATE on-disk `scenes` block (sibling of `playback`, §5.1), so
+   * the writer routes it through a dedicated scene write path (`mergeSceneEntry`)
+   * rather than `mergePlaybackEntry`. Keeping it out of `TUNABLE_KEYS` is
+   * load-bearing: a scene id is a STRING, not a number/mode literal, and lives in
+   * a different block — adding it to `TUNABLE_KEYS` would write it into the
+   * `playback` block where the build script's `sanitizePlayback` would drop it.
+   */
+  sceneId?: string;
 }
 
 /** Args for a save. */
@@ -142,6 +169,31 @@ export function mergePlaybackEntry(
     }
   }
   return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * Resolve the per-anim SCENE value for the `scenes` block from the override
+ * (scene-per-pose feature, 86ca88nvd — spec §5.4). The scene cascade is a
+ * SEPARATE on-disk block from `playback`, with a SINGLE value (`sceneId`) per
+ * anim, so the "merge" is a plain set/clear of one string — not a field-level
+ * object spread like `mergePlaybackEntry`.
+ *
+ *   - `sceneId` PRESENT in `override` (a scene id or the literal `"none"`) → the
+ *     value to set at `scenes["<anim>"]`.
+ *   - `sceneId` ABSENT → `null`, signalling the caller to DELETE the
+ *     `scenes["<anim>"]` key (clear → inherit). Field-omission == clear, the SAME
+ *     semantic as every playback field (spec §5.3).
+ *
+ * Mirrors `mergePlaybackEntry`'s set/clear contract so the host write + the
+ * webview overlay stay in lockstep (the §5.4 PARITY INVARIANT, the #213/#214
+ * stale-re-seed defect class). Pure. Exported for unit coverage.
+ *
+ * @returns the scene-id string to set, or `null` to clear the key.
+ */
+export function mergeSceneEntry(
+  override: TunablePlaybackOverride,
+): string | null {
+  return override.sceneId !== undefined ? override.sceneId : null;
 }
 
 /**
@@ -239,6 +291,31 @@ export function savePlaybackOverride(
     playback[animName] = merged;
   }
   root.playback = playback;
+
+  // Scene block (scene-per-pose feature, 86ca88nvd — spec §5.1/§5.4). A SEPARATE
+  // top-level `scenes` block (sibling of `playback`) keyed by anim name, holding
+  // a single scene-id string (or the literal `"none"`) per anim. Field-omission
+  // == clear: an absent `sceneId` DELETES the anim's scene key (→ inherit), set
+  // when present. The block is created lazily and dropped when it empties, so a
+  // file with no scene overrides stays byte-identical to today (no `scenes` key).
+  const scenesRaw = root.scenes;
+  const scenes: Record<string, unknown> =
+    typeof scenesRaw === "object" && scenesRaw !== null && !Array.isArray(scenesRaw)
+      ? { ...(scenesRaw as Record<string, unknown>) }
+      : {};
+  const sceneValue = mergeSceneEntry(override);
+  if (sceneValue === null) {
+    delete scenes[animName];
+  } else {
+    scenes[animName] = sceneValue;
+  }
+  if (Object.keys(scenes).length > 0) {
+    root.scenes = scenes;
+  } else {
+    // No scene entries left → drop the whole block so the file stays minimal and
+    // byte-identical to a never-had-a-scene file.
+    delete root.scenes;
+  }
 
   // Re-serialize with 2-space indent + trailing newline (matches the committed
   // json style). The merge preserved every other key in document order.

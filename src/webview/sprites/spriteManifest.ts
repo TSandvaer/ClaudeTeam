@@ -120,6 +120,21 @@ export interface SpriteCharacter {
   activePoolLoopsPerPose?: number;
   /** Canonical anim name → frame data. */
   animations: Record<string, SpriteAnimation>;
+  /**
+   * Per-character SCENE block (scene-per-pose feature, 86ca88nvd — Iris spec
+   * §5.6 LOCKED). The PER-CHAR layer (layer 1, highest priority) of the 3-layer
+   * scene cascade: canonical anim name → a scene id (e.g. `"room3"`) OR the
+   * literal `"none"` sentinel (flat-card STOP). Baked by
+   * `scripts/build-sprite-manifest.mjs` from each `animations.json`'s top-level
+   * `scenes` block (validated there — dangling ids dropped + warned). A key
+   * ABSENT = unset (inherit → falls through to `sceneDefaults`, then the
+   * registry's `defaultSceneId`). Absent block = no per-char scene overrides.
+   *
+   * Read by the cascade resolver `resolveSceneId` (Maya's webview half, 86ca88p45)
+   * as the highest-priority layer. Named `scenes` (under `SpriteCharacter` — no
+   * collision with the manifest-root `scenes` REGISTRY, which is `SpriteScenes`).
+   */
+  scenes?: Record<string, string>;
 }
 
 /**
@@ -170,6 +185,26 @@ export interface GeneratedSpriteManifest {
    * flat card, per Iris spec §FIRM.3). Read via `sceneForId` / `defaultScene`.
    */
   scenes?: SpriteScenes;
+  /**
+   * Pose-default SCENE block (scene-per-pose feature, 86ca88nvd — Iris spec §5.6
+   * LOCKED). The POSE-DEFAULT layer (layer 2, middle) of the 3-layer scene
+   * cascade: canonical anim name → a scene id OR the literal `"none"` sentinel.
+   * Shared across ALL characters. Baked by `scripts/build-sprite-manifest.mjs`
+   * from the repo-root `pose-defaults.json` `scenes` block (validated there —
+   * dangling ids dropped). A key ABSENT = unset (inherit → falls through to the
+   * registry's `defaultSceneId`, layer 3). Absent block = no pose-default scenes.
+   *
+   * Read by `resolveSceneId` as the MIDDLE layer: per-char `SpriteCharacter.scenes`
+   * wins, else this `sceneDefaults`, else `scenes.defaultSceneId` (the floor).
+   *
+   * Named `sceneDefaults` to PARALLEL `poseDefaults` and NOT collide with the
+   * manifest-root `scenes` REGISTRY field (`SpriteScenes`, "which scenes exist").
+   * The registry is `scenes`; this cascade layer is `sceneDefaults` ("which scene
+   * each pose inherits"). Three distinct manifest-root scene-related fields —
+   * `scenes` (registry), `sceneDefaults` (pose-default layer), per-char
+   * `SpriteCharacter.scenes` (per-char layer) — do NOT confuse them (spec §5.6).
+   */
+  sceneDefaults?: Record<string, string>;
   /**
    * Pose-keyed playback DEFAULTS, shared across ALL characters (anim-playback
    * epic E3, 86ca2187n). Baked by `scripts/build-sprite-manifest.mjs` from the

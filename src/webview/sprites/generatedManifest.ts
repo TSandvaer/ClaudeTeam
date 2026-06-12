@@ -531,5 +531,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "image": "sprites/scenes/room3.png"
       }
     }
+  },
+  "sceneDefaults": {
+    "active_work": "none",
+    "active_read": "none"
   }
 } as const;

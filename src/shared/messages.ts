@@ -387,6 +387,21 @@ export type SavePlaybackOverrideMessage = {
       startFrame?: number;
       /** Inclusive upper bound of the playback window (86ca2wj6u). Absent → full clip (cleared). */
       endFrame?: number;
+      /**
+       * Tile backdrop SCENE for this pose (scene-per-pose feature, 86ca88nvd —
+       * Iris spec §5.3 LOCKED). Value = a scene id (e.g. `"room3"`) OR the literal
+       * lowercase string `"none"` (the flat-card sentinel that STOPS the cascade,
+       * spec §2.1 / §5.2). **Absent from the payload = clear (inherit)** — exactly
+       * like every other tunable field; the host writer DELETES the `scenes["<anim>"]`
+       * key so resolution falls through to the next cascade layer.
+       *
+       * Unlike the playback fields above, the scene value lands in a SEPARATE
+       * on-disk `scenes` block (sibling of `playback`), NOT the `playback` block
+       * (spec §5.1 / §5.4) — the host writer has a dedicated scene write path. It
+       * rides THIS message rather than a new type (spec §5.3); the ack is the
+       * unchanged `playback:override-saved`.
+       */
+      sceneId?: string;
     };
   };
 };
