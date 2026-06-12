@@ -118,23 +118,22 @@ export interface SpriteCharacter {
    * cadence applies. NOT per-anim — a single per-character value.
    */
   activePoolLoopsPerPose?: number;
-  /** Canonical anim name → frame data. */
-  animations: Record<string, SpriteAnimation>;
   /**
-   * Per-character SCENE block (scene-per-pose feature, 86ca88nvd — Iris spec
-   * §5.6 LOCKED). The PER-CHAR layer (layer 1, highest priority) of the 3-layer
-   * scene cascade: canonical anim name → a scene id (e.g. `"room3"`) OR the
-   * literal `"none"` sentinel (flat-card STOP). Baked by
-   * `scripts/build-sprite-manifest.mjs` from each `animations.json`'s top-level
-   * `scenes` block (validated there — dangling ids dropped + warned). A key
-   * ABSENT = unset (inherit → falls through to `sceneDefaults`, then the
-   * registry's `defaultSceneId`). Absent block = no per-char scene overrides.
-   *
-   * Read by the cascade resolver `resolveSceneId` (Maya's webview half, 86ca88p45)
-   * as the highest-priority layer. Named `scenes` (under `SpriteCharacter` — no
-   * collision with the manifest-root `scenes` REGISTRY, which is `SpriteScenes`).
+   * Per-character scene-override block (scene-per-pose feature, 86ca88nvd —
+   * LOCKED vocabulary §5.6). Keyed by canonical anim name; the value is a scene
+   * id OR the literal `"none"` sentinel (flat card, stops the cascade). Baked by
+   * `scripts/build-sprite-manifest.mjs` from each character's `animations.json`
+   * top-level `scenes` block (validated there — dangling ids dropped + warned).
+   * This is the HIGHEST-priority layer of the 3-layer scene cascade (layer 1 —
+   * see `resolveSceneId`): per-char wins over `sceneDefaults` wins over
+   * `scenes.defaultSceneId`. An anim ABSENT here = unset = inherit the next
+   * layer. Absent block (the common case) → every pose inherits. NOT the scene
+   * REGISTRY — that is the manifest-root `scenes: SpriteScenes`; this names WHICH
+   * scene each pose uses, not which scenes exist (spec §5.6 three-field note).
    */
   scenes?: Record<string, string>;
+  /** Canonical anim name → frame data. */
+  animations: Record<string, SpriteAnimation>;
 }
 
 /**
@@ -336,4 +335,65 @@ export function defaultScene(
     return null;
   }
   return sceneForId(scenes.defaultSceneId, manifest);
+}
+
+/**
+ * The literal `"none"` sentinel (scene-per-pose feature, 86ca88nvd — LOCKED
+ * vocabulary §5.2). A scene-override value of exactly `"none"` means "flat card
+ * here — no backdrop"; it STOPS the cascade (does NOT fall through). Distinct
+ * from `unset` (key absent → inherit). Both the resolver and any caller match
+ * this exact lowercase string, never `"None"` / `null` / `""`.
+ */
+export const SCENE_NONE = "none";
+
+/**
+ * Resolve the scene a tile/preview should render for a given (character, pose),
+ * walking the 3-layer scene cascade (scene-per-pose feature, 86ca88nvd — spec
+ * §2.1; the scene analogue of `resolvePlayback`). Mirrors the playback cascade's
+ * highest-priority-last precedence, but the merged unit is ONE field (`sceneId`)
+ * so the field-level merge reduces to a first-non-unset-wins walk, with ONE
+ * extra semantic the playback cascade lacks: the `"none"` STOP sentinel.
+ *
+ *   1. Per-character    `manifest.characters[char].scenes["<anim>"]`   (layer 1)
+ *   2. Pose-default     `manifest.sceneDefaults["<anim>"]`             (layer 2)
+ *   3. Manifest default `manifest.scenes.defaultSceneId`               (the floor)
+ *
+ * Per layer the value is one of THREE states (§2.1):
+ *   - a scene id  → resolve to that id; STOP (this layer answered).
+ *   - `"none"`    → flat card; STOP (does NOT fall through to the next layer).
+ *   - unset (key absent) → fall through to the next layer.
+ *
+ * Returns:
+ *   - a scene id string  → the caller passes it to `sceneForId(id)` for the image.
+ *   - `"none"`           → the caller OMITS `data-scene-bg` → today's flat card
+ *                          (the existing omit-data-scene-bg degrade path).
+ *   - `null`             → no scene registry (manifest.scenes undefined) → the
+ *                          caller OMITS `data-scene-bg` → flat card (V1 degrade).
+ *
+ * NOTE on dangling ids: a returned scene id is NOT guaranteed to exist in the
+ * registry `byId` (a stale hand-edited overlay could name an unknown id). The
+ * caller MUST pass it through `sceneForId`, whose null-coalescing treats an
+ * unknown id as unresolvable → flat card (spec §4 runtime-dangling row).
+ *
+ * No project layer (decision 7 — scope is GLOBAL/shared across orchestrations).
+ */
+export function resolveSceneId(
+  characterName: string,
+  animName: string,
+  source: GeneratedSpriteManifest = GENERATED_SPRITE_MANIFEST,
+): string | null {
+  // Layer 1 — per-character.
+  const perChar = source.characters[characterName]?.scenes?.[animName];
+  if (perChar !== undefined) {
+    // A set value (scene id OR "none") answers — stop the walk.
+    return perChar;
+  }
+  // Layer 2 — pose-default (shared across all characters).
+  const poseDefault = source.sceneDefaults?.[animName];
+  if (poseDefault !== undefined) {
+    return poseDefault;
+  }
+  // Layer 3 — the floor: the registry's default scene id, or null when there is
+  // no registry at all (degrade → flat card).
+  return source.scenes?.defaultSceneId ?? null;
 }

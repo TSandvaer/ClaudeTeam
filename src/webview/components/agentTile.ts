@@ -38,7 +38,12 @@ import type {
   WebviewMessage,
 } from "../../shared/messages.js";
 import { formatFreshness } from "../../shared/freshness.js";
-import { spriteForMember, defaultScene } from "../sprites/spriteManifest.js";
+import { spriteForMember } from "../sprites/spriteManifest.js";
+import {
+  resolveTileScene,
+  paintSceneBackdrop,
+  sceneKeyOf,
+} from "../sprites/sceneBackdrop.js";
 import { createSpriteBox } from "../sprites/spritePlayer.js";
 import type { SpriteTracker } from "../spriteTracker.js";
 import type { MenuOpenTracker } from "../menuOpenTracker.js";
@@ -292,37 +297,12 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
     spriteBaseUri !== undefined
       ? spriteForMember(tile.memberId, tile.character)
       : null;
+  // The scene KEY this render painted (scene-per-pose 86ca88nvd) — registered
+  // into the tracker so the NEXT render's crossfade can diff against it. Set
+  // inside the sprite block below.
+  let sceneKey: string | undefined;
   if (char && spriteBaseUri !== undefined) {
     article.dataset.hasSprite = "true";
-
-    // ── Scene backdrop (scene-bg feature 86ca3kjyk · Iris spec §FIRM) ────────
-    // Resolve the DEFAULT scene (V1 ships ONE shared room; per-role is a
-    // data-only upgrade that swaps the resolved id, not this call site).
-    // `defaultScene()` returns null when the baked manifest has no scene
-    // registry (degrade path §FIRM.3) — in that case we set neither
-    // `data-scene-bg` nor `--ct-scene-url`, so the scene + scrim CSS selectors
-    // don't match and the tile renders today's flat card. When a scene
-    // resolves we set the gate attribute + the inline `--ct-scene-url` custom
-    // property; the scene image path is dist-relative (e.g.
-    // `sprites/scenes/room3.png`) and is prefixed with the host-injected
-    // `spriteBaseUri` (the asWebviewUri of dist/webview) exactly like sprite
-    // frame paths (see spritePlayer.ts). The scene is co-gated with the sprite
-    // (only sprite-bearing tiles get a scene per §FIRM.3) — resolving it inside
-    // this block guarantees `[data-has-sprite="true"]` is always present too.
-    const scene = defaultScene();
-    if (scene !== null) {
-      const sceneBase = spriteBaseUri.replace(/\/+$/, "");
-      const sceneImage = scene.image.replace(/^\/+/, "");
-      article.dataset.sceneBg = "";
-      article.style.setProperty(
-        "--ct-scene-url",
-        `url('${sceneBase}/${sceneImage}')`,
-      );
-      // 86ca3kyzq: a scene resolved → every meta label below gets the
-      // `ct-scene-chip` marker class so its per-label chip backing paints over
-      // the busy room (supersedes the §FIRM zone-bands).
-      sceneResolved = true;
-    }
 
     const handle = createSpriteBox({
       char,
@@ -386,6 +366,39 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
       ...(cancelFrame ? { cancelFrame } : {}),
     });
     article.appendChild(handle.element);
+
+    // ── Scene backdrop (scene-per-pose feature 86ca88nvd · Iris spec §2/§3/§6) ─
+    // THE ARCHITECTED CALL-SITE UPGRADE (spec §6): V1 painted the DEFAULT scene
+    // here; this resolves the 3-layer CASCADE for the POSE the box is actually
+    // playing (`handle.pose`) — per-char `scenes` → pose-default `sceneDefaults`
+    // → `defaultSceneId` floor. The seed makes desk poses (`active_work` /
+    // `active_read`) resolve to `"none"` → flat card (no double-desk), idles
+    // inherit `room3`. Resolution + paint + the per-render scene KEY all live in
+    // the shared `paintSceneBackdrop` helper so this tile, the multi-agent
+    // header, and the tuner preview can't drift. Resolved AFTER `createSpriteBox`
+    // because the pose is only known once the box picks its anim. `"none"` /
+    // dangling id / no-registry → OMIT `data-scene-bg` → today's flat card (the
+    // existing degrade path, no new render branch). A scene resolved → the tile
+    // gets the per-label chip markers below (`sceneResolved`).
+    //
+    // Crossfade (spec §3): the prior render's scene key (threaded via the
+    // tracker) drives a 200ms cross-dissolve when the backdrop CHANGED across the
+    // poll tick (e.g. work↔idle flips `none`↔`room3`), and no flicker when it
+    // didn't. First render → no prior key → no transition.
+    const resolvedScene = resolveTileScene(
+      char.character,
+      handle.pose,
+      spriteBaseUri,
+    );
+    const priorSceneKey = spriteTracker?.priorSceneKey(
+      sessionId,
+      tile.memberId,
+    );
+    sceneResolved = paintSceneBackdrop(article, resolvedScene, {
+      ...(priorSceneKey !== undefined ? { priorSceneKey } : {}),
+    });
+    sceneKey = sceneKeyOf(resolvedScene);
+
     if (spriteTracker) {
       spriteTracker.register(sessionId, tile.memberId, {
         idlePick: handle.idlePick,
@@ -395,6 +408,7 @@ export function renderAgentTile(props: AgentTileProps): HTMLElement {
         isActive: handle.isActive,
         dispose: handle.dispose,
         pose: handle.pose,
+        ...(sceneKey !== undefined ? { sceneKey } : {}),
         currentFrame: handle.currentFrame,
       });
     }

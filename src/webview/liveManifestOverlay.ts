@@ -71,6 +71,20 @@ import type {
   SpriteCharacter,
 } from "./sprites/spriteManifest.js";
 import type { PlaybackOverride } from "./sprites/spritePlayer.js";
+import type { WebviewMessage } from "../shared/messages.js";
+
+/**
+ * The save-message override payload as it lands on the wire — playback keys PLUS
+ * the optional scene field `sceneId` (86ca88nvd §5.3). Derived from main's
+ * `messages.ts` `ui:save-playback-override` payload (Felix's wire half, 86ca88p0a)
+ * so the store records the REAL `sceneId` field rather than a local
+ * `PlaybackOverride & { sceneId?: string }` intersection. Shapes byte-identical
+ * (Felix's #218 review) — pure single-source-of-truth swap, no behavior change.
+ */
+type SaveOverridePayload = Extract<
+  WebviewMessage,
+  { type: "ui:save-playback-override" }
+>["payload"]["override"];
 
 /**
  * The tunable fields the tuner owns — MUST stay byte-identical to the host
@@ -104,8 +118,19 @@ export interface RecordedSave {
   /** Manifest char key — REQUIRED when writeTarget === "per-char". */
   characterFolder?: string;
   animName: string;
-  /** Only the SET fields (field-omission == clear) — exactly the emitted draft. */
-  override: PlaybackOverride;
+  /**
+   * Only the SET fields (field-omission == clear) — exactly the emitted draft.
+   * MIXED PAYLOAD (scene-per-pose 86ca88nvd, PR #216 NIT): the override may carry
+   * BOTH playback keys AND the scene field `sceneId`. `apply` ROUTES them to
+   * SEPARATE on-disk-mirrored blocks — playback keys → `playback["<anim>"]`,
+   * `sceneId` → the `scenes["<anim>"]` (per-char) / `sceneDefaults["<anim>"]`
+   * (pose-default) block — exactly as the host writer splits them. `sceneId`
+   * value = a scene id OR the `"none"` sentinel; ABSENT = clear (inherit). So an
+   * in-session scene save re-seeds correctly without a rebuild (the #213/#214
+   * stale-re-seed class extended to the scene block). Typed from the real wire
+   * payload (`SaveOverridePayload`) now that Felix's `sceneId` field is on main.
+   */
+  override: SaveOverridePayload;
 }
 
 /** Public surface of the store — single instance per webview boot. */
@@ -165,6 +190,30 @@ function mergeBlock(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * Field-level merge of the scene field (`sceneId`) into an existing scene block,
+ * mirroring the host writer's `scenes`/`sceneDefaults` set/clear (scene-per-pose
+ * 86ca88nvd, PR #216 mixed-payload NIT). Unlike the playback block (an OBJECT of
+ * many tunable keys), the scene block holds ONE value per anim: a scene id OR the
+ * `"none"` sentinel. So the merge is: `sceneId` PRESENT → set `block[anim]`;
+ * `sceneId` ABSENT (the save didn't set it) → DELETE `block[anim]` (clear →
+ * inherit). Returns the next block (a fresh object), or `undefined` when it has
+ * no entries left (caller drops the whole block to preserve absent-vs-empty).
+ */
+function mergeSceneBlock(
+  existing: Record<string, string> | undefined,
+  animName: string,
+  sceneId: string | undefined,
+): Record<string, string> | undefined {
+  const out: Record<string, string> = { ...(existing ?? {}) };
+  if (sceneId !== undefined) {
+    out[animName] = sceneId;
+  } else {
+    delete out[animName];
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** Factory — returns an isolated overlay instance. Pure (no shared state). */
 export function createLiveManifestOverlay(): LiveManifestOverlay {
   const saves = new Map<string, RecordedSave>();
@@ -185,41 +234,72 @@ export function createLiveManifestOverlay(): LiveManifestOverlay {
       if (saves.size === 0) return baked;
 
       // Clone the layers we may touch. We rebuild only the characters / anims /
-      // poseDefaults entries that a recorded save lands on; everything else is
-      // re-referenced unchanged (cheap — a few entries per session).
+      // poseDefaults / sceneDefaults entries that a recorded save lands on;
+      // everything else is re-referenced unchanged (cheap — a few entries/session).
       const characters: Record<string, SpriteCharacter> = {
         ...baked.characters,
       };
       const poseDefaults: Record<string, PlaybackOverride> = {
         ...(baked.poseDefaults ?? {}),
       };
+      // Scene pose-default block (86ca88nvd) — the pose-default scene layer the
+      // tuner re-seeds from. Mirrors the poseDefaults clone.
+      const sceneDefaults: Record<string, string> = {
+        ...(baked.sceneDefaults ?? {}),
+      };
       let touchedPoseDefaults = false;
+      let touchedSceneDefaults = false;
 
       for (const save of saves.values()) {
+        // MIXED-PAYLOAD ROUTING (86ca88nvd, PR #216 NIT): split the override into
+        // its playback keys (→ playback block) and the scene field (→ scenes /
+        // sceneDefaults block). The two never share a block — `sceneId` is NOT a
+        // TUNABLE_KEY (it lives in a separate on-disk block), so `mergeBlock` (which
+        // walks TUNABLE_KEYS) ignores it and the playback merge is unaffected.
+        const sceneId = save.override.sceneId;
         if (save.writeTarget === "per-char") {
           const charKey = save.characterFolder ?? "";
           const char = characters[charKey];
-          // Only overlay a char/anim the baked manifest actually has — a save for
-          // an unknown char/anim can't be re-seeded into a control that has no
-          // option for it, so dropping it here keeps the overlay consistent with
-          // what the panel can render. (In practice the panel only ever saves for
-          // a char/anim the manifest contains.)
+          // Only overlay a char the baked manifest actually has — a save for an
+          // unknown char can't be re-seeded into a control that has no option for
+          // it, so dropping it here keeps the overlay consistent with what the
+          // panel can render. (In practice the panel only saves for a known char.)
           if (!char) continue;
+          // ── Playback keys → animations[anim].playback ──
           const anim = char.animations[save.animName];
-          if (!anim) continue;
-          const merged = mergeBlock(anim.playback, save.override);
-          const nextAnim: SpriteAnimation = { ...anim };
-          if (merged === undefined) {
-            delete nextAnim.playback;
-          } else {
-            nextAnim.playback = merged;
+          let nextChar: SpriteCharacter = char;
+          if (anim) {
+            const merged = mergeBlock(anim.playback, save.override);
+            const nextAnim: SpriteAnimation = { ...anim };
+            if (merged === undefined) {
+              delete nextAnim.playback;
+            } else {
+              nextAnim.playback = merged;
+            }
+            nextChar = {
+              ...nextChar,
+              animations: {
+                ...nextChar.animations,
+                [save.animName]: nextAnim,
+              },
+            };
           }
-          characters[charKey] = {
-            ...char,
-            animations: { ...char.animations, [save.animName]: nextAnim },
-          };
+          // ── Scene field → char.scenes[anim] (3-state set/clear) ──
+          const mergedScenes = mergeSceneBlock(
+            nextChar.scenes,
+            save.animName,
+            sceneId,
+          );
+          if (mergedScenes === undefined) {
+            const { scenes: _drop, ...rest } = nextChar;
+            void _drop;
+            nextChar = rest;
+          } else {
+            nextChar = { ...nextChar, scenes: mergedScenes };
+          }
+          characters[charKey] = nextChar;
         } else {
-          // pose-default → poseDefaults[anim].
+          // ── pose-default: playback keys → poseDefaults[anim] ──
           const merged = mergeBlock(poseDefaults[save.animName], save.override);
           if (merged === undefined) {
             delete poseDefaults[save.animName];
@@ -227,15 +307,40 @@ export function createLiveManifestOverlay(): LiveManifestOverlay {
             poseDefaults[save.animName] = merged;
           }
           touchedPoseDefaults = true;
+          // ── pose-default: scene field → sceneDefaults[anim] ──
+          const mergedScene = mergeSceneBlock(
+            sceneDefaults,
+            save.animName,
+            sceneId,
+          );
+          // mergeSceneBlock returns the WHOLE block (or undefined when empty);
+          // re-assign the cloned block contents in place.
+          for (const k of Object.keys(sceneDefaults)) delete sceneDefaults[k];
+          if (mergedScene !== undefined) {
+            Object.assign(sceneDefaults, mergedScene);
+          }
+          touchedSceneDefaults = true;
         }
       }
 
       return {
         characters,
+        // Carry forward the SCENE REGISTRY (`scenes: SpriteScenes`) untouched —
+        // it is the available-rooms registry the picker + cascade read, NOT a
+        // tunable layer. The overlay never writes it, so a save must not DROP it
+        // (86ca88nvd — the overlaid manifest is the panel's sole manifest view).
+        ...(baked.scenes !== undefined ? { scenes: baked.scenes } : {}),
         // Preserve "absent" vs "{}" semantics: only attach poseDefaults when the
         // baked manifest had one OR a pose-default save touched it.
         ...(baked.poseDefaults !== undefined || touchedPoseDefaults
           ? { poseDefaults }
+          : {}),
+        // Same absent-vs-present preservation for the scene pose-default block:
+        // attach when the baked manifest had a sceneDefaults block OR a
+        // pose-default scene save touched it (a save that cleared the only entry
+        // still attaches an empty block, mirroring the host writer leaving `{}`).
+        ...(baked.sceneDefaults !== undefined || touchedSceneDefaults
+          ? { sceneDefaults }
           : {}),
       };
     },

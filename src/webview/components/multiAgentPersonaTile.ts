@@ -69,7 +69,12 @@ import type {
 } from "../../shared/types.js";
 import type { OpenTranscriptMessage } from "../../shared/messages.js";
 import { formatFreshness } from "../../shared/freshness.js";
-import { spriteForMember, defaultScene } from "../sprites/spriteManifest.js";
+import { spriteForMember } from "../sprites/spriteManifest.js";
+import {
+  resolveTileScene,
+  paintSceneBackdrop,
+  sceneKeyOf,
+} from "../sprites/sceneBackdrop.js";
 import { createSpriteBox } from "../sprites/spritePlayer.js";
 import type { SpriteTracker } from "../spriteTracker.js";
 import type { ExpandedGroupsTracker } from "../expandedGroupsTracker.js";
@@ -278,28 +283,12 @@ export function renderMultiAgentPersonaTile(
     spriteBaseUri !== undefined
       ? spriteForMember(tile.memberId, tile.character)
       : null;
+  // The scene KEY this header render painted (scene-per-pose 86ca88nvd) — set
+  // inside the sprite block, registered into the tracker for the next render's
+  // crossfade diff.
+  let sceneKey: string | undefined;
   if (char && spriteBaseUri !== undefined) {
     article.dataset.hasSprite = "true";
-
-    // ── Scene backdrop (scene-bg feature 86ca3kjyk · Iris spec §FIRM) ────────
-    // The collapsed persona header is a sprite-bearing `.agent-tile`, so it gets
-    // the same full-bleed scene + per-label chips as the single tile (§FIRM.3
-    // row 1; chips supersede the bands per 86ca3kyzq). The `.persona-instances`
-    // expand rows below stay flat (their own --ct-card-bg repaint in
-    // dashboard.css) — no chips there. `defaultScene()` null → no attribute →
-    // flat card (degrade §FIRM.3). Same dist-relative-path + spriteBaseUri
-    // prefix convention as the single tile + sprite frames (spritePlayer.ts).
-    const scene = defaultScene();
-    if (scene !== null) {
-      const sceneBase = spriteBaseUri.replace(/\/+$/, "");
-      const sceneImage = scene.image.replace(/^\/+/, "");
-      article.dataset.sceneBg = "";
-      article.style.setProperty(
-        "--ct-scene-url",
-        `url('${sceneBase}/${sceneImage}')`,
-      );
-      sceneResolved = true;
-    }
 
     const handle = createSpriteBox({
       char,
@@ -368,6 +357,31 @@ export function renderMultiAgentPersonaTile(
       ...(cancelFrame ? { cancelFrame } : {}),
     });
     article.appendChild(handle.element);
+
+    // ── Scene backdrop (scene-per-pose feature 86ca88nvd · Iris spec §2/§3/§6) ─
+    // The collapsed persona header is a sprite-bearing `.agent-tile`, so it gets
+    // the same scene-CASCADE treatment as the single tile — resolved for the
+    // header's AGGREGATE pose (`handle.pose`, driven by aggregateState +
+    // headlineActivity). The `.persona-instances` expand rows below stay flat
+    // (their own --ct-card-bg repaint; OOS §10.7 — sprite-less rows get NO
+    // scene). Shared `paintSceneBackdrop` helper (same as agentTile + preview)
+    // so the resolution + paint + crossfade can't drift. `"none"` / dangling /
+    // no-registry → OMIT → flat card (degrade). Crossfade on a header pose→pose
+    // backdrop change via the tracker-threaded prior key.
+    const resolvedScene = resolveTileScene(
+      char.character,
+      handle.pose,
+      spriteBaseUri,
+    );
+    const priorSceneKey = spriteTracker?.priorSceneKey(
+      sessionId,
+      tile.memberId,
+    );
+    sceneResolved = paintSceneBackdrop(article, resolvedScene, {
+      ...(priorSceneKey !== undefined ? { priorSceneKey } : {}),
+    });
+    sceneKey = sceneKeyOf(resolvedScene);
+
     if (spriteTracker) {
       spriteTracker.register(sessionId, tile.memberId, {
         idlePick: handle.idlePick,
@@ -377,6 +391,7 @@ export function renderMultiAgentPersonaTile(
         isActive: handle.isActive,
         dispose: handle.dispose,
         pose: handle.pose,
+        ...(sceneKey !== undefined ? { sceneKey } : {}),
         currentFrame: handle.currentFrame,
       });
     }

@@ -45,11 +45,15 @@ import {
   PEAK_DWELL_MS_DEFAULT,
 } from "../sprites/spritePlayer.js";
 import type { GeneratedSpriteManifest } from "../sprites/spriteManifest.js";
+import { SCENE_NONE } from "../sprites/spriteManifest.js";
 import { GENERATED_SPRITE_MANIFEST } from "../sprites/generatedManifest.js";
 import type { TunerStateTracker } from "../tunerStateTracker.js";
 import type { LiveManifestOverlay } from "../liveManifestOverlay.js";
 import { ACTIVE_WORK } from "../sprites/posePicker.js";
-import { createPreviewController } from "./playbackTunerPreview.js";
+import {
+  createPreviewController,
+  type DraftSceneId,
+} from "./playbackTunerPreview.js";
 import {
   computeCascadeSource,
   APEX_FRAME_NONE,
@@ -59,9 +63,32 @@ import {
   type FieldValue,
 } from "../sprites/cascadeSource.js";
 
+/**
+ * The save-message override payload as it lands on the wire — playback keys PLUS
+ * the optional scene field `sceneId` (86ca88nvd §5.3). Derived from main's
+ * `messages.ts` `ui:save-playback-override` payload (Felix's wire half, 86ca88p0a)
+ * so the webview consumes the REAL `sceneId` field rather than a local
+ * `PlaybackOverride & { sceneId?: string }` intersection. The shapes are
+ * byte-identical (Felix's #218 review), so this is a pure single-source-of-truth
+ * swap — no behavior change.
+ */
+type SaveOverridePayload = Extract<
+  WebviewMessage,
+  { type: "ui:save-playback-override" }
+>["payload"]["override"];
+
 /** Debounce windows (E4 spec §6). Overridable for tests. */
 export const PREVIEW_DEBOUNCE_MS = 120;
 export const SAVE_DEBOUNCE_MS = 500;
+
+/**
+ * The scene `<select>` sentinel value for "Inherit" (scene-per-pose 86ca88nvd
+ * §1.2 option 1) — selecting it CLEARS the scene field (field-omission == clear).
+ * Module-level (not a closure const) so the construction-time
+ * `populateScenePicker` call can't hit a temporal-dead-zone. Distinct from the
+ * `"none"` sentinel (an explicit flat card, which DOES set the field).
+ */
+const SCENE_INHERIT_VALUE = "__inherit__";
 
 /**
  * Anim keys hidden from the tuner's animation dropdown (86ca4g2fh — cosmetic).
@@ -268,7 +295,11 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     writeTarget: "per-char" | "pose-default";
     characterFolder?: string;
     animName: string;
-    override: PlaybackOverride;
+    // The full emitted override — playback keys PLUS the optional scene field
+    // (86ca88nvd §5.4). The overlay's mixed-payload routing splits them. Typed
+    // from the real wire payload (`SaveOverridePayload`) now that Felix's
+    // `sceneId` field is on main (86ca88p0a).
+    override: SaveOverridePayload;
   } | null = null;
 
   // B2 (86ca2e697): the latest save ack is now MUTABLE — `applySaveAck` (the
@@ -368,6 +399,20 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   let writeTarget: "per-char" | "pose-default" = persistedValid
     ? persisted!.writeTarget
     : "per-char";
+
+  // ── Scene draft (scene-per-pose 86ca88nvd · spec §1) ──────────────────────
+  // The picker's draft scene value for the current (char, anim, writeTarget):
+  //   - a scene id string → explicit backdrop here
+  //   - the `"none"` sentinel → explicit flat card
+  //   - `undefined` → Inherit (clear the field; cascade-resolve)
+  // Field-omission == clear (§5.3): absent from the save payload → the host
+  // DELETES the per-anim scene entry → inherit. Seeded from the saved block on
+  // every selection / write-target change (mirrors the playback draft). The
+  // saved-block restore lives in `readSavedSceneId` / `seedSceneControl`.
+  let draftSceneId: DraftSceneId =
+    persistedValid && persisted!.draftSceneId !== undefined
+      ? persisted!.draftSceneId
+      : undefined;
 
   // Debounce handles.
   let previewTimer: number | null = null;
@@ -674,6 +719,48 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
   });
   root.appendChild(mode.element);
 
+  // ── Scene (scene-per-pose 86ca88nvd · spec §1) ────────────────────────────
+  // A native <select> backdrop picker (spec §1.2 — NOT a thumbnail grid / radios)
+  // placed in its OWN section between Controls and Write target (§1.1): scene is a
+  // backdrop choice (a property of the whole tile), distinct from the timing
+  // controls. Options (§1.2): `Inherit (<resolved>)` (clears the field) + `None
+  // (flat card)` (the "none" sentinel) + one-per-scene-id (`room3 (default)`).
+  // The preview backdrop tracks the draft live (§1.5, crossfading on change), and
+  // the field rides the EXISTING save round-trip as `sceneId` (§5.3).
+  root.appendChild(sectionDivider("Scene"));
+  const sceneSelect = document.createElement("select");
+  sceneSelect.className = "ct-tuner-select ct-tuner-scene-select";
+  sceneSelect.setAttribute("aria-label", "Tile backdrop scene for this pose");
+  const sceneRow = document.createElement("div");
+  sceneRow.className = "ct-tuner-control ct-tuner-scene";
+  const sceneField = labeledField("Backdrop", sceneSelect);
+  sceneField.classList.add("ct-tuner-scene-field");
+  const sceneResetBtn = document.createElement("button");
+  sceneResetBtn.type = "button";
+  sceneResetBtn.className = "ct-tuner-reset ct-tuner-scene-reset";
+  sceneResetBtn.textContent = "reset";
+  sceneResetBtn.setAttribute("aria-label", "Reset Backdrop");
+  sceneResetBtn.addEventListener("click", () => onSceneReset());
+  sceneField.appendChild(sceneResetBtn);
+  sceneRow.appendChild(sceneField);
+  // Effective-source line (§1.3) — the resolved scene + which cascade layer it
+  // came from. One read-only line (the scene field is ONE field, not a table).
+  const sceneSourceLine = document.createElement("p");
+  sceneSourceLine.className = "ct-tuner-help ct-tuner-scene-source";
+  sceneRow.appendChild(sceneSourceLine);
+  root.appendChild(sceneRow);
+  sceneSelect.addEventListener("change", () => onSceneChange());
+  // Scene shadowing warning (§1.3) — pose-default write but per-char scene wins
+  // for this character. Its own primary class (`ct-tuner-scene-shadow`, NOT the
+  // playback `ct-tuner-shadow-warning`) so a `querySelector(".ct-tuner-shadow-
+  // warning")` still finds the PLAYBACK warning; the CSS styles + [hidden]-guards
+  // both via a shared selector. Flex + [hidden]-toggled → MANDATORY [hidden] guard.
+  const sceneShadowWarn = document.createElement("p");
+  sceneShadowWarn.className = "ct-tuner-scene-shadow";
+  sceneShadowWarn.setAttribute("role", "alert");
+  sceneShadowWarn.hidden = true;
+  root.appendChild(sceneShadowWarn);
+
   // ── Write target (§3.7) ───────────────────────────────────────────────────
   root.appendChild(sectionDivider("Write target"));
   const writeTargetCtl = buildWriteTargetControl(writeTarget, (t) => {
@@ -973,6 +1060,12 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     // clip doesn't dangle on a shorter anim (spec §4.5).
     seedWindowFromActive();
     refreshWindowCouplingHelp();
+    // Scene picker (86ca88nvd §1) — re-seed from the saved block + repopulate the
+    // dropdown for the new (char, anim) + refresh the source line / shadow warning
+    // BEFORE rebuildPreview, so the preview paints the seeded draft scene.
+    seedSceneControl();
+    refreshSceneSourceLine();
+    refreshSceneShadowWarning();
     rebuildPreview();
     renderSourceTable(computeCascadeSource(selectedChar, selectedAnim, manifest));
     refreshPreviewNote();
@@ -1055,6 +1148,13 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     // panel looks exactly as the user left it before the poll tick.
     seedWindowFromActive();
     refreshWindowCouplingHelp();
+    // Scene picker (86ca88nvd §1) — RESTORE the persisted draft scene (do NOT
+    // re-seed from the saved block; that would wipe the in-progress picker choice
+    // the way onSelectionChange resets the playback draft). Populate the dropdown
+    // selecting the restored draft, then refresh the source line / shadow warning.
+    populateScenePicker(draftSceneId);
+    refreshSceneSourceLine();
+    refreshSceneShadowWarning();
     rebuildPreview();
     renderSourceTable(source);
     refreshPreviewNote();
@@ -1073,6 +1173,10 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       selectedAnim,
       draftOverride: { ...draftOverride },
       writeTarget,
+      // 86ca88nvd §1: persist the scene draft so the picker selection survives the
+      // poll-tick re-render exactly like the playback draft (undefined = Inherit,
+      // omitted so the tracker stores "unset").
+      ...(draftSceneId !== undefined ? { draftSceneId } : {}),
     });
   }
 
@@ -1415,6 +1519,8 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
         // cadence (`cycleCadence`) so the tuner previews exactly the dashboard
         // rotation. The callback fires for any pose (active or idle).
         onLoopComplete: () => onPreviewLoopComplete(),
+        // 86ca88nvd §1.5: the preview backdrop tracks the picker draft live.
+        ...(draftSceneId !== undefined ? { draftSceneId } : {}),
         ...(scheduleFrame !== undefined ? { scheduleFrame } : {}),
         ...(cancelFrame !== undefined ? { cancelFrame } : {}),
       });
@@ -1425,6 +1531,9 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       // passed; the controller reused its construction-time char, so switching to
       // M01 left the preview painting F01.)
       preview.update(char, selectedAnim, overrideForPreview);
+      // 86ca88nvd §1.5: keep the preview backdrop in sync with the draft after a
+      // selection change (the build path repaints from the now-current draft).
+      preview.setScene(draftSceneId, selectedAnim);
     }
     refreshPreviewNote();
   }
@@ -1435,17 +1544,29 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     // so its returning ok-ack is shown (the suppression only guards the STALE
     // ack a selection/target change orphaned, not the next real save).
     ackDismissed = false;
-    const payload: Extract<
-      WebviewMessage,
-      { type: "ui:save-playback-override" }
-    >["payload"] = {
+    // 86ca88nvd §5.3: the scene field rides the EXISTING save round-trip as
+    // `override.sceneId` (a scene id, or the "none" sentinel; ABSENT = clear =
+    // inherit). The host writer routes it to the `scenes["<anim>"]` block (Felix's
+    // half). Field-omission == clear: only attach `sceneId` when the draft SETS it
+    // (`undefined` = Inherit = field cleared). `sceneId` is now the real
+    // `messages.ts` payload field (Felix's wire half 86ca88p0a, merged), so the
+    // override is typed straight from the wire payload (`SaveOverridePayload`) —
+    // the prior `PlaybackOverride & { sceneId?: string }` intersection is gone.
+    const override: SaveOverridePayload = {
+      ...draftOverride,
+      ...(draftSceneId !== undefined ? { sceneId: draftSceneId } : {}),
+    };
+    const payload = {
       writeTarget,
       animName: selectedAnim,
-      override: { ...draftOverride },
+      override,
       ...(writeTarget === "per-char"
         ? { characterFolder: selectedChar }
         : {}),
-    };
+    } as Extract<
+      WebviewMessage,
+      { type: "ui:save-playback-override" }
+    >["payload"];
     // 86ca2wrnq: remember exactly what we asked the host to write, keyed by the
     // SAME (writeTarget, char, anim) the host writes. On a confirmed ok-ack we
     // commit this into the live overlay so a subsequent re-seed reads it instead
@@ -1455,7 +1576,12 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
       writeTarget,
       ...(writeTarget === "per-char" ? { characterFolder: selectedChar } : {}),
       animName: selectedAnim,
-      override: { ...draftOverride },
+      // Capture the FULL emitted override (playback keys + the `sceneId` field).
+      // The overlay's `apply` routes `sceneId` → the `scenes`/`sceneDefaults`
+      // block and the playback keys → the `playback` block (the mixed-payload
+      // routing — PR #216 NIT). So a confirmed in-session SCENE save re-seeds the
+      // picker correctly without a rebuild (the #213/#214 stale-re-seed class).
+      override: { ...override },
     };
     postMessage({ type: "ui:save-playback-override", payload });
   }
@@ -1624,6 +1750,187 @@ export function renderPlaybackTuner(props: PlaybackTunerProps): HTMLElement {
     shadowWarn.textContent =
       `⚠ ${selectedChar} overrides ${shadowed.join(", ")} per-char; ` +
       "the pose-default you set won't show for this character.";
+  }
+
+  // ===========================================================================
+  // Scene picker behavior (scene-per-pose 86ca88nvd · spec §1)
+  // ===========================================================================
+
+  /**
+   * The scene ids the registry offers (spec §1.2 option 3 — one per scene id).
+   * Empty when the manifest has NO scene registry (degrade — the picker then
+   * shows only Inherit + None, §4 no-registry row).
+   */
+  function sceneRegistryIds(): string[] {
+    return Object.keys(manifest.scenes?.byId ?? {});
+  }
+
+  /** The manifest's default scene id (the cascade floor), or null (no registry). */
+  function defaultSceneId(): string | null {
+    return manifest.scenes?.defaultSceneId ?? null;
+  }
+
+  /**
+   * Resolve the EFFECTIVE scene + the cascade LAYER it came from for the current
+   * (char, anim) on the overlaid manifest (§1.3). Mirrors `resolveSceneId`'s walk
+   * but reports WHICH layer answered (for the source line + shadow warning).
+   */
+  function computeSceneSource(): {
+    value: string | null;
+    layer: "per-char" | "pose-default" | "default";
+  } {
+    const perChar = manifest.characters[selectedChar]?.scenes?.[selectedAnim];
+    if (perChar !== undefined) return { value: perChar, layer: "per-char" };
+    const poseDefault = manifest.sceneDefaults?.[selectedAnim];
+    if (poseDefault !== undefined)
+      return { value: poseDefault, layer: "pose-default" };
+    return { value: defaultSceneId(), layer: "default" };
+  }
+
+  /**
+   * The saved scene value for the current (char, anim) at the WRITE TARGET — the
+   * per-anim `scenes` block entry the picker seeds from (field-omission == clear
+   * applies per file, like the playback draft). `undefined` (key absent) = unset.
+   */
+  function readSavedSceneId(): DraftSceneId {
+    const saved =
+      writeTarget === "per-char"
+        ? manifest.characters[selectedChar]?.scenes?.[selectedAnim]
+        : manifest.sceneDefaults?.[selectedAnim];
+    return saved;
+  }
+
+  /**
+   * Repopulate the scene <select> for the current (char, anim) (§1.2). Order:
+   * `Inherit (<resolved>)` (default selected when unset) → `None (flat card)` →
+   * one option per scene id (`room3 (default)`). The Inherit label shows the
+   * inherited resolution so the sponsor sees what unset means here. `selectId`
+   * (the draft) selects its option when present; an unknown draft id falls back
+   * to Inherit (§4 — the picker drops unknown ids on populate).
+   */
+  function populateScenePicker(selectId: DraftSceneId): void {
+    sceneSelect.replaceChildren();
+    const ids = sceneRegistryIds();
+    const def = defaultSceneId();
+    const source = computeSceneSource();
+    // Option 1 — Inherit (the unset sentinel). Label shows the inherited resolve.
+    const inheritOpt = document.createElement("option");
+    inheritOpt.value = SCENE_INHERIT_VALUE;
+    inheritOpt.dataset.scene = SCENE_INHERIT_VALUE;
+    const inheritResolved =
+      source.value === SCENE_NONE
+        ? "none (flat card)"
+        : (source.value ?? "no scene");
+    inheritOpt.textContent = `Inherit (${source.layer} → ${inheritResolved})`;
+    sceneSelect.appendChild(inheritOpt);
+    // Option 2 — None (the "none" sentinel; flat card, stops the cascade).
+    const noneOpt = document.createElement("option");
+    noneOpt.value = SCENE_NONE;
+    noneOpt.dataset.scene = SCENE_NONE;
+    noneOpt.textContent = "None (flat card)";
+    sceneSelect.appendChild(noneOpt);
+    // Option 3 — one per scene id; annotate the default.
+    for (const id of ids) {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.dataset.scene = id;
+      opt.textContent = id === def ? `${id} (default)` : id;
+      sceneSelect.appendChild(opt);
+    }
+    // Selection: the draft id when it is a known option, else Inherit (§4 drops
+    // unknown ids). `"none"` is always a valid option.
+    const isKnown =
+      selectId === SCENE_NONE ||
+      (selectId !== undefined && ids.includes(selectId));
+    sceneSelect.value = isKnown ? (selectId as string) : SCENE_INHERIT_VALUE;
+  }
+
+  /**
+   * Seed the scene control + draft from the saved block for the current
+   * (char, anim, writeTarget) (mirrors the playback re-seed). An unknown saved id
+   * normalizes to Inherit so the picker never displays a dangling id (§4).
+   */
+  function seedSceneControl(): void {
+    const saved = readSavedSceneId();
+    const ids = sceneRegistryIds();
+    // Drop an unknown id → Inherit (the dangling-id picker defense, §4).
+    draftSceneId =
+      saved === SCENE_NONE || (saved !== undefined && ids.includes(saved))
+        ? saved
+        : undefined;
+    populateScenePicker(draftSceneId);
+  }
+
+  /** Render the effective-source line (§1.3) — resolved scene + cascade layer. */
+  function refreshSceneSourceLine(): void {
+    const source = computeSceneSource();
+    const resolved =
+      source.value === SCENE_NONE
+        ? "none (flat card)"
+        : (source.value ?? "(no scene registry)");
+    const layerLabelText =
+      source.layer === "per-char"
+        ? "Per-char"
+        : source.layer === "pose-default"
+          ? "Pose-default"
+          : "Default";
+    sceneSourceLine.textContent = `↳ ${layerLabelText}: ${resolved}`;
+  }
+
+  /**
+   * Scene shadowing warning (§1.3): write target is pose-default but a per-char
+   * scene already WINS for this character — the pose-default backdrop won't show
+   * here. Flex + [hidden]-toggled → the CSS [hidden] guard is mandatory.
+   */
+  function refreshSceneShadowWarning(): void {
+    if (writeTarget !== "pose-default") {
+      sceneShadowWarn.hidden = true;
+      sceneShadowWarn.textContent = "";
+      return;
+    }
+    const source = computeSceneSource();
+    if (source.layer !== "per-char") {
+      sceneShadowWarn.hidden = true;
+      sceneShadowWarn.textContent = "";
+      return;
+    }
+    sceneShadowWarn.hidden = false;
+    sceneShadowWarn.textContent =
+      `⚠ ${selectedChar} overrides the scene per-char; ` +
+      "the pose-default backdrop you set won't show for this character.";
+  }
+
+  /** The scene <select> changed → update the draft + repaint the preview backdrop. */
+  function onSceneChange(): void {
+    const v = sceneSelect.value;
+    // Inherit clears the field (field-omission == clear, §5.3); None sets the
+    // "none" sentinel; any other value is an explicit scene id.
+    draftSceneId = v === SCENE_INHERIT_VALUE ? undefined : v;
+    applySceneDraft();
+  }
+
+  /** [reset] beside the picker → clear the scene field → Inherit (§1.2). */
+  function onSceneReset(): void {
+    draftSceneId = undefined;
+    sceneSelect.value = SCENE_INHERIT_VALUE;
+    applySceneDraft();
+  }
+
+  /**
+   * Apply the current scene draft: repaint the preview backdrop LIVE (§1.5, no
+   * host round-trip), refresh the source line + shadow warning + Inherit label,
+   * queue the debounced save (the scene field rides the SAME save round-trip,
+   * §5.3), and persist the draft so it survives the poll tick.
+   */
+  function applySceneDraft(): void {
+    // Re-label the Inherit option (its resolved text doesn't change on a draft
+    // pick, but keep the picker's displayed value in sync after a reset).
+    preview?.setScene(draftSceneId, selectedAnim);
+    refreshSceneSourceLine();
+    refreshSceneShadowWarning();
+    dismissCurrentAck();
+    scheduleSave();
+    persist();
   }
 
   /** Render the persistence banner from the latest ack (§3.6). */

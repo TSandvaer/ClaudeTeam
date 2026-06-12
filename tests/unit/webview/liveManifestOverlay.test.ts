@@ -304,3 +304,155 @@ describe("liveManifestOverlay", () => {
     expect(overlay.apply(b)).toBe(b);
   });
 });
+
+/*
+ * Scene-per-pose mixed-payload routing (scene-per-pose 86ca88nvd · PR #216 NIT).
+ * The overlay's `apply` must ROUTE a save's `sceneId` to the per-char `scenes` /
+ * pose-default `sceneDefaults` block, and the playback keys to the `playback` /
+ * `poseDefaults` block — in the SAME save. This is the #213/#214 stale-re-seed
+ * class extended to the scene block: an in-session scene save must re-seed the
+ * picker without a rebuild.
+ *
+ * NON-VACUITY: each assertion fails if `apply` stops routing `sceneId` to the
+ * scene block (the bug this NIT prevents) — the scene block would stay baked.
+ */
+describe("liveManifestOverlay — scene field routing (86ca88nvd · PR #216 NIT)", () => {
+  it("routes a per-char sceneId into the char's `scenes` block (not playback)", () => {
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { sceneId: "room5" },
+    });
+    const char = overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"];
+    // sceneId landed in the per-char scenes block...
+    expect(char.scenes).toEqual({ idle_coffee: "room5" });
+    // ...and NOT in the playback block (the playback block stays empty/dropped).
+    expect(char.animations.idle_coffee.playback).toBeUndefined();
+  });
+
+  it("MIXED payload: sceneId → scenes block AND playback keys → playback block (one save)", () => {
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { speedMultiplier: 0.7, sceneId: "room5" },
+    });
+    const char = overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"];
+    // The two fields are split into their on-disk-mirrored blocks.
+    expect(char.scenes).toEqual({ idle_coffee: "room5" });
+    expect(char.animations.idle_coffee.playback).toEqual({
+      speedMultiplier: 0.7,
+    });
+    // sceneId did NOT leak into the playback block.
+    expect(
+      (char.animations.idle_coffee.playback as Record<string, unknown>).sceneId,
+    ).toBeUndefined();
+  });
+
+  it("the \"none\" sentinel routes into the scenes block as the literal string", () => {
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "active_work",
+      override: { sceneId: "none" },
+    });
+    // active_work isn't in the baked M01 animations, but the scene block routing
+    // does not depend on the anim existing — assert the scenes block carries it.
+    const char = overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"];
+    expect(char.scenes).toEqual({ active_work: "none" });
+  });
+
+  it("a sceneId-ABSENT save CLEARS a previously-overlaid scene (field-omission == clear)", () => {
+    const overlay = createLiveManifestOverlay();
+    // First save sets a scene; second save (same coords) omits sceneId → clear.
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { sceneId: "room5" },
+    });
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { speedMultiplier: 1 }, // no sceneId → clears the scene field
+    });
+    const char = overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"];
+    // The scene block is empty now → dropped entirely (inherit).
+    expect(char.scenes).toBeUndefined();
+    // The playback save still applied.
+    expect(char.animations.idle_coffee.playback).toEqual({ speedMultiplier: 1 });
+  });
+
+  it("routes a pose-default sceneId into `sceneDefaults` (not characters)", () => {
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "pose-default",
+      animName: "active_work",
+      override: { sceneId: "none" },
+    });
+    const eff = overlay.apply(baked());
+    expect(eff.sceneDefaults).toEqual({ active_work: "none" });
+    // No per-char scene block was created.
+    expect(eff.characters["ClaudeTeam-M01-Dev"].scenes).toBeUndefined();
+  });
+
+  it("a pose-default MIXED save splits playback → poseDefaults, sceneId → sceneDefaults", () => {
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "pose-default",
+      animName: "idle_stretch",
+      override: { playbackMode: "loop", sceneId: "room5" },
+    });
+    const eff = overlay.apply(baked());
+    expect(eff.sceneDefaults).toEqual({ idle_stretch: "room5" });
+    // playbackMode:loop is field-set in poseDefaults (was pingpong baked → now loop).
+    expect(eff.poseDefaults?.idle_stretch).toEqual({ playbackMode: "loop" });
+  });
+
+  it("does NOT touch the scene block for a scene-LESS save (back-compat)", () => {
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { speedMultiplier: 2 }, // no sceneId
+    });
+    const char = overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"];
+    expect(char.scenes).toBeUndefined();
+    expect(char.animations.idle_coffee.playback).toEqual({ speedMultiplier: 2 });
+  });
+
+  it("PRESERVES the scene REGISTRY (`scenes`) through apply — the panel reads it (86ca88nvd)", () => {
+    // Latent-bug fence: `apply` rebuilds the manifest object, so it must carry the
+    // scene registry forward — the tuner reads `manifest.scenes.byId` for the
+    // picker options + `defaultSceneId` for the cascade floor. Dropping it (the
+    // pre-fix behavior) leaves the overlaid manifest with NO registry → empty
+    // picker + null floor. NON-VACUOUS: deleting the `scenes` carry-forward fails.
+    const b: GeneratedSpriteManifest = {
+      ...baked(),
+      scenes: {
+        defaultSceneId: "room3",
+        byId: {
+          room3: { id: "room3", image: "sprites/scenes/room3.png" },
+          room5: { id: "room5", image: "sprites/scenes/room5.png" },
+        },
+      },
+    };
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { sceneId: "room5" },
+    });
+    const eff = overlay.apply(b);
+    expect(eff.scenes).toEqual(b.scenes);
+    expect(eff.scenes?.defaultSceneId).toBe("room3");
+    expect(Object.keys(eff.scenes?.byId ?? {})).toEqual(["room3", "room5"]);
+  });
+});
