@@ -2135,4 +2135,125 @@ describe("86ca2wrnq — re-seed reflects in-session saves (stale-manifest re-see
       vi.useRealTimers();
     }
   });
+
+  // 86ca7yumw — window pair through the END-TO-END re-seed. The window re-seeds
+  // through yet ANOTHER surface (`activeWindow` → `seedWindowFromActive` →
+  // windowSlider.reseed → the `.ct-tuner-window-readout` text), distinct from
+  // both the speed slider and the apex picker. `activeWindow` reads the window
+  // straight off the EFFECTIVE manifest's per-char `playback` block — so before
+  // this fix the overlay dropped startFrame/endFrame and `activeWindow` resolved
+  // to the stale LOAD-TIME window on every char/anim switch + reopen. This drives
+  // save → ack → char-switch → switch-back on the window pair and asserts the
+  // readout shows the SAVED window. NON-VACUOUS: dropping startFrame/endFrame from
+  // liveManifestOverlay.TUNABLE_KEYS — OR reverting the panel's effective
+  // `manifest = liveOverlay.apply(baked)` to raw baked — re-seeds the readout to
+  // the baked window "1 – 2", failing the readout assertion. Mirrors the
+  // stale-manifest re-seed class (vscode-extension-conventions.md § baked
+  // manifest LOAD-TIME snapshot).
+  it("save M01 window → switch to F01 → back to M01: the window readout shows the SAVED window (no rebuild) (86ca7yumw)", () => {
+    vi.useFakeTimers();
+    try {
+      const overlay = createLiveManifestOverlay();
+      const baked = fixtureManifest();
+      // Bake a per-char window {0,1} on M01/idle_stretch so the slider opens on a
+      // declared window — the re-seed-to-saved must visibly differ from BOTH the
+      // baked window and the full clip.
+      baked.characters["ClaudeTeam-M01-Dev"].animations.idle_stretch.playback = {
+        speedMultiplier: 0.5,
+        startFrame: 0,
+        endFrame: 1,
+      };
+      const { root, posted } = mount({
+        manifest: baked,
+        liveOverlay: overlay,
+        stateTracker: createTunerStateTracker(),
+      });
+      const windowReadout = (): string =>
+        q2<HTMLElement>(root, ".ct-tuner-window-readout").textContent ?? "";
+      // Opens at the baked window 0–1.
+      expect(windowReadout()).toBe("0 – 1");
+
+      // The sponsor drags the window end to frame 2 → window becomes 1–2 (drag the
+      // start thumb to 1 too so it isn't the full clip, which would clear it).
+      const startThumb = q2<HTMLInputElement>(root, ".ct-tuner-window-start");
+      const endThumb = q2<HTMLInputElement>(root, ".ct-tuner-window-end");
+      endThumb.value = "2";
+      endThumb.dispatchEvent(new Event("input"));
+      startThumb.value = "1";
+      startThumb.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      const save = lastSave(posted)!;
+      expect(save.payload.override.startFrame).toBe(1);
+      expect(save.payload.override.endFrame).toBe(2);
+
+      // Host confirms → ack commits the window pair into the overlay.
+      getTunerPanelHandle(root)!.applySaveAck({ ok: true });
+
+      // View F01, then switch BACK to M01 — same panel instance, no rebuild.
+      const charSel = q2<HTMLSelectElement>(root, ".ct-tuner-char-select");
+      charSel.value = "ClaudeTeam-F01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+      charSel.value = "ClaudeTeam-M01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+
+      // LOAD-BEARING: the window re-seeds to the SAVED 1–2, NOT the stale baked
+      // 0–1. Reverting the overlay reads baked → "0 – 1".
+      expect(windowReadout()).toBe("1 – 2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ===========================================================================
+// 86ca7yumw (absorbed fixture from the ticket comment) — apex-ms-specific
+// debounce COALESCING. N rapid apex-ms slider inputs inside one trailing
+// SAVE_DEBOUNCE_MS window must coalesce to EXACTLY ONE save carrying the FINAL
+// dwellMs — distinct from the generic-slider AC2 coalescing (speed) above
+// because the apex-ms slider routes through the apex-hold control's own
+// onInput → onControlChange path. NON-VACUOUS: reverting the apex-ms slider's
+// trailing-edge debounce (fire-per-input) makes `saves.length === 1` FAIL
+// (multiple racing saves); seeding the wrong final value makes the dwellMs
+// assertion FAIL.
+// ===========================================================================
+describe("86ca7yumw — apex-ms slider debounce coalescing (absorbed comment fixture)", () => {
+  it("N rapid apex-ms inputs coalesce to exactly ONE save carrying the FINAL dwellMs", () => {
+    vi.useFakeTimers();
+    try {
+      const { root, posted } = mount();
+      // Pick an apex frame so the apex-ms slider is live.
+      const picker = q<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+      picker.value = "1";
+      picker.dispatchEvent(new Event("change"));
+      const apexMs = q<HTMLInputElement>(
+        root,
+        ".ct-tuner-apex-ms .ct-tuner-slider",
+      );
+      // Five rapid drags, each < SAVE_DEBOUNCE_MS apart → the trailing timer keeps
+      // resetting, so no save fires mid-stream.
+      const seq = ["800", "1200", "1600", "2000", "2400"];
+      for (const v of seq) {
+        apexMs.value = v;
+        apexMs.dispatchEvent(new Event("input"));
+        vi.advanceTimersByTime(SAVE_DEBOUNCE_MS - 1);
+      }
+      // No trailing save has fired yet (still inside the debounce window).
+      expect(
+        posted.filter((m) => m.type === "ui:save-playback-override").length,
+      ).toBe(0);
+      // Let the trailing edge fire.
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+
+      const saves = posted.filter(
+        (m) => m.type === "ui:save-playback-override",
+      );
+      // Exactly ONE coalesced save, carrying the FINAL apex-ms value + the frame.
+      expect(saves.length).toBe(1);
+      const save = lastSave(posted)!;
+      expect(save.payload.override.dwellFrameIndex).toBe(1);
+      expect(save.payload.override.dwellMs).toBe(2400);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -38,12 +38,12 @@
  *
  *   The host (`mergePlaybackEntry`) treats the FULL tunable-key set as
  *   field-omission == clear: a key PRESENT in the override is set, a key ABSENT
- *   (among the tunable keys) is DELETED from the entry; any NON-tunable field
- *   already present (`startFrame`/`endFrame` window — out of tuner scope) is
- *   PRESERVED. This store applies the identical rule, so the overlaid block
- *   matches the on-disk block exactly. If the merged block has no fields the
- *   `playback["<anim>"]` key is dropped (matches the host removing an empty
- *   entry).
+ *   (among the tunable keys — which since 86ca2wj6u INCLUDE the window pair
+ *   `startFrame`/`endFrame`) is DELETED from the entry; any field NOT in the
+ *   tunable set is PRESERVED. This store applies the identical rule, so the
+ *   overlaid block matches the on-disk block exactly. If the merged block has no
+ *   fields the `playback["<anim>"]` key is dropped (matches the host removing an
+ *   empty entry).
  *
  * ## Persistence scope (mirrors tunerStateTracker)
  *
@@ -72,13 +72,30 @@ import type {
 } from "./sprites/spriteManifest.js";
 import type { PlaybackOverride } from "./sprites/spritePlayer.js";
 
-/** The tunable fields the tuner owns (mirrors host writer's TUNABLE_KEYS). */
+/**
+ * The tunable fields the tuner owns — MUST stay byte-identical to the host
+ * writer's `TUNABLE_KEYS` (`src/extension/sprites/playbackOverrideWriter.ts`).
+ *
+ * The window pair `startFrame`/`endFrame` became tuner-owned (86ca2wj6u) on the
+ * HOST writer but was NOT propagated here — so the overlay treated the window as
+ * a non-tunable OOS field (preserved untouched) while the host sets-it-present /
+ * clears-it-absent and writes it to disk. The two merges DIVERGED: a confirmed
+ * in-session window save never landed on the effective manifest, so a re-seed
+ * (`activeWindow` → `seedWindowFromActive`, char/anim switch, close+reopen) read
+ * the stale LOAD-TIME baked window instead of the just-saved one — the exact
+ * stale-manifest re-seed class this overlay exists to prevent (86ca7yumw). The
+ * window pair is field-level merged identically to the other tunable keys: set
+ * when present, CLEAR when absent (mirrors `mergePlaybackEntry`).
+ */
 const TUNABLE_KEYS = [
   "speedMultiplier",
   "finalDwellMs",
   "playbackMode",
   "dwellFrameIndex",
   "dwellMs",
+  // 86ca7yumw — window pair, tuner-owned since 86ca2wj6u on the host writer.
+  "startFrame",
+  "endFrame",
 ] as const;
 
 /** A single confirmed save the store remembers. */
@@ -127,8 +144,10 @@ function keyOf(save: {
 /**
  * Field-level merge of `override` into an existing playback block, mirroring the
  * host's `mergePlaybackEntry`: tunable key present → set, tunable key absent →
- * delete; non-tunable fields (window) preserved. Returns the merged block, or
- * `undefined` when empty after merge (caller drops the whole `playback[anim]`).
+ * delete (the window pair `startFrame`/`endFrame` is now in the tunable set, so
+ * it follows the same set/clear rule — 86ca7yumw); any field outside the tunable
+ * set is preserved. Returns the merged block, or `undefined` when empty after
+ * merge (caller drops the whole `playback[anim]`).
  */
 function mergeBlock(
   existing: PlaybackOverride | undefined,

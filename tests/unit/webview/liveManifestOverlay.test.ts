@@ -68,10 +68,14 @@ describe("liveManifestOverlay", () => {
     ).toEqual({ finalDwellMs: 1200 });
   });
 
-  it("merges set fields and CLEARS absent tunable fields (field-omission == clear)", () => {
+  it("merges set fields and CLEARS absent tunable fields including the window pair (field-omission == clear) (86ca7yumw)", () => {
     const overlay = createLiveManifestOverlay();
-    // The baked block has speedMultiplier:0.5. Save a draft that sets ONLY
-    // finalDwellMs — the writer clears speedMultiplier (absent tunable key).
+    // The baked block has speedMultiplier:0.5 + a baked window {1,2}. Save a draft
+    // that sets ONLY finalDwellMs — the host writer clears speedMultiplier AND the
+    // window pair (all absent tunable keys), so the overlay must do the same.
+    // NON-VACUOUS: with startFrame/endFrame OUTSIDE TUNABLE_KEYS (the shipped bug)
+    // the window survives → block === { finalDwellMs, startFrame:1, endFrame:2 },
+    // diverging from disk. Adding the window keys makes them clear here.
     overlay.record({
       writeTarget: "per-char",
       characterFolder: "ClaudeTeam-M01-Dev",
@@ -81,12 +85,33 @@ describe("liveManifestOverlay", () => {
     const block =
       overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"].animations
         .idle_stretch.playback;
-    // speedMultiplier cleared; finalDwellMs set; window fields PRESERVED (OOS).
-    expect(block).toEqual({ finalDwellMs: 900, startFrame: 1, endFrame: 2 });
+    // speedMultiplier cleared; finalDwellMs set; window pair CLEARED (now tunable).
+    expect(block).toEqual({ finalDwellMs: 900 });
   });
 
-  it("preserves non-tunable window fields when the merged block keeps tunable fields", () => {
+  it("overlays a window-pair save onto the matching anim's playback block (86ca7yumw)", () => {
     const overlay = createLiveManifestOverlay();
+    // Save a NEW window {5,10} on idle_stretch (baked window is {1,2}). The overlay
+    // must reflect the SAVED window so a re-seed reads it (the bug: overlay drops
+    // startFrame/endFrame → re-seed shows the stale baked {1,2}).
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_stretch",
+      override: { speedMultiplier: 0.5, startFrame: 5, endFrame: 10 },
+    });
+    const block =
+      overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"].animations
+        .idle_stretch.playback;
+    expect(block).toEqual({ speedMultiplier: 0.5, startFrame: 5, endFrame: 10 });
+  });
+
+  it("clears the baked window when a later save omits the window pair (86ca7yumw)", () => {
+    const overlay = createLiveManifestOverlay();
+    // The baked block carries window {1,2}. A save that keeps speed but drops the
+    // window (the [reset]/full-clip branch in onWindowChange) must CLEAR the
+    // baked window — matching the host writer, which deletes the absent keys on
+    // disk. With the bug the overlay preserved {1,2}, so disk and overlay drift.
     overlay.record({
       writeTarget: "per-char",
       characterFolder: "ClaudeTeam-M01-Dev",
@@ -96,7 +121,7 @@ describe("liveManifestOverlay", () => {
     const block =
       overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"].animations
         .idle_stretch.playback;
-    expect(block).toEqual({ speedMultiplier: 2, startFrame: 1, endFrame: 2 });
+    expect(block).toEqual({ speedMultiplier: 2 });
   });
 
   it("drops the whole playback block when no tunable AND no other field remains", () => {
@@ -210,6 +235,28 @@ describe("liveManifestOverlay", () => {
     expect(overlay.apply(baked()).poseDefaults?.idle_stretch).toEqual({
       dwellFrameIndex: 2,
       dwellMs: 1500,
+    });
+  });
+
+  // 86ca7yumw — window pair through the pose-default surface. Mirrors the apex
+  // pose-default test: the window flows through the SAME field-level merge, so a
+  // regression dropping startFrame/endFrame from TUNABLE_KEYS makes the recorded
+  // window never land on poseDefaults → the pose-default window re-seed reads the
+  // stale baked value. NON-VACUOUS: with the bug, the pose-default block keeps
+  // playbackMode (window never set) → assertion fails.
+  it("overlays a pose-default WINDOW-pair save onto poseDefaults[anim] (86ca7yumw)", () => {
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "pose-default",
+      animName: "idle_stretch",
+      override: { startFrame: 3, endFrame: 7 },
+    });
+    // The baked pose-default for idle_stretch is { playbackMode: "pingpong" }; a
+    // window pose-default save clears playbackMode (absent tunable key) and sets
+    // the window pair (full field-level merge, mirroring the host writer).
+    expect(overlay.apply(baked()).poseDefaults?.idle_stretch).toEqual({
+      startFrame: 3,
+      endFrame: 7,
     });
   });
 
