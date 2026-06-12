@@ -47,13 +47,30 @@ import type {
   GeneratedSpriteManifest,
   SpriteCharacter,
 } from "../sprites/spriteManifest.js";
-import { defaultScene } from "../sprites/spriteManifest.js";
+import { SCENE_NONE } from "../sprites/spriteManifest.js";
+import {
+  resolveTileScene,
+  paintSceneBackdrop,
+  sceneKeyOf,
+  type ResolvedTileScene,
+} from "../sprites/sceneBackdrop.js";
+import { GENERATED_SPRITE_MANIFEST } from "../sprites/generatedManifest.js";
 import {
   createSpriteBox,
   type PlaybackOverride,
   type SpriteBoxHandle,
 } from "../sprites/spritePlayer.js";
 import { ACTIVE_READ } from "../sprites/posePicker.js";
+
+/**
+ * The draft scene value the tuner picker holds (scene-per-pose 86ca88nvd, spec
+ * §1.5). Drives the preview backdrop INDEPENDENTLY of the playback draft:
+ *   - a scene id string → paint that scene (the explicit per-target choice).
+ *   - the `"none"` sentinel → flat card (no backdrop here).
+ *   - `undefined` (Inherit) → resolve through the cascade (`resolveSceneId`) and
+ *     paint the inherited scene (or flat card if it resolves to none).
+ */
+export type DraftSceneId = string | undefined;
 
 /** The pose-forcing inputs to `createSpriteBox` for a given (char, anim). */
 export interface PreviewPoseInputs {
@@ -121,6 +138,14 @@ export interface PreviewControllerProps {
   manifest?: GeneratedSpriteManifest;
   /** The current draft override (the live slider/dropdown values). */
   draftOverride: PlaybackOverride;
+  /**
+   * The current DRAFT SCENE value (scene-per-pose 86ca88nvd, spec §1.5). Drives
+   * the preview backdrop live from the picker draft (a scene id → that backdrop;
+   * `"none"` → flat card; `undefined` = Inherit → cascade-resolve). Absent → the
+   * inherited cascade scene (Inherit), so a tuner that never sets the picker
+   * matches the dashboard tile's resolved backdrop.
+   */
+  draftSceneId?: DraftSceneId;
   /** Timer scheduler injection (tests — deterministic stepping). */
   scheduleFrame?: (cb: () => void, ms: number) => number;
   /** Timer canceller injection (tests). */
@@ -156,10 +181,24 @@ export interface PreviewController {
     animName: string,
     draftOverride: PlaybackOverride,
   ): void;
+  /**
+   * Re-paint ONLY the backdrop from a new draft scene value (scene-per-pose
+   * 86ca88nvd, spec §1.5) WITHOUT rebuilding the sprite box — the backdrop swaps
+   * the moment the picker changes, crossfading (spec §1.5 / §3) when the resolved
+   * backdrop differs. `animName` is the pose the backdrop's Inherit-cascade
+   * resolves against (the current selected anim). Pass `undefined` for Inherit.
+   */
+  setScene(draftSceneId: DraftSceneId, animName: string): void;
   /** The canonical pose name the current box is playing (for tests / a11y). */
   pose(): string;
   /** Whether the current box rendered a sprite (false when no frames / no base). */
   hasSprite(): boolean;
+  /**
+   * The resolved backdrop KEY the preview currently paints (scene id, or `"none"`
+   * / `""` for the flat-card cases). For tests + the tuner's effective-source
+   * line cross-check.
+   */
+  sceneKey(): string;
   /** Stop the running timer + tear down (call when the panel closes). */
   dispose(): void;
 }
@@ -172,39 +211,90 @@ export interface PreviewController {
 export function createPreviewController(
   props: PreviewControllerProps,
 ): PreviewController {
-  const { spriteBaseUri, manifest, scheduleFrame, cancelFrame, rng, onLoopComplete } =
+  const { spriteBaseUri, scheduleFrame, cancelFrame, rng, onLoopComplete } =
     props;
+  const manifest = props.manifest ?? GENERATED_SPRITE_MANIFEST;
 
   const wrapper = document.createElement("div");
   wrapper.className = "ct-tuner-preview-box";
 
-  // ── Scene backdrop over the preview (ticket 86ca4atwt §B.1) ────────────────
-  // Paint the SAME shared `defaultScene` the dashboard tile paints (agentTile.ts
-  // §FIRM), so the sponsor reviews each pose IN CONTEXT over the room. Reuse the
-  // EXISTING tile vocabulary verbatim — `data-scene-bg` attribute + `--ct-scene-url`
-  // custom prop, with the identical base/image normalization (Iris §B.1). The new
-  // `.ct-tuner-preview-box[data-scene-bg]` CSS rule (dashboard.css) paints it; the
-  // dashboard tile's `.agent-tile[data-scene-bg]` rule is NOT overloaded.
-  //
-  // Degrade path (Iris §B.1, mirrors §FIRM.3): set NEITHER attribute when
-  //   - `defaultScene()` returns null (manifest has no scene registry), OR
-  //   - `spriteBaseUri` is absent (browser-dev / no host — the scene image, like
-  //     sprite frames, only resolves through the host's `asWebviewUri`),
-  // so the preview keeps today's bare box with no broken bg-image.
-  const scene = defaultScene(manifest);
-  if (scene !== null && spriteBaseUri !== undefined && spriteBaseUri !== "") {
-    const sceneBase = spriteBaseUri.replace(/\/+$/, "");
-    const sceneImage = scene.image.replace(/^\/+/, "");
-    wrapper.dataset.sceneBg = "";
-    wrapper.style.setProperty(
-      "--ct-scene-url",
-      `url('${sceneBase}/${sceneImage}')`,
-    );
-  }
+  // ── Scene backdrop over the preview (scene-per-pose 86ca88nvd · spec §1.5) ──
+  // The preview paints the backdrop the sponsor is choosing, IN CONTEXT behind
+  // the sprite, using the SAME `paintSceneBackdrop` helper + LOCKED vocabulary
+  // (`data-scene-bg` + `--ct-scene-url`) the dashboard tile uses. Unlike the
+  // dashboard tile (which always cascade-resolves), the preview tracks the picker
+  // DRAFT (§1.5): a scene id → that backdrop; `"none"` → flat card; `undefined`
+  // (Inherit) → cascade-resolve through `resolveSceneId`. A draft change crossfades
+  // (the §3 cross-dissolve) so the sponsor previews the transition feel, not just
+  // the end state. The tracked `currentSceneKey` is the prior key for that diff.
+  let currentSceneKey: string | undefined;
+
+  /**
+   * Resolve the preview backdrop for a draft scene value + anim (§1.5). For an
+   * explicit scene id / `"none"` the draft answers directly; for Inherit
+   * (`undefined`) it cascade-resolves via `resolveTileScene`. Returns the same
+   * `ResolvedTileScene` shape `paintSceneBackdrop` consumes.
+   */
+  const resolveDraftScene = (
+    draftSceneId: DraftSceneId,
+    animName: string,
+    char: SpriteCharacter,
+  ): ResolvedTileScene => {
+    if (draftSceneId === SCENE_NONE) {
+      // Explicit None → flat card (no backdrop here).
+      return { kind: "none", id: SCENE_NONE };
+    }
+    if (draftSceneId !== undefined) {
+      // An explicit scene id — resolve it as if it were the per-char layer value.
+      // `resolveTileScene` validates against the registry (dangling → flat) +
+      // builds the base-prefixed url. We borrow it by overlaying the id onto a
+      // synthetic per-char block so the SAME validation/url path runs.
+      return resolveTileScene(char.character, animName, spriteBaseUri, {
+        ...manifest,
+        characters: {
+          ...manifest.characters,
+          [char.character]: {
+            ...manifest.characters[char.character],
+            scenes: {
+              ...manifest.characters[char.character]?.scenes,
+              [animName]: draftSceneId,
+            },
+          },
+        },
+      } as GeneratedSpriteManifest);
+    }
+    // Inherit → cascade-resolve from the real manifest for this (char, anim).
+    return resolveTileScene(char.character, animName, spriteBaseUri, manifest);
+  };
+
+  /**
+   * Paint the backdrop for the draft + anim onto the wrapper, crossfading from
+   * the prior key. Updates `currentSceneKey` so the next paint diffs against it.
+   */
+  const repaintScene = (
+    draftSceneId: DraftSceneId,
+    animName: string,
+    char: SpriteCharacter,
+  ): void => {
+    const resolved = resolveDraftScene(draftSceneId, animName, char);
+    paintSceneBackdrop(wrapper, resolved, {
+      // §5.4: the tuner preview ALWAYS animates (reduced-motion overridden in
+      // CSS for this selector), so the crossfade always reads on a draft change.
+      ...(currentSceneKey !== undefined ? { priorSceneKey: currentSceneKey } : {}),
+    });
+    currentSceneKey = sceneKeyOf(resolved);
+  };
 
   let handle: SpriteBoxHandle | null = null;
   let currentPose = "";
   let currentHasSprite = false;
+  // The current char key the preview is bound to — so `setScene` (which does NOT
+  // pass a char) can re-resolve the backdrop for the live character selection.
+  let currentCharKey = props.char.character;
+  // The draft scene the preview is currently showing (Inherit when undefined) —
+  // remembered so a sprite rebuild (`build`) keeps the chosen backdrop, and a
+  // `setScene` picker change diffs/crossfades against the live value.
+  let currentDraftSceneId: DraftSceneId = props.draftSceneId;
 
   const build = (
     char: SpriteCharacter,
@@ -213,7 +303,12 @@ export function createPreviewController(
   ): void => {
     // Dispose the running box first (§5.1 step 1) — stops its timer.
     handle?.dispose();
+    // The scene paint lives on the WRAPPER (attribute + custom prop), so
+    // `replaceChildren` (which clears the sprite <img>) leaves it intact — but
+    // re-resolve + repaint AFTER so a pose change that changes the inherited
+    // backdrop crossfades. The picker draft is preserved (`currentDraftSceneId`).
     wrapper.replaceChildren();
+    currentCharKey = char.character;
 
     const pose = derivePreviewPose(char, animName);
     handle = createSpriteBox({
@@ -243,6 +338,9 @@ export function createPreviewController(
     // presence is the reliable has-frames signal (spritePlayer.ts:380).
     currentHasSprite = handle.element.dataset.pose !== undefined;
     wrapper.appendChild(handle.element);
+    // Repaint the backdrop for the (possibly new) pose under the current draft —
+    // Inherit re-resolves the cascade for the new anim, an explicit pick stays.
+    repaintScene(currentDraftSceneId, animName, char);
   };
 
   build(props.char, props.animName, props.draftOverride);
@@ -251,8 +349,16 @@ export function createPreviewController(
     element: wrapper,
     update: (char, animName, draftOverride) =>
       build(char, animName, draftOverride),
+    setScene: (draftSceneId, animName) => {
+      currentDraftSceneId = draftSceneId;
+      // Backdrop-only: do NOT rebuild the sprite box (a picker change must not
+      // restart the loop). The crossfade fires when the resolved key differs.
+      const char = manifest.characters[currentCharKey];
+      if (char) repaintScene(draftSceneId, animName, char);
+    },
     pose: () => currentPose,
     hasSprite: () => currentHasSprite,
+    sceneKey: () => currentSceneKey ?? "",
     dispose: () => {
       handle?.dispose();
       handle = null;

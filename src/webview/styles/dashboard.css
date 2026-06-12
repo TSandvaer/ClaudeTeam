@@ -215,6 +215,15 @@
   --ct-scene-chip: rgba(236, 239, 241, 0.92);
   --ct-scene-chip-hover: rgba(225, 228, 230, 0.94);
   --ct-scene-anchor-y: bottom;
+  /* Scene-per-pose crossfade (86ca88nvd · spec §3.2 / §8 — LOCKED defaults,
+   * render-tunable). When a pose→pose change flips the resolved backdrop (e.g.
+   * work↔idle flipping none↔room3), the backdrop cross-dissolves over
+   * --ct-scene-crossfade-ms with the ease-in-out curve instead of hard-cutting.
+   * Opacity-only (background-image is not animatable) → no theme remap; the scene
+   * + scrim stay theme-independent (§FIRM.3). Tune these two tokens to adjust the
+   * dissolve feel with zero re-spec (sponsor feel-gate). */
+  --ct-scene-crossfade-ms: 200ms;
+  --ct-scene-crossfade-ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ===========================================================================
@@ -547,6 +556,57 @@ body {
   background-position: center var(--ct-scene-anchor-y);
   background-repeat: no-repeat;
   image-rendering: pixelated;
+}
+
+/* Scene crossfade (scene-per-pose 86ca88nvd · spec §3) — pose→pose backdrop
+ * cross-dissolve. The dashboard tile is REBUILT each poll tick, so the component
+ * threads the PRIOR render's scene key (via the spriteTracker) and stamps
+ * `data-scene-transition="cross"` on the fresh tile ONLY when the resolved
+ * backdrop CHANGED. The new backdrop then fades IN over --ct-scene-crossfade-ms
+ * (a §FIRM-compatible dissolve — `background-image` is not animatable, so the
+ * fade rides a dedicated `::before` overlay carrying the same --ct-scene-url; the
+ * article's own background-image is the steady-state end frame underneath). A
+ * pose change that did NOT change the backdrop sets no attribute → no flicker
+ * (spec §3.1 "no change" row). For a scene→none change the fresh tile has no
+ * `data-scene-bg`, so this overlay is absent and the flat card simply shows
+ * (the dissolve is carried by the OUTGOING tile's last paint going away).
+ *
+ * The overlay is a sibling paint UNDER the content (z-index 0; content children
+ * are lifted to z-index 1 by the existing rule), pointer-events:none so it never
+ * steals the tile click. */
+.agent-tile[data-has-sprite="true"][data-scene-bg][data-scene-transition="cross"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--ct-scene-url);
+  background-size: cover;
+  background-position: center var(--ct-scene-anchor-y);
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  animation: ct-scene-crossfade-in var(--ct-scene-crossfade-ms)
+    var(--ct-scene-crossfade-ease) both;
+}
+
+@keyframes ct-scene-crossfade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Reduced-motion: hard cut (spec §3.2) — the dashboard tiles honor
+ * prefers-reduced-motion, so suppress the dissolve overlay entirely (the
+ * steady-state background-image already shows the correct backdrop). */
+@media (prefers-reduced-motion: reduce) {
+  .agent-tile[data-has-sprite="true"][data-scene-bg][data-scene-transition="cross"]::before {
+    animation: none;
+    display: none;
+  }
 }
 
 /* Per-label chips (86ca3kyzq) — EVERY meta label on a scene tile gets its own
@@ -2352,6 +2412,8 @@ body {
 .ct-tuner-preview-host,
 .ct-tuner-preview-box {
   flex: 0 0 auto;
+  /* Positioning context for the scene-crossfade ::before overlay (86ca88nvd §3). */
+  position: relative;
 }
 
 /* Tuner preview-over-room (ticket 86ca4atwt §B.1). A PARALLEL rule to the tile's
@@ -2371,6 +2433,28 @@ body {
   background-position: center var(--ct-scene-anchor-y);
   background-repeat: no-repeat;
   image-rendering: pixelated;
+}
+
+/* Preview scene crossfade (scene-per-pose 86ca88nvd · spec §1.5 / §3). The
+ * preview controller stamps `data-scene-transition="cross"` on the box when the
+ * draft scene change flips the resolved backdrop, so the new backdrop fades IN —
+ * the sponsor previews the §3 cross-dissolve FEEL, not just the end state. §5.4:
+ * the tuner preview ALWAYS animates (it OVERRIDES reduced-motion — the sponsor
+ * opened the tuner specifically to watch motion), so this rule is NOT suppressed
+ * under prefers-reduced-motion (deliberately scoped, unlike the dashboard tile). */
+.ct-tuner-preview-box[data-scene-bg][data-scene-transition="cross"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--ct-scene-url);
+  background-size: cover;
+  background-position: center var(--ct-scene-anchor-y);
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 0;
+  animation: ct-scene-crossfade-in var(--ct-scene-crossfade-ms)
+    var(--ct-scene-crossfade-ease) both;
 }
 .ct-tuner-preview-note {
   flex: 1 1 100%;
@@ -2560,7 +2644,15 @@ body {
 /* Shadowing warning — flex + [hidden]-toggled -> MANDATORY [hidden] guard
  * (mirrors .ct-manage-orphan-confirm[hidden]). The author display:flex beats the
  * UA [hidden]{display:none}, so the warning would render OPEN without this. */
-.ct-tuner-shadow-warning {
+/* Both the playback (§3.7) and the scene (86ca88nvd §1.3) shadowing warnings
+ * share this warning treatment + the mandatory [hidden] guard (the elements are
+ * `hidden`-toggled AND declare `display:flex`, so an author display rule needs
+ * the explicit `[hidden]{display:none}` or jsdom-green-but-visually-open). The
+ * scene warning carries its OWN primary class (`ct-tuner-scene-shadow`, NOT
+ * `ct-tuner-shadow-warning`) so existing selectors that find the playback warning
+ * keep working — hence both selectors here. */
+.ct-tuner-shadow-warning,
+.ct-tuner-scene-shadow {
   display: flex;
   align-items: center;
   gap: var(--ct-space-s);
@@ -2576,8 +2668,32 @@ body {
     var(--vscode-inputValidation-warningBorder, var(--ct-color-border));
   font-size: smaller;
 }
-.ct-tuner-shadow-warning[hidden] {
+.ct-tuner-shadow-warning[hidden],
+.ct-tuner-scene-shadow[hidden] {
   display: none;
+}
+
+/* Scene picker row (scene-per-pose 86ca88nvd · spec §1). The <select> reuses the
+ * themed `.ct-tuner-select` dropdown styling; this lays the Backdrop field +
+ * [reset] on a row and styles the effective-source line (the scene-row analogue
+ * of the cascade source table). Theme-aware: --vscode-* tokens only (spec §8). */
+.ct-tuner-scene {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-xs);
+}
+.ct-tuner-scene-field {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-s);
+}
+.ct-tuner-scene-field .ct-tuner-scene-select {
+  flex: 1 1 auto;
+}
+.ct-tuner-scene-source {
+  margin: 0;
+  color: var(--vscode-descriptionForeground, var(--ct-color-fg-muted));
+  font-size: smaller;
 }
 .ct-tuner-banner {
   padding: var(--ct-space-s) var(--ct-space-m);

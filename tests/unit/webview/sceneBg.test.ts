@@ -126,16 +126,18 @@ describe("scene-bg — PRESENT (manifest carries a scene)", () => {
   });
 });
 
-describe("scene-bg — ABSENT (degrade path §FIRM.3 — defaultScene null)", () => {
+describe("scene-bg — ABSENT (degrade path §FIRM.3 — resolveSceneId null)", () => {
   it("tile sets NEITHER data-scene-bg NOR --ct-scene-url when no scene resolves", async () => {
-    // Mock ONLY defaultScene → null; keep spriteForMember real so the tile
-    // still renders its sprite (the degrade is "scene absent", not "sprite
-    // absent"). This reproduces a baked manifest with no `scenes` registry.
+    // Mock the scene CASCADE → null (scene-per-pose 86ca88nvd: the tile now
+    // resolves `resolveSceneId(char, pose)` via `sceneBackdrop`, not the old
+    // `defaultScene`). `resolveSceneId` returning null reproduces a baked manifest
+    // with no `scenes` registry → flat card. Keep spriteForMember real so the tile
+    // still renders its sprite (the degrade is "scene absent", not "sprite absent").
     vi.doMock("../../../src/webview/sprites/spriteManifest.js", async () => {
       const actual = await vi.importActual<
         typeof import("../../../src/webview/sprites/spriteManifest.js")
       >("../../../src/webview/sprites/spriteManifest.js");
-      return { ...actual, defaultScene: () => null };
+      return { ...actual, resolveSceneId: () => null };
     });
     const { renderAgentTile } = await import(
       "../../../src/webview/components/agentTile.js"
@@ -228,12 +230,49 @@ describe("scene-bg — MULTI-AGENT collapsed persona header gets the same wiring
     };
   }
 
-  it("sets data-scene-bg + --ct-scene-url on the persona header tile", async () => {
+  it("an active_work header OMITS data-scene-bg + --ct-scene-url (flat card — desk-clash fix, DECISIONS 2026-06-12 #8)", async () => {
+    // The default `multiTile()` aggregates `running` + `tool:Edit` → the header
+    // pose is `active_work`, which now resolves to the `"none"` sentinel via the
+    // seeded `sceneDefaults: { active_work: "none", active_read: "none" }`
+    // (DECISIONS.md § "2026-06-12 — Scene-per-pose-per-character feature: 8 locked
+    // decisions" #8 — the desk-clash fix ships ON by default; desk/work poses
+    // render a FLAT card so the room backdrop never doubles the baked desk).
+    // So the sprite still renders, but the scene block is OMITTED (degrade path).
     const { renderMultiAgentPersonaTile } = await import(
       "../../../src/webview/components/multiAgentPersonaTile.js"
     );
     const el = renderMultiAgentPersonaTile({
       tile: multiTile(),
+      sessionId: "s1",
+      postMessage: () => undefined,
+      spriteBaseUri: BASE,
+    });
+    // Sprite still renders (the degrade is scene-only, not sprite-absent).
+    expect(el.dataset.hasSprite).toBe("true");
+    // active_work → scene "none" → flat card: NEITHER attribute set.
+    expect(el.hasAttribute("data-scene-bg")).toBe(false);
+    expect(el.style.getPropertyValue("--ct-scene-url")).toBe("");
+    // And the flat-card header carries NO chip markers (chips only on scene tiles).
+    expect(el.querySelectorAll(".ct-scene-chip").length).toBe(0);
+  });
+
+  it("an IDLE-aggregate header resolves room3 + sets data-scene-bg (seed split: idles inherit room3)", async () => {
+    // The companion to the omit test above: with the SAME seed present, an idle
+    // aggregate (no `sceneDefaults` entry for the idle pose) falls through to the
+    // registry `defaultSceneId` (room3) and DOES paint the scene. This fences the
+    // intended split from decision #8 — active poses go flat, idles keep room3.
+    const { renderMultiAgentPersonaTile } = await import(
+      "../../../src/webview/components/multiAgentPersonaTile.js"
+    );
+    const el = renderMultiAgentPersonaTile({
+      tile: multiTile({
+        aggregateState: "idle",
+        headlineActivity: "idle 5s",
+        instances: [
+          inst({ agentId: "a1", state: "idle", activity: "idle 5s" }),
+          inst({ agentId: "a2", state: "idle", activity: "idle 9s" }),
+        ],
+      }),
       sessionId: "s1",
       postMessage: () => undefined,
       spriteBaseUri: BASE,
@@ -250,15 +289,28 @@ describe("scene-bg — MULTI-AGENT collapsed persona header gets the same wiring
       "../../../src/webview/components/multiAgentPersonaTile.js"
     );
     const el = renderMultiAgentPersonaTile({
+      // Re-fixtured to an IDLE aggregate (DECISIONS 2026-06-12 #8): chips only
+      // paint when a scene resolves, and active_work/active_read now degrade to
+      // the flat "none" card. An idle aggregate inherits room3 (the seed leaves
+      // idle poses unset → falls through to defaultSceneId), so the scene resolves
+      // and the per-label chips paint — preserving this test's original intent.
       // Non-sentinel headline model + activity so both rows render + chip.
       tile: multiTile({
-        headlineActivity: "tool:Edit",
+        aggregateState: "idle",
+        headlineActivity: "idle 5s",
         headlineModel: "claude-opus-4-8",
+        instances: [
+          inst({ agentId: "a1", state: "idle", activity: "idle 5s" }),
+          inst({ agentId: "a2", state: "idle", activity: "idle 9s" }),
+        ],
       }),
       sessionId: "s1",
       postMessage: () => undefined,
       spriteBaseUri: BASE,
     });
+    // Precondition: the idle aggregate actually resolved a scene (else the chip
+    // assertions below would be vacuously false for the wrong reason).
+    expect(el.hasAttribute("data-scene-bg")).toBe(true);
     expect(el.querySelector(".agent-display")!.classList.contains("ct-scene-chip")).toBe(true);
     expect(el.querySelector(".agent-role")!.classList.contains("ct-scene-chip")).toBe(true);
     expect(el.querySelector(".agent-model")!.classList.contains("ct-scene-chip")).toBe(true);

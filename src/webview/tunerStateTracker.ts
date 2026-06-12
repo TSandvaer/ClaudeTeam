@@ -66,6 +66,13 @@ export interface TunerSessionState {
   /** Draft override — ONLY the SET fields (field-omission == clear, §4.1). */
   draftOverride: PlaybackOverride;
   writeTarget: "per-char" | "pose-default";
+  /**
+   * Draft SCENE value (scene-per-pose 86ca88nvd, spec §1) — the picker's current
+   * choice: a scene id, the `"none"` sentinel, or `undefined` (Inherit / unset).
+   * Persisted so the picker selection survives the poll-tick re-render exactly
+   * like the playback draft. `undefined` = Inherit (the field is cleared).
+   */
+  draftSceneId?: string | undefined;
 }
 
 /** Public surface of the tracker — single instance per webview boot. */
@@ -103,6 +110,9 @@ export function createTunerStateTracker(): TunerStateTracker {
         selectedAnim: state.selectedAnim,
         draftOverride: { ...state.draftOverride },
         writeTarget: state.writeTarget,
+        ...(state.draftSceneId !== undefined
+          ? { draftSceneId: state.draftSceneId }
+          : {}),
       };
     },
 
@@ -112,6 +122,9 @@ export function createTunerStateTracker(): TunerStateTracker {
         selectedAnim: next.selectedAnim,
         draftOverride: { ...next.draftOverride },
         writeTarget: next.writeTarget,
+        ...(next.draftSceneId !== undefined
+          ? { draftSceneId: next.draftSceneId }
+          : {}),
       };
     },
 

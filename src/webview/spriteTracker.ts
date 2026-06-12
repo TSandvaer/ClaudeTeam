@@ -42,6 +42,15 @@ interface SpriteEntry {
   dispose: () => void;
   /** Canonical pose the prior box played (for resume pose-match guard). */
   pose: string;
+  /**
+   * The resolved scene KEY the prior render painted (scene-per-pose 86ca88nvd) —
+   * the scene id, or the literal `"none"` / `""` flat-card keys (see
+   * `sceneKeyOf`). Threaded into the next render so a pose→pose backdrop CHANGE
+   * cross-dissolves across the ~2s poll tick instead of hard-cutting, and an
+   * UNCHANGED backdrop does not flicker (spec §3.1). Absent on a tile that
+   * resolved no scene this render.
+   */
+  sceneKey?: string;
   /** Reads the prior box's live playback position at re-render time. */
   currentFrame: () => { frameIdx: number; direction: number; elapsedMs: number };
 }
@@ -95,9 +104,18 @@ export interface SpriteTracker {
    */
   priorPlayback(sessionId: string, memberId: string): PriorPlayback | undefined;
   /**
+   * The resolved scene KEY the prior render painted for this member
+   * (scene-per-pose 86ca88nvd). Threaded into the next render's
+   * `paintSceneBackdrop` so a pose→pose backdrop CHANGE cross-dissolves and an
+   * unchanged backdrop doesn't flicker. `undefined` when there is no prior box
+   * (first render → no crossfade, mirroring the state-transition first-render
+   * rule).
+   */
+  priorSceneKey(sessionId: string, memberId: string): string | undefined;
+  /**
    * Register the freshly-rendered sprite handle. Disposes any prior handle's
    * timer for this key first (prevents detached-img timer leaks), then stores
-   * the new pick / active flag / pose / position-reader / disposer.
+   * the new pick / active flag / pose / scene key / position-reader / disposer.
    */
   register(
     sessionId: string,
@@ -110,6 +128,7 @@ export interface SpriteTracker {
       isActive: boolean;
       dispose: () => void;
       pose: string;
+      sceneKey?: string;
       currentFrame: () => { frameIdx: number; direction: number; elapsedMs: number };
     },
   ): void;
@@ -152,6 +171,10 @@ export function createSpriteTracker(): SpriteTracker {
       if (!e) return undefined;
       const { frameIdx, direction, elapsedMs } = e.currentFrame();
       return { pose: e.pose, frameIdx, direction, elapsedMs };
+    },
+    priorSceneKey(sessionId, memberId) {
+      const e = entries.get(`${sessionId}:${memberId}`);
+      return e ? e.sceneKey : undefined;
     },
     register(sessionId, memberId, entry) {
       const key: SpriteKey = `${sessionId}:${memberId}`;
