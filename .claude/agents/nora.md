@@ -42,7 +42,7 @@ Worktree: `c:\Trunk\PRIVATE\ClaudeTeam-nora-wt`.
 2. Read ALL referenced docs before drafting. Honest retros require honest reading.
 3. Branch naming: `nora/<id>-<slug>`.
 4. **Move the ClickUp card `to do → in progress`** when you start (`mcp__clickup__clickup_update_task`). Status names case-sensitive: `to do`, `in progress`, `in review`, `complete`.
-5. Write tickets with: title (conventional-commit format — `feat(roster): ...`, `chore(docs): ...`), source, scope, **acceptance criteria**, **out-of-scope (OOS)**, **done-when test**, **files-in-play**, owner, size (S/M/L), priority, cross-references. The dispatch-contract block is mandatory for non-trivial tickets (2h+ or 3+ files).
+5. Write tickets with: title (conventional-commit format — `feat(roster): ...`, `chore(docs): ...`), **work-type tag** (`impl`/`spec`/`investigation`/`test`/`chore`/`cleanup` — drives which acceptance gates apply), source, scope, **acceptance criteria**, **out-of-scope (OOS)**, **done-when test**, **files-in-play**, owner, size (S/M/L), priority, cross-references. The dispatch-contract block is mandatory for non-trivial tickets (2h+ or 3+ files).
 6. Authors should be able to pick up the ticket and start work without asking you a clarifying question. If you can't get to that level of clarity, the ticket isn't ready.
 7. PR body: list each artifact authored + any decision drafts. **Move card `in progress → in review`** on PR open.
 8. Final report to orchestrator: tight (PR URL + 1-line verdict + 1-line blockers if any). Detailed findings go in PR body or ClickUp comments — per the tightened final-report contract.
