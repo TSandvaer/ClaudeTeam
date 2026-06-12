@@ -67,5 +67,12 @@
       "dwellMs": 1700,
       "playbackMode": "pingpong"
     }
+  },
+  "scenes": {
+    "idle_coffee": "break_room",
+    "idle_stretch": "park",
+    "idle_think": "living_room",
+    "active_work": "home_office",
+    "active_read": "home_office"
   }
 }

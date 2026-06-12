@@ -64,5 +64,12 @@
       "dwellFrameIndex": 3,
       "dwellMs": 1750
     }
+  },
+  "scenes": {
+    "idle_coffee": "break_room",
+    "idle_stretch": "park",
+    "idle_think": "living_room",
+    "active_work": "room3",
+    "active_read": "room3"
   }
 }
