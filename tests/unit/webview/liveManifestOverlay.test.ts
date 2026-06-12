@@ -148,6 +148,71 @@ describe("liveManifestOverlay", () => {
     ).toEqual({ speedMultiplier: 3 });
   });
 
+  // 86ca5eve1 Phase-2 (apex pair through the store) — the apex-hold pair
+  // (dwellFrameIndex/dwellMs) IS in liveManifestOverlay's TUNABLE_KEYS, but no
+  // store test exercised it (only speed/hold/mode did). A regression that drops
+  // the apex keys from the overlay's TUNABLE_KEYS would silently make the tuner's
+  // apex re-seed read the stale baked value after an in-session apex save — the
+  // exact stale-manifest class this overlay exists to prevent (spec §12.4 +
+  // vscode-extension-conventions.md § "baked sprite manifest is a LOAD-TIME
+  // snapshot"). NON-VACUOUS: removing "dwellFrameIndex"/"dwellMs" from
+  // liveManifestOverlay.TUNABLE_KEYS fails these (the recorded apex never lands
+  // on / never clears from the overlaid block).
+  it("overlays a per-char APEX-pair save onto the matching anim's playback block (86ca5eve1)", () => {
+    const overlay = createLiveManifestOverlay();
+    // idle_coffee starts with NO playback block — a pure apex save must create it.
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { dwellFrameIndex: 1, dwellMs: 2000 },
+    });
+    expect(
+      overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"].animations
+        .idle_coffee.playback,
+    ).toEqual({ dwellFrameIndex: 1, dwellMs: 2000 });
+  });
+
+  it("CLEARS the apex pair from a block when a later save omits it (field-omission == clear, apex) (86ca5eve1)", () => {
+    const overlay = createLiveManifestOverlay();
+    // First save sets speed + an apex pair on idle_coffee.
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { speedMultiplier: 1.5, dwellFrameIndex: 0, dwellMs: 800 },
+    });
+    // Second save (last-write-wins) keeps speed but OMITS the apex pair — the
+    // "Off" branch in the tuner. The overlaid block must drop both apex keys,
+    // mirroring the host writer's mergePlaybackEntry clear-absent behavior.
+    overlay.record({
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { speedMultiplier: 1.5 },
+    });
+    expect(
+      overlay.apply(baked()).characters["ClaudeTeam-M01-Dev"].animations
+        .idle_coffee.playback,
+    ).toEqual({ speedMultiplier: 1.5 });
+  });
+
+  it("overlays a pose-default APEX-pair save onto poseDefaults[anim] (86ca5eve1)", () => {
+    const overlay = createLiveManifestOverlay();
+    overlay.record({
+      writeTarget: "pose-default",
+      animName: "idle_stretch",
+      override: { dwellFrameIndex: 2, dwellMs: 1500 },
+    });
+    // The baked pose-default for idle_stretch is { playbackMode: "pingpong" };
+    // an apex pose-default save clears playbackMode (absent tunable key) and sets
+    // the apex pair (last-write-wins, full field-level merge).
+    expect(overlay.apply(baked()).poseDefaults?.idle_stretch).toEqual({
+      dwellFrameIndex: 2,
+      dwellMs: 1500,
+    });
+  });
+
   it("does NOT mutate the baked manifest", () => {
     const overlay = createLiveManifestOverlay();
     const b = baked();

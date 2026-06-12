@@ -2069,4 +2069,70 @@ describe("86ca2wrnq — re-seed reflects in-session saves (stale-manifest re-see
       vi.useRealTimers();
     }
   });
+
+  // 86ca5eve1 Phase-2 (apex pair through the END-TO-END re-seed) — the
+  // 86ca2wrnq block above proves the overlay re-seed for the SPEED slider; the
+  // apex pair re-seeds through a DIFFERENT surface (`seedApexFromSource` →
+  // `populateApexFrames` → the apex <select>.value + apex-ms readout), so a
+  // regression isolated to the apex re-seed path (e.g. the overlay dropping the
+  // apex keys, or seedApexFromSource reading the baked manifest) would NOT be
+  // caught by the speed test. This drives the full save → ack → char-switch →
+  // switch-back cycle on the apex pair and asserts the picker shows the SAVED
+  // frame, not the stale baked "Off". NON-VACUOUS: dropping the apex keys from
+  // liveManifestOverlay.TUNABLE_KEYS — OR reverting the panel's effective
+  // `manifest = liveOverlay.apply(baked)` to read raw baked — re-seeds the
+  // picker to "" (Off), failing the picker.value assertion. Mirrors the
+  // stale-manifest re-seed class (vscode-extension-conventions.md § baked
+  // manifest LOAD-TIME snapshot); spec §12.4.
+  it("save M01 apex → switch to F01 → back to M01: the apex picker shows the SAVED frame (no rebuild) (86ca5eve1)", () => {
+    vi.useFakeTimers();
+    try {
+      const overlay = createLiveManifestOverlay();
+      const baked = fixtureManifest();
+      const { root, posted } = mount({
+        manifest: baked,
+        liveOverlay: overlay,
+        stateTracker: createTunerStateTracker(),
+      });
+      // M01/idle_stretch (3 frames, no window, no baked apex) → picker opens "Off".
+      const picker = () =>
+        q2<HTMLSelectElement>(root, ".ct-tuner-apex-frame");
+      const apexMsReadout = (): string =>
+        q2<HTMLElement>(root, ".ct-tuner-apex-ms .ct-tuner-control-readout")
+          .textContent ?? "";
+      expect(picker().value).toBe("");
+
+      // The sponsor tunes an apex hold: frame 2 + 2500 ms, debounced save fires.
+      picker().value = "2";
+      picker().dispatchEvent(new Event("change"));
+      const slider = q2<HTMLInputElement>(
+        root,
+        ".ct-tuner-apex-ms .ct-tuner-slider",
+      );
+      slider.value = "2500";
+      slider.dispatchEvent(new Event("input"));
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS + 1);
+      const save = lastSave(posted)!;
+      expect(save.payload.override.dwellFrameIndex).toBe(2);
+      expect(save.payload.override.dwellMs).toBe(2500);
+
+      // Host confirms → ack commits the apex pair into the overlay (same instance).
+      getTunerPanelHandle(root)!.applySaveAck({ ok: true });
+
+      // View F01, then switch BACK to M01 — same panel instance, no rebuild, no
+      // fresh manifest re-fed.
+      const charSel = q2<HTMLSelectElement>(root, ".ct-tuner-char-select");
+      charSel.value = "ClaudeTeam-F01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+      charSel.value = "ClaudeTeam-M01-Dev";
+      charSel.dispatchEvent(new Event("change"));
+
+      // LOAD-BEARING: the apex picker re-seeds to the SAVED frame 2 + 2500 ms,
+      // NOT the stale baked "Off". Reverting the overlay reads baked → "".
+      expect(picker().value).toBe("2");
+      expect(apexMsReadout()).toBe("2500 ms");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
