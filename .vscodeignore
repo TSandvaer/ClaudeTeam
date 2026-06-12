@@ -52,7 +52,12 @@ node_modules/
 .tmp*/**
 
 # Misc
+# Sourcemaps — the bare `*.map` glob only matches root-level maps; the `**/*.map`
+# form is required to exclude the nested dist/extension|webview|diagnostics maps
+# (vsce/minimatch evaluates each file path, and `*.map` alone does not match
+# `dist/webview/main.js.map`). Both forms kept for belt-and-suspenders (86ca5eu2d).
 *.map
+**/*.map
 .gitignore
 .gitkeep
 *.md

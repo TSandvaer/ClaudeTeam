@@ -557,8 +557,8 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // with `.sprite-frame { object-fit: contain }` they render smaller AND float
   // high (the big transparent bottom margin pushes the figure up). When the
   // character declares a `render` block, expose it as two CSS custom props on
-  // the box; `.sprite-frame`'s `transform` reads them (origin: center bottom →
-  // feet planted) to enlarge + re-anchor the figure to match the 68px chars.
+  // the box; `.sprite-frame`'s `transform` reads them (origin: center center,
+  // dashboard.css:701) to enlarge + re-anchor the figure to match the 68px chars.
   // Absent → props unset → the dashboard.css fallbacks (1 / 0%) → identity
   // transform → 68×68 chars render byte-identically (no regression). The values
   // are sponsor-tunable on reload via the manifest OR the :root fallback tokens.
