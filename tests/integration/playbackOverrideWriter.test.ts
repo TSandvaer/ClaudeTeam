@@ -25,6 +25,7 @@ import { tmpdir } from "node:os";
 import {
   savePlaybackOverride,
   mergePlaybackEntry,
+  mergeSceneEntry,
   resolvePlaybackTargetPath,
 } from "../../src/extension/sprites/playbackOverrideWriter.js";
 
@@ -468,6 +469,231 @@ describe("schema compatibility — written json round-trips through sanitizePlay
     const { playback, warnings } = sanitizePlayback("test/idle_coffee", written);
     expect(warnings).toEqual([]);
     expect(playback).toEqual({ dwellFrameIndex: 3, dwellMs: 2500 });
+  });
+});
+
+// ===========================================================================
+// mergeSceneEntry — pure scene set/clear (scene-per-pose 86ca88nvd §5.4)
+// ===========================================================================
+
+describe("mergeSceneEntry — scene set/clear (field-omission == clear)", () => {
+  it("returns the scene id when sceneId is present", () => {
+    expect(mergeSceneEntry({ sceneId: "room3" })).toBe("room3");
+  });
+
+  it('returns the literal "none" sentinel verbatim when present', () => {
+    expect(mergeSceneEntry({ sceneId: "none" })).toBe("none");
+  });
+
+  it("returns null when sceneId is ABSENT (clear → inherit)", () => {
+    expect(mergeSceneEntry({})).toBeNull();
+    // A playback-only override (no sceneId) clears the scene too.
+    expect(mergeSceneEntry({ speedMultiplier: 0.5 })).toBeNull();
+  });
+});
+
+// ===========================================================================
+// savePlaybackOverride — scene block persistence (scene-per-pose 86ca88nvd §5.1)
+//
+// NON-VACUOUS: each test asserts the on-disk `scenes` block (a SEPARATE top-level
+// block from `playback`). Reverting the scene write path makes the set tests fail
+// (no `scenes` key written); reverting clear-on-omit makes the clear tests fail
+// (the stale scene survives). The §5.4 parity with mergePlaybackEntry's set/clear
+// is the load-bearing contract the webview overlay (86ca88p45) must mirror.
+// ===========================================================================
+
+describe("savePlaybackOverride — scene block (per-char)", () => {
+  it('writes sceneId into a SEPARATE top-level "scenes" block, NOT the playback block', () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { active_work: "x" },
+      playback: {},
+    });
+    const res = savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "active_work",
+      override: { sceneId: "none" },
+    });
+    expect(res.ok).toBe(true);
+    const doc = readJson(path);
+    // The scene lands in `scenes`, keyed by anim — NOT in `playback`.
+    expect((doc.scenes as Record<string, unknown>).active_work).toBe("none");
+    // playback stays empty (sceneId is not a playback field).
+    expect("active_work" in (doc.playback as Record<string, unknown>)).toBe(false);
+  });
+
+  it("persists a real scene id and coexists with a playback field in one save", () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { idle_coffee: "y" },
+      playback: {},
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { sceneId: "room3", speedMultiplier: 0.5 },
+    });
+    const doc = readJson(path);
+    // Scene block AND playback block both updated for the same anim.
+    expect((doc.scenes as Record<string, unknown>).idle_coffee).toBe("room3");
+    expect((doc.playback as Record<string, unknown>).idle_coffee).toEqual({
+      speedMultiplier: 0.5,
+    });
+  });
+
+  it("CLEARS a stale scene (key absent from override) — none-vs-absent distinction", () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { active_work: "x", idle_coffee: "y" },
+      scenes: { active_work: "none", idle_coffee: "room3" },
+    });
+    // Save for active_work WITHOUT a sceneId → its scene key is cleared (inherit),
+    // while idle_coffee's scene is untouched (different anim).
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "active_work",
+      override: { speedMultiplier: 0.7 },
+    });
+    const scenes = readJson(path).scenes as Record<string, unknown>;
+    // active_work cleared (absent → inherit); idle_coffee preserved untouched.
+    expect("active_work" in scenes).toBe(false);
+    expect(scenes.idle_coffee).toBe("room3");
+  });
+
+  it('"none" (explicit flat card) is DISTINCT from absent (clear): "none" is written, absent deletes', () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { active_work: "x" },
+    });
+    // First save: explicit "none" → present in the file.
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "active_work",
+      override: { sceneId: "none" },
+    });
+    expect((readJson(path).scenes as Record<string, unknown>).active_work).toBe(
+      "none",
+    );
+    // Second save: omit sceneId → the key is DELETED (clear → inherit), not "none".
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "active_work",
+      override: {},
+    });
+    // The whole scenes block empties → dropped from the file entirely.
+    expect("scenes" in readJson(path)).toBe(false);
+  });
+
+  it("drops the whole scenes block when it empties (file stays byte-minimal)", () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { active_work: "x" },
+      scenes: { active_work: "none" },
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "active_work",
+      override: {}, // no sceneId → clear → block empties → dropped
+    });
+    expect("scenes" in readJson(path)).toBe(false);
+  });
+
+  it("does NOT touch OTHER anims' scene entries", () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { active_work: "x", active_read: "y" },
+      scenes: { active_work: "none", active_read: "none" },
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "active_work",
+      override: { sceneId: "room3" },
+    });
+    const scenes = readJson(path).scenes as Record<string, unknown>;
+    expect(scenes.active_work).toBe("room3");
+    // active_read's scene is preserved untouched (structured merge, not replace).
+    expect(scenes.active_read).toBe("none");
+  });
+});
+
+describe("savePlaybackOverride — scene block (pose-default)", () => {
+  it("writes the scene seed into pose-defaults.json's top-level scenes block", () => {
+    const path = seedPoseDefaults({ playback: {} });
+    const res = savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "pose-default",
+      animName: "active_work",
+      override: { sceneId: "none" },
+    });
+    expect(res.ok).toBe(true);
+    expect((readJson(path).scenes as Record<string, unknown>).active_work).toBe(
+      "none",
+    );
+  });
+
+  it("a scene save preserves the playback block + _note (structured merge)", () => {
+    const path = seedPoseDefaults({
+      _note: "shared pose defaults",
+      playback: { idle_stretch: { speedMultiplier: 0.5 } },
+      scenes: { active_read: "none" },
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "pose-default",
+      animName: "active_work",
+      override: { sceneId: "none" },
+    });
+    const doc = readJson(path);
+    // The new scene is added; the existing scene + playback + note all survive.
+    expect((doc.scenes as Record<string, unknown>).active_work).toBe("none");
+    expect((doc.scenes as Record<string, unknown>).active_read).toBe("none");
+    expect((doc.playback as Record<string, unknown>).idle_stretch).toEqual({
+      speedMultiplier: 0.5,
+    });
+    expect(doc._note).toBe("shared pose defaults");
+  });
+});
+
+describe("scene compatibility — written scenes block round-trips through sanitizeScenes", () => {
+  it("the written scene entries survive the build script's sanitizeScenes verbatim", async () => {
+    const path = seedAnimationsJson("ClaudeTeam-M01-Dev", {
+      animations: { active_work: "x", idle_coffee: "y" },
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "active_work",
+      override: { sceneId: "none" },
+    });
+    savePlaybackOverride({
+      workspaceFolderPath: ws,
+      writeTarget: "per-char",
+      characterFolder: "ClaudeTeam-M01-Dev",
+      animName: "idle_coffee",
+      override: { sceneId: "room3" },
+    });
+    const written = readJson(path).scenes;
+    // The build script reads the SAME schema; with room3 in the registry both
+    // values survive sanitizeScenes (no silent drop on rebuild).
+    const { sanitizeScenes } = await import(
+      "../../scripts/build-sprite-manifest.mjs"
+    );
+    const { scenes, warnings } = sanitizeScenes(
+      "ClaudeTeam-M01-Dev",
+      written,
+      new Set(["room3"]),
+    );
+    expect(warnings).toEqual([]);
+    expect(scenes).toEqual({ active_work: "none", idle_coffee: "room3" });
   });
 });
 

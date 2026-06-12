@@ -27,6 +27,7 @@ import {
   detectMisplacedPoseDefaults,
   resolveStaticImage,
   buildScenes,
+  sanitizeScenes,
 } from "../../../scripts/build-sprite-manifest.mjs";
 
 describe("parseAnimValue — folder/slug value-format (AC5)", () => {
@@ -392,5 +393,180 @@ describe("buildScenes — manifest scenes registry (scene-bg 86ca3kjyk)", () => 
   it("ignores non-PNG files while still building from the PNGs", () => {
     const { scenes } = buildScenes(["room3.png", "README.md", "thumbs.db"]);
     expect(Object.keys(scenes!.byId)).toEqual(["room3"]);
+  });
+});
+
+describe("sanitizeScenes — per-char + pose-default scene block (scene-per-pose 86ca88nvd §4.1)", () => {
+  const valid = new Set(["room3", "studio"]);
+
+  it("keeps a scene id present in the registry", () => {
+    const { scenes, warnings } = sanitizeScenes(
+      "ClaudeTeam-M01-Dev",
+      { idle_coffee: "room3" },
+      valid,
+    );
+    expect(scenes).toEqual({ idle_coffee: "room3" });
+    expect(warnings).toEqual([]);
+  });
+
+  it('always keeps the literal "none" sentinel (flat card), even with an empty registry', () => {
+    // "none" is valid regardless of the registry — it is the explicit flat-card
+    // STOP, not a scene id. This is the seed shape (§7).
+    const { scenes, warnings } = sanitizeScenes(
+      "pose-defaults",
+      { active_work: "none", active_read: "none" },
+      new Set(),
+    );
+    expect(scenes).toEqual({ active_work: "none", active_read: "none" });
+    expect(warnings).toEqual([]);
+  });
+
+  it("DROPS a dangling scene id (not in the registry) + warns (build-time degrade §4)", () => {
+    const { scenes, warnings } = sanitizeScenes(
+      "ClaudeTeam-M01-Dev",
+      { idle_coffee: "room3", idle_stretch: "ghost_room" },
+      valid,
+    );
+    // room3 survives; ghost_room dropped → the block keeps only the valid entry.
+    expect(scenes).toEqual({ idle_coffee: "room3" });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("ghost_room");
+    expect(warnings[0]).toContain("not found in registry");
+  });
+
+  it("drops a non-string value + warns (malformed)", () => {
+    const { scenes, warnings } = sanitizeScenes(
+      "pose-defaults",
+      { active_work: 7, idle_coffee: "room3" },
+      valid,
+    );
+    expect(scenes).toEqual({ idle_coffee: "room3" });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("active_work");
+    expect(warnings[0]).toContain("must be a string");
+  });
+
+  it("returns null scenes when EVERY value dropped (block omitted → no-scenes degrade)", () => {
+    const { scenes, warnings } = sanitizeScenes(
+      "ClaudeTeam-M01-Dev",
+      { idle_coffee: "ghost", idle_stretch: "phantom" },
+      valid,
+    );
+    expect(scenes).toBeNull();
+    expect(warnings).toHaveLength(2);
+  });
+
+  it("absent / null / empty block → null scenes, no warnings", () => {
+    expect(sanitizeScenes("x", undefined, valid)).toEqual({
+      scenes: null,
+      warnings: [],
+    });
+    expect(sanitizeScenes("x", null, valid)).toEqual({
+      scenes: null,
+      warnings: [],
+    });
+    expect(sanitizeScenes("x", {}, valid)).toEqual({
+      scenes: null,
+      warnings: [],
+    });
+  });
+
+  it("a non-object block (array / scalar) → null scenes + warn", () => {
+    const arr = sanitizeScenes("x", ["room3"], valid);
+    expect(arr.scenes).toBeNull();
+    expect(arr.warnings).toHaveLength(1);
+    expect(arr.warnings[0]).toContain("must be an object");
+
+    const scalar = sanitizeScenes("x", "room3", valid);
+    expect(scalar.scenes).toBeNull();
+    expect(scalar.warnings).toHaveLength(1);
+  });
+
+  it('with NO registry (empty validSceneIds), a real scene id drops but "none" survives', () => {
+    // The no-scenes-registry degrade (§4 "No scenes registry"): a seed that names
+    // a real room would dangle (no PNG), but the "none" desk-clash seed stays.
+    const { scenes, warnings } = sanitizeScenes(
+      "pose-defaults",
+      { active_work: "none", idle_coffee: "room3" },
+      new Set(),
+    );
+    expect(scenes).toEqual({ active_work: "none" });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("room3");
+  });
+});
+
+// ===========================================================================
+// Bake round-trip — registry validates the scene blocks (mirrors main()'s
+// ordering: buildScenes → validSceneIds → sanitizeScenes per-char + pose-default)
+// (scene-per-pose 86ca88nvd — manifest bake AC)
+// ===========================================================================
+describe("scene bake round-trip — registry validates per-char + pose-default blocks", () => {
+  // Reproduce the exact composition `main()` performs so the wiring (registry id
+  // set feeds both sanitize calls) is asserted end-to-end without a filesystem.
+  function bake(opts: {
+    sceneFiles: string[];
+    perChar?: unknown;
+    poseDefaultScenes?: unknown;
+  }) {
+    const { scenes } = buildScenes(opts.sceneFiles);
+    const validSceneIds = new Set(scenes !== null ? Object.keys(scenes.byId) : []);
+    const charBake = sanitizeScenes("M01", opts.perChar, validSceneIds);
+    const poseBake = sanitizeScenes(
+      "pose-defaults",
+      opts.poseDefaultScenes,
+      validSceneIds,
+    );
+    return {
+      scenes,
+      charScenes: charBake.scenes,
+      sceneDefaults: poseBake.scenes,
+      warnings: [...charBake.warnings, ...poseBake.warnings],
+    };
+  }
+
+  it("the SEED + a real registry: pose-default scenes bakes the desk-clash seed verbatim", () => {
+    const out = bake({
+      sceneFiles: ["room3.png"],
+      poseDefaultScenes: { active_work: "none", active_read: "none" },
+    });
+    // The seed (§7) round-trips: both desk poses → "none" (flat card).
+    expect(out.sceneDefaults).toEqual({ active_work: "none", active_read: "none" });
+    expect(out.warnings).toEqual([]);
+    // The registry still ships room3 (the inherited default for idles).
+    expect(out.scenes!.defaultSceneId).toBe("room3");
+  });
+
+  it("a per-char real scene id round-trips when its PNG is in the registry", () => {
+    const out = bake({
+      sceneFiles: ["room3.png", "studio.png"],
+      perChar: { idle_coffee: "studio", active_work: "none" },
+    });
+    expect(out.charScenes).toEqual({ idle_coffee: "studio", active_work: "none" });
+    expect(out.warnings).toEqual([]);
+  });
+
+  it("a per-char DANGLING id drops + warns; the valid sibling survives (drop+warn AC)", () => {
+    const out = bake({
+      sceneFiles: ["room3.png"], // studio.png is NOT shipped → studio dangles
+      perChar: { idle_coffee: "studio", idle_stretch: "room3" },
+    });
+    // Dangling "studio" dropped; "room3" (in registry) kept.
+    expect(out.charScenes).toEqual({ idle_stretch: "room3" });
+    expect(out.warnings).toHaveLength(1);
+    expect(out.warnings[0]).toContain("studio");
+    expect(out.warnings[0]).toContain("not found in registry");
+  });
+
+  it("NO registry at all → real ids dangle, only the seed's none survives (full degrade)", () => {
+    const out = bake({
+      sceneFiles: [], // no PNGs → manifest omits the registry
+      poseDefaultScenes: { active_work: "none", active_read: "none", idle_coffee: "room3" },
+    });
+    expect(out.scenes).toBeNull();
+    // none survives, room3 dangles (no registry).
+    expect(out.sceneDefaults).toEqual({ active_work: "none", active_read: "none" });
+    expect(out.warnings).toHaveLength(1);
+    expect(out.warnings[0]).toContain("room3");
   });
 });

@@ -119,3 +119,19 @@ export function buildScenes(fileNames: string[]): {
   scenes: { defaultSceneId: string; byId: Record<string, ResolvedScene> } | null;
   warnings: string[];
 };
+
+/**
+ * Sanitize a `scenes` block (per-char `animations.json` or `pose-defaults.json`)
+ * into the anim → scene-id table baked onto the manifest (scene-per-pose feature,
+ * 86ca88nvd — spec §4.1 / §5.1). Each value must be a string that is either the
+ * literal `"none"` sentinel (always valid — the flat-card STOP) OR a scene id in
+ * `validSceneIds`. Non-strings + dangling ids (not in the registry) are DROPPED +
+ * warned (mirroring `sanitizePlayback`'s drop-malformed-field policy); the dropped
+ * value falls through the cascade as if unset. Returns `null` scenes when nothing
+ * valid survives (the baked block is then OMITTED). Pure — no filesystem.
+ */
+export function sanitizeScenes(
+  label: string,
+  raw: unknown,
+  validSceneIds: Set<string>,
+): { scenes: Record<string, string> | null; warnings: string[] };
