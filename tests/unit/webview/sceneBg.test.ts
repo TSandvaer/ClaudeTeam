@@ -66,12 +66,46 @@ function tile(overrides: Partial<AgentTile> = {}): AgentTile {
 
 afterEach(() => {
   // doMock factories are NOT cleared by resetModules — unmock the manifest so
-  // the null-scene factory from the degrade test can't leak into later tests
-  // that need the real (scene-bearing) manifest.
+  // the null-scene / cascade factories from earlier tests can't leak into later
+  // tests that need the real (scene-bearing) manifest.
   vi.doUnmock("../../../src/webview/sprites/spriteManifest.js");
   vi.resetModules();
   vi.restoreAllMocks();
 });
+
+/**
+ * Inject a fixture scene CASCADE (mirrors sceneCascade.test.ts §mockSceneCascade)
+ * so a tile's `resolveSceneId(char, pose)` returns deterministic per-pose values
+ * INDEPENDENT of the live (sponsor-tuned) manifest — the PR #210 tuning-proof
+ * fixture-injection class. `resolveSceneId` is keyed on the played pose name
+ * (`byPose[pose]`, falling through `__any__`, else `room3`); `sceneForId` stays
+ * real-ish (a known room id → a scene with an image path; unknown → null) so
+ * `resolveTileScene` builds a url for real ids + degrades the `"none"`/dangling
+ * cases. This decouples the multi-agent header scene tests from the live
+ * maya→F01-Dev per-char `scenes` override (e.g. the sponsor's
+ * `active_work=home_office` tune), so they assert the SEED / floor cascade layer
+ * the test intends — not whatever the live per-char layer currently resolves.
+ */
+function mockSceneCascade(byPose: Record<string, string | null>): void {
+  vi.doMock("../../../src/webview/sprites/spriteManifest.js", async () => {
+    const actual = await vi.importActual<
+      typeof import("../../../src/webview/sprites/spriteManifest.js")
+    >("../../../src/webview/sprites/spriteManifest.js");
+    return {
+      ...actual,
+      resolveSceneId: (_char: string, anim: string) =>
+        anim in byPose
+          ? byPose[anim]
+          : "__any__" in byPose
+            ? byPose["__any__"]
+            : "room3",
+      sceneForId: (id: string) =>
+        id === "room3" || id === "room5"
+          ? { id, image: `sprites/scenes/${id}.png` }
+          : null,
+    };
+  });
+}
 
 describe("scene-bg — PRESENT (manifest carries a scene)", () => {
   it("a sprite-bearing tile sets data-scene-bg + --ct-scene-url from spriteBaseUri", async () => {
@@ -232,12 +266,21 @@ describe("scene-bg — MULTI-AGENT collapsed persona header gets the same wiring
 
   it("an active_work header OMITS data-scene-bg + --ct-scene-url (flat card — desk-clash fix, DECISIONS 2026-06-12 #8)", async () => {
     // The default `multiTile()` aggregates `running` + `tool:Edit` → the header
-    // pose is `active_work`, which now resolves to the `"none"` sentinel via the
-    // seeded `sceneDefaults: { active_work: "none", active_read: "none" }`
+    // pose is `active_work`, which the decision-8 pose-default SEED maps to the
+    // `"none"` sentinel via `sceneDefaults: { active_work: "none" }`
     // (DECISIONS.md § "2026-06-12 — Scene-per-pose-per-character feature: 8 locked
     // decisions" #8 — the desk-clash fix ships ON by default; desk/work poses
     // render a FLAT card so the room backdrop never doubles the baked desk).
-    // So the sprite still renders, but the scene block is OMITTED (degrade path).
+    //
+    // TUNING-PROOF (PR #210 fixture-injection class): the pose-default `"none"`
+    // path is asserted via an INJECTED cascade with NO per-char override, NOT the
+    // live manifest. The sponsor's per-char `active_work=home_office` tune on
+    // F01-Dev (the live maya→F01-Dev binding) WINS the cascade — by design (the
+    // per-char layer beating the seed is the cascade working as specced). This
+    // test's intent is the SEED layer (active_work → none when no per-char
+    // override exists), so we mock `resolveSceneId(active_work) → "none"` and
+    // assert the flat-card omit independent of live tuning.
+    mockSceneCascade({ active_work: "none" });
     const { renderMultiAgentPersonaTile } = await import(
       "../../../src/webview/components/multiAgentPersonaTile.js"
     );
@@ -261,6 +304,12 @@ describe("scene-bg — MULTI-AGENT collapsed persona header gets the same wiring
     // aggregate (no `sceneDefaults` entry for the idle pose) falls through to the
     // registry `defaultSceneId` (room3) and DOES paint the scene. This fences the
     // intended split from decision #8 — active poses go flat, idles keep room3.
+    //
+    // TUNING-PROOF (PR #210 fixture-injection class): the idle pose resolves via
+    // an INJECTED cascade (`__any__ → room3`), so the room3 floor is asserted
+    // independent of any future sponsor per-char idle-pose tune on the live
+    // maya→F01-Dev binding.
+    mockSceneCascade({ __any__: "room3" });
     const { renderMultiAgentPersonaTile } = await import(
       "../../../src/webview/components/multiAgentPersonaTile.js"
     );
@@ -285,15 +334,19 @@ describe("scene-bg — MULTI-AGENT collapsed persona header gets the same wiring
   });
 
   it("chips name/role/model/status + the ×N badge + the (N agents) hint (86ca3kyzq)", async () => {
+    // Re-fixtured to an IDLE aggregate (DECISIONS 2026-06-12 #8): chips only
+    // paint when a scene resolves, and active_work/active_read degrade to the
+    // flat "none" card. An idle aggregate inherits room3, so the scene resolves
+    // and the per-label chips paint — preserving this test's original intent.
+    //
+    // TUNING-PROOF (PR #210 fixture-injection class): the idle scene resolves via
+    // an INJECTED cascade (`__any__ → room3`), so the chip assertions don't hinge
+    // on the live maya→F01-Dev binding's idle-pose tuning.
+    mockSceneCascade({ __any__: "room3" });
     const { renderMultiAgentPersonaTile } = await import(
       "../../../src/webview/components/multiAgentPersonaTile.js"
     );
     const el = renderMultiAgentPersonaTile({
-      // Re-fixtured to an IDLE aggregate (DECISIONS 2026-06-12 #8): chips only
-      // paint when a scene resolves, and active_work/active_read now degrade to
-      // the flat "none" card. An idle aggregate inherits room3 (the seed leaves
-      // idle poses unset → falls through to defaultSceneId), so the scene resolves
-      // and the per-label chips paint — preserving this test's original intent.
       // Non-sentinel headline model + activity so both rows render + chip.
       tile: multiTile({
         aggregateState: "idle",
