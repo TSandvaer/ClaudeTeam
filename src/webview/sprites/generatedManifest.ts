@@ -140,6 +140,13 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
             "endFrame": 2
           }
         }
+      },
+      "scenes": {
+        "active_work": "home_office",
+        "idle_coffee": "break_room",
+        "idle_stretch": "park",
+        "idle_think": "living_room",
+        "active_read": "home_office"
       }
     },
     "ClaudeTeam-F02-Dev": {
@@ -267,6 +274,13 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
             "endFrame": 2
           }
         }
+      },
+      "scenes": {
+        "idle_coffee": "break_room",
+        "idle_stretch": "park",
+        "idle_think": "living_room",
+        "active_work": "room3",
+        "active_read": "room3"
       }
     },
     "ClaudeTeam-M01-Dev": {
@@ -394,6 +408,13 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
             "finalDwellMs": 0
           }
         }
+      },
+      "scenes": {
+        "idle_coffee": "break_room",
+        "idle_stretch": "park",
+        "idle_think": "living_room",
+        "active_work": "room3",
+        "active_read": "room3"
       }
     },
     "ClaudeTeam-M03-Dev": {
@@ -520,6 +541,13 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
             "playbackMode": "pingpong"
           }
         }
+      },
+      "scenes": {
+        "idle_coffee": "break_room",
+        "idle_stretch": "park",
+        "idle_think": "living_room",
+        "active_work": "home_office",
+        "active_read": "home_office"
       }
     }
   },
