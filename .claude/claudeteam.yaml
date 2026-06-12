@@ -1,0 +1,51 @@
+# claudeteam.yaml — project-scoped, panel-managed.
+# Do NOT hand-edit while the Manage Team panel is open; the panel normalizes
+# this file on save (structured write — comments below the header and manual
+# formatting are not preserved). Use ClaudeTeam's "Manage Team" panel to edit.
+version: 1
+teams:
+  - id: claudeteam
+    name: ClaudeTeam
+    members:
+      - id: bram
+        display: bram
+        role: Claude Code Internals Consultant
+        character: ClaudeTeam-F01-Dev
+        status: live
+        match:
+          - agentType_equals: bram
+      - id: felix
+        display: felix
+        role: 'Senior Developer #1'
+        character: ClaudeTeam-M01-Dev
+        status: live
+        match:
+          - agentType_equals: felix
+      - id: iris
+        display: iris
+        role: UX Designer
+        character: ClaudeTeam-F01-Dev
+        status: live
+        match:
+          - agentType_equals: iris
+      - id: maya
+        display: maya
+        role: 'Senior Developer #2'
+        character: ClaudeTeam-F02-Dev
+        status: live
+        match:
+          - agentType_equals: maya
+      - id: nora
+        display: nora
+        role: Project Lead
+        character: ClaudeTeam-F02-Dev
+        status: live
+        match:
+          - agentType_equals: nora
+      - id: sage
+        display: sage
+        role: QA / Tester
+        character: ClaudeTeam-F02-Dev
+        status: live
+        match:
+          - agentType_equals: sage

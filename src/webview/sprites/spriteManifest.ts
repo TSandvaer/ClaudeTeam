@@ -63,8 +63,11 @@ export interface SpriteAnimation {
  * character declare a CSS-transform correction applied to its `.sprite-frame`:
  * `scale` enlarges the figure to match the 68px apparent size; `offsetY` (a % of
  * the box, positive = DOWN/forward toward the viewer) re-anchors the figure lower
- * in the tile. The transform-origin is `center bottom` (feet planted) so scaling
- * grows the figure up+out from its base rather than off-center.
+ * in the tile. The transform-origin is `center center` (dashboard.css:701): the
+ * v3 figure's feet sit ~74% down the 92px canvas, so scaling 1.5× about the
+ * center lands the feet at ≈86% down — matching the 68px chars' ~85% — while
+ * enlarging the figure. A `bottom` origin would instead LIFT the feet (it scales
+ * the transparent bottom margin too); `offsetY` then fine-tunes the figure down.
  *
  * Absent → no transform (identity) → the 68×68 chars render BYTE-IDENTICALLY (no
  * regression). The values are SPONSOR-TUNABLE on reload: they bake into the
