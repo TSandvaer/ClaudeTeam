@@ -220,4 +220,27 @@ describe("scene-bg accessors — sceneForId / defaultScene (86ca3kjyk)", () => {
     expect(scene!.id).toBe("room3");
     expect(scene!.image).toBe("sprites/scenes/room3.png");
   });
+
+  it("the SHIPPED generated manifest carries TWO scenes — room3 + home_office (86ca89pth)", () => {
+    // Binds to the real regenerated manifest. The home-office scene was wired as
+    // a SECOND registry entry (86ca89pth). Fails if either PNG is dropped from
+    // assets/sprites/scenes/ (the build script keys byId off the on-disk files).
+    const scenes = GENERATED_SPRITE_MANIFEST.scenes;
+    expect(scenes).toBeDefined();
+    // Exactly the two shipped ids resolve in byId.
+    expect(Object.keys(scenes!.byId).sort()).toEqual(["home_office", "room3"]);
+    // defaultSceneId stays room3 — adding a scene must NOT move the default.
+    expect(scenes!.defaultSceneId).toBe("room3");
+    // Both ids resolve via sceneForId (the per-role-upgrade lookup path).
+    expect(sceneForId("room3", GENERATED_SPRITE_MANIFEST)).toEqual({
+      id: "room3",
+      image: "sprites/scenes/room3.png",
+    });
+    expect(sceneForId("home_office", GENERATED_SPRITE_MANIFEST)).toEqual({
+      id: "home_office",
+      image: "sprites/scenes/home_office.png",
+    });
+    // defaultScene still resolves room3 (cascade floor unchanged).
+    expect(defaultScene(GENERATED_SPRITE_MANIFEST)!.id).toBe("room3");
+  });
 });
