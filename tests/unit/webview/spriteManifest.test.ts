@@ -221,25 +221,30 @@ describe("scene-bg accessors — sceneForId / defaultScene (86ca3kjyk)", () => {
     expect(scene!.image).toBe("sprites/scenes/room3.png");
   });
 
-  it("the SHIPPED generated manifest carries TWO scenes — room3 + home_office (86ca89pth)", () => {
-    // Binds to the real regenerated manifest. The home-office scene was wired as
-    // a SECOND registry entry (86ca89pth). Fails if either PNG is dropped from
-    // assets/sprites/scenes/ (the build script keys byId off the on-disk files).
+  it("the SHIPPED generated manifest carries FIVE scenes — break_room + home_office + living_room + park + room3 (86ca8bh63)", () => {
+    // Binds to the real regenerated manifest. break_room + living_room + park were
+    // wired as registry entries 3-5 (86ca8bh63), mirroring the home_office wiring
+    // (86ca89pth). Fails if any PNG is dropped from assets/sprites/scenes/ (the
+    // build script keys byId off the on-disk files).
     const scenes = GENERATED_SPRITE_MANIFEST.scenes;
     expect(scenes).toBeDefined();
-    // Exactly the two shipped ids resolve in byId.
-    expect(Object.keys(scenes!.byId).sort()).toEqual(["home_office", "room3"]);
-    // defaultSceneId stays room3 — adding a scene must NOT move the default.
+    // Exactly the five shipped ids resolve in byId (sorted).
+    expect(Object.keys(scenes!.byId).sort()).toEqual([
+      "break_room",
+      "home_office",
+      "living_room",
+      "park",
+      "room3",
+    ]);
+    // defaultSceneId stays room3 — adding scenes must NOT move the default.
     expect(scenes!.defaultSceneId).toBe("room3");
-    // Both ids resolve via sceneForId (the per-role-upgrade lookup path).
-    expect(sceneForId("room3", GENERATED_SPRITE_MANIFEST)).toEqual({
-      id: "room3",
-      image: "sprites/scenes/room3.png",
-    });
-    expect(sceneForId("home_office", GENERATED_SPRITE_MANIFEST)).toEqual({
-      id: "home_office",
-      image: "sprites/scenes/home_office.png",
-    });
+    // All five ids resolve via sceneForId (the per-role-upgrade lookup path).
+    for (const id of ["break_room", "home_office", "living_room", "park", "room3"]) {
+      expect(sceneForId(id, GENERATED_SPRITE_MANIFEST)).toEqual({
+        id,
+        image: `sprites/scenes/${id}.png`,
+      });
+    }
     // defaultScene still resolves room3 (cascade floor unchanged).
     expect(defaultScene(GENERATED_SPRITE_MANIFEST)!.id).toBe("room3");
   });

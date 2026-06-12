@@ -526,9 +526,21 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
   "scenes": {
     "defaultSceneId": "room3",
     "byId": {
+      "break_room": {
+        "id": "break_room",
+        "image": "sprites/scenes/break_room.png"
+      },
       "home_office": {
         "id": "home_office",
         "image": "sprites/scenes/home_office.png"
+      },
+      "living_room": {
+        "id": "living_room",
+        "image": "sprites/scenes/living_room.png"
+      },
+      "park": {
+        "id": "park",
+        "image": "sprites/scenes/park.png"
       },
       "room3": {
         "id": "room3",
