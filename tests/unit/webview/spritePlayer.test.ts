@@ -29,6 +29,8 @@ const M01 = "ClaudeTeam-M01-Dev";
 const F01 = "ClaudeTeam-F01-Dev";
 const F02 = "ClaudeTeam-F02-Dev";
 const M03 = "ClaudeTeam-M03-Dev";
+const M04 = "ClaudeTeam-M04-Dev";
+const F03 = "ClaudeTeam-F03-Dev";
 
 // Windowed raise-first stretch config — formerly baked into the 68×68 M01
 // manifest (E1-refine 86ca21876). The v3 92×92 M01 (86ca5ed8v) ships a plain
@@ -236,8 +238,16 @@ describe("resolvePlayback — peak-frame dwell indices (character-specific)", ()
     // resolvePlayback reads the manifest by default — assert the characters'
     // playback survived the migration as the new source of truth. F02 (86ca5aczf)
     // joined the manifest as the first v3 92×92 persona; M03 (86ca5at8f) as the second;
-    // M01 (86ca5ed8v) was overwritten in place by the v3 92×92 build.
-    expect(Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort()).toEqual([F01, F02, M01, M03]);
+    // M01 (86ca5ed8v) was overwritten in place by the v3 92×92 build; M04 + F03
+    // (86ca8r4jc) are the latest v3 chars wired into the picker.
+    expect(Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort()).toEqual([
+      F01,
+      F02,
+      F03,
+      M01,
+      M03,
+      M04,
+    ]);
     // The PLAYBACK VALUES are SPONSOR-TUNED in the live Playback Tuner (PR #210)
     // and change freely — so assert the migration SHAPE (a playback block exists
     // and carries a valid speedMultiplier), NOT a frozen tuning constant, so a

@@ -285,6 +285,148 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "active_read": "room3"
       }
     },
+    "ClaudeTeam-F03-Dev": {
+      "character": "ClaudeTeam-F03-Dev",
+      "render": {
+        "scale": 1.412,
+        "offsetY": 26.087,
+        "feetAnchorPct": 73.913
+      },
+      "defaultIdle": "idle_coffee",
+      "idlePool": [
+        "idle_coffee",
+        "idle_stretch",
+        "idle_think"
+      ],
+      "activePool": [
+        "active_work"
+      ],
+      "animations": {
+        "idle_coffee": {
+          "folder": "holding_a_coffee_cup",
+          "frames": [
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_000.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_001.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_002.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_003.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_004.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_005.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_006.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_007.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_008.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5,
+            "dwellFrameIndex": 0,
+            "dwellMs": 1600,
+            "finalDwellMs": 3700,
+            "playbackMode": "pingpong"
+          }
+        },
+        "idle_stretch": {
+          "folder": "a_relaxed_tired_upwa",
+          "frames": [
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_000.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_001.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_002.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_003.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_004.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_005.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_006.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_007.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_008.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_009.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_010.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_011.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_012.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_013.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_014.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_015.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "idle_think": {
+          "folder": "standing_in_a_relaxe",
+          "frames": [
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_000.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_001.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_002.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_003.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_004.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_005.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_006.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_007.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_008.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5,
+            "dwellFrameIndex": 4,
+            "dwellMs": 1700,
+            "finalDwellMs": 1400,
+            "playbackMode": "pingpong"
+          }
+        },
+        "active_work": {
+          "folder": "sitting_on_a_chair_a",
+          "frames": [
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_000.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_001.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_002.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_003.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_004.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_005.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_006.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_007.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_008.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_009.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_010.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_011.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_012.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_013.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_014.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_015.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.55,
+            "dwellFrameIndex": 4,
+            "dwellMs": 1550,
+            "finalDwellMs": 0,
+            "startFrame": 0,
+            "endFrame": 7,
+            "playbackMode": "pingpong"
+          }
+        },
+        "active_read": {
+          "folder": "sitting_on_a_chair_a",
+          "frames": [
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/The_torso_shoulders_and_hips_are_completely_frozen/south/frame_000.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/The_torso_shoulders_and_hips_are_completely_frozen/south/frame_001.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/The_torso_shoulders_and_hips_are_completely_frozen/south/frame_002.png",
+            "sprites/ClaudeTeam-F03-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/The_torso_shoulders_and_hips_are_completely_frozen/south/frame_003.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.25,
+            "dwellFrameIndex": 1,
+            "dwellMs": 2100,
+            "finalDwellMs": 3200,
+            "startFrame": 1,
+            "endFrame": 2,
+            "playbackMode": "pingpong"
+          }
+        }
+      },
+      "scenes": {
+        "idle_coffee": "break_room",
+        "idle_stretch": "park",
+        "idle_think": "living_room",
+        "active_work": "home_office",
+        "active_read": "home_office"
+      }
+    },
     "ClaudeTeam-M01-Dev": {
       "character": "ClaudeTeam-M01-Dev",
       "render": {
@@ -534,6 +676,148 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
             "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_001.png",
             "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_002.png",
             "sprites/ClaudeTeam-M03-Dev/_pixellab_anims/sitting_at_a_desk_wo/animations/Seated_at_the_desk_reading_the_screen._The_torso_s-784da89a/south/frame_003.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.25,
+            "dwellFrameIndex": 1,
+            "dwellMs": 2100,
+            "finalDwellMs": 3200,
+            "startFrame": 1,
+            "endFrame": 2,
+            "playbackMode": "pingpong"
+          }
+        }
+      },
+      "scenes": {
+        "idle_coffee": "break_room",
+        "idle_stretch": "park",
+        "idle_think": "living_room",
+        "active_work": "home_office",
+        "active_read": "home_office"
+      }
+    },
+    "ClaudeTeam-M04-Dev": {
+      "character": "ClaudeTeam-M04-Dev",
+      "render": {
+        "scale": 1.412,
+        "offsetY": 25,
+        "feetAnchorPct": 75
+      },
+      "defaultIdle": "idle_coffee",
+      "idlePool": [
+        "idle_coffee",
+        "idle_stretch",
+        "idle_think"
+      ],
+      "activePool": [
+        "active_work"
+      ],
+      "animations": {
+        "idle_coffee": {
+          "folder": "holding_a_coffee_cup",
+          "frames": [
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_000.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_001.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_002.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_003.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_004.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_005.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_006.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_007.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/holding_a_coffee_cup/animations/the_cup_stays_pressed_to_the_lips_and_both_hands_s/south/frame_008.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5,
+            "dwellFrameIndex": 0,
+            "dwellMs": 1600,
+            "finalDwellMs": 3700,
+            "playbackMode": "pingpong"
+          }
+        },
+        "idle_stretch": {
+          "folder": "a_relaxed_tired_upwa",
+          "frames": [
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_000.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_001.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_002.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_003.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_004.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_005.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_006.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_007.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_008.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_009.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_010.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_011.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_012.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_013.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_014.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_015.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/a_relaxed_tired_upwa/animations/a_slow_stretching_loop_from_the_overhead_stretched/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5
+          }
+        },
+        "idle_think": {
+          "folder": "standing_in_a_relaxe",
+          "frames": [
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_000.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_001.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_002.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_003.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_004.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_005.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_006.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_007.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/standing_in_a_relaxe/animations/the_hand_stays_resting_against_the_chin_completely/south/frame_008.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.5,
+            "dwellFrameIndex": 4,
+            "dwellMs": 1700,
+            "finalDwellMs": 1400,
+            "playbackMode": "pingpong"
+          }
+        },
+        "active_work": {
+          "folder": "sitting_on_a_chair_a",
+          "frames": [
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_000.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_001.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_002.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_003.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_004.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_005.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_006.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_007.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_008.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_009.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_010.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_011.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_012.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_013.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_014.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_015.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/the_character_stays_seated_and_completely_still_th/south/frame_016.png"
+          ],
+          "playback": {
+            "speedMultiplier": 0.55,
+            "dwellFrameIndex": 4,
+            "dwellMs": 1550,
+            "finalDwellMs": 0,
+            "startFrame": 0,
+            "endFrame": 7,
+            "playbackMode": "pingpong"
+          }
+        },
+        "active_read": {
+          "folder": "sitting_on_a_chair_a",
+          "frames": [
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/The_torso_shoulders_and_hips_are_completely_frozen/south/frame_000.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/The_torso_shoulders_and_hips_are_completely_frozen/south/frame_001.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/The_torso_shoulders_and_hips_are_completely_frozen/south/frame_002.png",
+            "sprites/ClaudeTeam-M04-Dev/_pixellab_anims/sitting_on_a_chair_a/animations/The_torso_shoulders_and_hips_are_completely_frozen/south/frame_003.png"
           ],
           "playback": {
             "speedMultiplier": 0.25,
