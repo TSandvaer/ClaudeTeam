@@ -24,9 +24,12 @@
  * Assertion (3) FAILS if a center-origin regression breaks grounding.
  */
 
-import { describe, it, expect } from "vitest";
+import { afterAll, describe, it, expect } from "vitest";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import zlib from "node:zlib";
 import { readPngAlphaBbox, computeRenderFit } from "../../scripts/build-sprite-manifest.mjs";
 import { GENERATED_SPRITE_MANIFEST } from "../../src/webview/sprites/generatedManifest.js";
 import type { SpriteCharacter } from "../../src/webview/sprites/spriteManifest.js";
@@ -126,3 +129,209 @@ describe("shipped manifest normalizes the WHOLE roster to a uniform on-tile heig
     }
   });
 });
+
+// ── EDGE PROBES (ticket 86ca8ncja) — additive bbox/normalization coverage ─────
+//
+// The shipped-roster passes above only exercise figures that DO occupy a real
+// sub-region of the canvas. These probes drive `readPngAlphaBbox` + the
+// `computeRenderFit` math through the corner cases the shipped frames never hit:
+// an empty (all-transparent) figure, a figure already AT target, and a figure
+// that fills the WHOLE canvas (zero margins). They synthesize tiny RGBA8 PNGs in
+// a tempdir and feed them through the SAME decode→fit path the build uses.
+//
+// Non-vacuity (each mutation-verified — corrupt the guard/scale → RED, restore):
+//   • Probe 1 fails if the decoder's `maxX < 0` (empty-bbox) guard is removed —
+//     a fully transparent frame then returns minX/minY=W/H, maxX/maxY=-1, which
+//     `computeRenderFit` turns into a non-finite scale (figureH ≤ 0 → null only
+//     because the guard fired first; without it the bbox is corrupt).
+//   • Probe 2 fails if `scale` stops normalizing to the target (e.g. a hardcoded
+//     per-char 1.5) — a figure already AT 0.706 fill must yield scale ≈ 1.0.
+//   • Probe 3 fails if a full-canvas figure produces a non-finite scale OR breaks
+//     grounding (feetAnchorPct + offsetY must still === 100 at zero margins).
+
+const TARGET_FIGURE_FRACTION = 0.706; // mirrors the build's TARGET_FIGURE_FRACTION.
+
+const pngTmp = mkdtempSync(path.join(tmpdir(), "renderfit-edge-"));
+afterAll(() => {
+  rmSync(pngTmp, { recursive: true, force: true });
+});
+
+describe("readPngAlphaBbox edge: all-transparent PNG → null → identity (86ca8ncja probe 1)", () => {
+  it("a fully transparent frame returns null (no figure to measure)", async () => {
+    // 24×24 RGBA8, every pixel alpha=0 — no pixel clears FIGURE_ALPHA_THRESHOLD.
+    const file = path.join(pngTmp, "all-transparent.png");
+    writeFileSync(file, encodeRgba8Png(24, 24, () => [0, 0, 0, 0]));
+
+    const bbox = await readPngAlphaBbox(file);
+    // The `maxX < 0` guard returns null here. MUTATION: delete that guard in the
+    // decoder and this becomes a corrupt bbox (minX=24, maxX=-1), turning the
+    // assertion RED.
+    expect(bbox).toBeNull();
+  });
+
+  it("a transparent-figure path normalizes to IDENTITY, never NaN/Infinity scale", async () => {
+    const file = path.join(pngTmp, "all-transparent-2.png");
+    writeFileSync(file, encodeRgba8Png(32, 32, () => [255, 255, 255, 0]));
+
+    const bbox = await readPngAlphaBbox(file);
+    expect(bbox).toBeNull();
+    // The build does `if (bbox) { autoRender = computeRenderFit(...) }` — a null
+    // bbox means NO render block is baked → the char falls back to the CSS
+    // identity transform. Simulate that contract: feeding the (absent) bbox to
+    // computeRenderFit must never yield a non-finite scale. There is nothing to
+    // measure, so the only correct outcome is "no render-fit", i.e. identity.
+    const fit = bbox
+      ? computeRenderFit({
+          figureTop: (bbox as { minY: number }).minY,
+          figureBottom: (bbox as { maxY: number }).maxY,
+          canvasH: (bbox as { canvasH: number }).canvasH,
+        })
+      : null;
+    expect(fit).toBeNull(); // identity — no transform baked.
+  });
+});
+
+describe("render-fit edge: 68px figure already at target → scale ≈ 1.0 (86ca8ncja probe 2)", () => {
+  it("an M02-like figure occupying ≈0.706 of the canvas measures scale ≈ 1.0", async () => {
+    // 68×68 canvas, figure fills exactly 48 rows (48/68 ≈ 0.70588 ≈ TARGET) at
+    // full width, grounded at the bottom (rows 20..67). This is the M02 baseline:
+    // the figure is ALREADY at the target apparent size, so normalization must be
+    // a near-no-op (scale ≈ 1.0) — proving the build does NOT special-case any
+    // character and a new char at the target auto-resolves to identity-scale.
+    const W = 68;
+    const H = 68;
+    const figureTop = 20;
+    const figureBottom = 67; // inclusive → 48 rows → fill 48/68 ≈ 0.70588.
+    const file = path.join(pngTmp, "at-target-68.png");
+    writeFileSync(
+      file,
+      encodeRgba8Png(W, H, (_x, y) =>
+        y >= figureTop && y <= figureBottom ? [10, 20, 30, 255] : [0, 0, 0, 0],
+      ),
+    );
+
+    const bbox = (await readPngAlphaBbox(file))!;
+    expect(bbox).not.toBeNull();
+    expect(bbox.minY).toBe(figureTop);
+    expect(bbox.maxY).toBe(figureBottom);
+
+    const fit = computeRenderFit({
+      figureTop: bbox.minY,
+      figureBottom: bbox.maxY,
+      canvasH: bbox.canvasH,
+    })!;
+    const fill = (bbox.maxY - bbox.minY + 1) / bbox.canvasH;
+    // fill ≈ 0.70588, target 0.706 → scale = 0.706/0.70588 ≈ 1.0017.
+    expect(fill).toBeCloseTo(TARGET_FIGURE_FRACTION, 2);
+    expect(fit.scale).toBeCloseTo(1.0, 2); // MUTATION: hardcode scale=1.5 → RED.
+    // And the on-tile figure height already equals the target (no enlargement).
+    expect(fit.scale * fill).toBeCloseTo(TARGET_FIGURE_FRACTION, 3);
+  });
+});
+
+describe("render-fit edge: full-canvas figure (zero margins) → finite + grounded (86ca8ncja probe 3)", () => {
+  it("a figure filling the entire frame yields finite scale AND grounds at 100%", async () => {
+    // 40×40 canvas, EVERY pixel opaque → figure occupies the whole frame, no
+    // transparent margin anywhere (figureTop=0, figureBottom=39, fill=1.0).
+    const W = 40;
+    const H = 40;
+    const file = path.join(pngTmp, "full-canvas.png");
+    writeFileSync(file, encodeRgba8Png(W, H, () => [200, 100, 50, 255]));
+
+    const bbox = (await readPngAlphaBbox(file))!;
+    expect(bbox).not.toBeNull();
+    expect(bbox.minX).toBe(0);
+    expect(bbox.minY).toBe(0);
+    expect(bbox.maxX).toBe(W - 1);
+    expect(bbox.maxY).toBe(H - 1); // fills the whole canvas.
+
+    const fit = computeRenderFit({
+      figureTop: bbox.minY,
+      figureBottom: bbox.maxY,
+      canvasH: bbox.canvasH,
+    })!;
+    // fill = 1.0 → scale = target/1.0 = 0.706 (shrinks an over-large figure). The
+    // value must be FINITE — no division-by-zero / NaN at the zero-margin edge.
+    expect(Number.isFinite(fit.scale)).toBe(true);
+    expect(fit.scale).toBeGreaterThan(0);
+    expect(fit.scale).toBeCloseTo(TARGET_FIGURE_FRACTION, 3);
+    // Grounding: a full-canvas figure's feet are the very bottom edge →
+    // feetAnchorPct = (39 + 1)/40 × 100 = 100 → offsetY = 0 → sum still 100.
+    expect(fit.feetAnchorPct).toBeCloseTo(100, 3);
+    expect(fit.offsetY).toBeCloseTo(0, 3);
+    expect(fit.feetAnchorPct + fit.offsetY).toBeCloseTo(100, 3); // grounded.
+  });
+});
+
+/**
+ * Minimal self-contained RGBA8 (color type 6, bit depth 8) PNG encoder for the
+ * edge probes — the repo ships no PNG library, and `readPngAlphaBbox` is itself a
+ * self-contained decoder, so we mirror it on the encode side. Writes filter-0
+ * (None) scanlines, which `readPngAlphaBbox` un-filters via its `filter === 0`
+ * branch. CRC32 is computed in-line (Node `zlib.crc32` is not guaranteed on all
+ * Node 20.x; the decoder ignores CRC, but a well-formed PNG keeps the encoder
+ * portable). `px(x, y)` returns the [r, g, b, a] for each pixel.
+ */
+function encodeRgba8Png(
+  width: number,
+  height: number,
+  px: (x: number, y: number) => [number, number, number, number],
+): Buffer {
+  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // color type 6 = RGBA
+  ihdr[10] = 0; // compression
+  ihdr[11] = 0; // filter
+  ihdr[12] = 0; // interlace
+
+  const stride = width * 4;
+  const rawData = Buffer.alloc(height * (stride + 1));
+  let q = 0;
+  for (let y = 0; y < height; y++) {
+    rawData[q++] = 0; // filter type 0 (None)
+    for (let x = 0; x < width; x++) {
+      const [r, g, b, a] = px(x, y);
+      rawData[q++] = r & 0xff;
+      rawData[q++] = g & 0xff;
+      rawData[q++] = b & 0xff;
+      rawData[q++] = a & 0xff;
+    }
+  }
+  const idat = zlib.deflateSync(rawData);
+
+  return Buffer.concat([
+    sig,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", idat),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function pngChunk(type: string, body: Buffer): Buffer {
+  const typeBuf = Buffer.from(type, "ascii");
+  const lenBuf = Buffer.alloc(4);
+  lenBuf.writeUInt32BE(body.length, 0);
+  const crcBuf = Buffer.alloc(4);
+  crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, body])), 0);
+  return Buffer.concat([lenBuf, typeBuf, body, crcBuf]);
+}
+
+const CRC_TABLE: number[] = (() => {
+  const t: number[] = [];
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(buf: Buffer): number {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}

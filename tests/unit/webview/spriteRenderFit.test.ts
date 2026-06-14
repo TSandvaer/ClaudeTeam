@@ -226,3 +226,47 @@ describe("GENERATED_SPRITE_MANIFEST render-fit wiring (86ca5b0gj; 86ca8n5pe)", (
     expect(c).toBeUndefined();
   });
 });
+
+// ── EDGE PROBE 4 (ticket 86ca8ncja) — reduced-motion frame-0 is scaled+grounded ─
+//
+// The block-2 test above asserts the reduced-motion path carries scale +
+// feetAnchor. This probe strengthens that to the FULL grounding contract: on the
+// `prefers-reduced-motion: reduce` path, frame-0 is shown WITHOUT a timer, yet
+// the figure must STILL be scaled AND grounded (all three render props set, and
+// feetAnchorPct + offsetY === 100) — the static frame must not float un-normalized.
+//
+// Non-vacuity: createSpriteBox sets the render props (spritePlayer.ts ~565) BEFORE
+// the reduced-motion early-return (~609). MUTATION: move the prop-setting block
+// AFTER the early-return and this RED — the reduced-motion box would carry no
+// render props (identity → small + floating static frame).
+
+describe("createSpriteBox reduced-motion frame is scaled + grounded (86ca8ncja probe 4)", () => {
+  it("reduced-motion static frame carries all three props AND grounds (feetAnchor+offsetY=100)", () => {
+    const scale = 1.412;
+    const offsetY = 26.087;
+    const feetAnchorPct = 73.913; // offsetY + feetAnchorPct === 100 (grounded).
+    const handle = createSpriteBox({
+      char: char("ClaudeTeam-F02-Dev", { scale, offsetY, feetAnchorPct }),
+      state: "idle",
+      activity: "",
+      spriteBaseUri: "vscode://x",
+      reducedMotion: true, // forces the static frame-0 early-return.
+      rng: () => 0,
+    });
+    const box = handle.element;
+
+    // Confirm we are on the reduced-motion path (no timer; static frame-0).
+    expect(box.dataset.reducedMotion).toBe("true");
+    const img = box.querySelector<HTMLImageElement>("img.sprite-frame");
+    expect(img, "reduced-motion box must still render a frame").not.toBeNull();
+    expect(img!.getAttribute("src")).toContain("/frame_0.png");
+
+    // All three render props are set on the static-frame box (not skipped).
+    expect(box.style.getPropertyValue("--ct-render-scale")).toBe(String(scale));
+    expect(box.style.getPropertyValue("--ct-render-offset-y")).toBe(`${offsetY}%`);
+    expect(box.style.getPropertyValue("--ct-render-feet-anchor")).toBe(`${feetAnchorPct}%`);
+
+    // Grounding contract holds even on the static path: feet land at the box bottom.
+    expect(offsetY + feetAnchorPct).toBeCloseTo(100, 1);
+  });
+});
