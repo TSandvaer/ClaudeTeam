@@ -22,10 +22,13 @@ import { describe, it, expect, vi } from "vitest";
 import { hydrateState } from "../../../src/webview/main.js";
 import { serializeState } from "../../../src/extension/messageBus.js";
 import { renderSessionBlock } from "../../../src/webview/components/sessionBlock.js";
+import { renderFull } from "../../../src/webview/render.js";
 import type { SerializedDashboardState } from "../../../src/shared/messages.js";
 import type {
   AgentTile,
   AgentTree,
+  HiddenMemberKey,
+  RemovedMemberKey,
   SessionTree,
 } from "../../../src/shared/types.js";
 
@@ -561,5 +564,331 @@ describe("86ca8mj84 — live session title end-to-end (serialize → hydrate →
     } finally {
       mount.remove();
     }
+  });
+});
+
+// ===========================================================================
+// 86ca8mquy — HIDDEN-MEMBER recovery chip, FULL-PATH non-vacuous regression.
+//
+// THE BUG (Sage-verified, pre-existing on main): `serializeState` (host) puts
+// `hiddenMemberKeys` / `removedMemberKeys` + their counts onto the wire, but
+// `hydrateState` (webview) DROPPED all four in its top-level spread — they're
+// all OPTIONAL on `AgentTree`/`WebviewAgentTree`, so the omission compiled
+// green yet the webview always received `undefined` → `readHiddenMemberKeys`
+// returned `[]` → `renderHiddenMembersChip` rendered nothing → the
+// ".ct-hidden-members-chip" recovery surface never mounted → a hidden member
+// was UNRECOVERABLE from the UI.
+//
+// Why the EXISTING coverage was vacuous (same trap as #222/#223): the chip-
+// mount tests in `hideMember.test.ts` (`render.ts — hidden-members chip
+// integration`) build an in-memory `AgentTree` with `hiddenMemberKeys` already
+// set and feed it STRAIGHT into `renderFull` — bypassing the
+// serialize → JSON → hydrate seam where the drop happens. Those tests stay
+// green with the bug present.
+//
+// This block drives the COMPLETE host→webview path through the REAL seam:
+//
+//   AgentTree (hiddenMemberKeys set)
+//     → serializeState   (host: puts the keys on the wire)
+//     → JSON round-trip  (the actual postMessage bytes)
+//     → hydrateState     (webview: was DROPPING the keys)
+//     → renderFull       (reads state.hiddenMemberKeys via readHiddenMemberKeys)
+//
+// Mutation-verify: revert the `hiddenMemberKeys` spread in `hydrateState`
+// (src/webview/main.ts) → the "chip mounts" assertion goes RED (the key is
+// stripped at hydration → the chip returns null → never mounts).
+// ===========================================================================
+describe("86ca8mquy — hidden-member chip end-to-end (serialize → JSON → hydrate → renderFull)", () => {
+  /** A rostered tile so the session renders normally alongside the chip. */
+  function liveTile(): AgentTile {
+    return {
+      memberId: "felix",
+      teamId: "claudeteam-alpha",
+      display: "Felix",
+      role: "Extension Host Dev",
+      activity: "tool:Edit src/extension/main.ts",
+      model: "claude-opus-4-7",
+      state: "running",
+      agentId: "a1d53b4a2db17f2f5",
+      toolUseId: "toolu_TEST",
+    };
+  }
+
+  /** A live host `AgentTree` carrying a hidden-member set. */
+  function hostStateWithHidden(
+    hiddenKeys: HiddenMemberKey[],
+    removedKeys: RemovedMemberKey[] = [],
+  ): AgentTree {
+    return {
+      sessions: [
+        {
+          shortId: "sessA001",
+          sessionId: "sess-A-0000-0000-0000-000000000001",
+          pid: 1234,
+          entrypoint: "claude-vscode",
+          version: "2.1.145",
+          isAlive: true,
+          cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
+          title: "hidden-member end-to-end",
+          rosterTiles: new Map([["claudeteam-alpha", [liveTile()]]]),
+          teamOrder: ["claudeteam-alpha"],
+          background: [],
+        },
+      ],
+      hiddenMemberCount: hiddenKeys.length,
+      hiddenMemberKeys: hiddenKeys,
+      removedMemberCount: removedKeys.length,
+      removedMemberKeys: removedKeys,
+    };
+  }
+
+  /** serialize → JSON bytes → hydrate, then renderFull into a fresh mount. */
+  function renderThroughWire(host: AgentTree): HTMLElement {
+    const wire = JSON.parse(
+      JSON.stringify(serializeState(host)),
+    ) as SerializedDashboardState;
+    const hydrated = hydrateState(wire);
+    const mount = document.createElement("div");
+    renderFull({ mount, postMessage: vi.fn() }, hydrated);
+    return mount;
+  }
+
+  it("mounts the .ct-hidden-members-chip when a member is hidden (survives the wire)", () => {
+    const mount = renderThroughWire(
+      hostStateWithHidden(["claudeteam-alpha:bram"] as HiddenMemberKey[]),
+    );
+    const chip = mount.querySelector(".ct-hidden-members-chip");
+    // The load-bearing assertion: with the hydrate fix the key survives the
+    // wire and the recovery chip mounts. Pre-fix the key was stripped at
+    // hydration → readHiddenMemberKeys returned [] → chip null → NOT mounted.
+    expect(chip).not.toBeNull();
+    expect(chip?.getAttribute("data-hidden-member-count")).toBe("1");
+  });
+
+  it("does NOT mount the chip when nothing is hidden (no false positive)", () => {
+    const mount = renderThroughWire(hostStateWithHidden([]));
+    expect(mount.querySelector(".ct-hidden-members-chip")).toBeNull();
+  });
+
+  it("removedMemberKeys also survive the wire — a removed-AND-hidden member is masked OUT of the chip", () => {
+    // bram is both hidden AND removed; the webview applies the set-difference
+    // (readRemovedMemberKeys) so the recovery chip must NOT surface a removed
+    // member. This exercises BOTH hiddenMemberKeys and removedMemberKeys
+    // surviving hydration — reverting EITHER spread breaks an assertion here:
+    //   - drop hiddenMemberKeys → chip is null (count assert fails)
+    //   - drop removedMemberKeys → the mask is empty → bram leaks into the chip
+    const mount = renderThroughWire(
+      hostStateWithHidden(
+        [
+          "claudeteam-alpha:bram",
+          "claudeteam-alpha:nora",
+        ] as HiddenMemberKey[],
+        ["claudeteam-alpha:bram"] as RemovedMemberKey[],
+      ),
+    );
+    const chip = mount.querySelector(".ct-hidden-members-chip");
+    expect(chip).not.toBeNull();
+    // Only nora remains after masking bram (the removed one).
+    expect(chip?.getAttribute("data-hidden-member-count")).toBe("1");
+    const memberIds = Array.from(
+      mount.querySelectorAll(".ct-hidden-member-row"),
+    ).map((row) => (row as HTMLElement).dataset.memberId);
+    expect(memberIds).toContain("nora");
+    expect(memberIds).not.toContain("bram");
+  });
+});
+
+// ===========================================================================
+// 86ca8mquy — GUARD: whole-state serialize → JSON → hydrate round-trip property
+// test. THE STRUCTURAL PREVENTION (sponsor-approved as a REQUIRED AC).
+//
+// This is the 3rd instance of the SAME footgun: `hydrateState` copies a
+// HARDCODED SUBSET of the state shape, so any OPTIONAL field a future host adds
+// to the wire — and forgets to thread through hydration — silently arrives
+// `undefined` at the renderer. #222 (title), #223 (customTitle/gitBranch), now
+// #86ca8mquy (member-keys) are all this class. A per-field property test makes
+// the NEXT dropped field fail CI by construction.
+//
+// The property: for a maximal `DashboardState` populating EVERY field that
+// `serializeState` puts on the `state:full` wire, the round-trip
+// `serialize → JSON.parse(JSON.stringify(...)) → hydrate` must PRESERVE every
+// field (deep-equal), modulo the two documented, intentional transforms below.
+//
+// DOCUMENTED EXCLUSIONS (each is an intentional design choice, NOT a drop):
+//   1. `sessions[].rosterTiles` — `Map<…>` in memory, `Record<…>` on the wire
+//      (JSON.stringify drops Map contents to `{}`; serializeState flattens via
+//      Object.fromEntries and hydrateState rebuilds the Map via Object.entries).
+//      Asserted via Map↔Map deep-equality (entries compared), NOT raw-equal.
+//   2. `roster` (`AgentTree.roster?: Team[]`) — INTENTIONALLY NOT on the
+//      `state:full` wire. `serializeState` omits it; the roster rides its own
+//      `roster:loaded` message (see SessionTree/AgentTree `roster` docstring +
+//      messageBus `postRosterLoaded`). So it is excluded from the round-trip by
+//      design — the fixture deliberately does NOT set it, and we assert it is
+//      absent on the wire to lock the omission in.
+//
+// Mutation-verify: remove ANY threaded field from `hydrateState`'s spread (e.g.
+// `hiddenMemberKeys`, `filterApplied`, `customTitle`) → the corresponding
+// per-field assertion goes RED.
+// ===========================================================================
+describe("86ca8mquy GUARD — whole-state round-trip preserves every wire field", () => {
+  /**
+   * A maximal `DashboardState` — every field `serializeState` emits onto the
+   * `state:full` wire is populated with a DISTINCT, non-default value so a drop
+   * (→ undefined) or a coerce (→ default) is detectable. `roster` is
+   * intentionally omitted (excluded per the block header).
+   */
+  function maximalState(): AgentTree {
+    const tileA: AgentTile = {
+      memberId: "felix",
+      teamId: "claudeteam-alpha",
+      display: "Felix",
+      role: "Extension Host Dev",
+      activity: "tool:Edit src/extension/main.ts",
+      model: "claude-opus-4-7",
+      state: "running",
+      agentId: "a1d53b4a2db17f2f5",
+      toolUseId: "toolu_AAA",
+    };
+    const tileB: AgentTile = {
+      memberId: "maya",
+      teamId: "claudeteam-alpha",
+      display: "Maya",
+      role: "Webview UI Dev",
+      activity: "idle 3s",
+      model: "claude-opus-4-7",
+      state: "idle",
+      agentId: "b2e64c5b3ec28g3g6",
+      toolUseId: null,
+    };
+    return {
+      sessions: [
+        {
+          shortId: "sessMAX0",
+          sessionId: "sessMAX0-1111-2222-3333-444455556666",
+          pid: 4242,
+          entrypoint: "claude-vscode",
+          version: "2.1.177",
+          isAlive: true,
+          cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
+          title: "Resume scene per pose shipped session",
+          customTitle: "claude team - live session",
+          gitBranch: "maya/86ca8mquy-hydrate-member-keys",
+          rosterTiles: new Map([
+            ["claudeteam-alpha", [tileA, tileB]],
+            ["claudeteam-beta", [{ ...tileA, teamId: "claudeteam-beta" }]],
+          ]),
+          teamOrder: ["claudeteam-alpha", "claudeteam-beta"],
+          background: [
+            {
+              agentType: "general-purpose",
+              description: "noise agent",
+              state: "running",
+              model: "claude-sonnet-4-5",
+            },
+          ],
+        },
+      ],
+      filterApplied: true,
+      rosterErrors: ["global roster YAML parse error (/x/teams.yaml): bad indent"],
+      rosterWarnings: ['duplicate member id "felix" across teams — second wins'],
+      hiddenMemberCount: 2,
+      hiddenMemberKeys: [
+        "claudeteam-alpha:bram",
+        "claudeteam-alpha:nora",
+      ] as HiddenMemberKey[],
+      removedMemberCount: 1,
+      removedMemberKeys: ["claudeteam-alpha:sage"] as RemovedMemberKey[],
+      config: { autoCollapseUniformClusters: true },
+    };
+  }
+
+  /** The round-tripped state through the REAL host→webview seam. */
+  function roundTrip(host: AgentTree): ReturnType<typeof hydrateState> {
+    const wire = JSON.parse(
+      JSON.stringify(serializeState(host)),
+    ) as SerializedDashboardState;
+    return hydrateState(wire);
+  }
+
+  it("preserves every top-level wire field (per-field deep-equal)", () => {
+    const host = maximalState();
+    const out = roundTrip(host);
+
+    expect(out.filterApplied).toBe(host.filterApplied);
+    expect(out.rosterErrors).toEqual(host.rosterErrors);
+    expect(out.rosterWarnings).toEqual(host.rosterWarnings);
+    expect(out.hiddenMemberCount).toBe(host.hiddenMemberCount);
+    expect(out.hiddenMemberKeys).toEqual(host.hiddenMemberKeys);
+    expect(out.removedMemberCount).toBe(host.removedMemberCount);
+    expect(out.removedMemberKeys).toEqual(host.removedMemberKeys);
+    expect(out.config).toEqual(host.config);
+  });
+
+  it("preserves every per-session field (per-field deep-equal; rosterTiles via Map↔Map)", () => {
+    const host = maximalState();
+    const out = roundTrip(host);
+
+    expect(out.sessions).toHaveLength(host.sessions.length);
+    const hs = host.sessions[0]!;
+    const os = out.sessions[0]!;
+
+    // Every scalar / array session field round-trips verbatim.
+    expect(os.shortId).toBe(hs.shortId);
+    expect(os.sessionId).toBe(hs.sessionId);
+    expect(os.pid).toBe(hs.pid);
+    expect(os.entrypoint).toBe(hs.entrypoint);
+    expect(os.version).toBe(hs.version);
+    expect(os.isAlive).toBe(hs.isAlive);
+    expect(os.cwd).toBe(hs.cwd);
+    expect(os.title).toBe(hs.title);
+    expect(os.customTitle).toBe(hs.customTitle);
+    expect(os.gitBranch).toBe(hs.gitBranch);
+    expect(os.teamOrder).toEqual(hs.teamOrder);
+    expect(os.background).toEqual(hs.background);
+
+    // Documented exclusion #1 — rosterTiles is Map↔Record↔Map by design.
+    // Assert the Map round-trips with identical entries (NOT raw-equal).
+    expect(os.rosterTiles).toBeInstanceOf(Map);
+    expect(Array.from(os.rosterTiles.keys())).toEqual(
+      Array.from(hs.rosterTiles.keys()),
+    );
+    for (const [teamId, tiles] of hs.rosterTiles) {
+      expect(os.rosterTiles.get(teamId)).toEqual(tiles);
+    }
+  });
+
+  it("the COMPLETE wire round-trips structurally (whole-shape deep-equal modulo Map transform)", () => {
+    // Strongest single assertion: rebuild the expected webview shape from the
+    // host state by applying ONLY the documented Map↔Record transform, then
+    // deep-equal the entire hydrated tree against it. ANY field dropped by
+    // hydrateState's hardcoded subset diverges here → RED. This is the guard
+    // that catches the NEXT optional field a future host adds + forgets to
+    // thread (the #222/#223/#86ca8mquy footgun) without enumerating fields.
+    const host = maximalState();
+    const out = roundTrip(host);
+
+    // Expected = host with rosterTiles already a Map (it is) — the hydrated
+    // shape is structurally identical to host modulo `roster` (absent here)
+    // and the Map transform (which is a no-op when both sides are Maps).
+    expect(out).toEqual(host);
+  });
+
+  it("documented exclusion #2 — `roster` is NOT on the state:full wire", () => {
+    // Lock the intentional omission: even if a host sets `roster`, serializeState
+    // must not emit it (it rides `roster:loaded`). A regression that started
+    // serializing `roster` onto state:full would surface it on the wire here.
+    const host = maximalState();
+    host.roster = [
+      { id: "claudeteam-alpha", name: "Alpha", members: [] },
+    ];
+    const wire = JSON.parse(
+      JSON.stringify(serializeState(host)),
+    ) as SerializedDashboardState & { roster?: unknown };
+    expect("roster" in wire).toBe(false);
+    // And it stays absent after hydration.
+    const out = hydrateState(wire) as ReturnType<typeof hydrateState> & {
+      roster?: unknown;
+    };
+    expect("roster" in out).toBe(false);
   });
 });
