@@ -1,30 +1,32 @@
 /**
  * @vitest-environment jsdom
  *
- * Unit tests for per-character sprite render-fit (ticket 86ca5b0gj).
+ * Unit tests for per-character sprite render-fit (ticket 86ca5b0gj; roster-wide
+ * AUTO-normalization + feet-anchored grounding 86ca8n5pe).
  *
- * The v3 92×92 persona sprites (ClaudeTeam-F02-Dev, ClaudeTeam-M03-Dev) bake the
- * figure into only ~50% of the canvas, vs ~75% for the legacy 68×68 chars
- * (F01/M01/M02). With `.sprite-frame { object-fit: contain }` the WHOLE canvas
- * scales into the fixed box, so a 92px char renders SMALLER + floats HIGH. The
- * fix is a per-character `render: { scale, offsetY }` block that bakes onto the
- * manifest and drives the `--ct-render-scale` / `--ct-render-offset-y` CSS custom
- * props on each `.sprite-box`; `.sprite-frame`'s transform reads them.
+ * The roster mixes canvas sizes (92×92 v3 vs 68×68 legacy) + fill ratios (figure
+ * ~50% vs ~71% of the canvas). With `.sprite-frame { object-fit: contain }` the
+ * WHOLE square canvas scales into the box, so without correction the figures
+ * render at DIFFERENT apparent sizes. The build script measures each char's
+ * figure bbox and bakes a `render: { scale, offsetY, feetAnchorPct }` correction
+ * so the WHOLE roster shows a UNIFORM on-tile figure height grounded on the scene
+ * floor; the three values drive the `--ct-render-scale` / `--ct-render-offset-y`
+ * / `--ct-render-feet-anchor` CSS custom props on each `.sprite-box`.
  *
- * Two surfaces are covered:
- *   1. build sanitizer `sanitizeRenderFit` — finite-number validation + drop +
- *      identity-when-absent (mirrors `sanitizePlayback`'s policy).
- *   2. `createSpriteBox` — sets the custom props from `char.render`, AND leaves
- *      them UNSET when `render` is absent (the 68×68 no-regression contract).
+ * Three surfaces are covered (the bbox→render MATH is unit-tested in
+ * buildSpriteManifest.test.ts `computeRenderFit`; the real-frame measurement in
+ * the integration test renderFitNormalization.test.ts):
+ *   1. build sanitizer `sanitizeRenderFit` — finite-number validation (incl. the
+ *      new `feetAnchorPct` field) + drop + identity-when-absent.
+ *   2. `createSpriteBox` — sets all three custom props from `char.render`, AND
+ *      leaves them UNSET when `render` is absent (the no-regression contract);
+ *      the reduced-motion static frame is scaled + grounded too (AC4).
+ *   3. shipped manifest — every char carries an auto render block + grounds at
+ *      the box bottom (`feetAnchorPct + offsetY === 100`).
  *
- * Non-vacuity: each block FAILS if the fix is reverted —
- *   - sanitizer block fails if `sanitizeRenderFit` drops valid numbers or keeps
- *     malformed ones.
- *   - createSpriteBox block fails if the props are not set (92px char renders
- *     identity again → small + floating) OR are set for a render-less char
- *     (68px char regresses).
- *   - the shipped-manifest block fails if F02/M03 lose their render block or
- *     F01/M01 gain one.
+ * Non-vacuity: each block FAILS if the fix is reverted — props not set (figure
+ * renders identity → small + floating), or grounding broken (a center-origin
+ * regression makes scaled figures float off the room floor).
  */
 
 import { describe, it, expect } from "vitest";
@@ -39,6 +41,16 @@ describe("sanitizeRenderFit — build-time validation (86ca5b0gj)", () => {
   it("keeps both finite-number fields", () => {
     const { render, warnings } = sanitizeRenderFit("C", { scale: 1.5, offsetY: 4 });
     expect(render).toEqual({ scale: 1.5, offsetY: 4 });
+    expect(warnings).toHaveLength(0);
+  });
+
+  it("keeps the feetAnchorPct field (86ca8n5pe) too", () => {
+    const { render, warnings } = sanitizeRenderFit("C", {
+      scale: 1.4,
+      offsetY: 26,
+      feetAnchorPct: 74,
+    });
+    expect(render).toEqual({ scale: 1.4, offsetY: 26, feetAnchorPct: 74 });
     expect(warnings).toHaveLength(0);
   });
 
@@ -82,10 +94,7 @@ describe("sanitizeRenderFit — build-time validation (86ca5b0gj)", () => {
 // ── 2. createSpriteBox prop-setting ───────────────────────────────────────────
 
 /** Build a synthetic character; render block opt-in via the 3rd arg. */
-function char(
-  name: string,
-  render?: SpriteCharacter["render"],
-): SpriteCharacter {
+function char(name: string, render?: SpriteCharacter["render"]): SpriteCharacter {
   const c: SpriteCharacter = {
     character: name,
     defaultIdle: "idle_coffee",
@@ -102,10 +111,14 @@ function char(
   return c;
 }
 
-describe("createSpriteBox — render-fit custom props (86ca5b0gj)", () => {
-  it("sets --ct-render-scale + --ct-render-offset-y from char.render", () => {
+describe("createSpriteBox — render-fit custom props (86ca5b0gj; feet-anchor 86ca8n5pe)", () => {
+  it("sets all three render props (scale + offsetY + feetAnchorPct) from char.render", () => {
     const handle = createSpriteBox({
-      char: char("ClaudeTeam-F02-Dev", { scale: 1.5, offsetY: 4 }),
+      char: char("ClaudeTeam-F02-Dev", {
+        scale: 1.412,
+        offsetY: 26.087,
+        feetAnchorPct: 73.913,
+      }),
       state: "idle",
       activity: "",
       spriteBaseUri: "vscode://x",
@@ -113,11 +126,12 @@ describe("createSpriteBox — render-fit custom props (86ca5b0gj)", () => {
       rng: () => 0,
     });
     const box = handle.element;
-    expect(box.style.getPropertyValue("--ct-render-scale")).toBe("1.5");
-    expect(box.style.getPropertyValue("--ct-render-offset-y")).toBe("4%");
+    expect(box.style.getPropertyValue("--ct-render-scale")).toBe("1.412");
+    expect(box.style.getPropertyValue("--ct-render-offset-y")).toBe("26.087%");
+    expect(box.style.getPropertyValue("--ct-render-feet-anchor")).toBe("73.913%");
   });
 
-  it("leaves BOTH props unset when char has no render block (identity no-regression)", () => {
+  it("leaves ALL props unset when char has no render block (identity no-regression)", () => {
     const handle = createSpriteBox({
       char: char("ClaudeTeam-NoRender-Dev"),
       state: "idle",
@@ -127,12 +141,13 @@ describe("createSpriteBox — render-fit custom props (86ca5b0gj)", () => {
       rng: () => 0,
     });
     const box = handle.element;
-    // Unset → the CSS :root identity fallback (1 / 0%) applies → no transform.
+    // Unset → the CSS :root identity fallbacks (1 / 0% / 50%) apply → no transform.
     expect(box.style.getPropertyValue("--ct-render-scale")).toBe("");
     expect(box.style.getPropertyValue("--ct-render-offset-y")).toBe("");
+    expect(box.style.getPropertyValue("--ct-render-feet-anchor")).toBe("");
   });
 
-  it("sets only the field present in a partial render block", () => {
+  it("sets only the field present in a partial render block (each prop independent)", () => {
     const handle = createSpriteBox({
       char: char("ClaudeTeam-F02-Dev", { scale: 1.6 }),
       state: "idle",
@@ -144,15 +159,37 @@ describe("createSpriteBox — render-fit custom props (86ca5b0gj)", () => {
     const box = handle.element;
     expect(box.style.getPropertyValue("--ct-render-scale")).toBe("1.6");
     expect(box.style.getPropertyValue("--ct-render-offset-y")).toBe("");
+    expect(box.style.getPropertyValue("--ct-render-feet-anchor")).toBe("");
+  });
+
+  it("scaled sprite still grounds: the reduced-motion frame carries the same render props", () => {
+    // The render props are set BEFORE the reduced-motion early-return, so the
+    // static frame-0 (prefers-reduced-motion path) is scaled + grounded too (AC4).
+    const handle = createSpriteBox({
+      char: char("ClaudeTeam-M03-Dev", {
+        scale: 1.412,
+        offsetY: 26.087,
+        feetAnchorPct: 73.913,
+      }),
+      state: "idle",
+      activity: "",
+      spriteBaseUri: "vscode://x",
+      reducedMotion: true, // reduced-motion path
+      rng: () => 0,
+    });
+    const box = handle.element;
+    expect(box.dataset.reducedMotion).toBe("true"); // confirm we took that path
+    expect(box.style.getPropertyValue("--ct-render-scale")).toBe("1.412");
+    expect(box.style.getPropertyValue("--ct-render-feet-anchor")).toBe("73.913%");
   });
 });
 
-// ── 3. shipped manifest — only the 92px chars carry render-fit ───────────────
+// ── 3. shipped manifest — every char auto-normalizes (86ca8n5pe) ─────────────
 
-describe("GENERATED_SPRITE_MANIFEST render-fit wiring (86ca5b0gj)", () => {
-  it("v3 92×92 chars (F01/M01/F02/M03) carry a render block with scale > 1", () => {
-    // Every shipped persona is now the v3 92×92 build (F01 overwritten in place
-    // 86ca5j1mt); all carry the render-fit block (scale 1.5, offsetY 4).
+describe("GENERATED_SPRITE_MANIFEST render-fit wiring (86ca5b0gj; 86ca8n5pe)", () => {
+  it("every shipped char carries an auto-computed render block with all three fields", () => {
+    // Render-fit is now AUTO-computed from the measured figure bbox (86ca8n5pe) —
+    // every char carries scale + offsetY + feetAnchorPct, no per-char manual block.
     for (const name of [
       "ClaudeTeam-F01-Dev",
       "ClaudeTeam-M01-Dev",
@@ -162,13 +199,29 @@ describe("GENERATED_SPRITE_MANIFEST render-fit wiring (86ca5b0gj)", () => {
       const c = GENERATED_SPRITE_MANIFEST.characters[name];
       expect(c, `${name} must be in the manifest`).toBeDefined();
       expect(c.render, `${name} must carry render-fit`).toBeDefined();
+      expect(typeof c.render?.scale, `${name}.scale`).toBe("number");
+      expect(typeof c.render?.offsetY, `${name}.offsetY`).toBe("number");
+      expect(typeof c.render?.feetAnchorPct, `${name}.feetAnchorPct`).toBe("number");
+      // v3 chars (figure ~50% of canvas) are enlarged toward the M02 target.
       expect(c.render?.scale ?? 1).toBeGreaterThan(1);
     }
   });
 
+  it("every shipped char's feet ground at the box bottom (scale-about-feet contract)", () => {
+    // feetAnchorPct + offsetY === 100 → the transform drops the feet to the box
+    // bottom (= the scene room floor). FAILS if a center-origin regression breaks
+    // grounding (the floated-figure bug this feature fixes).
+    for (const c of Object.values(GENERATED_SPRITE_MANIFEST.characters)) {
+      if (!c.render) continue;
+      expect(
+        (c.render.feetAnchorPct ?? 50) + (c.render.offsetY ?? 0),
+        `${c.character} feet must ground at 100%`,
+      ).toBeCloseTo(100, 1);
+    }
+  });
+
   it("a character with no render block resolves to identity (no transform)", () => {
-    // No shipped character omits the render block any more (all are v3). The
-    // identity path is asserted directly: an unknown character has no render-fit.
+    // An unknown character has no render-fit → the CSS :root identity fallback.
     const c = GENERATED_SPRITE_MANIFEST.characters["ClaudeTeam-Z99-Dev"];
     expect(c).toBeUndefined();
   });

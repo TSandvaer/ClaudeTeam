@@ -171,7 +171,9 @@ export type PlaybackOverrideTable = Record<string, PlaybackOverride>;
 export function resolvePlayback(
   characterName: string,
   animName: string,
-  source: GeneratedSpriteManifest | Record<string, PlaybackOverrideTable> = GENERATED_SPRITE_MANIFEST,
+  source:
+    | GeneratedSpriteManifest
+    | Record<string, PlaybackOverrideTable> = GENERATED_SPRITE_MANIFEST,
 ): PlaybackOverride {
   // Injected flat override-table form (tests): `{ [char]: { [anim]: override } }`.
   // No pose-default layer in this form — return the per-char entry directly.
@@ -480,9 +482,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
       ? char.activePoolLoopsPerPose
       : loopsPerActivePose;
   const cadence =
-    typeof cadenceRaw === "number" &&
-    Number.isFinite(cadenceRaw) &&
-    cadenceRaw > 0
+    typeof cadenceRaw === "number" && Number.isFinite(cadenceRaw) && cadenceRaw > 0
       ? Math.trunc(cadenceRaw)
       : 1;
   let activeRotIdx = priorActiveRotIdx ?? 0;
@@ -498,8 +498,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     // cursor means read→work RESUMES (not a fresh reset), while a true idle→active
     // gap (priorWasActive false) OR a first render (priorActiveRotIdx undefined)
     // restarts rotation at activePool[0] (spec A.4 + A.5).
-    const freshActiveEpisode =
-      priorWasActive !== true || priorActiveRotIdx === undefined;
+    const freshActiveEpisode = priorWasActive !== true || priorActiveRotIdx === undefined;
     if (freshActiveEpisode) {
       // idle→active (or first render): restart rotation at the top of the pool.
       activeRotIdx = 0;
@@ -539,8 +538,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // next non-read render, per spec A.5). A single-/empty-pool degrades correctly:
   // empty pool → activePick null → no rotation (A.6); single member → cursor wraps
   // 0→0, a visual no-op (A.6).
-  const rotates =
-    isActive && activePick !== null && char.activePool.length > 0;
+  const rotates = isActive && activePick !== null && char.activePool.length > 0;
 
   // Canonical pose name for this render (active name or idle pick). Used for
   // playback-position resume (E1 fix 86ca2c4t8) and exposed on the handle so a
@@ -552,25 +550,30 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   box.className = "sprite-box";
   box.dataset.character = char.character;
 
-  // Per-character render-fit (ticket 86ca5b0gj). v3 92×92 sprites bake the
-  // figure into only ~50% of the canvas vs ~75% for the legacy 68×68 chars, so
-  // with `.sprite-frame { object-fit: contain }` they render smaller AND float
-  // high (the big transparent bottom margin pushes the figure up). When the
-  // character declares a `render` block, expose it as two CSS custom props on
-  // the box; `.sprite-frame`'s `transform` reads them (origin: center center,
-  // dashboard.css:701) to enlarge + re-anchor the figure to match the 68px chars.
-  // Absent → props unset → the dashboard.css fallbacks (1 / 0%) → identity
-  // transform → 68×68 chars render byte-identically (no regression). The values
-  // are sponsor-tunable on reload via the manifest OR the :root fallback tokens.
+  // Per-character render-fit (ticket 86ca5b0gj; roster-wide AUTO-normalization
+  // 86ca8n5pe). Characters have different canvas sizes (92×92 v3 vs 68×68 legacy)
+  // + fill ratios, so with `.sprite-frame { object-fit: contain }` their figures
+  // render at different apparent sizes + anchors. The build measures each
+  // character's figure bbox and bakes a `{ scale, offsetY, feetAnchorPct }`
+  // correction; expose all three as CSS custom props on the box. `.sprite-frame`'s
+  // transform reads them (transform-origin: center <feetAnchorPct>) to scale ABOUT
+  // THE FEET (grounding preserved on scene rooms) and drop the feet to the box
+  // bottom = the room floor. Absent / partial → the dashboard.css fallbacks
+  // (scale 1 / offset 0% / origin 50%) apply → identity for an unmeasured /
+  // render-less char (no regression). Each prop is independent so a partial block
+  // (e.g. a manual offsetY override merged onto auto scale) sets only what it has.
   if (char.render) {
     if (typeof char.render.scale === "number" && Number.isFinite(char.render.scale)) {
       box.style.setProperty("--ct-render-scale", String(char.render.scale));
     }
-    if (
-      typeof char.render.offsetY === "number" &&
-      Number.isFinite(char.render.offsetY)
-    ) {
+    if (typeof char.render.offsetY === "number" && Number.isFinite(char.render.offsetY)) {
       box.style.setProperty("--ct-render-offset-y", `${char.render.offsetY}%`);
+    }
+    if (
+      typeof char.render.feetAnchorPct === "number" &&
+      Number.isFinite(char.render.feetAnchorPct)
+    ) {
+      box.style.setProperty("--ct-render-feet-anchor", `${char.render.feetAnchorPct}%`);
     }
   }
 
@@ -723,8 +726,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     // lands on (the bug is per-POSE, not per-character) — while a frame's full
     // configured dwell (peak/final) is still respected, just spread across the
     // re-renders it takes to elapse.
-    const elapsed =
-      typeof priorElapsedMs === "number" && priorElapsedMs >= 0 ? priorElapsedMs : 0;
+    const elapsed = typeof priorElapsedMs === "number" && priorElapsedMs >= 0 ? priorElapsedMs : 0;
     carryElapsedMs = elapsed;
     // 86ca4atwt §A.3 — if the re-render re-seats us EXACTLY on `winEnd`, the prior
     // box already incremented `activeLoopCount` for that wrap (on the tick that
@@ -775,8 +777,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
   // pick a reachable apex — see playbackTuner.populateApexFrames). With no window
   // declared (winStart=0, winEnd=lastIndex) this is byte-identical to the old
   // full-clip guard, so frame 0 (and any clip frame) still dwells as before.
-  const peakIsValid =
-    typeof peakIndex === "number" && peakIndex >= winStart && peakIndex <= winEnd;
+  const peakIsValid = typeof peakIndex === "number" && peakIndex >= winStart && peakIndex <= winEnd;
 
   // True only for the synchronous construction tick (the box's first paint).
   // The first paint may RESUME a frame the prior box re-showed without finishing
@@ -846,9 +847,7 @@ export function createSpriteBox(props: SpriteBoxProps): SpriteBoxHandle {
     // to flip to +1). A single-frame window has no cycle.
     const completesLoop =
       winEnd > winStart &&
-      (isPingpong
-        ? frameIdx === winStart && direction === -1
-        : frameIdx === winEnd);
+      (isPingpong ? frameIdx === winStart && direction === -1 : frameIdx === winEnd);
     // Advance to the next frame WITHIN the window.
     if (isPingpong && winEnd > winStart) {
       // Reverse direction AT each window endpoint (naive endpoint-hold: winStart

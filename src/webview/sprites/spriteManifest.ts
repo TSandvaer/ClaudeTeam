@@ -52,36 +52,52 @@ export interface SpriteAnimation {
 }
 
 /**
- * Per-character render-fit tuning (ticket 86ca5b0gj). v3 92×92 persona sprites
- * (ClaudeTeam-F02-Dev, ClaudeTeam-M03-Dev) bake the figure into only ~50% of the
- * canvas height (measured: figure ≈ 46–51px of 92px, with a ~20–24px transparent
- * bottom margin), whereas the legacy 68×68 chars (F01/M01/M02) fill ~75% (≈48px
- * of 68px, ~10px bottom margin). `.sprite-frame` uses `object-fit: contain`, which
- * scales the WHOLE canvas (including the transparent margin) into the fixed box —
- * so a 92px char renders ≈ 50/75 ≈ 0.7× the apparent figure size of a 68px char
- * AND floats high (the big bottom margin pushes the figure up). This block lets a
- * character declare a CSS-transform correction applied to its `.sprite-frame`:
- * `scale` enlarges the figure to match the 68px apparent size; `offsetY` (a % of
- * the box, positive = DOWN/forward toward the viewer) re-anchors the figure lower
- * in the tile. The transform-origin is `center center` (dashboard.css:701): the
- * v3 figure's feet sit ~74% down the 92px canvas, so scaling 1.5× about the
- * center lands the feet at ≈86% down — matching the 68px chars' ~85% — while
- * enlarging the figure. A `bottom` origin would instead LIFT the feet (it scales
- * the transparent bottom margin too); `offsetY` then fine-tunes the figure down.
+ * Per-character render-fit (ticket 86ca5b0gj; roster-wide AUTO-normalization
+ * 86ca8n5pe). The roster mixes canvas sizes (92×92 v3 vs 68×68 legacy) AND fill
+ * ratios — a v3 figure is ≈51% of its 92px canvas; a legacy M02 figure ≈71% of
+ * its 68px canvas. `.sprite-frame` uses `object-fit: contain`, which fits the
+ * WHOLE square canvas (including the transparent margin) into the fixed box — so
+ * without correction a v3 char renders ≈51/71 ≈ 0.7× the apparent figure size of
+ * an M02 char AND at a different vertical anchor.
  *
- * Absent → no transform (identity) → the 68×68 chars render BYTE-IDENTICALLY (no
- * regression). The values are SPONSOR-TUNABLE on reload: they bake into the
- * `--ct-render-scale` / `--ct-render-offset-y` custom props on each `.sprite-box`,
- * and the dashboard.css `:root` fallback tokens are the single nudge point if the
- * sponsor wants to retune without re-running the build.
+ * The build script (`scripts/build-sprite-manifest.mjs` → `computeRenderFit`)
+ * MEASURES each character's figure bbox from its base/idle south frame and bakes
+ * this block automatically so EVERY roster character (current + future M04/F03 —
+ * no per-char special-casing) renders its figure at a UNIFORM on-tile height,
+ * grounded on the scene floor. A character's `animations.json` MAY also carry a
+ * hand-tuned `render` block that overrides the auto values per-field (the sponsor
+ * nudge lever); the auto value is the default.
+ *
+ * The three fields drive a feet-anchored CSS transform on `.sprite-frame`:
+ *   - `transform-origin: center <feetAnchorPct>` — the scale pivots about the
+ *     figure's FEET, so the feet do NOT drift when the figure is enlarged. This
+ *     is what preserves grounding on a scene room (floor pinned to box bottom);
+ *     the old `center center` origin floated the figure off the floor.
+ *   - `scale` enlarges/shrinks the figure about the feet to the uniform target.
+ *   - `offsetY` (translateY %, applied after the scale) drops the feet from their
+ *     measured position to the box bottom = the room floor.
+ *
+ * Absent → no transform (identity) → an unmeasured / render-less character renders
+ * BYTE-IDENTICALLY (no-regression contract). The values bake into the
+ * `--ct-render-scale` / `--ct-render-offset-y` / `--ct-render-feet-anchor` custom
+ * props on each `.sprite-box`; the dashboard.css `:root` fallback tokens (1 / 0% /
+ * 50%) are the single nudge point to retune the WHOLE roster without a rebuild.
  */
 export interface SpriteRenderFit {
-  /** Figure-size multiplier (CSS `scale`). 1 = unchanged. ~1.5 lifts a 92px
-   *  figure to the legacy 68px apparent size. Absent → 1. */
+  /** Figure-size multiplier (CSS `scale`). 1 = unchanged. Computed as
+   *  TARGET_FIGURE_FRACTION / measured-fill so the on-tile figure height is
+   *  uniform across the roster. Absent → 1. */
   scale?: number;
   /** Vertical re-anchor as a % of the sprite box, POSITIVE = DOWN / forward
-   *  toward the viewer (CSS `translateY(<offsetY>%)`). Absent → 0. */
+   *  toward the viewer (CSS `translateY(<offsetY>%)`). Computed as
+   *  100 − feetAnchorPct so the feet drop to the box bottom (the room floor).
+   *  Absent → 0. */
   offsetY?: number;
+  /** The figure's FEET position as a % of the sprite box (CSS `transform-origin`
+   *  Y). Measured = (figureBottom + 1) / canvasH × 100. Scaling pivots about this
+   *  point so the feet stay grounded when the figure is enlarged. Absent → 50%
+   *  (center — the legacy identity origin for an unmeasured char). */
+  feetAnchorPct?: number;
 }
 
 /** One character's full animation set. */

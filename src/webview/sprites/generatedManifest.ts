@@ -13,8 +13,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
     "ClaudeTeam-F01-Dev": {
       "character": "ClaudeTeam-F01-Dev",
       "render": {
-        "scale": 1.5,
-        "offsetY": 4
+        "scale": 1.476,
+        "offsetY": 28.261,
+        "feetAnchorPct": 71.739
       },
       "defaultIdle": "idle_coffee",
       "idlePool": [
@@ -152,8 +153,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
     "ClaudeTeam-F02-Dev": {
       "character": "ClaudeTeam-F02-Dev",
       "render": {
-        "scale": 1.5,
-        "offsetY": 4
+        "scale": 1.412,
+        "offsetY": 26.087,
+        "feetAnchorPct": 73.913
       },
       "defaultIdle": "idle_coffee",
       "idlePool": [
@@ -286,8 +288,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
     "ClaudeTeam-M01-Dev": {
       "character": "ClaudeTeam-M01-Dev",
       "render": {
-        "scale": 1.5,
-        "offsetY": 4
+        "scale": 1.412,
+        "offsetY": 26.087,
+        "feetAnchorPct": 73.913
       },
       "defaultIdle": "idle_coffee",
       "idlePool": [
@@ -420,8 +423,9 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
     "ClaudeTeam-M03-Dev": {
       "character": "ClaudeTeam-M03-Dev",
       "render": {
-        "scale": 1.5,
-        "offsetY": 4
+        "scale": 1.412,
+        "offsetY": 26.087,
+        "feetAnchorPct": 73.913
       },
       "defaultIdle": "idle_coffee",
       "idlePool": [

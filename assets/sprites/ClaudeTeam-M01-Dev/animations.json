@@ -5,20 +5,10 @@
   "base_id": "dfd4d94e-990c-4e8c-996d-31216b074929",
   "sprites_root": "_pixellab_anims",
   "base_portrait_folder": "ClaudeTeam-M01-Dev-v3",
-  "_render_note": "Per-character render-fit (ticket 86ca5b0gj). v3 92x92 sprites bake the figure into only ~50% of the canvas (measured: figure ~46-51px of 92px, ~20-24px transparent bottom margin) vs ~75% for the legacy 68x68 chars (F01/M01/M02). With `.sprite-frame { object-fit: contain }` the WHOLE canvas scales into the box, so a 92px char renders ~0.7x the apparent figure size AND floats high. `scale` enlarges the figure to the 68px apparent size; `offsetY` (% of box, positive = DOWN/forward toward the viewer) fine-anchors it. Origin is center-center: scale 1.5 lands the feet at ~86% down, matching the 68px chars. SPONSOR-TUNABLE on reload (edit + npm run build + reload, OR override the dashboard.css :root --ct-render-scale / --ct-render-offset-y fallbacks for a no-rebuild nudge). Omit the block to render identity (no transform).",
-  "render": {
-    "scale": 1.5,
-    "offsetY": 4
-  },
+  "_render_note": "Render-fit is now AUTO-COMPUTED at build time from the measured figure bbox of the base/idle south frame (ticket 86ca8n5pe) — the whole roster normalizes to a UNIFORM on-tile figure height grounded on the scene floor, regardless of canvas size (92x92 v3 vs 68x68 legacy) or fill ratio. scripts/build-sprite-manifest.mjs `computeRenderFit` bakes { scale, offsetY, feetAnchorPct } onto the manifest: scale = TARGET_FIGURE_FRACTION / measured-fill; feetAnchorPct = the feet position (transform pivots about the feet so grounding is preserved); offsetY = 100 - feetAnchorPct (drops the feet to the box bottom = room floor). To OVERRIDE the auto value per-field, add a `render` block here (e.g. `\"render\": { \"offsetY\": 26 }`) — it merges over the auto value (mergeRenderFit). No manual block = pure auto. The :root --ct-render-* fallbacks in dashboard.css are the no-rebuild nudge point.",
   "default_idle": "idle_coffee",
-  "idle_pool": [
-    "idle_coffee",
-    "idle_stretch",
-    "idle_think"
-  ],
-  "active_pool": [
-    "active_work"
-  ],
+  "idle_pool": ["idle_coffee", "idle_stretch", "idle_think"],
+  "active_pool": ["active_work"],
   "active": {
     "active_work": "tool != Read",
     "active_read": "tool == Read"

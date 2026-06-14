@@ -60,23 +60,69 @@ export function buildPoseDefaults(rawBlock: unknown): {
   warnings: string[];
 };
 
-/** Validated per-character render-fit shape baked onto the manifest (86ca5b0gj). */
+/** Validated per-character render-fit shape baked onto the manifest (86ca5b0gj;
+ *  `feetAnchorPct` added 86ca8n5pe for feet-anchored roster normalization). */
 export interface SanitizedRenderFit {
   scale?: number;
   offsetY?: number;
+  feetAnchorPct?: number;
 }
 
 /**
- * Sanitize a character's optional top-level `render` block (ticket 86ca5b0gj)
- * into `{ scale?, offsetY? }`. Mirrors `sanitizePlayback`'s policy: numeric
- * fields must be finite numbers, malformed ones dropped (with a warning) never
- * thrown; a non-object block is ignored. Returns `null` render when nothing
- * valid survives (the manifest then omits the field → identity transform).
+ * Sanitize a character's optional MANUAL `render` override block (ticket
+ * 86ca5b0gj; extended 86ca8n5pe with `feetAnchorPct`) into `{ scale?, offsetY?,
+ * feetAnchorPct? }`. Mirrors `sanitizePlayback`'s policy: numeric fields must be
+ * finite numbers, malformed ones dropped (with a warning) never thrown; a
+ * non-object block is ignored. Returns `null` render when nothing valid survives.
  */
 export function sanitizeRenderFit(
   label: string,
   raw: unknown,
 ): { render: SanitizedRenderFit | null; warnings: string[] };
+
+/**
+ * Decode a PNG and return the tight bounding box of its non-transparent pixels —
+ * the "figure bbox" used to normalize on-tile figure size (ticket 86ca8n5pe).
+ * Self-contained PNG reader (no PNG library in the repo): handles 8-bit RGBA /
+ * gray+alpha (color types 6 / 4); returns `null` when the image has no alpha
+ * channel or is fully transparent; throws on a non-PNG / unsupported depth.
+ * Impure (reads a file) — the pure bbox→render math is `computeRenderFit`.
+ */
+export function readPngAlphaBbox(filePath: string): Promise<{
+  canvasW: number;
+  canvasH: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} | null>;
+
+/**
+ * Compute the per-character render-fit transform from a measured figure bbox so
+ * every roster character renders at a UNIFORM on-tile figure height + grounds on
+ * the scene floor (ticket 86ca8n5pe). PURE — the unit-tested seam.
+ *   - `feetAnchorPct` = (figureBottom + 1) / canvasH × 100 — the feet position as
+ *     a % of the box (CSS transform-origin Y; scale pivots about the feet).
+ *   - `scale` = targetFraction / (figureH / canvasH) — enlarges/shrinks to target.
+ *   - `offsetY` = 100 − feetAnchorPct — drops the feet to the box bottom (floor).
+ * Returns `null` for degenerate inputs (non-finite, non-positive canvas, zero-
+ * height figure) so the caller falls back to identity rather than baking a NaN.
+ */
+export function computeRenderFit(
+  m: { figureTop: number; figureBottom: number; canvasH: number } | null | undefined,
+  targetFraction?: number,
+): { scale: number; offsetY: number; feetAnchorPct: number } | null;
+
+/**
+ * Merge the auto-computed render-fit (bbox-measured) with a character's optional
+ * MANUAL override (ticket 86ca8n5pe). PURE. Field-level merge — a hand-tuned
+ * field WINS over the auto value (sponsor nudge one field without losing the
+ * others). Returns `null` only when BOTH inputs are null.
+ */
+export function mergeRenderFit(
+  auto: SanitizedRenderFit | null,
+  manual: SanitizedRenderFit | null,
+): SanitizedRenderFit | null;
 
 /**
  * Detect anim-looking keys placed at the JSON ROOT of `pose-defaults.json`
