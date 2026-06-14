@@ -566,3 +566,7 @@ ENTRY 20260614T100743Z: 86ca8mj84 -> in review (PR #223 opened — team-box head
 ENTRY 20260614T110316Z: 86ca8mquy -> in progress (Maya dispatched — fix hydrateState sibling-drop of hidden/removed member-keys + whole-state round-trip GUARD property test; branch maya/86ca8mquy-hydrate-member-keys)
 
 ENTRY 20260614T110316Z-r: 86ca8mquy -> in review (PR #224 opened — hydrateState member-keys fix + round-trip GUARD; HEAD 90676b7; reviewer Felix then Sage QA)
+
+ENTRY 20260615T005800Z: 86ca8r4jc -> in progress (Maya dispatched — wire v3 chars M04 + F03 into the manifest; branch maya/86ca8r4jc-wire-m04-f03)
+
+ENTRY 20260615T005800Z-r: 86ca8r4jc -> in review (PR #228 opened — M04 + F03 v3 wiring; HEAD ee866b9; reviewer Felix then Sage QA)
