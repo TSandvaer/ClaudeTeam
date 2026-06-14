@@ -39,7 +39,7 @@
       "dwellFrameIndex": 0,
       "finalDwellMs": 5700,
       "playbackMode": "pingpong",
-      "dwellMs": 2350,
+      "dwellMs": 2750,
       "startFrame": 0,
       "endFrame": 6
     },

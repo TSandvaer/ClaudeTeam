@@ -221,25 +221,37 @@ describe("scene-bg accessors — sceneForId / defaultScene (86ca3kjyk)", () => {
     expect(scene!.image).toBe("sprites/scenes/room3.png");
   });
 
-  it("the SHIPPED generated manifest carries FIVE scenes — break_room + home_office + living_room + park + room3 (86ca8bh63)", () => {
-    // Binds to the real regenerated manifest. break_room + living_room + park were
-    // wired as registry entries 3-5 (86ca8bh63), mirroring the home_office wiring
-    // (86ca89pth). Fails if any PNG is dropped from assets/sprites/scenes/ (the
-    // build script keys byId off the on-disk files).
+  it("the SHIPPED generated manifest carries SEVEN scenes — break_room + home_office + library + living_room + park + room3 + rooftop (86ca8r18e)", () => {
+    // Binds to the real regenerated manifest. library + rooftop were wired as
+    // registry entries 6-7 (86ca8r18e), mirroring the break_room/living_room/park
+    // wiring (86ca8bh63) and the home_office wiring (86ca89pth). Fails if any PNG
+    // is dropped from assets/sprites/scenes/ (the build script keys byId off the
+    // on-disk files).
     const scenes = GENERATED_SPRITE_MANIFEST.scenes;
     expect(scenes).toBeDefined();
-    // Exactly the five shipped ids resolve in byId (sorted).
+    // Exactly the seven shipped ids resolve in byId (JS lexicographic sort —
+    // "rooftop" sorts before "room3" because 'f' < 'm' at index 3).
     expect(Object.keys(scenes!.byId).sort()).toEqual([
       "break_room",
       "home_office",
+      "library",
       "living_room",
       "park",
+      "rooftop",
       "room3",
     ]);
     // defaultSceneId stays room3 — adding scenes must NOT move the default.
     expect(scenes!.defaultSceneId).toBe("room3");
-    // All five ids resolve via sceneForId (the per-role-upgrade lookup path).
-    for (const id of ["break_room", "home_office", "living_room", "park", "room3"]) {
+    // All seven ids resolve via sceneForId (the per-role-upgrade lookup path).
+    for (const id of [
+      "break_room",
+      "home_office",
+      "library",
+      "living_room",
+      "park",
+      "room3",
+      "rooftop",
+    ]) {
       expect(sceneForId(id, GENERATED_SPRITE_MANIFEST)).toEqual({
         id,
         image: `sprites/scenes/${id}.png`,
