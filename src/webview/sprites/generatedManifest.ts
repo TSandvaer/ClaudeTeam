@@ -43,7 +43,7 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
           "playback": {
             "speedMultiplier": 0.75,
             "dwellFrameIndex": 0,
-            "dwellMs": 2350,
+            "dwellMs": 2750,
             "finalDwellMs": 5700,
             "startFrame": 0,
             "endFrame": 6,
@@ -566,6 +566,10 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
         "id": "home_office",
         "image": "sprites/scenes/home_office.png"
       },
+      "library": {
+        "id": "library",
+        "image": "sprites/scenes/library.png"
+      },
       "living_room": {
         "id": "living_room",
         "image": "sprites/scenes/living_room.png"
@@ -573,6 +577,10 @@ export const GENERATED_SPRITE_MANIFEST: GeneratedSpriteManifest = {
       "park": {
         "id": "park",
         "image": "sprites/scenes/park.png"
+      },
+      "rooftop": {
+        "id": "rooftop",
+        "image": "sprites/scenes/rooftop.png"
       },
       "room3": {
         "id": "room3",
