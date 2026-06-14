@@ -306,10 +306,10 @@ body {
   overflow-wrap: anywhere;
 }
 
-.session-entrypoint {
-  color: var(--ct-color-fg-muted);
-  font-size: smaller;
-}
+/* 86ca8mac6: the `.session-entrypoint` rule was removed alongside the dropped
+ * entrypoint chip — the dashboard header now renders the resolved session
+ * label only (no `[{entrypoint}]` tag). `entrypoint` still rides the wire for
+ * the CLI presenter + diagnostics panel, neither of which uses this class. */
 
 /* DEMOTED session id — small muted monospace chip pushed to the trailing
  * edge of the header. `margin-left: auto` floats it right of the title +

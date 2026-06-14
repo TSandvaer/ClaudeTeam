@@ -5,7 +5,6 @@
  *   <section class="session-block" data-session-id data-alive>
  *     <header class="session-header">
  *       <span class="session-title">{resolved title}</span>     <!-- PRIMARY -->
- *       <span class="session-entrypoint">[{entrypoint}]</span>
  *       <span class="session-git-branch">{branch}</span>        <!-- when present -->
  *       <span class="session-dead-badge">dead</span>            <!-- only when !isAlive -->
  *       <span class="session-id" title="pid={pid}">ⓘ {shortId}</span>  <!-- DEMOTED, trailing -->
@@ -23,6 +22,13 @@
  * JSONLs/logs, just not dominant). `pid` folds into that chip's tooltip and
  * `cwd` folds into the title's tooltip — both demoted from standalone spans
  * (§5.2). The gitBranch chip + `data-label-source` attribute are unchanged.
+ *
+ * Entrypoint chip dropped (86ca8mac6, sponsor 2026-06-14): the header line is
+ * the LIVE SESSION'S resolved label ONLY — no `[{entrypoint}]` tag and no
+ * team-name prefix (the resolver already produces a title-only string). Team
+ * identity stays surfaced on the team-card sub-label (`TEAM {name} (N visible)`
+ * in teamCard.ts), which is unchanged. `entrypoint` remains on the wire
+ * (SessionTree) — the CLI presenter + diagnostics panel still render it.
  *
  * Dead session treatment (§4): isAlive === false adds `session-block--dead`
  * class. CSS dims via opacity + --vscode-disabledForeground. No team cards or
@@ -178,8 +184,11 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
   labelSpan.dataset.labelSource = resolved.source;
   header.appendChild(labelSpan);
 
-  // Entrypoint chip — small muted chip, unchanged (§5.2).
-  appendSpan(header, "session-entrypoint", `[${session.entrypoint}]`);
+  // 86ca8mac6: the entrypoint chip ([{entrypoint}]) is intentionally NOT
+  // rendered here. Sponsor decision 2026-06-14 ("Session title only"): the
+  // header line is the live session's resolved label ONLY. `entrypoint`
+  // stays on the wire for the CLI presenter + diagnostics panel; it is simply
+  // not part of the dashboard header surface anymore.
 
   // 86ca03nww: gitBranch chip — small badge near the title surfacing the
   // active branch at the latest JSONL record. Hidden when the parser found
@@ -264,15 +273,4 @@ export function renderSessionBlock(props: SessionBlockProps): HTMLElement {
   }
 
   return block;
-}
-
-function appendSpan(
-  parent: HTMLElement,
-  className: string,
-  text: string,
-): void {
-  const span = document.createElement("span");
-  span.className = className;
-  span.textContent = text;
-  parent.appendChild(span);
 }
