@@ -138,6 +138,53 @@ describe("serializeState — Map → Record conversion", () => {
     expect(serialized.sessions).toEqual([]);
   });
 
+  // 86ca8mj84 — the LIVE SESSION TITLE bug. `serializeState` previously copied a
+  // hardcoded field subset that OMITTED `customTitle` + `gitBranch`. Both are
+  // OPTIONAL on `SessionTree`, so the omission satisfied `SerializedSessionTree`
+  // and compiled green — but the webview always received `customTitle:
+  // undefined`, so the session-header resolver fell through to the cwd-basename
+  // (`ClaudeTeam`) instead of the sponsor's rename. These tests FAIL against the
+  // pre-fix serializer (the fields are absent on the wire) and pass after.
+  it("threads customTitle (sponsor rename) onto the wire (86ca8mj84)", () => {
+    const tiles = new Map<string, AgentTile[]>();
+    const session: SessionTree = {
+      ...makeSession("sid-ct", tiles),
+      customTitle: "claude team - live session",
+    };
+    const serialized = serializeState({ sessions: [session] });
+    // Round-trip through JSON so the assertion reflects the real wire bytes,
+    // not just the in-memory return shape.
+    const wire = JSON.parse(JSON.stringify(serialized));
+    expect(wire.sessions[0].customTitle).toBe("claude team - live session");
+  });
+
+  it("threads gitBranch onto the wire (86ca8mj84)", () => {
+    const tiles = new Map<string, AgentTile[]>();
+    const session: SessionTree = {
+      ...makeSession("sid-gb", tiles),
+      gitBranch: "maya/86ca8mj84-team-box-session-title",
+    };
+    const serialized = serializeState({ sessions: [session] });
+    const wire = JSON.parse(JSON.stringify(serialized));
+    expect(wire.sessions[0].gitBranch).toBe(
+      "maya/86ca8mj84-team-box-session-title",
+    );
+  });
+
+  it("customTitle absent on SessionTree stays absent on the wire (back-compat)", () => {
+    // makeSession sets neither customTitle nor gitBranch — a pre-86ca03nww
+    // session. The conditional spread must keep the keys absent (not present
+    // with `undefined`) so the resolver's `typeof === "string"` Tier-1 check
+    // falls through cleanly.
+    const tiles = new Map<string, AgentTile[]>();
+    const serialized = serializeState({
+      sessions: [makeSession("sid-noct", tiles)],
+    });
+    const wire = JSON.parse(JSON.stringify(serialized));
+    expect("customTitle" in wire.sessions[0]).toBe(false);
+    expect("gitBranch" in wire.sessions[0]).toBe(false);
+  });
+
   it("threads memberColor on AgentTile through to the wire (86c9zq9vm)", () => {
     const tile = { ...makeTile("felix"), memberColor: "#5d8aa8" };
     const tiles = new Map<string, AgentTile[]>([["alpha", [tile]]]);

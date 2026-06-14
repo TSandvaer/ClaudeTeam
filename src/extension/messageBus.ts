@@ -56,6 +56,22 @@ export function serializeState(state: DashboardState): SerializedDashboardState 
       isAlive: session.isAlive,
       cwd: session.cwd,
       title: session.title,
+      // 86ca8mj84: carry the two label-surface fields onto the wire so the
+      // webview's `resolveSessionLabel` can resolve the LIVE SESSION TITLE
+      // (customTitle > aiTitle > cwd-basename). Before this fix `serializeState`
+      // copied a hardcoded field subset that OMITTED `customTitle` + `gitBranch`
+      // — both are OPTIONAL on `SessionTree`, so the omission satisfied the
+      // `SerializedSessionTree` type and compiled green, but the webview always
+      // received `customTitle: undefined` → the resolver fell through to the
+      // cwd-basename fallback (`ClaudeTeam`) instead of the sponsor's rename.
+      // Both are JSON-safe scalars; omit-when-undefined keeps the wire shape
+      // back-compat (pre-86ca03nww sessions carry neither field).
+      ...(session.customTitle !== undefined
+        ? { customTitle: session.customTitle }
+        : {}),
+      ...(session.gitBranch !== undefined
+        ? { gitBranch: session.gitBranch }
+        : {}),
       // Map<string, AgentTile[]> → Record<string, AgentTile[]>
       rosterTiles: Object.fromEntries(session.rosterTiles),
       teamOrder: session.teamOrder,

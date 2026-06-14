@@ -558,3 +558,5 @@ ENTRY 20260606T122120Z: 86ca5aczf -> in review (PR #200 opened)
 ## STATUS FLIP — 86ca88nvd (Iris, 2026-06-12): flip `to do -> in progress -> in review` (scene-per-pose-per-character DESIGN SPEC — scene picker row in tuner + 3-layer scene cascade + crossfade + degrade paths + LOCKED vocabulary contract; doubles as Felix∥Maya parallel-dispatch contract; branch `iris/86ca88nvd-scene-per-pose-spec`); reviewer Maya; after merge `in review -> complete`.
 - spec: `team/iris-design/scene-per-pose-spec.md` (new); cross-ref pointer added to `team/iris-design/anim-tuner-spec.md` amendment history
 - base: origin/main `869a7f33ab87da67a8c7e34ae0be9536eda21a93`
+
+ENTRY 20260614T095413Z: 86ca8mj84 -> in progress (Maya dispatched — team-box header must show LIVE SESSION TITLE; branch maya/86ca8mj84-team-box-session-title)

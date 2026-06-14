@@ -41,6 +41,7 @@ import {
   writeRoster,
   appendAsyncLaunchedAck,
   appendFinishedToolResult,
+  parentJsonlPath,
 } from "./helpers/tempdir.js";
 
 import { runTick } from "../../src/extension/watcher/watcherLoop.js";
@@ -48,6 +49,7 @@ import { cwdToSlug } from "../../src/shared/slug.js";
 import {
   isCollapsedPersonaGroup,
   isMultiAgentPersonaTile,
+  resolveSessionLabel,
 } from "../../src/shared/types.js";
 import type { AgentTile, RosterTileEntry } from "../../src/shared/types.js";
 
@@ -482,5 +484,142 @@ describe("86c9zfmke: readSessionMetadata single-pass scan via runTick", () => {
     expect(s.gitBranch).toBe("felix/feature-x");
     const alphaTiles = s.rosterTiles.get("claudeteam-alpha") ?? [];
     expect(findTile(alphaTiles, "felix")!.state).toBe("finished");
+  });
+});
+
+// ===========================================================================
+// 86ca8mj84 — ai-title KEY is `aiTitle` on disk, not `title`.
+//
+// The previous parser read `rec["title"]` from the `ai-title` record, but real
+// Claude Code (verified live session c023bfef on v2.1.177) writes the VALUE
+// under the `aiTitle` key:
+//   {"type":"ai-title","sessionId":"c023bfef-...","aiTitle":"Resume scene per pose shipped session"}
+// So `rec["title"]` was `undefined` on every real session → the ai-title tier
+// never fired → the resolver fell through to the cwd-basename (`ClaudeTeam`).
+//
+// The `writeParentJsonl` fixture helper used to synthesize the record with key
+// `title`, which exactly matched the buggy read — that is why the whole
+// integration suite stayed GREEN while the parser could not extract a real
+// ai-title. This block writes the parent JSONL BYTE-FOR-BYTE in the real
+// on-disk key shape (raw write, NOT the helper) so the parse is asserted
+// against ground truth. It FAILS against the pre-fix parser and passes after.
+// ===========================================================================
+describe("86ca8mj84: ai-title `aiTitle` key parse (real on-disk shape)", () => {
+  let root: string;
+  let cleanup: () => void;
+  let rosterPath: string;
+
+  beforeEach(() => {
+    ({ root, cleanup } = createTempRoot());
+    rosterPath = writeRoster(root, "teams-valid.yaml");
+    writeSessionFile(root, { pid: PID, sessionId: SESSION_ID, cwd: CWD });
+    writeMetaJson(root, CWD, SESSION_ID, AGENT_FELIX, "meta-new-schema-persona.json");
+    writeSubagentJsonl(root, CWD, SESSION_ID, AGENT_FELIX, "subagent-running.jsonl");
+  });
+
+  afterEach(() => cleanup());
+
+  it("extracts ai-title from the real `aiTitle` key (NOT `title`)", async () => {
+    // Raw write — bypass the helper so the record carries `aiTitle` exactly as
+    // Claude Code v2.1.177 writes it. The pre-fix parser read `rec["title"]`
+    // here → undefined → `(no title yet)`; this asserts the real key is read.
+    const path = parentJsonlPath(root, CWD, SESSION_ID);
+    writeFileSync(
+      path,
+      JSON.stringify({
+        type: "ai-title",
+        sessionId: SESSION_ID,
+        aiTitle: "Resume scene per pose shipped session",
+      }) + "\n",
+      "utf8",
+    );
+
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+
+    const s = state.sessions[0]!;
+    expect(s.title).toBe("Resume scene per pose shipped session");
+  });
+
+  it("falls back to the legacy `title` key when `aiTitle` is absent (older emitters)", async () => {
+    const path = parentJsonlPath(root, CWD, SESSION_ID);
+    writeFileSync(
+      path,
+      JSON.stringify({
+        type: "ai-title",
+        sessionId: SESSION_ID,
+        title: "Legacy-key session title",
+      }) + "\n",
+      "utf8",
+    );
+
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+
+    expect(state.sessions[0]!.title).toBe("Legacy-key session title");
+  });
+
+  it("LIVE SESSION TITLE end-to-end: aiTitle present + sponsor customTitle (key-order variant) → customTitle is the resolved label, distinct from cwd-basename", async () => {
+    // Reproduces the exact live c023bfef shape: a real `aiTitle` record PLUS
+    // multiple `custom-title` renames (last-wins), written raw in the on-disk
+    // key orders. The three candidate strings are deliberately all distinct:
+    //   - customTitle  = "claude team - live session"  (Tier 1, must win)
+    //   - aiTitle      = "Resume scene per pose shipped session"  (Tier 2)
+    //   - cwd-basename = "ClaudeTeam"  (Tier 3, the wrong on-screen value)
+    // so the assertion distinguishes the resolver from the fallback. The host
+    // emits BOTH title + customTitle on the SessionTree; `resolveSessionLabel`
+    // (exercised at the webview layer) then picks customTitle.
+    const path = parentJsonlPath(root, CWD, SESSION_ID);
+    const lines = [
+      // ai-title (real `aiTitle` key)
+      JSON.stringify({
+        type: "ai-title",
+        sessionId: SESSION_ID,
+        aiTitle: "Resume scene per pose shipped session",
+      }),
+      // custom-title rename #1 — key order {type,sessionId,customTitle}
+      JSON.stringify({
+        type: "custom-title",
+        sessionId: SESSION_ID,
+        customTitle: "claude team",
+      }),
+      // custom-title rename #2 (last wins) — key order {type,customTitle,sessionId}
+      JSON.stringify({
+        type: "custom-title",
+        customTitle: "claude team - live session",
+        sessionId: SESSION_ID,
+      }),
+    ];
+    writeFileSync(path, lines.join("\n") + "\n", "utf8");
+
+    const state = await runTick({
+      claudeHome: root,
+      globalRosterPath: rosterPath,
+      showAllSessionsGlobally: true,
+    });
+
+    const s = state.sessions[0]!;
+    // Both label surfaces reach the SessionTree…
+    expect(s.title).toBe("Resume scene per pose shipped session");
+    expect(s.customTitle).toBe("claude team - live session");
+    // …and the resolver picks the sponsor rename (Tier 1) — NOT the
+    // cwd-basename `ClaudeTeam` that the on-screen box wrongly showed.
+    expect(
+      resolveSessionLabel({
+        title: s.title,
+        customTitle: s.customTitle,
+        cwd: s.cwd,
+      }),
+    ).toBe("claude team - live session");
+    // Negative anchor: the bug's wrong value.
+    expect(resolveSessionLabel({ title: s.title, customTitle: s.customTitle, cwd: s.cwd })).not.toBe(
+      "ClaudeTeam",
+    );
   });
 });

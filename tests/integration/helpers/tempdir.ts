@@ -240,10 +240,17 @@ export function writeParentJsonl(
   const lines: string[] = [];
 
   if (opts.title) {
+    // 86ca8mj84: real Claude Code JSONLs carry the ai-title VALUE under the
+    // `aiTitle` key, NOT `title` (verified live session c023bfef on v2.1.177:
+    // `{"type":"ai-title",...,"aiTitle":"Resume scene per pose shipped session"}`).
+    // This helper previously wrote `title`, which matched the buggy parser's
+    // `rec["title"]` read — so the integration suite was GREEN while the parser
+    // could not extract a real on-disk ai-title. Emitting `aiTitle` here makes
+    // the existing ai-title integration tests exercise the real on-disk shape.
     lines.push(
       JSON.stringify({
         type: "ai-title",
-        title: opts.title,
+        aiTitle: opts.title,
         sessionId,
         timestamp: new Date().toISOString(),
         uuid: `ai-title-${sessionId.slice(0, 8)}`,
