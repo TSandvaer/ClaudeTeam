@@ -225,6 +225,117 @@ describe("sessionBlock — gitBranch chip (86ca03nww)", () => {
   });
 });
 
+describe("sessionBlock — header shows session title only, no entrypoint (86ca8mac6)", () => {
+  // Non-vacuity: every assertion below FAILS if the entrypoint chip is
+  // re-added to the header, OR if the title stops flowing through the
+  // resolver. Sponsor decision 2026-06-14 — "Session title only", full
+  // replacement: drop the `[{entrypoint}]` tag (and any team-name prefix)
+  // from the dashboard header line; team identity stays on the team-card
+  // sub-label (TEAM {name} (N visible)), which this component does not render.
+
+  it("does NOT render the entrypoint chip in the header", () => {
+    const block = renderSessionBlock({
+      // entrypoint is the default "claude-vscode" from makeSession.
+      session: makeSession({ customTitle: "claude team - live session" }),
+      postMessage: vi.fn(),
+    });
+    // The `.session-entrypoint` span is gone entirely.
+    expect(block.querySelector(".session-entrypoint")).toBeNull();
+    // And the entrypoint value never appears anywhere in the header text —
+    // catches a regression that drops the class but keeps the raw value.
+    const header = block.querySelector(".session-header");
+    expect(header?.textContent).not.toContain("claude-vscode");
+    expect(header?.textContent).not.toContain("[");
+  });
+
+  it("renders the resolved label ONLY (no team-name prefix, no entrypoint tag)", () => {
+    const block = renderSessionBlock({
+      session: makeSession({ customTitle: "claude team - live session" }),
+      postMessage: vi.fn(),
+    });
+    const title = block.querySelector(".session-title");
+    // The title span carries exactly the resolved label — nothing prepended
+    // (no "TEAM ", no workspace name) and nothing appended (no entrypoint).
+    expect(title?.textContent).toBe("claude team - live session");
+  });
+
+  it("the resolver precedence chain drives the HEADER title (customTitle > aiTitle > cwd basename)", () => {
+    // customTitle wins.
+    const withCustom = renderSessionBlock({
+      session: makeSession({ title: "AI title", customTitle: "renamed" }),
+      postMessage: vi.fn(),
+    });
+    expect(
+      withCustom.querySelector(".session-title")?.textContent,
+    ).toBe("renamed");
+
+    // aiTitle wins when customTitle absent.
+    const withAi = renderSessionBlock({
+      session: makeSession({ title: "AI title" }),
+      postMessage: vi.fn(),
+    });
+    expect(withAi.querySelector(".session-title")?.textContent).toBe(
+      "AI title",
+    );
+
+    // cwd basename when both absent (sentinel ai-title treated as absent).
+    const withFallback = renderSessionBlock({
+      session: makeSession({
+        title: "(no title yet)",
+        cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
+      }),
+      postMessage: vi.fn(),
+    });
+    expect(
+      withFallback.querySelector(".session-title")?.textContent,
+    ).toBe("ClaudeTeam");
+  });
+
+  it("no-title session never renders a blank header (cwd-basename fallback)", () => {
+    const block = renderSessionBlock({
+      session: makeSession({
+        title: "(no title yet)",
+        cwd: "c:\\Trunk\\PRIVATE\\ClaudeTeam",
+      }),
+      postMessage: vi.fn(),
+    });
+    const title = block.querySelector(".session-title");
+    expect(title?.textContent?.trim().length).toBeGreaterThan(0);
+    expect(title?.textContent).toBe("ClaudeTeam");
+    expect(title?.getAttribute("data-label-source")).toBe("workspace-folder");
+  });
+
+  it("re-render reflects a live custom-title change (poll tick re-build)", () => {
+    // First render: no custom title yet → falls through to ai-title.
+    const first = renderSessionBlock({
+      session: makeSession({ title: "AI title" }),
+      postMessage: vi.fn(),
+    });
+    expect(first.querySelector(".session-title")?.textContent).toBe(
+      "AI title",
+    );
+
+    // Sponsor renames the session mid-flight; the next host snapshot carries
+    // the new customTitle. The component is a pure function of its props, so
+    // a fresh render with the updated session reflects the rename immediately.
+    const second = renderSessionBlock({
+      session: makeSession({
+        title: "AI title",
+        customTitle: "claude team - live session",
+      }),
+      postMessage: vi.fn(),
+    });
+    expect(second.querySelector(".session-title")?.textContent).toBe(
+      "claude team - live session",
+    );
+    expect(
+      second.querySelector(".session-title")?.getAttribute("data-label-source"),
+    ).toBe("custom-title");
+    // Still no entrypoint chip after the re-render.
+    expect(second.querySelector(".session-entrypoint")).toBeNull();
+  });
+});
+
 describe("sessionBlock — dead session back-compat (86ca03nww does NOT regress)", () => {
   it("dead session still renders header-only (no tiles, no chips beyond gitBranch + dead-badge)", () => {
     const block = renderSessionBlock({
