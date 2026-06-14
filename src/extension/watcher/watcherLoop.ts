@@ -882,8 +882,17 @@ function readSessionMetadata(jsonlPath: string): {
     // Title branch — `type: "ai-title"`. Keep scanning the rest of the
     // file even after a title is found because finished-ids may still
     // appear in later records.
+    //
+    // 86ca8mj84: the ai-title VALUE lives under the `aiTitle` key in real
+    // Claude Code JSONLs (verified live session c023bfef on v2.1.177:
+    // `{"type":"ai-title",...,"aiTitle":"Resume scene per pose shipped session"}`).
+    // The prior code read `rec["title"]`, which is `undefined` on disk, so
+    // the ai-title tier never fired and the resolver fell through to the
+    // cwd-basename fallback. We read `aiTitle` first, then `title` as a
+    // back-compat fallback (the integration fixtures + any older Claude Code
+    // emitter that wrote the value under `title`). First non-empty match wins.
     if (recType === "ai-title" && title === null) {
-      const t = rec["title"];
+      const t = rec["aiTitle"] ?? rec["title"];
       if (typeof t === "string" && t.length > 0) title = t;
       continue;
     }

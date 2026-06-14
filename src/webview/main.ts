@@ -131,6 +131,18 @@ export function hydrateState(wire: SerializedDashboardState): WebviewAgentTree {
         isAlive: s.isAlive,
         cwd: s.cwd,
         title: s.title,
+        // 86ca8mj84: carry the two label-surface fields through hydration so
+        // the session-header resolver (`resolveSessionLabel`: customTitle >
+        // aiTitle > cwd-basename) sees the LIVE SESSION TITLE. Both are
+        // OPTIONAL on `WebviewSessionTree`, and this map previously copied a
+        // hardcoded subset that omitted them — so even with the host
+        // serializing them onto the wire, the webview re-stripped them here and
+        // the resolver fell through to the cwd-basename (`ClaudeTeam`).
+        // Preserve `undefined` rather than coercing so the field stays absent
+        // when the host never sent it (resolver's Tier-1 check is `typeof ===
+        // "string"`, so undefined falls through correctly either way).
+        ...(s.customTitle !== undefined ? { customTitle: s.customTitle } : {}),
+        ...(s.gitBranch !== undefined ? { gitBranch: s.gitBranch } : {}),
         rosterTiles: new Map<string, RosterTileEntry[]>(
           Object.entries(s.rosterTiles),
         ),
