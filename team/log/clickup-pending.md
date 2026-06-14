@@ -560,3 +560,5 @@ ENTRY 20260606T122120Z: 86ca5aczf -> in review (PR #200 opened)
 - base: origin/main `869a7f33ab87da67a8c7e34ae0be9536eda21a93`
 
 ENTRY 20260614T095413Z: 86ca8mj84 -> in progress (Maya dispatched — team-box header must show LIVE SESSION TITLE; branch maya/86ca8mj84-team-box-session-title)
+
+ENTRY 20260614T100743Z: 86ca8mj84 -> in review (PR #223 opened — team-box header LIVE SESSION TITLE; HEAD 790f3df; reviewer Felix then Sage QA)
