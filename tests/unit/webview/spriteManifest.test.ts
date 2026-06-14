@@ -79,14 +79,16 @@ describe("spriteForMember — 6-member gender binding (E-07b) / AC6", () => {
 });
 
 describe("generated manifest — AC6 shape", () => {
-  it("contains the harvested dev characters (F01, F02, M01, M03)", () => {
+  it("contains the harvested dev characters (F01, F02, F03, M01, M03, M04)", () => {
     expect(
       Object.keys(GENERATED_SPRITE_MANIFEST.characters).sort(),
     ).toEqual([
       "ClaudeTeam-F01-Dev",
       "ClaudeTeam-F02-Dev",
+      "ClaudeTeam-F03-Dev",
       "ClaudeTeam-M01-Dev",
       "ClaudeTeam-M03-Dev",
+      "ClaudeTeam-M04-Dev",
     ]);
   });
 
@@ -124,6 +126,8 @@ describe("read-at-screen wiring (regenerated manifest) — AC4 + AC5", () => {
     "ClaudeTeam-M01-Dev",
     "ClaudeTeam-F02-Dev",
     "ClaudeTeam-M03-Dev",
+    "ClaudeTeam-M04-Dev",
+    "ClaudeTeam-F03-Dev",
   ])(
     "%s: active_work + active_read share ONE desk folder but resolve to DISTINCT anims",
     (charName) => {
@@ -159,6 +163,77 @@ describe("read-at-screen wiring (regenerated manifest) — AC4 + AC5", () => {
     expect(char.idlePool).toEqual(["idle_coffee", "idle_stretch", "idle_think"]);
     expect(char.idlePool).not.toContain("idle_reading_book");
   });
+});
+
+describe("M04 + F03 v3 wiring (86ca8r4jc)", () => {
+  // The 2 sponsor-approved v3 chars (M04 88×88, F03 92×92), mirroring the
+  // M03/F02 v3 wiring (#205/#209). Each shares ONE desk state
+  // (sitting_on_a_chair_a) holding BOTH active_work (17f) + active_read (4f)
+  // via the folder/slug value form, has the 3-pose idle pool, a 1-member
+  // active_pool, and gets an AUTO render block from #225's build-time
+  // render-fit normalization (no manual `render` block in animations.json).
+  it.each(["ClaudeTeam-M04-Dev", "ClaudeTeam-F03-Dev"])(
+    "%s: baked with exactly 5 anims (3 idle + active_work + active_read)",
+    (charName) => {
+      const char = GENERATED_SPRITE_MANIFEST.characters[charName];
+      expect(char).toBeDefined();
+      expect(Object.keys(char.animations).sort()).toEqual([
+        "active_read",
+        "active_work",
+        "idle_coffee",
+        "idle_stretch",
+        "idle_think",
+      ]);
+      // Every anim resolved to frames.
+      for (const entry of Object.values(char.animations)) {
+        expect(entry.frames.length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  it.each(["ClaudeTeam-M04-Dev", "ClaudeTeam-F03-Dev"])(
+    "%s: 3-pose idle pool + single-member active_pool + default_idle",
+    (charName) => {
+      const char = GENERATED_SPRITE_MANIFEST.characters[charName];
+      expect(char.idlePool).toEqual(["idle_coffee", "idle_stretch", "idle_think"]);
+      // 1-member pool: pickActive always returns active_work (no-pool-equivalent
+      // dashboard pose) while enabling the tuner's Active-pool controls (86ca5ftzp).
+      expect(char.activePool).toEqual(["active_work"]);
+      expect(char.defaultIdle).toBe("idle_coffee");
+    },
+  );
+
+  it.each(["ClaudeTeam-M04-Dev", "ClaudeTeam-F03-Dev"])(
+    "%s: active_work + active_read share the sitting_on_a_chair_a desk folder but resolve to DISTINCT anims",
+    (charName) => {
+      const char = GENERATED_SPRITE_MANIFEST.characters[charName];
+      const work = char.animations.active_work;
+      const read = char.animations.active_read;
+      expect(work.folder).toBe("sitting_on_a_chair_a");
+      expect(read.folder).toBe("sitting_on_a_chair_a");
+      // Disambiguated by the <folder>/<anim_slug> value form → different frames.
+      expect(work.frames[0]).not.toBe(read.frames[0]);
+      // active_work is the 17-frame typing loop; active_read the 4-frame pro
+      // torso-lock head-scan — distinct frame counts confirm the slug split.
+      expect(work.frames.length).toBe(17);
+      expect(read.frames.length).toBe(4);
+    },
+  );
+
+  it.each(["ClaudeTeam-M04-Dev", "ClaudeTeam-F03-Dev"])(
+    "%s: gets an auto-computed render block (no manual block in animations.json)",
+    (charName) => {
+      const char = GENERATED_SPRITE_MANIFEST.characters[charName];
+      // #225 build-time render-fit auto-normalization measures the base/idle
+      // bbox and bakes { scale, offsetY, feetAnchorPct } — the manifest entry
+      // MUST carry a render block even though animations.json has none.
+      expect(char.render).toBeDefined();
+      expect(Number.isFinite(char.render!.scale)).toBe(true);
+      expect(char.render!.scale).toBeGreaterThan(0);
+      expect(Number.isFinite(char.render!.offsetY)).toBe(true);
+      expect(Number.isFinite(char.render!.feetAnchorPct)).toBe(true);
+    },
+  );
 });
 
 describe("scene-bg accessors — sceneForId / defaultScene (86ca3kjyk)", () => {

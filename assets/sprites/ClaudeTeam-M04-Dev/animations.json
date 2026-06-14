@@ -1,0 +1,68 @@
+{
+  "_note": "Canonical animation-name → sprite map for ClaudeTeam-M04-Dev (v3 88x88 persona). PixelLab does NOT export the semantic animation_name; its metadata.json keys by an action-description slug + folder. This file is the authoritative map the webview trigger logic + manifest generator (scripts/build-sprite-manifest.mjs) consume. VALUE FORMAT: a bare folder name `<state_folder>` means that folder holds exactly ONE animation (resolve animations/<sole-slug>/south/frame_*.png); a `<state_folder>/<anim_slug>` value names a SPECIFIC animation inside a folder holding MORE THAN ONE. active_work + active_read SHARE the sitting_on_a_chair_a desk state (char_id 5bc02bc4 — same desk posture → no flip during active sessions), so both use the folder/slug form. idle_pool = [idle_coffee, idle_stretch, idle_think] (webview picks at random). active_pool = [active_work] — a single-member pool (ticket 86ca5ftzp) so `pickActive` always returns active_work, keeping the dashboard pose identical to a no-pool char while enabling the tuner's Active-pool Source / Prev-Next / Cycle-over-room controls. active_read stays tool==Read-gated (NEVER pool-drawn). Slugs discovered from the harvested metadata.json — not guessed.",
+  "character": "ClaudeTeam-M04-Dev",
+  "group_id": "6a5a66fa-620a-4f59-b4e0-d0888f446647",
+  "base_id": "8efe2bda-698b-4dfd-a27f-61cf6834ce6c",
+  "sprites_root": "_pixellab_anims",
+  "base_portrait_folder": "ClaudeTeam-M04-Dev",
+  "_render_note": "Render-fit is now AUTO-COMPUTED at build time from the measured figure bbox of the base/idle south frame (ticket 86ca8n5pe) — the whole roster normalizes to a UNIFORM on-tile figure height grounded on the scene floor, regardless of canvas size (88x88 v3 vs 68x68 legacy) or fill ratio. scripts/build-sprite-manifest.mjs `computeRenderFit` bakes { scale, offsetY, feetAnchorPct } onto the manifest. To OVERRIDE the auto value per-field, add a `render` block here (e.g. \"render\": { \"offsetY\": 26 }) — it merges over the auto value (mergeRenderFit). No manual block = pure auto. The :root --ct-render-* fallbacks in dashboard.css are the no-rebuild nudge point.",
+  "default_idle": "idle_coffee",
+  "idle_pool": ["idle_coffee", "idle_stretch", "idle_think"],
+  "active_pool": ["active_work"],
+  "active": {
+    "active_work": "tool != Read",
+    "active_read": "tool == Read"
+  },
+  "animations": {
+    "idle_coffee": "holding_a_coffee_cup",
+    "idle_stretch": "a_relaxed_tired_upwa",
+    "idle_think": "standing_in_a_relaxe",
+    "active_work": "sitting_on_a_chair_a/the_character_stays_seated_and_completely_still_th",
+    "active_read": "sitting_on_a_chair_a/The_torso_shoulders_and_hips_are_completely_frozen"
+  },
+  "_playback_note": "Per-animation playback tuning (anim-playback epic E2, 86ca2187g). Keyed by canonical anim name (must exist in `animations`). Fields (all optional): speedMultiplier (fraction of default frame RATE; 0.5 = half speed), dwellFrameIndex, dwellMs, finalDwellMs, playbackMode, startFrame/endFrame. Malformed values dropped + warned by scripts/build-sprite-manifest.mjs. Mirrors M03's slow-calm defaults as starting values; sponsor retunes on reload with zero gens (edit + npm run build + reload).",
+  "playback": {
+    "active_work": {
+      "speedMultiplier": 0.55,
+      "finalDwellMs": 0,
+      "startFrame": 0,
+      "endFrame": 7,
+      "dwellFrameIndex": 4,
+      "dwellMs": 1550,
+      "playbackMode": "pingpong"
+    },
+    "active_read": {
+      "speedMultiplier": 0.25,
+      "finalDwellMs": 3200,
+      "playbackMode": "pingpong",
+      "dwellMs": 2100,
+      "dwellFrameIndex": 1,
+      "startFrame": 1,
+      "endFrame": 2
+    },
+    "idle_coffee": {
+      "speedMultiplier": 0.5,
+      "dwellFrameIndex": 0,
+      "dwellMs": 1600,
+      "finalDwellMs": 3700,
+      "playbackMode": "pingpong"
+    },
+    "idle_stretch": {
+      "speedMultiplier": 0.5
+    },
+    "idle_think": {
+      "speedMultiplier": 0.5,
+      "finalDwellMs": 1400,
+      "dwellFrameIndex": 4,
+      "dwellMs": 1700,
+      "playbackMode": "pingpong"
+    }
+  },
+  "scenes": {
+    "idle_coffee": "break_room",
+    "idle_stretch": "park",
+    "idle_think": "living_room",
+    "active_work": "home_office",
+    "active_read": "home_office"
+  }
+}
