@@ -164,6 +164,29 @@ export function hydrateState(wire: SerializedDashboardState): WebviewAgentTree {
     ...(wire.rosterWarnings !== undefined
       ? { rosterWarnings: wire.rosterWarnings }
       : {}),
+    // 86ca8mquy: thread the hide/remove member-key wire surface through
+    // hydration. `serializeState` (host) puts all four onto the wire (E-06a /
+    // E-07a §7.2/§7.3), but this map previously DROPPED them in the top-level
+    // spread — they're all OPTIONAL on `AgentTree`/`WebviewAgentTree`, so the
+    // omission compiled green yet the webview always received `undefined` →
+    // `readHiddenMemberKeys` returned `[]` → `renderHiddenMembersChip` rendered
+    // nothing → the ".ct-hidden-members-chip" recovery surface never mounted →
+    // a hidden member was unrecoverable from the UI. Same omit-in-hydrate bug
+    // class as #222 (title) / #223 (customTitle/gitBranch). Preserve `undefined`
+    // rather than coercing so the in-memory shape stays distinguishable from a
+    // host that explicitly sent the field (consumers default undefined → 0 / []).
+    ...(wire.hiddenMemberCount !== undefined
+      ? { hiddenMemberCount: wire.hiddenMemberCount }
+      : {}),
+    ...(wire.hiddenMemberKeys !== undefined
+      ? { hiddenMemberKeys: wire.hiddenMemberKeys }
+      : {}),
+    ...(wire.removedMemberCount !== undefined
+      ? { removedMemberCount: wire.removedMemberCount }
+      : {}),
+    ...(wire.removedMemberKeys !== undefined
+      ? { removedMemberKeys: wire.removedMemberKeys }
+      : {}),
     ...(wire.config !== undefined ? { config: wire.config } : {}),
   };
 }
