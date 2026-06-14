@@ -28,6 +28,8 @@ import {
   resolveStaticImage,
   buildScenes,
   sanitizeScenes,
+  computeRenderFit,
+  mergeRenderFit,
 } from "../../../scripts/build-sprite-manifest.mjs";
 
 describe("parseAnimValue — folder/slug value-format (AC5)", () => {
@@ -226,9 +228,9 @@ describe("buildPoseDefaults — pose-keyed defaults block (E3 86ca2187n)", () =>
       idle_stretch: { playbackMode: "bounce", finalDwellMs: 800 },
     });
     expect(poseDefaults).toEqual({ idle_stretch: { finalDwellMs: 800 } });
-    expect(warnings.some((w) => w.includes("pose-defaults/idle_stretch") && w.includes("bounce"))).toBe(
-      true,
-    );
+    expect(
+      warnings.some((w) => w.includes("pose-defaults/idle_stretch") && w.includes("bounce")),
+    ).toBe(true);
   });
 
   it("drops an entry whose object yields no valid field entirely", () => {
@@ -504,19 +506,11 @@ describe("sanitizeScenes — per-char + pose-default scene block (scene-per-pose
 describe("scene bake round-trip — registry validates per-char + pose-default blocks", () => {
   // Reproduce the exact composition `main()` performs so the wiring (registry id
   // set feeds both sanitize calls) is asserted end-to-end without a filesystem.
-  function bake(opts: {
-    sceneFiles: string[];
-    perChar?: unknown;
-    poseDefaultScenes?: unknown;
-  }) {
+  function bake(opts: { sceneFiles: string[]; perChar?: unknown; poseDefaultScenes?: unknown }) {
     const { scenes } = buildScenes(opts.sceneFiles);
     const validSceneIds = new Set(scenes !== null ? Object.keys(scenes.byId) : []);
     const charBake = sanitizeScenes("M01", opts.perChar, validSceneIds);
-    const poseBake = sanitizeScenes(
-      "pose-defaults",
-      opts.poseDefaultScenes,
-      validSceneIds,
-    );
+    const poseBake = sanitizeScenes("pose-defaults", opts.poseDefaultScenes, validSceneIds);
     return {
       scenes,
       charScenes: charBake.scenes,
@@ -568,5 +562,99 @@ describe("scene bake round-trip — registry validates per-char + pose-default b
     expect(out.sceneDefaults).toEqual({ active_work: "none", active_read: "none" });
     expect(out.warnings).toHaveLength(1);
     expect(out.warnings[0]).toContain("room3");
+  });
+});
+
+// ── computeRenderFit — bbox → uniform on-tile figure height (86ca8n5pe) ───────
+//
+// Non-vacuity: each assertion below FAILS if the math is reverted —
+//   - the figure-height uniformity assertion fails if `scale` stops normalizing
+//     to TARGET_FIGURE_FRACTION (e.g. a hardcoded 1.5).
+//   - the grounding assertion fails if `feetAnchorPct` / `offsetY` stop tracking
+//     the measured feet (the "scale about the feet, not center" contract — a
+//     center-origin regression makes scaled figures float off the room floor).
+describe("computeRenderFit — per-char figure-size normalization (86ca8n5pe)", () => {
+  const TARGET = 0.706; // matches TARGET_FIGURE_FRACTION (the M02 apparent size).
+
+  it("a v3 92×92 char (figure ~51% of canvas) scales UP toward the target", () => {
+    // figure rows 22..68 → height 47 of 92 → fill ≈ 0.511 → scale ≈ 0.706/0.511.
+    const fit = computeRenderFit({ figureTop: 22, figureBottom: 68, canvasH: 92 });
+    expect(fit).not.toBeNull();
+    // The on-tile figure height = scale × fill must land on the target.
+    const fill = (68 - 22 + 1) / 92;
+    expect(fit!.scale * fill).toBeCloseTo(TARGET, 3);
+    expect(fit!.scale).toBeGreaterThan(1); // v3 is enlarged
+  });
+
+  it("a legacy 68×68 char (figure ~71%) is already ~at target → scale ≈ 1 (no special-casing)", () => {
+    // figure rows 10..58 → height 49 of 68 → fill ≈ 0.721 → scale ≈ 0.706/0.721 < 1.
+    const fit = computeRenderFit({ figureTop: 10, figureBottom: 58, canvasH: 68 });
+    expect(fit).not.toBeNull();
+    const fill = (58 - 10 + 1) / 68;
+    expect(fit!.scale * fill).toBeCloseTo(TARGET, 3);
+    expect(fit!.scale).toBeLessThan(1.05); // near identity — the M02 baseline
+  });
+
+  it("produces a UNIFORM on-tile figure height across a mixed roster (the whole point)", () => {
+    // Two different canvas sizes + fill ratios must yield the SAME on-tile height.
+    const v3 = computeRenderFit({ figureTop: 22, figureBottom: 68, canvasH: 92 })!;
+    const legacy = computeRenderFit({ figureTop: 10, figureBottom: 58, canvasH: 68 })!;
+    const onTileV3 = v3.scale * ((68 - 22 + 1) / 92);
+    const onTileLegacy = legacy.scale * ((58 - 10 + 1) / 68);
+    expect(onTileV3).toBeCloseTo(onTileLegacy, 3); // uniform regardless of canvas
+    expect(onTileV3).toBeCloseTo(TARGET, 3);
+  });
+
+  it("anchors the scale about the FEET (not center) so grounding is preserved", () => {
+    // feetAnchorPct = (figureBottom + 1) / canvasH × 100 — the measured contact line.
+    const fit = computeRenderFit({ figureTop: 22, figureBottom: 68, canvasH: 92 })!;
+    expect(fit.feetAnchorPct).toBeCloseTo(((68 + 1) / 92) * 100, 3); // ≈ 75%
+    // offsetY drops the feet from feetAnchorPct to the box bottom (100%) = floor.
+    expect(fit.offsetY).toBeCloseTo(100 - fit.feetAnchorPct, 3);
+    // Post-transform feet position = feetAnchorPct + offsetY = 100% (grounded).
+    expect(fit.feetAnchorPct + fit.offsetY).toBeCloseTo(100, 3);
+  });
+
+  it("degenerate inputs → null (caller falls back to identity, never bakes NaN)", () => {
+    expect(computeRenderFit({ figureTop: 0, figureBottom: 0, canvasH: 0 })).toBeNull();
+    expect(computeRenderFit({ figureTop: 50, figureBottom: 10, canvasH: 92 })).toBeNull(); // zero/negative figure height
+    expect(computeRenderFit({ figureTop: Number.NaN, figureBottom: 68, canvasH: 92 })).toBeNull();
+    expect(computeRenderFit(null)).toBeNull();
+  });
+
+  it("honors an explicit target fraction", () => {
+    const fit = computeRenderFit({ figureTop: 22, figureBottom: 68, canvasH: 92 }, 0.6)!;
+    expect(fit.scale * ((68 - 22 + 1) / 92)).toBeCloseTo(0.6, 3);
+  });
+});
+
+// ── mergeRenderFit — auto + manual override per-field (86ca8n5pe) ─────────────
+describe("mergeRenderFit — auto value with manual per-field override", () => {
+  const auto = { scale: 1.4, offsetY: 26, feetAnchorPct: 74 };
+
+  it("no manual block → the auto value passes through unchanged", () => {
+    expect(mergeRenderFit(auto, null)).toEqual(auto);
+  });
+
+  it("a manual field WINS over the auto field; un-overridden auto fields survive", () => {
+    // Sponsor nudges only offsetY — scale + feetAnchorPct stay auto.
+    expect(mergeRenderFit(auto, { offsetY: 30 })).toEqual({
+      scale: 1.4,
+      offsetY: 30,
+      feetAnchorPct: 74,
+    });
+  });
+
+  it("a full manual block overrides every field", () => {
+    const manual = { scale: 2, offsetY: 0, feetAnchorPct: 50 };
+    expect(mergeRenderFit(auto, manual)).toEqual(manual);
+  });
+
+  it("both null → null (manifest omits render → identity, no normalization)", () => {
+    expect(mergeRenderFit(null, null)).toBeNull();
+  });
+
+  it("auto null + manual present → the manual block (pure manual char)", () => {
+    expect(mergeRenderFit(null, { scale: 1.2 })).toEqual({ scale: 1.2 });
   });
 });

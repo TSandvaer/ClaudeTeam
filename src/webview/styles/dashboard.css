@@ -115,20 +115,28 @@
   --ct-anim-frame-ms-default: 160ms;
   --ct-anim-dwell-ms-default: 400ms;
 
-  /* Per-character sprite render-fit fallbacks (ticket 86ca5b0gj). v3 92×92
-   * persona sprites (F02/M03) bake the figure into only ~50% of the canvas vs
-   * ~75% for the legacy 68×68 chars, so with `.sprite-frame { object-fit:
-   * contain }` they render smaller AND float high (the big transparent bottom
-   * margin pushes the figure up). `createSpriteBox` sets `--ct-render-scale` /
-   * `--ct-render-offset-y` PER `.sprite-box` from each character's manifest
-   * `render` block (baked from animations.json); `.sprite-frame`'s transform
-   * reads them with these :root values as the no-render fallback. The fallbacks
-   * are IDENTITY (1 / 0%) so a character with NO `render` block — every 68×68
-   * char (F01/M01/M02) — renders byte-identically (no regression). Override
-   * here to retune ALL render-fit chars on reload without a rebuild; the
-   * per-character manifest value is the normal tuning lever. */
+  /* Per-character sprite render-fit fallbacks (ticket 86ca5b0gj; roster-wide
+   * AUTO-normalization 86ca8n5pe). Characters have different canvas sizes (92×92
+   * v3 vs 68×68 legacy) AND fill ratios (figure ~51% vs ~71% of the canvas), so
+   * `.sprite-frame { object-fit: contain }` — which fits the WHOLE square canvas
+   * into the box — renders their figures at DIFFERENT apparent sizes + vertical
+   * anchors. The build script measures each character's figure bbox and bakes a
+   * per-character correction so the whole roster shows a UNIFORM on-tile figure
+   * height grounded on the scene floor. `createSpriteBox` sets these three custom
+   * props PER `.sprite-box` from the manifest `render` block; `.sprite-frame`'s
+   * transform reads them with these :root values as the no-render fallback:
+   *   --ct-render-scale       figure-size multiplier (TARGET / measured fill).
+   *   --ct-render-offset-y    translateY (%) that drops the feet to the box bottom.
+   *   --ct-render-feet-anchor transform-origin Y = the figure's feet position, so
+   *                           the scale pivots about the feet (grounding preserved).
+   * The fallbacks are IDENTITY (scale 1 / offset 0% / origin center 50%) so a
+   * character with NO `render` block renders byte-identically (no regression).
+   * Override here to retune the WHOLE roster on reload without a rebuild; the
+   * per-character baked value is the normal lever. The FINAL on-tile size is
+   * sponsor-tunable via --ct-render-scale (the figure-height target). */
   --ct-render-scale: 1;
   --ct-render-offset-y: 0%;
+  --ct-render-feet-anchor: 50%;
 
   /* Light WHOLE-CARD background behind the persona sprite AND the text column,
    * so the dark-outlined pixel character reads against the dark side bar and the
@@ -141,7 +149,7 @@
    * previewing without touching the rule. Sponsor-picked: #ECEFF1 (Material
    * Blue-Grey 50); alternatives considered #FFFFFF (max pop) / #F5F1E8 (warm
    * paper) per the design spec §3. */
-  --ct-card-bg: #ECEFF1;
+  --ct-card-bg: #eceff1;
   --ct-card-radius: var(--ct-radius-tile);
 
   /* Dark-on-light text + chrome tokens for the light card (86ca23utq §5). Because
@@ -166,7 +174,7 @@
    * so all 5 consumers read identically but deterministically. */
   --ct-card-fg: #1f2933;
   --ct-card-fg-muted: #52606d;
-  --ct-card-hover: #E1E4E6;
+  --ct-card-hover: #e1e4e6;
   /* Hairline that delineates the light card from a LIGHT VS Code theme bg (where
    * the card and editor bg are tonally close). Subtle in dark theme, load-bearing
    * in light theme. Hardcoded translucent-dark, theme-independent. */
@@ -586,8 +594,7 @@ body {
   border-radius: inherit;
   pointer-events: none;
   z-index: 0;
-  animation: ct-scene-crossfade-in var(--ct-scene-crossfade-ms)
-    var(--ct-scene-crossfade-ease) both;
+  animation: ct-scene-crossfade-in var(--ct-scene-crossfade-ms) var(--ct-scene-crossfade-ease) both;
 }
 
 @keyframes ct-scene-crossfade-in {
@@ -740,25 +747,32 @@ body {
    * image glyph (AC5). The build copies the frames, so this should not fire
    * in production. */
   object-fit: contain;
-  /* Per-character render-fit (ticket 86ca5b0gj). `object-fit: contain` fits the
-   * WHOLE sprite canvas (incl. transparent margin) into the box, so a v3 92×92
-   * canvas — whose figure is only ~50% of its height — renders the figure
-   * smaller than a 68×68 char (~75% figure) AND floats it high. This transform
-   * corrects BOTH: `scale()` enlarges the figure to the 68px apparent size, and
-   * `translateY()` (positive = DOWN, toward the viewer) re-anchors it lower in
-   * the tile. The values come from the box's `--ct-render-scale` /
-   * `--ct-render-offset-y` custom props (set by createSpriteBox from the
-   * manifest `render` block); the :root fallbacks are IDENTITY (1 / 0%), so a
-   * character with no `render` block — every 68×68 char — gets
-   * `translateY(0%) scale(1)` = no visual change.
+  /* Per-character render-fit (ticket 86ca5b0gj; roster-wide AUTO-normalization
+   * 86ca8n5pe). `object-fit: contain` fits the WHOLE square canvas (incl. the
+   * transparent margin) into the box, so characters with different canvas sizes
+   * (92×92 v3 vs 68×68 legacy) and fill ratios (figure ~51% vs ~71%) render their
+   * figures at DIFFERENT apparent sizes + vertical anchors. The build measures
+   * each character's figure bbox and bakes a correction that makes the WHOLE
+   * roster show a UNIFORM on-tile figure height grounded on the scene floor:
    *
-   * Origin is `center center` (NOT bottom): the figure's feet sit at ~74% down
-   * the 92px canvas (a ~26% transparent bottom margin). Scaling 1.5× about the
-   * CENTER lands the feet at 50% + 1.5×(74%−50%) ≈ 86% down — matching the 68px
-   * chars' feet at ~85% — while enlarging the figure to the 68px apparent size.
-   * A bottom origin would instead LIFT the feet (it scales the bottom margin
-   * too). offsetY then nudges the whole figure down/forward for fine-tuning. */
-  transform-origin: center center;
+   *   - `transform-origin: center <--ct-render-feet-anchor>` puts the pivot at the
+   *     figure's FEET (measured: feetAnchorPct = the canvas y-fraction of the
+   *     contact line). Scaling about the feet means the feet do NOT drift when the
+   *     figure is enlarged — so a scaled sprite still grounds correctly on a scene
+   *     room (whose floor is pinned to the box bottom). This is the load-bearing
+   *     change vs the old `center center`, which floated the figure off the floor.
+   *   - `scale(<--ct-render-scale>)` enlarges (or shrinks) the figure about the
+   *     feet to the uniform target height (≈ the legacy M02 apparent size).
+   *   - `translateY(<--ct-render-offset-y>)` (applied AFTER the feet-anchored
+   *     scale) drops the feet from their measured position to the box bottom =
+   *     the room floor, so every character grounds on the same baseline.
+   *
+   * The values come from the box's three `--ct-render-*` custom props (set by
+   * createSpriteBox from the manifest `render` block); the :root fallbacks are
+   * IDENTITY (scale 1 / offset 0% / origin center 50%), so a character with NO
+   * `render` block gets `translateY(0%) scale(1)` about center = no visual change
+   * (no-regression contract for any unmeasured / render-less character). */
+  transform-origin: center var(--ct-render-feet-anchor, 50%);
   transform: translateY(var(--ct-render-offset-y, 0%)) scale(var(--ct-render-scale, 1));
 }
 
@@ -833,10 +847,7 @@ body {
    * Idle / finished / error rules below intentionally do NOT consume the
    * override — those states retain the semantic state colors per spec
    * §1.3 ("Idle / finished / error states IGNORE this field"). */
-  background-color: var(
-    --ct-color-running-dot,
-    var(--ct-color-state-running)
-  );
+  background-color: var(--ct-color-running-dot, var(--ct-color-state-running));
   /* Subtle 1.8s breathing pulse — M4-01 §2.2. Reserved for `running` only;
    * idle/finished/error use steady-state visuals (fade / check / static).
    * Pulse is opacity-only so it inherits whatever background-color the
@@ -968,8 +979,13 @@ body {
  * --------------------------------------------------------------------------- */
 
 @keyframes ct-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 @keyframes ct-error-flash {
@@ -1418,14 +1434,8 @@ body {
   z-index: 2;
   display: flex;
   flex-direction: column;
-  background-color: var(
-    --vscode-menu-background,
-    var(--ct-color-bg)
-  );
-  border: 1px solid var(
-    --vscode-menu-border,
-    var(--ct-color-border)
-  );
+  background-color: var(--vscode-menu-background, var(--ct-color-bg));
+  border: 1px solid var(--vscode-menu-border, var(--ct-color-border));
   border-radius: var(--ct-radius-chip);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
 }
@@ -1455,10 +1465,7 @@ body {
 
 .agent-tile-overflow-item:hover,
 .agent-tile-overflow-item:focus-visible {
-  background-color: var(
-    --vscode-menu-selectionBackground,
-    var(--ct-color-bg-hover)
-  );
+  background-color: var(--vscode-menu-selectionBackground, var(--ct-color-bg-hover));
   color: var(--vscode-menu-selectionForeground, var(--ct-color-fg));
   outline: none;
 }
@@ -1531,10 +1538,7 @@ body {
 
 /* Cancel = the safe default → VS Code secondary-button styling. */
 .agent-tile-remove-confirm-cancel {
-  background-color: var(
-    --vscode-button-secondaryBackground,
-    var(--ct-color-bg-hover)
-  );
+  background-color: var(--vscode-button-secondaryBackground, var(--ct-color-bg-hover));
   color: var(--vscode-button-secondaryForeground, var(--ct-color-fg));
   border: 1px solid var(--ct-color-border);
 }
@@ -1547,10 +1551,7 @@ body {
 }
 
 .agent-tile-remove-confirm-cancel:hover {
-  background-color: var(
-    --vscode-button-secondaryHoverBackground,
-    var(--ct-color-bg-hover)
-  );
+  background-color: var(--vscode-button-secondaryHoverBackground, var(--ct-color-bg-hover));
 }
 
 .agent-tile-remove-confirm-remove:hover {
@@ -1684,19 +1685,13 @@ body {
 }
 
 .error-chip--error {
-  background-color: var(
-    --vscode-inputValidation-errorBackground,
-    #5a1d1d
-  );
+  background-color: var(--vscode-inputValidation-errorBackground, #5a1d1d);
   border-color: var(--vscode-inputValidation-errorBorder, #be1100);
   color: var(--vscode-inputValidation-errorForeground, #f48771);
 }
 
 .error-chip--warning {
-  background-color: var(
-    --vscode-inputValidation-warningBackground,
-    #352a05
-  );
+  background-color: var(--vscode-inputValidation-warningBackground, #352a05);
   border-color: var(--vscode-inputValidation-warningBorder, #cca700);
   color: var(--vscode-inputValidation-warningForeground, #cca700);
 }
@@ -1823,10 +1818,7 @@ body {
 .empty-state-code {
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: smaller;
-  background-color: var(
-    --vscode-textBlockQuote-background,
-    rgba(255, 255, 255, 0.04)
-  );
+  background-color: var(--vscode-textBlockQuote-background, rgba(255, 255, 255, 0.04));
   padding: 1px var(--ct-space-xs);
   border-radius: var(--ct-radius-chip);
   /* Long setting names should wrap rather than overflow the sidebar. */
@@ -2453,8 +2445,7 @@ body {
   image-rendering: pixelated;
   pointer-events: none;
   z-index: 0;
-  animation: ct-scene-crossfade-in var(--ct-scene-crossfade-ms)
-    var(--ct-scene-crossfade-ease) both;
+  animation: ct-scene-crossfade-in var(--ct-scene-crossfade-ms) var(--ct-scene-crossfade-ease) both;
 }
 .ct-tuner-preview-note {
   flex: 1 1 100%;
@@ -2582,14 +2573,10 @@ body {
   background: linear-gradient(
     to right,
     var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted)) 0,
-    var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted))
-      var(--ct-win-start-pct),
-    var(--vscode-button-background, var(--ct-color-state-running))
-      var(--ct-win-start-pct),
-    var(--vscode-button-background, var(--ct-color-state-running))
-      var(--ct-win-end-pct),
-    var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted))
-      var(--ct-win-end-pct),
+    var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted)) var(--ct-win-start-pct),
+    var(--vscode-button-background, var(--ct-color-state-running)) var(--ct-win-start-pct),
+    var(--vscode-button-background, var(--ct-color-state-running)) var(--ct-win-end-pct),
+    var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted)) var(--ct-win-end-pct),
     var(--vscode-scrollbarSlider-background, var(--ct-color-fg-muted)) 100%
   );
 }
@@ -2660,12 +2647,8 @@ body {
   padding: var(--ct-space-s);
   border-radius: var(--ct-radius-chip);
   color: var(--vscode-inputValidation-warningForeground, var(--ct-color-fg));
-  background-color: var(
-    --vscode-inputValidation-warningBackground,
-    var(--ct-color-bg-hover)
-  );
-  border: 1px solid
-    var(--vscode-inputValidation-warningBorder, var(--ct-color-border));
+  background-color: var(--vscode-inputValidation-warningBackground, var(--ct-color-bg-hover));
+  border: 1px solid var(--vscode-inputValidation-warningBorder, var(--ct-color-border));
   font-size: smaller;
 }
 .ct-tuner-shadow-warning[hidden],
@@ -2708,10 +2691,7 @@ body {
 }
 .ct-tuner-banner--error {
   color: var(--vscode-inputValidation-errorForeground, var(--ct-color-fg));
-  background-color: var(
-    --vscode-inputValidation-errorBackground,
-    rgba(90, 29, 29, 0.4)
-  );
+  background-color: var(--vscode-inputValidation-errorBackground, rgba(90, 29, 29, 0.4));
   border-color: var(--ct-color-state-error);
 }
 .ct-tuner-banner-text {

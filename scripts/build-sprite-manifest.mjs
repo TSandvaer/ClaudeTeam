@@ -50,6 +50,7 @@
 
 import { readdir, readFile, mkdir, copyFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import zlib from "node:zlib";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,13 +78,7 @@ const DIST_SCENES = path.join(DIST_SPRITES, "scenes");
  * PNGs in `scenes/` and point a future member/character field at their id.
  */
 const DEFAULT_SCENE_ID = "room3";
-const GENERATED_TS = path.join(
-  ROOT,
-  "src",
-  "webview",
-  "sprites",
-  "generatedManifest.ts",
-);
+const GENERATED_TS = path.join(ROOT, "src", "webview", "sprites", "generatedManifest.ts");
 
 /** Recursively copy a directory tree (PNG frames + rotations). */
 async function copyDir(src, dest) {
@@ -358,19 +353,230 @@ export function buildPoseDefaults(rawBlock) {
   return { poseDefaults: Object.keys(out).length > 0 ? out : null, warnings };
 }
 
-/** Numeric render-fit fields (ticket 86ca5b0gj) validated as finite numbers. */
-const RENDER_FIT_NUMERIC_FIELDS = ["scale", "offsetY"];
+/**
+ * Roster-wide on-tile figure normalization (ticket 86ca8n5pe). Goal: EVERY
+ * character renders its figure at a UNIFORM on-tile height regardless of canvas
+ * size (92×92 v3 vs 68×68 legacy) or fill ratio (~50% vs ~75%). Without this,
+ * `.sprite-frame { object-fit: contain }` fits the WHOLE square canvas into the
+ * box, so a 92px char (figure ~51% of canvas) renders ~50/71 ≈ 0.7× the apparent
+ * figure size of a 68px M02 char (figure ~71%) — the v3 chars look SMALLER.
+ *
+ * The fix is computed at BUILD time from each character's measured figure bbox:
+ *   - `scale = TARGET_FIGURE_FRACTION / (figureH / canvasH)` enlarges (or shrinks)
+ *     the figure so its on-tile height is uniform across the roster.
+ *   - `feetAnchorPct = (figureBottom + 1) / canvasH * 100` is where the figure's
+ *     feet sit as a % of the box (object-fit maps the canvas 1:1 into the square
+ *     box, so a canvas y-fraction is a box y-fraction). The CSS scales ABOUT this
+ *     feet point (`transform-origin: center <feetAnchorPct>%`) so the feet do NOT
+ *     drift when the figure is enlarged — preserving grounding on scene rooms,
+ *     whose floor is pinned to the box bottom (dashboard.css `--ct-scene-anchor-y:
+ *     bottom`). A `translateY(100 − feetAnchorPct)` (baked as `offsetY`) then drops
+ *     the feet to the box bottom = the room floor.
+ *
+ * `TARGET_FIGURE_FRACTION` ≈ the legacy 68×68 M02 apparent size (figure 48/68 ≈
+ * 0.706 of the canvas → 0.706 of the box) — the ticket's "scale v3 UP to M02"
+ * target. Sponsor-tunable: the FINAL on-tile-size visual feel is sponsor-domain
+ * (queued for their return); this is the code-correct starting value.
+ */
+const TARGET_FIGURE_FRACTION = 0.706;
 
 /**
- * Sanitize a character's optional top-level `render` block (ticket 86ca5b0gj)
- * into the `{ scale?, offsetY? }` shape baked onto the manifest character entry.
- * Mirrors `sanitizePlayback`'s policy: malformed fields are DROPPED + warned,
- * never thrown, so a typo can never break the build. Pure — exported for unit
- * coverage.
+ * Alpha threshold (0–255) above which a pixel counts as "figure" when measuring
+ * the bbox. >16 ignores near-transparent anti-alias fringe so the bbox tracks the
+ * solid figure, matching the measurement that produced the documented ~51% fill.
+ */
+const FIGURE_ALPHA_THRESHOLD = 16;
+
+/**
+ * Decode a PNG file's pixels and return the tight bounding box of its non-
+ * transparent (alpha > `FIGURE_ALPHA_THRESHOLD`) pixels — the "figure bbox" used
+ * to normalize on-tile figure size (ticket 86ca8n5pe). Returns `null` when the
+ * image has no alpha channel (color types 0/2/3 — opaque, no figure to isolate)
+ * or no pixel clears the threshold (fully transparent frame).
  *
- * Returns `{ render, warnings }`. `render` is `null` when nothing valid survived
- * (the manifest then OMITS the field → identity transform → 68×68 chars
- * unchanged).
+ * Self-contained PNG reader (the repo ships no PNG library): parses IHDR for
+ * dimensions + color type, inflates the IDAT stream, then un-filters each
+ * scanline (None/Sub/Up/Average/Paeth, the 5 PNG filter types). Handles 8-bit
+ * depth only (every PixelLab harvest is RGBA8 — color type 6); other depths throw
+ * so a future format change fails loud rather than silently mis-measuring.
+ *
+ * NOT pure (reads a file) — the pure bbox→render math is `computeRenderFit`,
+ * which is the unit-tested seam; this decoder is exercised by the integration
+ * pass over the real shipped frames.
+ *
+ * @param {string} filePath absolute path to a PNG frame
+ * @returns {Promise<{ canvasW: number, canvasH: number, minX: number, minY: number, maxX: number, maxY: number } | null>}
+ */
+export async function readPngAlphaBbox(filePath) {
+  const data = await readFile(filePath);
+  if (
+    data.length < 8 ||
+    data[0] !== 0x89 ||
+    data[1] !== 0x50 ||
+    data[2] !== 0x4e ||
+    data[3] !== 0x47
+  ) {
+    throw new Error(`not a PNG: ${filePath}`);
+  }
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idatChunks = [];
+  while (pos + 8 <= data.length) {
+    const len = data.readUInt32BE(pos);
+    const type = data.toString("ascii", pos + 4, pos + 8);
+    const body = data.subarray(pos + 8, pos + 8 + len);
+    if (type === "IHDR") {
+      width = body.readUInt32BE(0);
+      height = body.readUInt32BE(4);
+      bitDepth = body[8];
+      colorType = body[9];
+    } else if (type === "IDAT") {
+      idatChunks.push(body);
+    } else if (type === "IEND") {
+      break;
+    }
+    pos += 12 + len; // length(4) + type(4) + data(len) + CRC(4)
+  }
+  // Alpha lives only in color types 4 (gray+alpha) and 6 (RGBA). Others have no
+  // figure/background distinction — return null so the caller skips normalization.
+  const channels = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }[colorType];
+  if (channels === undefined) {
+    throw new Error(`unsupported PNG color type ${colorType}: ${filePath}`);
+  }
+  if (bitDepth !== 8) {
+    throw new Error(`unsupported PNG bit depth ${bitDepth} (want 8): ${filePath}`);
+  }
+  const alphaIndex = colorType === 6 ? 3 : colorType === 4 ? 1 : -1;
+  if (alphaIndex === -1) {
+    return null; // no alpha channel → no figure to isolate.
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idatChunks));
+  const bpp = channels; // bytes-per-pixel at 8-bit depth.
+  const stride = width * bpp;
+  const out = Buffer.alloc(height * stride);
+  let p = 0;
+  const paeth = (a, b, c) => {
+    const pp = a + b - c;
+    const pa = Math.abs(pp - a);
+    const pb = Math.abs(pp - b);
+    const pc = Math.abs(pp - c);
+    return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+  };
+  for (let y = 0; y < height; y++) {
+    const filter = raw[p++];
+    const rowStart = y * stride;
+    const prevStart = (y - 1) * stride;
+    for (let i = 0; i < stride; i++) {
+      const x = raw[p++];
+      const a = i >= bpp ? out[rowStart + i - bpp] : 0;
+      const b = y > 0 ? out[prevStart + i] : 0;
+      const c = y > 0 && i >= bpp ? out[prevStart + i - bpp] : 0;
+      let v;
+      if (filter === 0) v = x;
+      else if (filter === 1) v = x + a;
+      else if (filter === 2) v = x + b;
+      else if (filter === 3) v = x + ((a + b) >> 1);
+      else if (filter === 4) v = x + paeth(a, b, c);
+      else throw new Error(`bad PNG filter ${filter} on row ${y}: ${filePath}`);
+      out[rowStart + i] = v & 0xff;
+    }
+  }
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * stride;
+    for (let xx = 0; xx < width; xx++) {
+      if (out[rowStart + xx * bpp + alphaIndex] > FIGURE_ALPHA_THRESHOLD) {
+        if (xx < minX) minX = xx;
+        if (xx > maxX) maxX = xx;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) {
+    return null; // fully transparent.
+  }
+  return { canvasW: width, canvasH: height, minX, minY, maxX, maxY };
+}
+
+/**
+ * Compute the per-character render-fit transform from a measured figure bbox so
+ * every roster character renders at a UNIFORM on-tile figure height (ticket
+ * 86ca8n5pe). PURE — takes already-measured numbers, no filesystem; this is the
+ * unit-tested seam (the PNG decode in `readPngAlphaBbox` is the impure half).
+ *
+ * Inputs: the figure's bbox top/bottom Y (pixel rows, inclusive) and the canvas
+ * height. Output `{ scale, offsetY, feetAnchorPct }`:
+ *   - `feetAnchorPct` — the feet position as a % of the box. `object-fit: contain`
+ *     maps the square canvas 1:1 into the square box, so a canvas y-fraction is a
+ *     box y-fraction. Feet = the bbox bottom edge: `(figureBottom + 1) / canvasH`
+ *     (the +1 makes it the row BELOW the last opaque pixel — the contact line).
+ *     Used as the CSS `transform-origin` Y so the scale pivots about the feet and
+ *     they do NOT drift (grounding preserved on scene rooms — floor at box bottom).
+ *   - `scale` — `TARGET_FIGURE_FRACTION / (figureH / canvasH)`. Enlarges a sparse
+ *     v3 figure (51% fill) up to the M02 apparent size (~71%), shrinks an
+ *     over-large one down. A char already AT the target gets ~1.0 (near-identity).
+ *   - `offsetY` — `100 − feetAnchorPct` (a % of the box). Applied as `translateY`
+ *     AFTER the feet-anchored scale, it drops the feet from `feetAnchorPct` to the
+ *     box bottom (100%) = the scene room floor. So the whole roster grounds on the
+ *     same baseline AND shows a uniform figure height.
+ *
+ * Returns `null` when the inputs are degenerate (non-finite, non-positive canvas,
+ * zero-height figure) so the caller falls back to identity (no transform) rather
+ * than baking a NaN/Infinity that would blank the tile.
+ *
+ * @param {{ figureTop: number, figureBottom: number, canvasH: number }} m measured bbox rows
+ * @param {number} [targetFraction] target figure height as a fraction of the box (default TARGET_FIGURE_FRACTION)
+ * @returns {{ scale: number, offsetY: number, feetAnchorPct: number } | null}
+ */
+export function computeRenderFit(m, targetFraction = TARGET_FIGURE_FRACTION) {
+  if (m === null || m === undefined || typeof m !== "object") return null;
+  const { figureTop, figureBottom, canvasH } = m;
+  if (
+    !Number.isFinite(figureTop) ||
+    !Number.isFinite(figureBottom) ||
+    !Number.isFinite(canvasH) ||
+    !Number.isFinite(targetFraction) ||
+    canvasH <= 0 ||
+    targetFraction <= 0
+  ) {
+    return null;
+  }
+  const figureH = figureBottom - figureTop + 1;
+  if (figureH <= 0) return null;
+  const fillFraction = figureH / canvasH;
+  const scale = round3(targetFraction / fillFraction);
+  // Feet = the contact line just below the last opaque row, as a % of the box.
+  const feetAnchorPct = round3(((figureBottom + 1) / canvasH) * 100);
+  const offsetY = round3(100 - feetAnchorPct);
+  return { scale, offsetY, feetAnchorPct };
+}
+
+/** Round to 3 decimals to keep the baked manifest tidy + deterministic. */
+function round3(n) {
+  return Math.round(n * 1000) / 1000;
+}
+
+/** Numeric render-fit fields (tickets 86ca5b0gj + 86ca8n5pe) validated as finite numbers. */
+const RENDER_FIT_NUMERIC_FIELDS = ["scale", "offsetY", "feetAnchorPct"];
+
+/**
+ * Sanitize a character's optional top-level `render` block (ticket 86ca5b0gj;
+ * extended 86ca8n5pe with `feetAnchorPct`) into the `{ scale?, offsetY?,
+ * feetAnchorPct? }` shape baked onto the manifest character entry. Mirrors
+ * `sanitizePlayback`'s policy: malformed fields are DROPPED + warned, never
+ * thrown, so a typo can never break the build. Pure — exported for unit coverage.
+ *
+ * Used for the MANUAL override path: a character's `animations.json` may carry a
+ * hand-tuned `render` block that overrides the auto-computed (bbox-measured)
+ * values per-field (`mergeRenderFit`). Returns `{ render, warnings }`; `render`
+ * is `null` when nothing valid survived (then only the auto value, if any, baked).
  *
  * @param {string} label `<char>` for warning context
  * @param {unknown} raw the raw per-character render object (or undefined)
@@ -400,6 +606,27 @@ export function sanitizeRenderFit(label, raw) {
     }
   }
   return { render: Object.keys(out).length > 0 ? out : null, warnings };
+}
+
+/**
+ * Merge the auto-computed render-fit (bbox-measured, ticket 86ca8n5pe) with a
+ * character's optional MANUAL override block (sanitized via `sanitizeRenderFit`).
+ * PURE — exported for unit coverage. Field-level merge: a hand-tuned field WINS
+ * over the auto value (so the sponsor can nudge ONE field — e.g. nudge `offsetY`
+ * by a few % — without discarding the auto `scale`/`feetAnchorPct`). Mirrors the
+ * playback cascade's `{ ...auto, ...manual }` per-field precedence.
+ *
+ * Returns `null` when BOTH inputs are null (→ manifest omits `render` → identity
+ * transform → no normalization for a char with no measurable base frame and no
+ * manual block). Otherwise the merged object.
+ *
+ * @param {{ scale?: number, offsetY?: number, feetAnchorPct?: number } | null} auto auto-computed fit
+ * @param {{ scale?: number, offsetY?: number, feetAnchorPct?: number } | null} manual sanitized manual override
+ * @returns {{ scale?: number, offsetY?: number, feetAnchorPct?: number } | null}
+ */
+export function mergeRenderFit(auto, manual) {
+  if (auto === null && manual === null) return null;
+  return { ...(auto ?? {}), ...(manual ?? {}) };
 }
 
 /**
@@ -508,13 +735,7 @@ async function readPoseDefaults(validSceneIds) {
  */
 async function resolveAnimFrames(charName, value) {
   const { folder, animSlug } = parseAnimValue(value);
-  const animsParent = path.join(
-    SPRITES_SRC,
-    charName,
-    "_pixellab_anims",
-    folder,
-    "animations",
-  );
+  const animsParent = path.join(SPRITES_SRC, charName, "_pixellab_anims", folder, "animations");
   if (!existsSync(animsParent)) {
     return null;
   }
@@ -542,16 +763,13 @@ async function resolveAnimFrames(charName, value) {
   if (!existsSync(southDir)) {
     return null;
   }
-  const frames = (await readdir(southDir))
-    .filter((f) => /^frame_\d+\.png$/.test(f))
-    .sort();
+  const frames = (await readdir(southDir)).filter((f) => /^frame_\d+\.png$/.test(f)).sort();
   if (frames.length === 0) {
     return null;
   }
   // Relative to dist/webview/ (the localResourceRoot base the webview prefixes).
   return frames.map(
-    (f) =>
-      `sprites/${charName}/_pixellab_anims/${folder}/animations/${slug}/south/${f}`,
+    (f) => `sprites/${charName}/_pixellab_anims/${folder}/animations/${slug}/south/${f}`,
   );
 }
 
@@ -665,23 +883,57 @@ async function buildCharacter(charName, validSceneIds) {
     }
   }
   // idle_pool filtered to anims that actually resolved to frames.
-  const idlePool = (animMap.idle_pool ?? []).filter(
-    (name) => animations[name] !== undefined,
-  );
+  const idlePool = (animMap.idle_pool ?? []).filter((name) => animations[name] !== undefined);
   // active_pool (ticket 86ca3mge9) — the 3 working anims the webview cycles
   // through per active episode (running + tool != Read), mirroring idle_pool.
   // Filtered to anims that actually resolved to frames so a stale/missing pose
   // never reaches the picker.
-  const activePool = (animMap.active_pool ?? []).filter(
-    (name) => animations[name] !== undefined,
-  );
-  // Per-character render-fit (ticket 86ca5b0gj) — optional top-level `render`
-  // block. Malformed fields dropped + warned; absent → omitted (identity).
-  const { render, warnings: renderWarnings } = sanitizeRenderFit(
+  const activePool = (animMap.active_pool ?? []).filter((name) => animations[name] !== undefined);
+  // Per-character render-fit — AUTO-computed from the measured figure bbox so
+  // every roster char renders at a uniform on-tile figure height + grounds on the
+  // scene floor (ticket 86ca8n5pe), with an optional MANUAL override block
+  // (ticket 86ca5b0gj) winning per-field.
+  //
+  // Measure the BASE/idle south frame_000: pick `default_idle` (the resting
+  // pose the dashboard shows by default), else the first resolved idle, else the
+  // first resolved anim. Measuring the resting pose (not a desk pose, whose baked
+  // furniture would inflate the bbox) keeps the figure-height target consistent.
+  const baseAnimName =
+    (animMap.default_idle && animations[animMap.default_idle] !== undefined
+      ? animMap.default_idle
+      : undefined) ??
+    idlePool[0] ??
+    Object.keys(animations)[0];
+  let autoRender = null;
+  if (baseAnimName !== undefined && animations[baseAnimName] !== undefined) {
+    const rel = animations[baseAnimName].frames[0];
+    if (rel) {
+      // `frames[]` are relative to dist/webview/ (`sprites/<char>/...`); the
+      // source PNG lives under assets/sprites/<char>/... — strip the leading
+      // `sprites/` and re-root at SPRITES_SRC.
+      const srcFrame = path.join(SPRITES_SRC, rel.replace(/^sprites\//, ""));
+      try {
+        const bbox = await readPngAlphaBbox(srcFrame);
+        if (bbox !== null) {
+          autoRender = computeRenderFit({
+            figureTop: bbox.minY,
+            figureBottom: bbox.maxY,
+            canvasH: bbox.canvasH,
+          });
+        }
+      } catch (err) {
+        console.warn(
+          `[sprite-manifest] ${charName}: could not measure base frame for render-fit (${err instanceof Error ? err.message : String(err)}) — falling back to manual/identity`,
+        );
+      }
+    }
+  }
+  const { render: manualRender, warnings: renderWarnings } = sanitizeRenderFit(
     charName,
     animMap.render,
   );
   for (const w of renderWarnings) console.warn(w);
+  const render = mergeRenderFit(autoRender, manualRender);
   // Per-character SCENE block (scene-per-pose feature, 86ca88nvd — spec §4.1) —
   // optional top-level `scenes` block (sibling of `playback`), anim → scene-id
   // (or `"none"`). Dangling ids (no matching PNG) dropped + warned; absent →
@@ -736,10 +988,7 @@ async function main() {
       await mkdir(DIST_SCENES, { recursive: true });
       for (const scene of Object.values(scenes.byId)) {
         const fileName = path.basename(scene.image);
-        await copyFile(
-          path.join(SCENES_SRC, fileName),
-          path.join(DIST_SCENES, fileName),
-        );
+        await copyFile(path.join(SCENES_SRC, fileName), path.join(DIST_SCENES, fileName));
       }
     }
   }
@@ -755,10 +1004,7 @@ async function main() {
       // Copy this character's PNG tree into dist/webview/sprites/<char>/.
       const srcCharDir = path.join(SPRITES_SRC, name, "_pixellab_anims");
       if (existsSync(srcCharDir)) {
-        await copyDir(
-          srcCharDir,
-          path.join(DIST_SPRITES, name, "_pixellab_anims"),
-        );
+        await copyDir(srcCharDir, path.join(DIST_SPRITES, name, "_pixellab_anims"));
       }
       // TS-02 (team-setup epic, AC7): also copy `animations.json` into the dist
       // char folder so the BUNDLED character matches the valid-character shape
@@ -770,10 +1016,7 @@ async function main() {
       const srcManifest = path.join(SPRITES_SRC, name, "animations.json");
       if (existsSync(srcManifest)) {
         await mkdir(path.join(DIST_SPRITES, name), { recursive: true });
-        await copyFile(
-          srcManifest,
-          path.join(DIST_SPRITES, name, "animations.json"),
-        );
+        await copyFile(srcManifest, path.join(DIST_SPRITES, name, "animations.json"));
       }
     }
   }
