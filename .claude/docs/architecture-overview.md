@@ -64,6 +64,16 @@ State that already exists in the extension host should NOT be duplicated in the 
 - Agent control surfaces (start/stop/send-message — read-only V1).
 - Replacing Pixel Agents. ClaudeTeam coexists with its own port (when hooks land).
 
+### Why "talk to an agent" is harder than it looks (relay, not inject)
+
+A recurring sponsor idea is "let me message a team agent (Felix/Maya/…) from the dashboard." A 3-agent investigation (2026-06-15) established the feasibility spectrum — capture it so future sessions don't re-derive it:
+
+- **True live-injection into a running sub-agent is BLOCKED, three independent ways.** (1) The orchestrator's `SendMessage` tool works only because it is the *parent process* that spawned the agents — an in-process mechanism, not a file/network API. (2) The extension is a separate process and didn't spawn anything; there is no external write surface — the IDE lock file `~/.claude/ide/{pid}.lock` carries `{pid, transport, authToken}` but **no port**, and `DirectConnectTransport` in Claude Code is a separate SDK *server* mode, not a route into a live interactive REPL. (3) Claude Code hooks are **one-way** (Claude → hook), never the reverse.
+- **Personas are ephemeral.** Each "Felix"/"Maya" is an `agentId` that exits when its task completes (JSONL closes with `stop_reason`). So "message Felix" realistically means "queue for the **next** Felix dispatch," not "interrupt the current one." This makes relay-not-inject the *correct* model, not just the cheap one.
+- **Buildable Tier 1 = queue-and-relay through the orchestrator.** Webview input → host appends to a coordination file (e.g. a `.claude/` inbox, same pattern the orchestrator already reads `away-queue.md`/`STATE.md` with) → orchestrator folds it into the named role's next dispatch brief. ~50 lines extension-side, **zero** Claude Code changes; naturally handles "agent already exited" and "no active session" by deferring.
+- **Tier 2 (stretch, fragile) = indirect live nudge** via a `FileChanged` hook emitting `hookSpecificOutput.additionalContext` — reaches the *orchestrator* session's next step only, untested for latency/reliability, and still can't target a specific persona.
+- The experimental Agent-Teams mailbox (`~/.claude/teams/{team}/`, behind `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) is the closest *supported* Claude-to-Claude primitive, but it is session-to-session, not extension-to-agent. Prior art (Pixel Agents) is also observe-only and lists "chat with it, redirect it" as aspiration, not shipped.
+
 ## Where to look in code
 
 The scaffold doesn't exist yet (M2 work). Expected layout:
