@@ -242,6 +242,11 @@ This is parsed into `SpriteRenderFit` in `src/webview/sprites/spriteManifest.ts`
 
 Test: `tests/unit/webview/spriteRenderFit.test.ts`.
 
+**UPGRADE — build-time AUTO-MEASUREMENT is now the DEFAULT (PR #225, merged main `98f55c1`; ticket `86ca8n5pe`).** The build script (`scripts/build-sprite-manifest.mjs`) now measures each character's south base/idle figure bbox (`readPngAlphaBbox`) and BAKES a per-char `render: { scale, offsetY, feetAnchorPct }` so every roster tile renders its figure at a **uniform on-tile height** — `TARGET_FIGURE_FRACTION = 0.706` (the legacy 68×68 M02 apparent size, figure 48/68). v3 chars scale UP ≈1.41–1.48×; a 68px char already at target gets ≈1.0. **No per-char special-casing — NEW characters auto-normalize with zero manual tuning.** This is why a v3 char no longer "looks too small" next to M02 (root cause: v3 fills ~50% of its canvas, M02 ~71%).
+- **Grounding (the load-bearing part):** the scale pivots about the FEET, not the center — `transform-origin: center var(--ct-render-feet-anchor)` (the measured feet line) — and `offsetY = 100 − feetAnchorPct` drops the feet to the box bottom (= scene room floor `--ct-scene-anchor-y: bottom`). Invariant **`feetAnchorPct + offsetY === 100`** is test-asserted per shipped char; the integration test asserts the baked `feetAnchorPct` equals a FRESH re-measurement of the real PNG (so the pivot is the real feet, not center). The OLD center-origin floated scaled figures off the scene floor.
+- **The manual `render` block (above, PR #203) is now an OPTIONAL per-field OVERRIDE**, not the default lever — auto-measurement supplies `scale`/`offsetY`/`feetAnchorPct` unless a manual value overrides. Still tunable without a rebuild via the `--ct-render-*` `:root` tokens.
+- Test: `tests/integration/renderFitNormalization.test.ts` (degenerate-bbox / reduced-motion / M02-scale≈1.0 edge coverage in flight, ticket `86ca8ncja`).
+
 ### Scene backgrounds are PATH-referenced, not data-URI baked (PR #204)
 
 Only CHARACTER sprite frames are baked as data URIs into `src/webview/sprites/generatedManifest.ts`. SCENE images (e.g. `assets/sprites/scenes/room3.png`) are stored as a stable relative path (`sprites/scenes/room3.png`) in the manifest — NOT as inline bytes.
